@@ -1,0 +1,11 @@
+# mise config for statifier_examples: toolchain only.
+#
+#   mise install        provision the toolchain below
+#
+# Pinned to match statifier_blocks, whose editor this app embeds, and through
+# it statifier-ex. CI reads these two versions out of this file rather than
+# duplicating them, so this is the one place a toolchain bump happens.
+
+[tools]
+erlang = "27.3"
+elixir = "1.18.3-otp-27"
