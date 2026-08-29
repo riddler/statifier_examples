@@ -1,0 +1,14 @@
+defmodule StatifierExamplesWeb.ErrorJSONTest do
+  use StatifierExamplesWeb.ConnCase, async: true
+
+  test "renders 404" do
+    assert StatifierExamplesWeb.ErrorJSON.render("404.json", %{}) == %{
+             errors: %{detail: "Not Found"}
+           }
+  end
+
+  test "renders 500" do
+    assert StatifierExamplesWeb.ErrorJSON.render("500.json", %{}) ==
+             %{errors: %{detail: "Internal Server Error"}}
+  end
+end
