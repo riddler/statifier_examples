@@ -34,9 +34,8 @@ defmodule StatifierExamples.Charts.StepLabelTest do
               |> Enum.uniq()
 
   # Sabotage: dropped label_field/0 from Charts.Step.config_schema/2; this
-  # went red, then reverted. Dropped it from Signup.Step.config_schema/2 as
-  # well, since the two domains reach the field through separate helpers;
-  # this went red again, then reverted.
+  # went red, then reverted. One mutation reaches every host type now that
+  # both domains route through the one helper; it took two before se-lin.
   test "every host block type declares label, first in the inspector form" do
     for module <- @host_types do
       assert [first | _rest] = module.config_schema(%{}),

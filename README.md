@@ -136,6 +136,33 @@ messaging block type `myapp.notify`, which belongs to neither domain, and
 `invoke_types/0` - the union of every handler the app registers, which the
 compiler reads as `:known_invoke_types`.
 
+### One step helper, one handler shape
+
+A reference embedder that showed two ways to write the same thing would be
+teaching the reader to pick, so there is one of each and both domains use it:
+
+- **`StatifierExamples.Charts.Step`** is the only step helper. Every host
+  block type in both domains declares its schema with `config_schema/2`,
+  checks it with `check_invoke_type/2` and `verdict/1`, and compiles with
+  `emit/4` - which takes the type's own invoke type as the default and
+  whatever `<param>` children it wants. It lives under `Charts` because that
+  is the seam the domains meet in, next to the palette and the fixture list.
+- **A handler module** is `invoke_types/0` plus `handle/2`: every name the
+  module registers, and one call answered or refused with
+  `{:error, {:unknown_invoke_type, type}}`. That shape is the one the
+  runtime asks for - st-ADR-0051 registers handlers per session as a
+  `%{invoke type => module}` map - and it is what makes
+  `Charts.invoke_types/0` a concatenation of three identical calls.
+- **Two outcomes, `done` and `error`**, in that order, labelled "Done" and
+  "Error". The label is the outcome's own name, which is also the compiled
+  event's (`error.communication.invoke`), so a card and a chart say one word
+  for one thing.
+
+A step whose config stores no `invoke_type` is naming the default its schema
+declares - the one place "the usual handler" is written down - so an absent
+key compiles and validates, while a stored value outside the `myapp:*`
+grammar is a finding.
+
 ## Fixtures
 
 `priv/fixtures/` holds the example block documents, decoded strictly at

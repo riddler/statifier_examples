@@ -3,25 +3,38 @@ defmodule StatifierExamples.Charts.Step do
   The shape every example step in this app shares: a leaf block type that
   **names** one host invoke type and compiles to a call the host answers.
 
+  This is the app's **one** step helper. Both example domains route through
+  it - card processing, the signup wizard, and the shared messaging type -
+  because a reference embedder that showed two ways to write the same step
+  would be teaching the reader to pick, and there is nothing here to pick
+  between. It lives under `StatifierExamples.Charts` for the reason the
+  palette and the fixture list do: that is the seam the domains meet in,
+  and a helper both domains need is not one domain's to own.
+
   This is host plumbing, not a block type. `statifier_blocks` owns the
   `StatifierBlocks.BlockType` behaviour and this module implements none of
   it; what it holds is the handful of decisions the example domains make
-  the same way every time, factored out so ten modules do not spell them
-  ten times:
+  the same way every time, factored out so twelve modules do not spell them
+  twelve times:
 
     * the `invoke_type` config field every step carries, and the
       `myapp:*` grammar it has to be in;
     * the two outcomes a call has, `done` and `error`;
     * the emission - an `<invoke>` in an inner state, one transition per
-      outcome, one `<final>` per outcome - modelled on
-      `StatifierBlocks.Core.Invoke`;
+      outcome, one `<final>` per outcome, with whatever `<param>` children
+      the calling type wants - modelled on `StatifierBlocks.Core.Invoke`;
     * the palette-entry defaults, including the one accent token the
       example CSS declares.
 
   The two-registry seam matters here and is easy to lose: a block type
   **names** an invoke type, it never runs one. What runs is a handler the
-  host registers separately, per session - `StatifierExamples.CardAuth.Handlers`
-  and `StatifierExamples.Charts.Messaging.Handlers` are this app's.
+  host registers separately, per session. This app's three handler modules
+  - `StatifierExamples.CardAuth.Handlers`,
+  `StatifierExamples.Signup.Handlers` and
+  `StatifierExamples.Charts.Messaging.Handlers` - are written in one shape:
+  `invoke_types/0` answers every name the module registers and `handle/2`
+  answers one call. `StatifierExamples.Charts.invoke_types/0` is their
+  union, and it is what the compiler reads as `:known_invoke_types`.
 
   Every function here is pure, because `StatifierBlocks.BlockType`'s purity
   rule (ADR-0002 decision 4) reaches anything a callback calls and not only
@@ -218,6 +231,22 @@ defmodule StatifierExamples.Charts.Step do
   def io, do: %{kinds: [:step]}
 
   @doc """
+  A `<param>` carrying a literal, for a value the block type stores rather
+  than reads out of the datamodel.
+
+  `config_key` is stamped on the emission as the provenance of the value,
+  so a finding inside it points at the author's field and not at this
+  module.
+  """
+  @spec literal_param(String.t(), String.t(), String.t()) :: Emission.t()
+  def literal_param(name, value, config_key)
+      when is_binary(name) and is_binary(value) and is_binary(config_key) do
+    "param"
+    |> Emission.element([{"expr", "'" <> value <> "'"}, {"name", name}])
+    |> Emission.from_config(config_key)
+  end
+
+  @doc """
   A compound state that calls the host and finishes at the `<final>` of
   whichever outcome the call reached.
 
@@ -248,17 +277,24 @@ defmodule StatifierExamples.Charts.Step do
   has no config key for a finding to point at, and attributing the
   attribute to a key the document does not carry would send an author
   looking for text they never typed.
+
+  `params` are the `<param>` children the calling type wants on the
+  `<invoke>`, in the order it wants them - `literal_param/3` builds one.
+  A step with nothing to send omits the argument.
   """
-  @spec emit(Block.t(), Context.t(), String.t()) ::
+  @spec emit(Block.t(), Context.t(), String.t(), [Emission.t()]) ::
           {:ok, Emission.t()} | {:error, BlockType.emit_error()}
-  def emit(%Block{config: config}, %Context{} = context, default) do
+  def emit(block, context, default, params \\ [])
+
+  def emit(%Block{config: config}, %Context{} = context, default, params)
+      when is_binary(default) and is_list(params) do
     with {:ok, running} <- Context.role_id(context, "running"),
          {:ok, done_final} <- Context.outcome_id(context, "done"),
          {:ok, error_final} <- Context.outcome_id(context, "error"),
          {:ok, invoke_type} <- checked_invoke_type(config, default) do
       inner =
         Emit.state(running, nil, [
-          call(config, invoke_type),
+          call(config, invoke_type, params),
           Emit.transition(event: @done_event, target: done_final),
           Emit.transition(event: @error_event, target: error_final)
         ])
@@ -272,9 +308,9 @@ defmodule StatifierExamples.Charts.Step do
     end
   end
 
-  @spec call(Block.config(), String.t()) :: Emission.t()
-  defp call(config, invoke_type) do
-    element = Emission.element("invoke", [{"type", invoke_type}])
+  @spec call(Block.config(), String.t(), [Emission.t()]) :: Emission.t()
+  defp call(config, invoke_type, params) do
+    element = Emission.element("invoke", [{"type", invoke_type}], params)
 
     case Map.get(config, "invoke_type") do
       nil -> element

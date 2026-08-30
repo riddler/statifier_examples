@@ -9,7 +9,7 @@ defmodule StatifierExamples.Signup.Provision do
 
   @behaviour StatifierBlocks.BlockType
 
-  alias StatifierExamples.Signup.Step
+  alias StatifierExamples.Charts.Step
 
   @invoke_type "myapp:provision"
 
@@ -49,5 +49,5 @@ defmodule StatifierExamples.Signup.Provision do
     }
 
   @impl true
-  def emit(block, context), do: Step.emit(block, context, [])
+  def emit(block, context), do: Step.emit(block, context, @invoke_type)
 end
