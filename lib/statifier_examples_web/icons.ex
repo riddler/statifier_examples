@@ -36,22 +36,7 @@ defmodule StatifierExamplesWeb.Icons do
   nobody made.
   """
   def icon(assigns) do
-    # The package calls this seam as `@icon.(%{name: name, class: class})` - a
-    # plain map, built by hand rather than by HEEx - so what arrives carries no
-    # `__changed__` key, and every `Phoenix.Component` helper raises on a map
-    # that has none. `nil` is change tracking's own word for "assume everything
-    # changed", so putting it in is exactly right for a component that is
-    # re-rendered whenever its tile is; `put_new` rather than `put` so a call
-    # that DID come through HEEx keeps the tracking it arrived with.
-    #
-    # This is API friction worth reporting upstream rather than a defect here:
-    # the seam's documented example happens to render straight from its
-    # arguments, so it never touches a helper, and a host that derives one
-    # value the ordinary way finds out by crash.
-    assigns =
-      assigns
-      |> Map.put_new(:__changed__, nil)
-      |> Map.put_new(:class, nil)
+    assigns = Map.put_new(assigns, :class, nil)
 
     assigns = assign(assigns, :body, Charts.icon(assigns.name) && Charts.Icons.body(assigns.name))
 

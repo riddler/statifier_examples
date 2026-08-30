@@ -186,11 +186,11 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # is on `statifier_blocks`' own rendering and no mutation of this app's
     # code can move it.
     #
-    # 2026-08-30 (se-3io): before the campaign-017 pin moved forward this
-    # refuted a subtitle outright. The package now summarises core blocks in
-    # that slot, so an unlabelled `core.branch` reads "1 arm + otherwise";
-    # the row asserts the summary instead, and still refutes the title being
-    # repeated there.
+    # 2026-08-30 (se-3io): before statifier_blocks 0.5.0 this refuted a
+    # subtitle outright. The package now summarises core blocks in that slot,
+    # so an unlabelled `core.branch` reads "1 arm + otherwise"; the row
+    # asserts the summary instead, and still refutes the title being repeated
+    # there.
     test "a block with no label of its own is titled by its palette entry",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
