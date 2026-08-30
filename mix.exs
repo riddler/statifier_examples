@@ -87,15 +87,25 @@ defmodule StatifierExamples.MixProject do
     ]
   end
 
-  # The editor package. From Hex by default; setting `STATIFIER_BLOCKS_PATH` to
-  # a local `statifier_blocks` checkout swaps in a path dep on that directory,
-  # which is how a host-side change is tried against an unreleased editor.
-  # The arm is a local convenience: the `mix.lock` (and `mix.exs`) changes it
-  # produces are never committed, and CI sets no env, so CI resolves Hex.
+  # The editor package. Setting `STATIFIER_BLOCKS_PATH` to a local
+  # `statifier_blocks` checkout swaps in a path dep on that directory, which is
+  # how a host-side change is tried against an unreleased editor. The arm is a
+  # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
+  # never committed, and CI sets no env, so CI resolves the default arm.
+  #
+  # The default arm is INTERIM (campaign 019, bead se-9o0): it is a git dep
+  # pinned to the `statifier_blocks` main commit that carries the findings
+  # anatomy work, so the sweep runs against the unreleased editor. It returns
+  # to `{:statifier_blocks, "~> 0.7"}` from Hex once 0.7.0 is published.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
-      path when is_binary(path) and path != "" -> {:statifier_blocks, path: path}
-      _ -> {:statifier_blocks, "~> 0.6"}
+      path when is_binary(path) and path != "" ->
+        {:statifier_blocks, path: path}
+
+      _ ->
+        {:statifier_blocks,
+         git: "https://github.com/riddler/statifier_blocks.git",
+         ref: "ec05e5632c373f6ae71abef6cc9e12ecc8abf6e9"}
     end
   end
 
