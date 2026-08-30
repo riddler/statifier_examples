@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_su_invites_demo",
+  "revision": 4,
+  "metadata": {
+    "name": "Signup invitations",
+    "description": "Invite teammates to a new workspace, run the signup wizard for each invitee as a child chart, and confirm the team once they are through.",
+    "domain": "signup"
+  },
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_si_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.invoke",
+          "id": "blk_si_send_invites",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:notify",
+            "params": "email=signup.email\nseats=signup.seats",
+            "label": "Email the invitations"
+          }
+        },
+        {
+          "type": "core.group",
+          "id": "blk_si_onboarding",
+          "type_version": 1,
+          "config": {
+            "label": "While an invitee is signing up"
+          },
+          "slots": {
+            "body": [
+              {
+                "type": "core.foreach",
+                "id": "blk_si_each_invitee",
+                "type_version": 1,
+                "config": {
+                  "items": "signup.invitees",
+                  "item_as": "invitee",
+                  "label": "For each invitee"
+                },
+                "slots": {
+                  "body": [
+                    {
+                      "type": "core.subchart",
+                      "id": "blk_si_invitee_signup",
+                      "type_version": 1,
+                      "config": {
+                        "chart": "bdoc_signup_demo",
+                        "params": "email=signup.email\nplan=signup.plan",
+                        "assign_to": "onboarding",
+                        "label": "Run the signup wizard for the invitee"
+                      },
+                      "slots": {
+                        "on_error": [
+                          {
+                            "type": "core.sequence",
+                            "id": "blk_si_signup_failed",
+                            "type_version": 1,
+                            "config": {
+                              "label": "The invitee never got through"
+                            },
+                            "slots": {
+                              "body": [
+                                {
+                                  "type": "core.invoke",
+                                  "id": "blk_si_notify_owner",
+                                  "type_version": 1,
+                                  "config": {
+                                    "invoke_type": "myapp:notify",
+                                    "params": "email=signup.email",
+                                    "label": "Tell the account owner"
+                                  }
+                                },
+                                {
+                                  "type": "core.raise",
+                                  "id": "blk_si_raise_abandoned",
+                                  "type_version": 1,
+                                  "config": {
+                                    "event": "signup.abandoned"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "core.wait",
+                "id": "blk_si_settle",
+                "type_version": 1,
+                "config": {
+                  "duration": "24h",
+                  "label": "Give the rest of the team a day"
+                }
+              }
+            ],
+            "interrupts": [
+              {
+                "type": "core.on_event",
+                "id": "blk_si_abandoned",
+                "type_version": 1,
+                "config": {
+                  "event": "signup.abandoned",
+                  "outcome": "abandon"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "myapp.signup_step",
+          "id": "blk_si_confirm",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:signup",
+            "step": "confirm",
+            "label": "Confirm the team is set up"
+          }
+        }
+      ]
+    }
+  }
+}

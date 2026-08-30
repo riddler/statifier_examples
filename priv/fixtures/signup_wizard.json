@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_signup_demo",
+  "revision": 8,
+  "metadata": {
+    "name": "Signup wizard",
+    "description": "Collect an account, verify the email, branch on the chosen plan, and provision.",
+    "domain": "signup"
+  },
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_su_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.signup_step",
+          "id": "blk_su_account",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:signup",
+            "step": "account",
+            "label": "Collect email and password"
+          }
+        },
+        {
+          "type": "core.group",
+          "id": "blk_su_verify",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "myapp.signup_step",
+                "id": "blk_su_send_verification",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:signup",
+                  "step": "send_verification",
+                  "label": "Send the verification email"
+                }
+              },
+              {
+                "type": "core.wait",
+                "id": "blk_su_verify_wait",
+                "type_version": 1,
+                "config": {
+                  "duration": "24h"
+                }
+              }
+            ],
+            "interrupts": [
+              {
+                "type": "core.on_event",
+                "id": "blk_su_verified",
+                "type_version": 1,
+                "config": {
+                  "event": "signup.email_verified",
+                  "outcome": "resume"
+                }
+              },
+              {
+                "type": "core.on_event",
+                "id": "blk_su_abandoned",
+                "type_version": 1,
+                "config": {
+                  "event": "signup.abandoned",
+                  "outcome": "abandon"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "core.group",
+          "id": "blk_su_onboarding",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "core.send",
+                "id": "blk_su_onboarding_deadline",
+                "type_version": 1,
+                "config": {
+                  "event": "signup.abandoned",
+                  "delay": "2h",
+                  "label": "Give onboarding two hours"
+                }
+              },
+              {
+                "type": "core.branch",
+                "id": "blk_su_plan",
+                "type_version": 1,
+                "config": {
+                  "arms": [
+                    {
+                      "slot": "arm_business",
+                      "cond": "signup.plan == 'business' AND signup.seats > 1"
+                    },
+                    {
+                      "slot": "arm_personal",
+                      "cond": "signup.plan == 'personal' AND signup.email_verified"
+                    }
+                  ]
+                },
+                "slots": {
+                  "arm_business": [
+                    {
+                      "type": "myapp.signup_step",
+                      "id": "blk_su_company",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:signup",
+                        "step": "company_details",
+                        "label": "Collect the company details"
+                      }
+                    }
+                  ],
+                  "arm_personal": [
+                    {
+                      "type": "myapp.signup_step",
+                      "id": "blk_su_preferences",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:signup",
+                        "step": "preferences",
+                        "label": "Ask about preferences"
+                      }
+                    }
+                  ],
+                  "otherwise": [
+                    {
+                      "type": "myapp.notify",
+                      "id": "blk_su_plan_help",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:notify",
+                        "template": "choose_a_plan",
+                        "label": "Nudge them to pick a plan"
+                      }
+                    },
+                    {
+                      "type": "core.raise",
+                      "id": "blk_su_raise_abandoned",
+                      "type_version": 1,
+                      "config": {
+                        "event": "signup.abandoned"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "myapp.provision",
+                "id": "blk_su_provision",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:provision",
+                  "label": "Create the workspace"
+                }
+              }
+            ],
+            "interrupts": [
+              {
+                "type": "core.on_event",
+                "id": "blk_su_onboarding_abandoned",
+                "type_version": 1,
+                "config": {
+                  "event": "signup.abandoned",
+                  "outcome": "abandon"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
