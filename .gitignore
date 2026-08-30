@@ -45,3 +45,9 @@ statifier_examples-*.tar
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
+
+# SQLite databases (se-cnv). `*.db` above already covers the database file
+# itself; these are the journal and write-ahead-log sidecars SQLite leaves
+# beside it.
+*.db-shm
+*.db-wal

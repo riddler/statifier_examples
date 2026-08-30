@@ -1,5 +1,10 @@
 import Config
 
+config :statifier_examples, StatifierExamples.Repo,
+  database: Path.expand("../priv/repo/statifier_examples_dev.db", __DIR__),
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

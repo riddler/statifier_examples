@@ -1,5 +1,12 @@
 import Config
 
+# Each test checks out its own sandbox connection, so the suite shares one
+# database file and rolls every test's rows back.
+config :statifier_examples, StatifierExamples.Repo,
+  database: Path.expand("../priv/repo/statifier_examples_test.db", __DIR__),
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: 5
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :statifier_examples, StatifierExamplesWeb.Endpoint,

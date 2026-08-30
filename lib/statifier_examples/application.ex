@@ -9,6 +9,7 @@ defmodule StatifierExamples.Application do
   def start(_type, _args) do
     children = [
       StatifierExamplesWeb.Telemetry,
+      StatifierExamples.Repo,
       {DNSCluster,
        query: Application.get_env(:statifier_examples, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: StatifierExamples.PubSub},
