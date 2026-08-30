@@ -78,10 +78,13 @@ defmodule StatifierExamples.Charts.StepLabelTest do
 
   # The labels the declaration reaches, counted per fixture and split at the
   # boundary that decides whether it reaches them: a `myapp.*` block is
-  # titled by the field this bead declares, and the thirteen `core.*` blocks
-  # that also carry one stay titled by their type until `statifier_blocks`
-  # declares a label of its own. Counting both halves is what keeps that
-  # remainder from reading as an oversight here.
+  # titled by the field this app declares, and a `core.*` block is not,
+  # because no type in that vocabulary declares one (ADR-0002 amendment H5).
+  # The `core.*` half is therefore zero everywhere and stays zero - se-62u
+  # dropped the thirteen labels that half used to count, since a key nothing
+  # reads is not a remainder waiting on an upstream declaration, it is dead
+  # data in a shipped example. Counting the half that is empty is the point:
+  # it is what fails if one creeps back in through a fixture edit.
   #
   # Sabotage: made Signup.fixtures/0 drop its first document; this went red
   # on the missing key, then reverted.
@@ -94,9 +97,9 @@ defmodule StatifierExamples.Charts.StepLabelTest do
       end)
 
     assert counts == %{
-             "card_processing" => {17, 5},
-             "signup_invitations" => {1, 7},
-             "signup_wizard" => {6, 1}
+             "card_processing" => {17, 0},
+             "signup_invitations" => {1, 0},
+             "signup_wizard" => {6, 0}
            }
   end
 

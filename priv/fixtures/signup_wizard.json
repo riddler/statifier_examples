@@ -82,8 +82,7 @@
                 "type_version": 1,
                 "config": {
                   "event": "signup.abandoned",
-                  "delay": "2h",
-                  "label": "Give onboarding two hours"
+                  "delay": "2h"
                 }
               },
               {
