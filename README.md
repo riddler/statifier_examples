@@ -12,10 +12,99 @@ whether that is pleasant to do.
 
 ## Running it
 
-```sh
-mix setup        # deps, tailwind, esbuild
-mix phx.server   # http://127.0.0.1:8645
-```
+1. `mise install` - provisions the Erlang and Elixir versions `mise.toml`
+   pins; CI reads the same two.
+2. `mix setup` - `deps.get`, then the tailwind and esbuild installs and one
+   asset build.
+3. `mix phx.server` - starts the dev server.
+4. Open <http://127.0.0.1:8645/>. The home page lists the example documents,
+   each linking into the editor.
+
+The dev port is 8645 and is set in `config/dev.exs`. `config/runtime.exs`
+overrides it only when `PORT` is set or the environment is `:prod`, so dev
+stays on 8645; 8642, 8643 and 8644 belong to other processes and are never
+bound here.
+
+## Opening a document in the editor
+
+1. Click a document on the home page, or go to `/editor?doc=<key>` directly.
+   The three keys, in the order the switcher offers them:
+
+   | `doc=` | What the document shows |
+   |---|---|
+   | `card_processing` | intake and a validation branch, then a three-lane authorization group - fraud review, balance check, 3-D Secure - with a `core.send` arming a deadline and two guarded interrupt rules listening on the group's rail; then an outcome branch with capture-retry, a resumable manual-review arm and a receipt tail. It also carries the one deliberately unregistered block type |
+   | `signup_wizard` | account collection, a verification group with resume and abandon interrupts, then the A/B branch on the chosen plan - business, personal, or a nudge - and provisioning |
+   | `signup_invitations` | a `core.foreach` over the invitees, each running the wizard above as a `core.subchart` child chart with an `on_error` subtree |
+
+2. Switch documents with the header's DOCUMENT select. Edits live in the
+   LiveView process, so an edit survives a document switch and does not
+   survive a reload - there is no database in this app yet.
+
+An unknown `doc=` is not a 404: the page falls back to the first fixture,
+`card_processing`, because a query-string name is a thing somebody typed.
+
+## Themes, and naming a screen by URL
+
+1. Pick a theme with the header's THEME select, or ask for one:
+   `/editor?doc=signup_wizard&theme=dark`. The three are `light`, `dark` and
+   `brand`; an unknown theme falls back to `light`.
+2. Both parameters are read in `handle_params/3` and nowhere else, so any
+   screen this app can show has a URL that names it - which is what a
+   headless capture, a browser loop and a bug report each need.
+
+The themes are CSS, not an assign: three
+`.myapp-page[data-theme="..."]` blocks in `assets/css/app.css`, each
+declaring the host's own `--sb-accent-myapp` alongside the package's tokens.
+
+## What Compile shows
+
+The compile runs on every load and again on every edit, so the findings pane
+is never answering for a document that is no longer on the canvas. The
+header's Compile button re-runs a pass that is already current - it is there
+because a host whose compile is expensive wants one, and this page is what
+such a host copies. The verdict beside it reads `clean` or `N findings`, and
+it counts the compiler's findings rather than the pane's, so a finding that
+names no block is still counted even though there is nowhere to draw it.
+
+What the three documents report today:
+
+- `signup_wizard` - `clean`.
+- `card_processing` - `1 finding`, and it is intended: `myapp.legacy_check`
+  at depth 7 is deliberately left out of the palette, so the editor's
+  unavailable-block chrome and the compiler's `unknown_block_type` finding
+  are both exercised on a document you can open.
+- `signup_invitations` - `1 finding`, also expected: its `core.subchart`
+  emits the invoke type `statifier_blocks:subchart`, which is the **host's**
+  to register, and this app registers only its own `myapp:*` handlers. The
+  warning is the ordinary unregistered-handler lint, not a broken fixture.
+
+## Copying the reference header
+
+ADR-0005's shell arrangement, ruling 8A, splits the editing surface from the
+document chrome: the package ships the canvas toolbar, the tabbed inspector,
+the drawer and the grouped palette, and the **host** ships the outer header -
+document identity, the document switcher, the theme control, and compile.
+The record is `docs/adr/0005-liveview-editor.md` in `statifier_blocks`,
+section "Amendment (2026-08-29): the shell arrangement - three panes and a
+drawer". To copy the host's half:
+
+1. Read `lib/statifier_examples_web/live/editor_live.ex`. The header markup
+   goes in `StatifierBlocks.Editor`'s `:header` slot: the document's name,
+   `revision N` and its id, the DOCUMENT and THEME selects as `phx-change`
+   forms, and the Compile button. Undo and redo are deliberately absent -
+   they are the package's toolbar, and a second pair here would be two
+   controls over one history.
+2. Register **both** hooks in `assets/js/app.js`. `StatifierBlocksDrag` is
+   the drag hook and `StatifierBlocksMeasure` is the read-only measurement
+   hook; without the second one the editor works but draws no connectors at
+   all. At the SHA this app pins, the package's default export carries only
+   the drag hook, so the two are imported as named exports from their own
+   entry points. The specifiers resolve through esbuild's `NODE_PATH`, which
+   `config/config.exs` points at `deps/` - the same way this app already
+   resolves `phoenix` - rather than through an `assets/package.json` and an
+   npm install.
+3. Style the page root, not the editor's internals: `assets/css/app.css`
+   redeclares the package's tokens under `.myapp-page[data-theme="..."]`.
 
 ## The gate
 
@@ -72,3 +161,9 @@ editor's unavailable-block chrome and the compiler's unknown-type finding are
 both exercised.
 
 Every fixture, seed and example value in this repository is fictional.
+
+## The rules that are not in this file
+
+`CLAUDE.md` carries the ones a change here has to honour: the git-SHA pin on
+`statifier_blocks` and the bead that swaps it for the Hex release, and the
+rule that the example domains are the two canonical ones and nothing else.
