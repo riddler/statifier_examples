@@ -93,19 +93,14 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is INTERIM (campaign 019, bead se-9o0): it is a git dep
-  # pinned to the `statifier_blocks` main commit that carries the findings
-  # anatomy work, so the sweep runs against the unreleased editor. It returns
-  # to `{:statifier_blocks, "~> 0.7"}` from Hex once 0.7.0 is published.
+  # The default arm is the Hex requirement `{:statifier_blocks, "~> 0.7"}`.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "ec05e5632c373f6ae71abef6cc9e12ecc8abf6e9"}
+        {:statifier_blocks, "~> 0.7"}
     end
   end
 
