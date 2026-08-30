@@ -62,18 +62,31 @@ The compile runs on every load and again on every edit, so the findings pane
 is never answering for a document that is no longer on the canvas. The
 header's Compile button re-runs a pass that is already current - it is there
 because a host whose compile is expensive wants one, and this page is what
-such a host copies. The verdict beside it reads `clean` or `N findings`, and
-it counts the compiler's findings rather than the pane's, so a finding that
-names no block is still counted even though there is nowhere to draw it.
+such a host copies. The verdict beside it reads `Findings N` - the drawer's
+own title and the drawer's own number, read out of the package through
+`StatifierBlocks.Editor.findings_count/3` rather than counted here. There is
+one findings number on this page and it is the package's: the compiler
+reports what it found, the editor's view model derives findings of its own on
+top of whatever the host hands in, and a header counting the first beside a
+drawer listing the second is a page disagreeing with itself about one fact.
+The wording is the package's too, so there is no singular form and no word
+for zero: a document with nothing wrong reads `Findings 0`.
+
+The page also opens at Fit width, because the host passes the package's `fit`
+attr - see step 1 of "Copying the reference header".
 
 What the three documents report today:
 
-- `signup_wizard` - `clean`.
-- `card_processing` - `1 finding`, and it is intended: `myapp.legacy_check`
-  at depth 7 is deliberately left out of the palette, so the editor's
-  unavailable-block chrome and the compiler's `unknown_block_type` finding
-  are both exercised on a document you can open.
-- `signup_invitations` - `1 finding`, also expected: its `core.subchart`
+- `signup_wizard` - `Findings 0`.
+- `card_processing` - `Findings 2`, and both are intended.
+  `myapp.legacy_check` at depth 7 is deliberately left out of the palette, so
+  the editor's unavailable-block chrome and the compiler's
+  `unknown_block_type` finding are both exercised on a document you can open.
+  The compiler reports one finding for it; the view model derives a second on
+  the same block from the same unresolved type, and the drawer lists both. It
+  is the document that made the two numbers' gap visible, which is why the
+  header now reads the package's.
+- `signup_invitations` - `Findings 1`, also expected: its `core.subchart`
   emits the invoke type `statifier_blocks:subchart`, which is the **host's**
   to register, and this app registers only its own `myapp:*` handlers. The
   warning is the ordinary unregistered-handler lint, not a broken fixture.
@@ -93,7 +106,11 @@ drawer". To copy the host's half:
    `revision N` and its id, the DOCUMENT and THEME selects as `phx-change`
    forms, and the Compile button. Undo and redo are deliberately absent -
    they are the package's toolbar, and a second pair here would be two
-   controls over one history.
+   controls over one history. The same call passes `fit={:width}`, which is
+   how the page opens at Fit width: the fit is the package's to compute and
+   the host's to ask for, so a host that wants the whole document in view on
+   the first paint says so here rather than reaching for the toolbar's Fit
+   button on the reader's behalf.
 2. Register **both** hooks in `assets/js/app.js`. `StatifierBlocksDrag` is
    the drag hook and `StatifierBlocksMeasure` is the read-only measurement
    hook; without the second one the editor works but draws no connectors at
