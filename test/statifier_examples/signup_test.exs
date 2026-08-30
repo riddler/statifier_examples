@@ -1,19 +1,16 @@
 defmodule StatifierExamples.SignupTest do
   use ExUnit.Case, async: true
 
-  alias StatifierBlocks.{Compiler, Decode, Palette}
-  alias StatifierExamples.Signup
+  alias StatifierBlocks.{Compiler, Decode}
+  alias StatifierExamples.{Charts, Signup}
   alias StatifierExamples.Signup.{Provision, SignupStep}
-  alias StatifierExamples.Support.Notify
 
-  # The palette the fixtures are written against: this app's signup types,
-  # the core vocabulary underneath, and a test-only `myapp.notify` standing
-  # in for `StatifierExamples.Charts.Messaging`, which `se-rrd` owns and
-  # which is not on main yet.
-  defp palette do
-    registrations = Map.to_list(Signup.block_types()) ++ [{"myapp.notify", Notify}]
-    Palette.from_modules(registrations, core: true)
-  end
+  # The palette the fixtures are written against: this app's own, which
+  # composes the signup types, the card-processing ones, the shared
+  # `myapp.notify` and the core vocabulary underneath. The test-only
+  # stand-in that stood here until `StatifierExamples.Charts.Messaging`
+  # landed (se-rrd) is gone with it.
+  defp palette, do: Charts.palette()
 
   # Sabotage: dropped "myapp.provision" from block_types/0; this went red,
   # then reverted.
