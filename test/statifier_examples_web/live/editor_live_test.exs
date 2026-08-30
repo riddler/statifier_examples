@@ -195,16 +195,22 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # so an unlabelled `core.branch` reads "1 arm + otherwise"; the row
     # asserts the summary instead, and still refutes the title being repeated
     # there.
+    #
+    # 2026-08-30 (se-e63, pin moved to the 0.6.0 prep): sb-2mxa split the
+    # card's second line in two. `subtitle/1` is now the type label and is
+    # `nil` for an unlabelled block, so `.sb-node__type` is absent entirely;
+    # the summary moved to a chip row, `.sb-node__summary` > `.sb-node__chip`.
+    # The row reads the chip row, which is where the summary lives now.
     test "a block with no label of its own is titled by its palette entry",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
 
       assert card(view, "blk_cp_validation", "sb-node__label") =~ "Branch"
 
-      subtitle = card(view, "blk_cp_validation", "sb-node__type")
+      summary = card(view, "blk_cp_validation", "sb-node__summary")
 
-      assert subtitle =~ "arm"
-      refute subtitle =~ "Branch"
+      assert summary =~ "arm"
+      refute summary =~ "Branch"
     end
   end
 
