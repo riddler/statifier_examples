@@ -51,10 +51,10 @@ defmodule StatifierExamples.Charts.CardProcessingFixtureTest do
     refute "core.timeout" in types
     assert "core.send" in types
 
-    assert %{"event" => "card.authorization_timed_out", "delay" => "15m"} =
+    assert %{"event" => "card.authz_timed_out", "delay" => "15m"} =
              config(document, "blk_cp_authz_deadline")
 
-    assert %{"event" => "card.authorization_timed_out", "outcome" => "abandon"} =
+    assert %{"event" => "card.authz_timed_out", "outcome" => "abandon"} =
              config(document, "blk_cp_authz_timeout")
   end
 
