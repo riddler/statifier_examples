@@ -1,0 +1,540 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_cp_demo",
+  "revision": 42,
+  "metadata": {
+    "name": "Card processing",
+    "description": "Intake, validation, a three-lane authorization group with interrupts, an outcome branch with capture retry and manual review, and a receipt tail. The authorize and capture calls carry on_error subtrees, so the slot idiom and the retry-predicate idiom can be read side by side. Ported from the statifier_blocks spike: the proposed core.timeout block became the shipped pair that models a clock interrupt - a core.send arming card.authorization_timed_out at the head of the authorization group's body, and a core.on_event on its interrupt rail listening for that event. One block type is deliberately unregistered, myapp.legacy_check, so the unavailable-block chrome is exercised at depth 7.",
+    "domain": "card-processing"
+  },
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_cp_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.intake",
+          "id": "blk_cp_intake",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:intake",
+            "label": "Take the payment request"
+          }
+        },
+        {
+          "type": "core.branch",
+          "id": "blk_cp_validation",
+          "type_version": 1,
+          "config": {
+            "arms": [
+              {
+                "slot": "arm_valid",
+                "cond": "validation.passed AND amount_cents > 0 AND card.active"
+              }
+            ]
+          },
+          "slots": {
+            "arm_valid": [
+              {
+                "type": "core.group",
+                "id": "blk_cp_authz",
+                "type_version": 1,
+                "slots": {
+                  "body": [
+                    {
+                      "type": "core.send",
+                      "id": "blk_cp_authz_deadline",
+                      "type_version": 1,
+                      "config": {
+                        "event": "card.authorization_timed_out",
+                        "delay": "15m",
+                        "label": "Arm the authorization deadline"
+                      }
+                    },
+                    {
+                      "type": "core.parallel",
+                      "id": "blk_cp_lanes",
+                      "type_version": 1,
+                      "config": {
+                        "lanes": [
+                          "fraud_review",
+                          "balance_check",
+                          "three_ds"
+                        ]
+                      },
+                      "slots": {
+                        "lane_fraud_review": [
+                          {
+                            "type": "core.group",
+                            "id": "blk_cp_fraud",
+                            "type_version": 1,
+                            "slots": {
+                              "body": [
+                                {
+                                  "type": "myapp.risk_rating",
+                                  "id": "blk_cp_risk_rating",
+                                  "type_version": 1,
+                                  "config": {
+                                    "invoke_type": "myapp:risk_rating",
+                                    "label": "Rate the transaction"
+                                  }
+                                },
+                                {
+                                  "type": "core.wait",
+                                  "id": "blk_cp_fraud_wait",
+                                  "type_version": 1,
+                                  "config": {
+                                    "duration": "2m"
+                                  }
+                                },
+                                {
+                                  "type": "core.branch",
+                                  "id": "blk_cp_risk_branch",
+                                  "type_version": 1,
+                                  "config": {
+                                    "arms": [
+                                      {
+                                        "slot": "arm_high_risk",
+                                        "cond": "risk_rating >= 70 OR fraud.verdict == 'review'"
+                                      },
+                                      {
+                                        "slot": "arm_low_risk",
+                                        "cond": "risk_rating < 40 AND customer.verified"
+                                      }
+                                    ]
+                                  },
+                                  "slots": {
+                                    "arm_high_risk": [
+                                      {
+                                        "type": "myapp.manual_flag",
+                                        "id": "blk_cp_manual_flag",
+                                        "type_version": 1,
+                                        "config": {
+                                          "invoke_type": "myapp:manual_flag",
+                                          "label": "Flag for a human"
+                                        }
+                                      }
+                                    ],
+                                    "arm_low_risk": [
+                                      {
+                                        "type": "myapp.legacy_check",
+                                        "id": "blk_cp_legacy",
+                                        "type_version": 3,
+                                        "config": {
+                                          "ruleset": "velocity-v2",
+                                          "window": "24h",
+                                          "thresholds": {
+                                            "count": 5,
+                                            "amount_cents": 250000
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "otherwise": [
+                                      {
+                                        "type": "myapp.notify",
+                                        "id": "blk_cp_risk_notify",
+                                        "type_version": 1,
+                                        "config": {
+                                          "invoke_type": "myapp:notify",
+                                          "template": "risk_indeterminate",
+                                          "label": "Tell ops the rating was inconclusive"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ],
+                              "interrupts": [
+                                {
+                                  "type": "core.on_event",
+                                  "id": "blk_cp_fraud_abort",
+                                  "type_version": 1,
+                                  "config": {
+                                    "event": "fraud.aborted",
+                                    "outcome": "abandon"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "lane_balance_check": [
+                          {
+                            "type": "myapp.balance_check",
+                            "id": "blk_cp_balance",
+                            "type_version": 1,
+                            "config": {
+                              "invoke_type": "myapp:balance_check",
+                              "label": "Check the available balance"
+                            }
+                          },
+                          {
+                            "type": "core.wait",
+                            "id": "blk_cp_balance_wait",
+                            "type_version": 1,
+                            "config": {
+                              "duration": "30s"
+                            }
+                          }
+                        ],
+                        "lane_three_ds": [
+                          {
+                            "type": "myapp.three_ds_challenge",
+                            "id": "blk_cp_three_ds",
+                            "type_version": 2,
+                            "config": {
+                              "invoke_type": "myapp:three_ds",
+                              "label": "Send the cardholder a challenge"
+                            }
+                          },
+                          {
+                            "type": "core.group",
+                            "id": "blk_cp_three_ds_group",
+                            "type_version": 1,
+                            "slots": {
+                              "body": [
+                                {
+                                  "type": "core.wait",
+                                  "id": "blk_cp_three_ds_wait",
+                                  "type_version": 1,
+                                  "config": {
+                                    "duration": "10m"
+                                  }
+                                }
+                              ],
+                              "interrupts": [
+                                {
+                                  "type": "core.on_event",
+                                  "id": "blk_cp_three_ds_done",
+                                  "type_version": 1,
+                                  "config": {
+                                    "event": "card.three_ds_completed",
+                                    "outcome": "resume"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "core.invoke",
+                      "id": "blk_cp_authorize",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:authorize",
+                        "assign_to": "auth",
+                        "params": "amount=amount_cents\ncurrency=currency\ncustomer=customer.id",
+                        "label": "Authorize the card"
+                      },
+                      "slots": {
+                        "on_error": [
+                          {
+                            "type": "core.sequence",
+                            "id": "blk_cp_authz_error",
+                            "type_version": 1,
+                            "slots": {
+                              "body": [
+                                {
+                                  "type": "myapp.park",
+                                  "id": "blk_cp_authz_park",
+                                  "type_version": 1,
+                                  "config": {
+                                    "invoke_type": "myapp:park",
+                                    "queue": "authorization_review",
+                                    "label": "Queue it for review"
+                                  }
+                                },
+                                {
+                                  "type": "myapp.notify",
+                                  "id": "blk_cp_authz_error_notify",
+                                  "type_version": 1,
+                                  "config": {
+                                    "invoke_type": "myapp:notify",
+                                    "template": "authorization_failed",
+                                    "label": "Tell ops the authorization failed"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "interrupts": [
+                    {
+                      "type": "core.on_event",
+                      "id": "blk_cp_cancelled",
+                      "type_version": 1,
+                      "config": {
+                        "event": "customer.cancelled",
+                        "cond": "event.customer_cancelled.reason == 'customer_request' AND auth.captured == false",
+                        "outcome": "abandon"
+                      }
+                    },
+                    {
+                      "type": "core.on_event",
+                      "id": "blk_cp_authz_timeout",
+                      "type_version": 1,
+                      "config": {
+                        "event": "card.authorization_timed_out",
+                        "cond": "three_ds.completed == false OR fraud.cleared == false",
+                        "outcome": "abandon",
+                        "label": "Give up on the authorization"
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "otherwise": [
+              {
+                "type": "myapp.notify",
+                "id": "blk_cp_validation_fail",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "template": "validation_failed",
+                  "label": "Tell the customer what was wrong"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "core.branch",
+          "id": "blk_cp_outcome",
+          "type_version": 1,
+          "config": {
+            "arms": [
+              {
+                "slot": "arm_approved",
+                "cond": "auth.approved AND fraud.cleared AND balance.available_cents >= amount_cents"
+              },
+              {
+                "slot": "arm_declined",
+                "cond": "fraud.verdict == 'decline' OR balance.available_cents < amount_cents"
+              },
+              {
+                "slot": "arm_manual_review",
+                "cond": "fraud.verdict == 'review' AND limits.manual_review_backlog < 50"
+              }
+            ]
+          },
+          "slots": {
+            "arm_approved": [
+              {
+                "type": "core.group",
+                "id": "blk_cp_capture_group",
+                "type_version": 1,
+                "slots": {
+                  "body": [
+                    {
+                      "type": "core.invoke",
+                      "id": "blk_cp_capture",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:capture",
+                        "params": "amount=amount_cents\nauth_code=auth.code",
+                        "label": "Capture the funds"
+                      },
+                      "slots": {
+                        "on_error": [
+                          {
+                            "type": "myapp.park",
+                            "id": "blk_cp_capture_park",
+                            "type_version": 1,
+                            "config": {
+                              "invoke_type": "myapp:park",
+                              "queue": "capture_reconciliation",
+                              "label": "Park it for reconciliation"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "core.branch",
+                      "id": "blk_cp_capture_retry",
+                      "type_version": 1,
+                      "config": {
+                        "arms": [
+                          {
+                            "slot": "arm_retry",
+                            "cond": "auth.captured == false AND capture_attempts < 3"
+                          }
+                        ]
+                      },
+                      "slots": {
+                        "arm_retry": [
+                          {
+                            "type": "core.sequence",
+                            "id": "blk_cp_retry_seq",
+                            "type_version": 1,
+                            "slots": {
+                              "body": [
+                                {
+                                  "type": "core.wait",
+                                  "id": "blk_cp_retry_wait",
+                                  "type_version": 1,
+                                  "config": {
+                                    "duration": "1m"
+                                  }
+                                },
+                                {
+                                  "type": "myapp.capture",
+                                  "id": "blk_cp_capture_retry_call",
+                                  "type_version": 1,
+                                  "config": {
+                                    "invoke_type": "myapp:capture",
+                                    "amount_key": "amount_cents",
+                                    "retries": 3,
+                                    "label": "Try the capture again"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "interrupts": [
+                    {
+                      "type": "core.on_event",
+                      "id": "blk_cp_capture_cancel",
+                      "type_version": 1,
+                      "config": {
+                        "event": "capture.reversed",
+                        "outcome": "abandon"
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "arm_declined": [
+              {
+                "type": "myapp.notify",
+                "id": "blk_cp_decline_notify",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "template": "payment_declined",
+                  "label": "Tell the customer it was declined"
+                }
+              }
+            ],
+            "arm_manual_review": [
+              {
+                "type": "core.resumable_group",
+                "id": "blk_cp_manual",
+                "type_version": 1,
+                "config": {
+                  "history": "deep"
+                },
+                "slots": {
+                  "body": [
+                    {
+                      "type": "myapp.park",
+                      "id": "blk_cp_park",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:park",
+                        "queue": "manual_review",
+                        "label": "Park it for a reviewer"
+                      }
+                    },
+                    {
+                      "type": "core.wait",
+                      "id": "blk_cp_manual_wait",
+                      "type_version": 1,
+                      "config": {
+                        "duration": "2d"
+                      }
+                    },
+                    {
+                      "type": "myapp.resolve_review",
+                      "id": "blk_cp_resolve",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:resolve_review",
+                        "label": "Apply the reviewer's decision"
+                      }
+                    },
+                    {
+                      "type": "core.assign",
+                      "id": "blk_cp_review_cleared",
+                      "type_version": 1,
+                      "config": {
+                        "path": "review.parked",
+                        "value": "false",
+                        "label": "Clear the parked flag"
+                      }
+                    }
+                  ],
+                  "interrupts": [
+                    {
+                      "type": "core.on_event",
+                      "id": "blk_cp_manual_resolved",
+                      "type_version": 1,
+                      "config": {
+                        "event": "review.resolved",
+                        "cond": "event.review_resolved.decision == 'approve' AND review.parked",
+                        "outcome": "resume"
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "otherwise": [
+              {
+                "type": "myapp.notify",
+                "id": "blk_cp_outcome_fallback",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "template": "outcome_indeterminate",
+                  "label": "Tell ops no outcome arm matched"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "core.sequence",
+          "id": "blk_cp_tail",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "myapp.receipt",
+                "id": "blk_cp_receipt",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:receipt",
+                  "label": "Build the receipt"
+                }
+              },
+              {
+                "type": "myapp.notify",
+                "id": "blk_cp_final_notify",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "template": "receipt_ready",
+                  "label": "Send the receipt"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
