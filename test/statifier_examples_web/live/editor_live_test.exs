@@ -3,6 +3,10 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias StatifierBlocks.Compiler
+  alias StatifierBlocks.Editor
+  alias StatifierBlocks.Finding
+  alias StatifierBlocks.Shell
   alias StatifierExamples.Charts
 
   @themes ["light", "dark", "brand"]
@@ -205,31 +209,94 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   end
 
   describe "the strict compile" do
-    # The card-processing fixture carries exactly one deliberate finding: it
-    # names myapp.legacy_check, which no palette entry answers, so the
-    # unavailable-block chrome is exercised at depth 7. That is the fixture's
-    # documented reason for existing, which is why the count is asserted
-    # exactly rather than as "at least one".
+    # D1 (campaign 018): the package's number is THE number. The compiler's
+    # count and the drawer's are not the same count - the compiler reports
+    # what it found, and `ViewModel` derives findings of its own on top of
+    # whatever the caller hands in - so the header used to render the first
+    # beside a drawer showing the second, and card processing was the document
+    # that made the gap visible. `Editor.findings_count/3` is the seam sb-ukgu
+    # added for exactly this, and it is read here with the SAME assigns the
+    # component is passed, which is the whole condition on the two agreeing.
     #
-    # Sabotage: made compiler_findings/1 return [] for the {:error, _} branch -
-    # the branch this fixture's finding arrives on, because an unresolvable
-    # block type stops the compile at the resolve stage rather than warning;
-    # this went red, then reverted.
-    test "card processing reports its one deliberate finding", %{conn: conn} do
+    # The `seam > length(raw)` assertion is the criterion's "more than one
+    # source", asserted as a relation rather than as two literals: the point
+    # is that the header follows the seam and not the compiler, and a fixture
+    # edit that changes either number by one should not have to edit this file
+    # to keep saying so.
+    #
+    # Sabotage: put the pre-018 header back - verdict/2 answering
+    # `length(findings)` instead of asking the seam; this went red with
+    # "Findings 1" where "Findings 2" belongs, then reverted.
+    test "the header verdict is the package's findings number", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
 
-      assert html =~ "1 finding"
+      %{raw: raw, seam: seam} = counts("card_processing")
 
-      assert view |> element("button[phx-click='compile']") |> render_click() =~ "1 finding"
+      assert seam > length(raw)
+      assert html =~ "Findings #{seam}"
+      refute html =~ "#{length(raw)} finding"
+
+      assert view |> element("button[phx-click='compile']") |> render_click() =~
+               "Findings #{seam}"
     end
 
-    # Sabotage: made verdict/1 answer "0 findings" for zero; this went red,
+    # The wording, at the value where the host's old vocabulary and the
+    # package's diverge most: the package prints a zero and the host used to
+    # print a word. Mirroring it exactly is the ruling - the drawer has no
+    # singular form and no "clean", so neither does the header.
+    #
+    # Sabotage: made verdict/2 answer "clean" for a zero count again (the same
+    # mutation as the row above, which also restores the word); this went red,
     # then reverted.
-    test "a document with nothing to report reads clean", %{conn: conn} do
+    test "a document with nothing to report reads the package's zero", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 
-      assert html =~ "clean"
-      assert view |> element("button[phx-click='compile']") |> render_click() =~ "clean"
+      assert %{seam: 0} = counts("signup_wizard")
+      assert html =~ "Findings 0"
+      refute html =~ "clean"
+
+      assert view |> element("button[phx-click='compile']") |> render_click() =~ "Findings 0"
+    end
+
+    # The title is the package's own constant rather than a string this app
+    # spells for itself, and this is what says so: the same function the
+    # drawer titles its strip and its tab with. A package that renamed the tab
+    # would move both at once, and a host that had transcribed the word would
+    # be the only thing left saying the old one.
+    #
+    # Sabotage: covered by the same mutation as the first row, which this went
+    # red alongside. The SPELLING is not this app's to break - it comes back
+    # out of the package either way - and that is the point of the row: what a
+    # mutation here can move is the number beside it, and what a package rename
+    # would move is both sides of this assertion at once.
+    test "the verdict carries the drawer's own title", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      assert html =~ "#{Shell.drawer_title(:findings)} #{counts("card_processing").seam}"
+    end
+  end
+
+  describe "the fit the page opens at" do
+    # D3 / sb-ehqn: the spike opened every document at Fit width and the
+    # authors who used it never pressed the button, so the host opts in
+    # through the package's `fit` attr instead of leaving a first-render zoom
+    # of 100% on a document wider than the scroller. The attr is the mode, and
+    # the canvas carries it as `data-fit`; the zoom itself needs a measurement
+    # only the browser has, so the mount-time evidence is the mode and not a
+    # number.
+    #
+    # Every fixture, because the attr is on the one component call all three
+    # go through and a single-document row would pass on a page that had
+    # somehow acquired a second.
+    #
+    # Sabotage: dropped `fit={:width}` from the live_component call; all three
+    # rows went red with data-fit="manual", then reverted.
+    test "every fixture opens at Fit width", %{conn: conn} do
+      for fixture <- Charts.fixtures() do
+        {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
+
+        assert html =~ ~s(data-fit="width")
+      end
     end
   end
 
@@ -369,6 +436,27 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
           )
       end
     end
+  end
+
+  # The host's compile, run outside the page so a test can hold both numbers
+  # the page has to choose between: what the compiler reported, and what the
+  # package counts once its own derives are folded in. The `findings:` option
+  # is the assign the component is given and nothing else, which is what makes
+  # the seam's answer the drawer's answer.
+  @spec counts(String.t()) :: %{raw: [Compiler.Finding.t()], seam: non_neg_integer()}
+  defp counts(key) do
+    {:ok, fixture} = Charts.fixture(key)
+    palette = Charts.palette()
+
+    raw =
+      case Compiler.compile(fixture.document, palette, known_invoke_types: Charts.invoke_types()) do
+        {:ok, compiled} -> compiled.warnings
+        {:error, findings} -> findings
+      end
+
+    {anchored, _refused} = Finding.from_compiler_all(raw)
+
+    %{raw: raw, seam: Editor.findings_count(fixture.document, palette, findings: anchored)}
   end
 
   @spec card(Phoenix.LiveViewTest.View.t(), String.t(), String.t()) :: String.t()
