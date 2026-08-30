@@ -113,6 +113,89 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
   end
 
+  describe "the card title" do
+    # The bead's criterion, read off the rendered page rather than off the
+    # schema: a step's config label is the card's title and the block type's
+    # own label drops to the subtitle underneath it. Three named blocks, each
+    # a leaf, so the child combinator addresses one card and not a subtree.
+    #
+    # Sabotage: dropped label_field/0 from Charts.Step.config_schema/2 - the
+    # declaration is the whole of what ViewModel.title/1 reads - and all three
+    # rows went red with the type name where the label belongs; then reverted.
+    test "a step's label titles its card and its type becomes the subtitle",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      for {id, title, type} <- [
+            {"blk_cp_intake", "Take the payment request", "Intake"},
+            {"blk_cp_risk_rating", "Rate the transaction", "Risk rating"},
+            {"blk_cp_receipt", "Build the receipt", "Receipt"}
+          ] do
+        assert card(view, id, "sb-node__label") =~ title
+        assert card(view, id, "sb-node__type") =~ type
+      end
+    end
+
+    # The wizard's two types reach the field through their own helper,
+    # `StatifierExamples.Signup.Step`, which declared `invoke_type` directly
+    # until this bead gave it a schema. A card-processing-only assertion would
+    # not have noticed that second copy at all.
+    #
+    # Sabotage: put signup_step.ex back on Step.invoke_type_field/1; this went
+    # red on the subtitle, then reverted.
+    test "the wizard's steps are titled the same way", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      assert card(view, "blk_su_account", "sb-node__label") =~ "Collect email and password"
+      assert card(view, "blk_su_account", "sb-node__type") =~ "Signup step"
+      assert card(view, "blk_su_provision", "sb-node__label") =~ "Create the workspace"
+    end
+
+    # "The label sits first in the inspector form", the bead's other half,
+    # read off the rendered form rather than off the schema: the inspector
+    # draws one control per schema field in declaration order, so the order
+    # the app declares is only observably the form's order here.
+    #
+    # Sabotage: put label_field/0 after invoke_type_field/1 in
+    # Charts.Step.config_schema/2; this went red, then reverted.
+    test "the label is the first control in the inspector form", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      view
+      |> element(~s([data-block-id="blk_cp_intake"] > .sb-node__chrome > .sb-node__label))
+      |> render_click()
+
+      form = view |> element(~s(form[data-block-id="blk_cp_intake"])) |> render()
+
+      assert [label_at, invoke_at] =
+               Enum.map(["Label", "Invoke type"], fn text ->
+                 {at, _len} = :binary.match(form, text)
+                 at
+               end)
+
+      assert label_at < invoke_at
+    end
+
+    # The control the two rows above need: an unlabelled block is titled by
+    # its palette entry and carries no subtitle at all, which is what says the
+    # declaration adds a title rather than a second line to every card.
+    #
+    # No sabotage note: nothing in `lib/` here decides this. `core.branch` is
+    # the package's type and the fixture gives it no label, so the assertion
+    # is on `statifier_blocks`' fallback and no mutation of this app's code
+    # can move it.
+    test "a block with no label of its own carries no subtitle", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      assert card(view, "blk_cp_validation", "sb-node__label") =~ "Branch"
+
+      refute has_element?(
+               view,
+               ~s([data-block-id="blk_cp_validation"] > .sb-node__chrome > .sb-node__type)
+             )
+    end
+  end
+
   describe "the strict compile" do
     # The card-processing fixture carries exactly one deliberate finding: it
     # names myapp.legacy_check, which no palette entry answers, so the
@@ -212,5 +295,12 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       # And a container's body is boxed when it is a boundary (10c/10h).
       assert html =~ "sb-node--boundary"
     end
+  end
+
+  @spec card(Phoenix.LiveViewTest.View.t(), String.t(), String.t()) :: String.t()
+  defp card(view, block_id, class) do
+    view
+    |> element(~s([data-block-id="#{block_id}"] > .sb-node__chrome > .#{class}))
+    |> render()
   end
 end

@@ -35,16 +35,16 @@ defmodule StatifierExamples.Signup.SignupStep do
 
   @impl true
   def config_schema(_config),
-    do: [
-      Step.invoke_type_field(@invoke_type),
-      %{
-        key: "step",
-        type: {:select, Enum.map(@steps, &{&1, label(&1)})},
-        label: "Wizard step",
-        required?: true,
-        default: "account"
-      }
-    ]
+    do:
+      Step.config_schema(@invoke_type, [
+        %{
+          key: "step",
+          type: {:select, Enum.map(@steps, &{&1, label(&1)})},
+          label: "Wizard step",
+          required?: true,
+          default: "account"
+        }
+      ])
 
   @impl true
   def validate_config(config) do

@@ -20,9 +20,10 @@ defmodule StatifierExamples.Signup.SignupStepTest do
 
   # Sabotage: made config_schema/1 return only the invoke_type field; this
   # went red, then reverted.
-  test "config_schema/1 declares the handler and the step, and the step is a select" do
-    assert [invoke_type, step] = SignupStep.config_schema(config())
+  test "config_schema/1 declares the label, the handler and the step, and the step is a select" do
+    assert [label, invoke_type, step] = SignupStep.config_schema(config())
 
+    assert %{key: "label", type: :string, required?: false, default: ""} = label
     assert %{key: "invoke_type", required?: true, default: "myapp:signup"} = invoke_type
     assert %{key: "step", required?: true, default: "account", type: {:select, options}} = step
     assert {"send_verification", "send verification"} in options

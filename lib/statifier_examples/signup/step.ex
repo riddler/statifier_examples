@@ -86,6 +86,38 @@ defmodule StatifierExamples.Signup.Step do
   end
 
   @doc """
+  The optional `label` field: the name this particular step goes by on the
+  card, above the block type's own label.
+
+  `StatifierExamples.Charts.Step.label_field/0`'s reasoning, unchanged -
+  `statifier_blocks` titles a card from a declared `:string` field keyed
+  `"label"`, so declaring it is the whole of what a host does to opt in.
+  """
+  @spec label_field() :: StatifierBlocks.BlockType.field_decl()
+  def label_field do
+    %{
+      key: "label",
+      type: :string,
+      label: "Label",
+      required?: false,
+      default: ""
+    }
+  end
+
+  @doc """
+  `label` first, then `invoke_type`, then whatever else the step declares.
+
+  The wizard's types went through `invoke_type_field/1` directly until
+  `label` arrived; routing them through one list is what keeps a third
+  shared field from having to be added in two places again.
+  """
+  @spec config_schema(String.t(), [StatifierBlocks.BlockType.field_decl()]) ::
+          [StatifierBlocks.BlockType.field_decl()]
+  def config_schema(default, extra \\ []) when is_binary(default) and is_list(extra) do
+    [label_field(), invoke_type_field(default) | extra]
+  end
+
+  @doc """
   Adds an `invoke_type` finding to `findings` unless `config` names one this
   app would recognise.
   """

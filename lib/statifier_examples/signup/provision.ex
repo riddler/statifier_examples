@@ -20,7 +20,7 @@ defmodule StatifierExamples.Signup.Provision do
   def slots(_config), do: []
 
   @impl true
-  def config_schema(_config), do: [Step.invoke_type_field(@invoke_type)]
+  def config_schema(_config), do: Step.config_schema(@invoke_type)
 
   @impl true
   def validate_config(config) do

@@ -39,10 +39,12 @@ defmodule StatifierExamples.CardAuthTest do
 
   # Sabotage: made Step.config_schema/2 drop the invoke_type field; this went
   # red, then reverted.
-  test "every type declares invoke_type first, defaulted to its own" do
+  test "every type declares label then invoke_type, defaulted to its own" do
     for {_name, module} <- CardAuth.block_types() do
-      assert [%{key: "invoke_type", required?: true, default: default} | _rest] =
-               module.config_schema(%{})
+      assert [
+               %{key: "label", type: :string, required?: false},
+               %{key: "invoke_type", required?: true, default: default} | _rest
+             ] = module.config_schema(%{})
 
       assert default == module.invoke_type()
     end
