@@ -198,6 +198,5 @@ Every fixture, seed and example value in this repository is fictional.
 
 ## The rules that are not in this file
 
-`CLAUDE.md` carries the ones a change here has to honour: the git-SHA pin on
-`statifier_blocks` and the bead that swaps it for the Hex release, and the
-rule that the example domains are the two canonical ones and nothing else.
+`CLAUDE.md` carries the ones a change here has to honour, including the rule
+that the example domains are the two canonical ones and nothing else.
