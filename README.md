@@ -97,12 +97,11 @@ drawer". To copy the host's half:
 2. Register **both** hooks in `assets/js/app.js`. `StatifierBlocksDrag` is
    the drag hook and `StatifierBlocksMeasure` is the read-only measurement
    hook; without the second one the editor works but draws no connectors at
-   all. At the SHA this app pins, the package's default export carries only
-   the drag hook, so the two are imported as named exports from their own
-   entry points. The specifiers resolve through esbuild's `NODE_PATH`, which
-   `config/config.exs` points at `deps/` - the same way this app already
-   resolves `phoenix` - rather than through an `assets/package.json` and an
-   npm install.
+   all. Both arrive in the package's default export, so one import spreads
+   the pair into `hooks:`. The specifier resolves through esbuild's
+   `NODE_PATH`, which `config/config.exs` points at `deps/` - the same way
+   this app already resolves `phoenix` - rather than through an
+   `assets/package.json` and an npm install.
 3. Style the page root, not the editor's internals: `assets/css/app.css`
    redeclares the package's tokens under `.myapp-page[data-theme="..."]`.
 
@@ -164,6 +163,5 @@ Every fixture, seed and example value in this repository is fictional.
 
 ## The rules that are not in this file
 
-`CLAUDE.md` carries the ones a change here has to honour: the git-SHA pin on
-`statifier_blocks` and the bead that swaps it for the Hex release, and the
-rule that the example domains are the two canonical ones and nothing else.
+`CLAUDE.md` carries the ones a change here has to honour, including the rule
+that the example domains are the two canonical ones and nothing else.

@@ -76,15 +76,8 @@ defmodule StatifierExamples.MixProject do
       {:bandit, "~> 1.5"},
 
       # The authoring layer this app is the reference embedder for.
-      #
-      # Campaign 016 pins it to a git SHA on `main`: the editor chrome this
-      # app is built against is on main and not yet in a Hex release. That is
-      # a deliberate, temporary deviation from the family's Hex-only
-      # dependency rule, and bead `se-5ez` swaps it for `{:statifier_blocks,
-      # "~> 0.4"}` once 0.4.0 is published. `phoenix_live_view` is optional
-      # there and supplied by this app above.
-      {:statifier_blocks,
-       github: "riddler/statifier_blocks", ref: "2640bb0703836b1f135df1b03cd17c2d8a17e1a9"},
+      # `phoenix_live_view` is optional there and supplied by this app above.
+      {:statifier_blocks, "~> 0.4"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
