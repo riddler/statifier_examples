@@ -18,34 +18,42 @@ defmodule StatifierExamples.Signup.HandlersTest do
     on_exit(fn -> Logger.configure(level: level) end)
   end
 
-  # Sabotage: dropped "myapp:provision" from handlers/0; this went red, then
-  # reverted.
-  test "handlers/0 answers a function per invoke type the block types name" do
-    handlers = Handlers.handlers()
-
-    assert handlers |> Map.keys() |> Enum.sort() == ["myapp:provision", "myapp:signup"]
-    assert Enum.all?(Map.values(handlers), &is_function(&1, 1))
+  # Sabotage: dropped "myapp:provision" from @invoke_types; this went red,
+  # then reverted.
+  test "invoke_types/0 answers every name the block types name, sorted" do
+    assert Handlers.invoke_types() == ["myapp:provision", "myapp:signup"]
   end
 
-  # Sabotage: made signup/1 log the invoke type without the step; this went
+  # Sabotage: made handle/2 log the invoke type without the step; this went
   # red, then reverted.
   test "myapp:signup logs the step it collected and answers an empty result" do
     log =
       capture_log(fn ->
-        assert {:ok, %{}} == Handlers.signup(%{"step" => "confirm"})
+        assert {:ok, %{}} == Handlers.handle("myapp:signup", %{"step" => "confirm"})
       end)
 
     assert log =~ "myapp:signup"
     assert log =~ "confirm"
   end
 
-  # Sabotage: made provision/1 answer `:ok`; this went red, then reverted.
+  # Sabotage: made the myapp:provision clause answer `:ok`; this went red,
+  # then reverted.
   test "myapp:provision logs one line and answers an empty result" do
     log =
       capture_log(fn ->
-        assert {:ok, %{}} == Handlers.provision(%{"email" => "someone@example.com"})
+        assert {:ok, %{}} ==
+                 Handlers.handle("myapp:provision", %{"email" => "someone@example.com"})
       end)
 
     assert log =~ "myapp:provision"
+  end
+
+  # The half the map-of-functions shape could not express at all: a name
+  # this module does not register is an answer, not a `FunctionClauseError`.
+  #
+  # Sabotage: dropped handle/2's catch-all clause; this went red with a
+  # FunctionClauseError, then reverted.
+  test "a name this module does not register is refused rather than raised" do
+    assert Handlers.handle("myapp:park", %{}) == {:error, {:unknown_invoke_type, "myapp:park"}}
   end
 end

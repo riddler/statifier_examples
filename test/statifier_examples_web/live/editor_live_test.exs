@@ -136,10 +136,10 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       end
     end
 
-    # The wizard's two types reach the field through their own helper,
-    # `StatifierExamples.Signup.Step`, which declared `invoke_type` directly
-    # until this bead gave it a schema. A card-processing-only assertion would
-    # not have noticed that second copy at all.
+    # The wizard's two types reached the field through a second helper of
+    # their own until se-lin folded it into `StatifierExamples.Charts.Step`.
+    # A card-processing-only assertion would not have noticed that copy at
+    # all, which is why this one covers the other domain too.
     #
     # Sabotage: put signup_step.ex back on Step.invoke_type_field/1; this went
     # red on the subtitle, then reverted.

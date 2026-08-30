@@ -15,8 +15,8 @@ defmodule StatifierExamples.Signup.SignupStep do
 
   @behaviour StatifierBlocks.BlockType
 
-  alias StatifierBlocks.Block
-  alias StatifierExamples.Signup.Step
+  alias StatifierBlocks.{Block, BlockType}
+  alias StatifierExamples.Charts.Step
 
   @invoke_type "myapp:signup"
 
@@ -54,7 +54,7 @@ defmodule StatifierExamples.Signup.SignupStep do
     |> Step.verdict()
   end
 
-  @spec check_step([Step.finding()], Block.config()) :: [Step.finding()]
+  @spec check_step([BlockType.finding()], Block.config()) :: [BlockType.finding()]
   defp check_step(findings, config) do
     if Map.get(config, "step") in @steps do
       findings
@@ -88,7 +88,7 @@ defmodule StatifierExamples.Signup.SignupStep do
 
   @impl true
   def emit(%Block{config: config} = block, context) do
-    Step.emit(block, context, [
+    Step.emit(block, context, @invoke_type, [
       Step.literal_param("step", Map.get(config, "step", "account"), "step")
     ])
   end

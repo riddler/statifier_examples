@@ -99,13 +99,17 @@ defmodule StatifierExamples.Charts do
   the deployment half of ADR-0002's two-registry seam, assembled where the
   palette is, because a document is compiled against both at once and this
   is the one place that holds them together.
+
+  All three handler modules answer `invoke_types/0`, so the union is one
+  concatenation and not three spellings of "what can this module do": that
+  is the point of the app having a single handler-module shape.
   """
   @spec invoke_types() :: [String.t()]
   def invoke_types do
     Enum.sort(
       CardAuth.Handlers.invoke_types() ++
         Messaging.Handlers.invoke_types() ++
-        Map.keys(Signup.Handlers.handlers())
+        Signup.Handlers.invoke_types()
     )
   end
 
