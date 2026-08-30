@@ -32,29 +32,25 @@ import topbar from "../vendor/topbar"
 // with cards and no edges between them is this import missing rather than a
 // layout bug.
 //
-// They are imported as two NAMED exports rather than as the package's default
-// export. At the SHA this app pins, `statifier_blocks`' default export carries
-// only `StatifierBlocksDrag` - the measurement hook was admitted to the
-// package after it, and ships its own default export from its own entry
-// point. Spreading the default would therefore register one hook and silently
-// drop the other. Bead `se-5ez` re-pins to the Hex release, where the
-// combined export is the shorter way to write this.
+// Both arrive in the package's default export, which is what the README's
+// "Embedding the editor" section documents (`hooks: { ...StatifierBlocks }`).
+// An earlier pin carried only the drag hook there and this app imported the
+// two named exports separately; that workaround retired with the pin bump.
 //
-// The specifiers go through esbuild's NODE_PATH (config/config.exs points it
+// The specifier goes through esbuild's NODE_PATH (config/config.exs points it
 // at `deps`) rather than through an `assets/package.json` and an npm install,
 // which is how this app already resolves `phoenix` and `phoenix_live_view`.
 // The package's README documents the npm route, and it does not work as
 // written for a host without a Node toolchain: `file:../deps/statifier_blocks`
 // names a directory with no `package.json` in it, because the package keeps
-// its own under `assets/`.
-import {StatifierBlocksDrag} from "statifier_blocks/assets/js/statifier_blocks.js"
-import {StatifierBlocksMeasure} from "statifier_blocks/assets/js/statifier_blocks_measure.js"
+// its own under `assets/`. Filed upstream as `sb-a5u`.
+import StatifierBlocks from "statifier_blocks/assets/js/statifier_blocks.js"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, StatifierBlocksDrag, StatifierBlocksMeasure},
+  hooks: {...colocatedHooks, ...StatifierBlocks},
 })
 
 // Show progress bar on live navigation and form submits

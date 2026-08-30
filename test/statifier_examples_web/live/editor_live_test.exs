@@ -171,4 +171,43 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert html =~ credit_card_path
     end
   end
+
+  describe "the editor chrome the pin carries" do
+    # `se-jat` moved the git SHA pin forward onto the statifier_blocks main
+    # that carries the chrome parity work, and the only thing that made the
+    # new chrome appear was the pin. That is exactly the kind of change a
+    # screenshot proves and nothing else does - so this asserts the shell's
+    # structural markers instead, one per parity piece, and a later pin move
+    # that loses one goes red here rather than in a capture nobody re-reads.
+    #
+    # Structural class and event names only. What they LOOK like is the
+    # package's, and this app asserting a colour would be asserting the
+    # package's stylesheet from the wrong repo.
+    #
+    # Sabotage: pinned mix.exs back to 890d95d - the SHA this app carried
+    # before se-jat - and re-ran; the canvas-panel assertion went red (the
+    # palette fold is the other marker that pin does not have at all, and the
+    # rest are names whose MEANING moved rather than names that arrived),
+    # then reverted.
+    test "the shell, the panes and the drawer row all render", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      # The tier-2 grid, and the full-width drawer row under it.
+      assert html =~ "sb-editor__layout"
+      assert html =~ "sb-drawer__strip"
+
+      # The canvas is a framed panel with its own header, not a bare stage.
+      assert html =~ "sb-canvas-panel"
+
+      # The palette folds; the inspector is a three-tab pane.
+      assert html =~ ~s(phx-click="palette-collapse")
+      assert html =~ ~s(phx-click="inspector-tab")
+
+      # The card face carries its own delete.
+      assert html =~ ~s(phx-click="remove")
+
+      # And a container's body is boxed when it is a boundary (10c/10h).
+      assert html =~ "sb-node--boundary"
+    end
+  end
 end
