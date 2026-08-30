@@ -77,7 +77,7 @@ defmodule StatifierExamples.MixProject do
 
       # The authoring layer this app is the reference embedder for.
       # `phoenix_live_view` is optional there and supplied by this app above.
-      {:statifier_blocks, "~> 0.6"},
+      statifier_blocks_dep(),
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
@@ -85,6 +85,18 @@ defmodule StatifierExamples.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test}
     ]
+  end
+
+  # The editor package. From Hex by default; setting `STATIFIER_BLOCKS_PATH` to
+  # a local `statifier_blocks` checkout swaps in a path dep on that directory,
+  # which is how a host-side change is tried against an unreleased editor.
+  # The arm is a local convenience: the `mix.lock` (and `mix.exs`) changes it
+  # produces are never committed, and CI sets no env, so CI resolves Hex.
+  defp statifier_blocks_dep do
+    case System.get_env("STATIFIER_BLOCKS_PATH") do
+      path when is_binary(path) and path != "" -> {:statifier_blocks, path: path}
+      _ -> {:statifier_blocks, "~> 0.6"}
+    end
   end
 
   # Aliases are shortcuts or tasks specific to the current project.

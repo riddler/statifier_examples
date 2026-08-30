@@ -20,10 +20,22 @@ whether that is pleasant to do.
 4. Open <http://127.0.0.1:8645/>. The home page lists the example documents,
    each linking into the editor.
 
-The dev port is 8645 and is set in `config/dev.exs`. `config/runtime.exs`
-overrides it only when `PORT` is set or the environment is `:prod`, so dev
-stays on 8645; 8642, 8643 and 8644 belong to other processes and are never
-bound here.
+Two environment variables change what step 3 does, and neither one's effect is
+ever committed:
+
+- `PORT` - the dev port is 8645 and is set in `config/dev.exs`.
+  `config/runtime.exs` overrides it only when `PORT` is set or the environment
+  is `:prod`, so dev stays on 8645 and `PORT=8650 mix phx.server` runs a second
+  copy beside it; 8642, 8643 and 8644 belong to other processes and are never
+  bound here.
+- `STATIFIER_BLOCKS_PATH` - point it at a local `statifier_blocks` checkout and
+  `deps/0` swaps the Hex requirement for a path dep on that directory, which is
+  how a host-side change is tried against an unreleased editor. Unset, the Hex
+  requirement in `mix.exs` is what resolves.
+
+The path arm rewrites `mix.lock` when deps resolve under it, and a hand-edited
+dep would rewrite `mix.exs`: **neither change is ever committed.** CI sets
+neither variable, so a CI run always resolves `statifier_blocks` from Hex.
 
 ## Opening a document in the editor
 
