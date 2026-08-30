@@ -84,7 +84,7 @@ defmodule StatifierExamples.MixProject do
       # `{:statifier_blocks, "~> 0.5"}` once 0.5.0 is published.
       # `phoenix_live_view` is optional there and supplied by this app above.
       {:statifier_blocks,
-       github: "riddler/statifier_blocks", ref: "1e75dc7c8abe09ced569321bd62c0f198b1c7341"},
+       github: "riddler/statifier_blocks", ref: "60fbd0908ebd46b7de245d0e3f7dfc217168a2e5"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},

@@ -177,22 +177,30 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
 
     # The control the two rows above need: an unlabelled block is titled by
-    # its palette entry and carries no subtitle at all, which is what says the
-    # declaration adds a title rather than a second line to every card.
+    # its palette entry, and whatever subtitle it carries is the package's,
+    # not a second line the host's declaration put there. That is what says
+    # the declaration adds a title rather than a subtitle to every card.
     #
     # No sabotage note: nothing in `lib/` here decides this. `core.branch` is
     # the package's type and the fixture gives it no label, so the assertion
-    # is on `statifier_blocks`' fallback and no mutation of this app's code
-    # can move it.
-    test "a block with no label of its own carries no subtitle", %{conn: conn} do
+    # is on `statifier_blocks`' own rendering and no mutation of this app's
+    # code can move it.
+    #
+    # 2026-08-30 (se-3io): before the campaign-017 pin moved forward this
+    # refuted a subtitle outright. The package now summarises core blocks in
+    # that slot, so an unlabelled `core.branch` reads "1 arm + otherwise";
+    # the row asserts the summary instead, and still refutes the title being
+    # repeated there.
+    test "a block with no label of its own is titled by its palette entry",
+         %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
 
       assert card(view, "blk_cp_validation", "sb-node__label") =~ "Branch"
 
-      refute has_element?(
-               view,
-               ~s([data-block-id="blk_cp_validation"] > .sb-node__chrome > .sb-node__type)
-             )
+      subtitle = card(view, "blk_cp_validation", "sb-node__type")
+
+      assert subtitle =~ "arm"
+      refute subtitle =~ "Branch"
     end
   end
 
