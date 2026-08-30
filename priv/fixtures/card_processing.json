@@ -4,7 +4,7 @@
   "revision": 42,
   "metadata": {
     "name": "Card processing",
-    "description": "Intake, validation, a three-lane authorization group with interrupts, an outcome branch with capture retry and manual review, and a receipt tail. The authorize and capture calls carry on_error subtrees, so the slot idiom and the retry-predicate idiom can be read side by side. Ported from the statifier_blocks spike: the proposed core.timeout block became the shipped pair that models a clock interrupt - a core.send arming card.authorization_timed_out at the head of the authorization group's body, and a core.on_event on its interrupt rail listening for that event. One block type is deliberately unregistered, myapp.legacy_check, so the unavailable-block chrome is exercised at depth 7.",
+    "description": "Intake, validation, a three-lane authorization group with interrupts, an outcome branch with capture retry and manual review, and a receipt tail. The authorize and capture calls carry on_error subtrees, so the slot idiom and the retry-predicate idiom can be read side by side. Ported from the statifier_blocks spike: the proposed core.timeout block became the shipped pair that models a clock interrupt - a core.send arming card.authz_timed_out at the head of the authorization group's body, and a core.on_event on its interrupt rail listening for that event. One block type is deliberately unregistered, myapp.legacy_check, so the unavailable-block chrome is exercised at depth 7.",
     "domain": "card-processing"
   },
   "root": {
@@ -47,7 +47,7 @@
                       "id": "blk_cp_authz_deadline",
                       "type_version": 1,
                       "config": {
-                        "event": "card.authorization_timed_out",
+                        "event": "card.authz_timed_out",
                         "delay": "15m"
                       }
                     },
@@ -279,7 +279,7 @@
                       "id": "blk_cp_authz_timeout",
                       "type_version": 1,
                       "config": {
-                        "event": "card.authorization_timed_out",
+                        "event": "card.authz_timed_out",
                         "cond": "three_ds.completed == false OR fraud.cleared == false",
                         "outcome": "abandon"
                       }

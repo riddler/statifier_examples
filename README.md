@@ -181,7 +181,7 @@ because the shipped vocabulary is not the spike's proposed one:
   than the spike's map;
 - the spike's proposed `core.timeout` block is ported onto the pair of
   **shipped** types that models a clock interrupt: a `core.send` arming
-  `card.authorization_timed_out` at the head of the authorization group's
+  `card.authz_timed_out` at the head of the authorization group's
   body, and a `core.on_event` on that group's interrupt rail listening for
   it. Nothing in this app registers a `core.*` name - the vocabulary is
   `statifier_blocks`' to grow;
