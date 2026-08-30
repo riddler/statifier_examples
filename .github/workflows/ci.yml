@@ -46,8 +46,8 @@ jobs:
       # (_build/dev/dialyxir_erlang-*_elixir-*_deps-dev.plt), so this cache is
       # the PLT cache too. The restore-keys fallback means a lockfile bump
       # rebuilds the PLT incrementally from the previous one rather than from
-      # scratch. statifier_blocks resolves from the git ref mix.lock pins, so
-      # the cache key moves when se-5ez swaps that pin for the Hex release.
+      # scratch. Every dependency including statifier_blocks resolves from
+      # Hex, so the cache key moves whenever mix.lock does and never otherwise.
       #
       # Known tradeoff, the same one the rest of the family accepts: a warm
       # _build means the compile stage is incremental, so warnings_as_errors

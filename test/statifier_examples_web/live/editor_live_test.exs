@@ -172,13 +172,16 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
   end
 
-  describe "the editor chrome the pin carries" do
-    # `se-jat` moved the git SHA pin forward onto the statifier_blocks main
-    # that carries the chrome parity work, and the only thing that made the
-    # new chrome appear was the pin. That is exactly the kind of change a
-    # screenshot proves and nothing else does - so this asserts the shell's
-    # structural markers instead, one per parity piece, and a later pin move
-    # that loses one goes red here rather than in a capture nobody re-reads.
+  describe "the editor chrome the dependency carries" do
+    # `se-jat` moved the app onto the statifier_blocks build that carries the
+    # chrome parity work, and the only thing that made the new chrome appear
+    # was the dependency. That is exactly the kind of change a screenshot
+    # proves and nothing else does - so this asserts the shell's structural
+    # markers instead, one per parity piece, and a later version bump that
+    # loses one goes red here rather than in a capture nobody re-reads.
+    #
+    # `se-5ez` re-pinned that build from its git SHA to Hex `~> 0.4`; 0.4.0
+    # is the release of the same chrome, and these markers held across it.
     #
     # Structural class and event names only. What they LOOK like is the
     # package's, and this app asserting a colour would be asserting the
