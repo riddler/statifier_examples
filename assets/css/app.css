@@ -273,6 +273,18 @@
      rule: 14% of a pale accent over near-black is not a tint. */
   --sb-block-accent-mix: 24%;
 
+  /* The canvas's dotted ground (new with the chrome parity work). The token
+     carries the whole `background` shorthand, so a theme that wants a
+     different dot restates the gradient rather than a colour. This one is
+     restated because the shipped default derives the dot from `--sb-border`,
+     and `--sb-border` in this theme is deliberately the quietest line in it -
+     it divides two panes of one surface. A dot at that value on a near-black
+     panel is ground nobody can see. One step up, and still well under the
+     3:1 the package explicitly does not hold this to: it is ground, not a
+     line that carries information. */
+  --sb-canvas-grid: radial-gradient(#3a4350 var(--sb-border-width), transparent 0) 0 0 /
+    var(--sb-space-3) var(--sb-space-3);
+
   --sb-accent-myapp: #9d8cff;
 }
 
@@ -313,6 +325,15 @@
   --sb-drop-ok-bg: rgba(99, 211, 154, 0.12);
 
   --sb-block-accent-mix: 26%;
+
+  /* Same restatement as `dark` above, on this theme's own violet grey. */
+  --sb-canvas-grid: radial-gradient(#463e63 var(--sb-border-width), transparent 0) 0 0 /
+    var(--sb-space-3) var(--sb-space-3);
+
+  /* A louder theme wants a heavier stripe down the side of a card. The
+     package ships 3px; this is the one shape token this theme moves, and it
+     is the whole reason a per-type accent is a token at all. */
+  --sb-block-edge: 4px;
 
   /* One name, because every example step points at exactly this one. A
      per-type name declared here would be a token nothing reads, which is the
