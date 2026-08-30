@@ -125,6 +125,11 @@ The seams the domains fill:
 There is **no database yet** - Postgres joins when a later campaign needs
 persistence; the app is generated `--no-ecto` and nothing here stores state.
 
+`statifier_blocks` is pinned to a git SHA on `main` for campaign 017 as a
+temporary deviation from the family's Hex-only dependency rule - the
+bounded-height token the editor page sets landed after 0.4.0; `se-3io` swaps
+it to Hex `~> 0.5` once 0.5.0 is published.
+
 Always refer to state machines as **state charts**, as statifier-ex does.
 
 ## Terminology firewall

@@ -76,8 +76,15 @@ defmodule StatifierExamples.MixProject do
       {:bandit, "~> 1.5"},
 
       # The authoring layer this app is the reference embedder for.
+      #
+      # Campaign 017 pins it to a git SHA on `main`: the bounded-height token
+      # this app now sets (`--sb-editor-height`) landed after 0.4.0 and is not
+      # in a Hex release yet. That is a deliberate, temporary deviation from
+      # the family's Hex-only dependency rule, and bead `se-3io` swaps it for
+      # `{:statifier_blocks, "~> 0.5"}` once 0.5.0 is published.
       # `phoenix_live_view` is optional there and supplied by this app above.
-      {:statifier_blocks, "~> 0.4"},
+      {:statifier_blocks,
+       github: "riddler/statifier_blocks", ref: "1e75dc7c8abe09ced569321bd62c0f198b1c7341"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
