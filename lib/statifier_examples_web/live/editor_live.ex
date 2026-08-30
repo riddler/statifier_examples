@@ -48,7 +48,9 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   alias StatifierBlocks.Compiler
   alias StatifierBlocks.Document
+  alias StatifierBlocks.Editor
   alias StatifierBlocks.Finding
+  alias StatifierBlocks.Shell
   alias StatifierExamples.Charts
   alias StatifierExamplesWeb.Icons
 
@@ -114,11 +116,12 @@ defmodule StatifierExamplesWeb.EditorLive do
     ~H"""
     <div class="myapp-page" data-theme={@theme}>
       <.live_component
-        module={StatifierBlocks.Editor}
+        module={Editor}
         id="editor"
         document={@document}
         palette={@palette}
         findings={@findings}
+        fit={:width}
         icon={&Icons.icon/1}
         on_change={@on_change}
         on_drawer_resize={@on_drawer_resize}
@@ -223,15 +226,12 @@ defmodule StatifierExamplesWeb.EditorLive do
       |> compiler_findings()
 
     # A finding that names no block has nowhere in the editor to land, so the
-    # adapter hands those back separately rather than dropping them. The count
-    # in the header is the compiler's, not the pane's: a host that reported
-    # only what it could anchor would report a clean compile for a document
-    # whose findings it failed to route.
+    # adapter hands those back separately rather than dropping them.
     {anchored, _refused} = Finding.from_compiler_all(raw)
 
     socket
     |> assign(:findings, anchored)
-    |> assign(:verdict, verdict(length(raw)))
+    |> assign(:verdict, verdict(socket, anchored))
   end
 
   @spec compiler_findings({:ok, StatifierBlocks.Compiled.t()} | {:error, [Compiler.Finding.t()]}) ::
@@ -239,10 +239,29 @@ defmodule StatifierExamplesWeb.EditorLive do
   defp compiler_findings({:ok, compiled}), do: compiled.warnings
   defp compiler_findings({:error, findings}), do: findings
 
-  @spec verdict(non_neg_integer()) :: String.t()
-  defp verdict(0), do: "clean"
-  defp verdict(1), do: "1 finding"
-  defp verdict(count), do: "#{count} findings"
+  # There is one findings number on this page and it is the package's, which
+  # is the whole of what `Editor.findings_count/3` exists to settle: the
+  # compiler reports what it found, the editor's view model derives findings
+  # of its own on top of whatever the host hands in, and a header rendering
+  # the first beside a drawer rendering the second is a page disagreeing with
+  # itself about one fact. The seam takes the assigns rather than the
+  # component's state precisely so the host can read it before the first
+  # render, and the arguments here are the SAME ones the component is given
+  # above - a `datamodel` added to that call and not to this one is exactly
+  # how the two would come apart again.
+  #
+  # The wording is the package's too, and read out of it rather than
+  # transcribed: `Shell.drawer_title/1` is what titles the drawer's strip and
+  # its tab. The package prints a bare integer beside that title, with no
+  # singular form and no word for zero, so this prints a bare integer beside
+  # the same title. "clean" retired with the count that produced it.
+  @spec verdict(Phoenix.LiveView.Socket.t(), [Finding.t()]) :: String.t()
+  defp verdict(socket, findings) do
+    count =
+      Editor.findings_count(socket.assigns.document, socket.assigns.palette, findings: findings)
+
+    "#{Shell.drawer_title(:findings)} #{count}"
+  end
 
   @spec theme_label(atom()) :: String.t()
   defp theme_label(theme) do

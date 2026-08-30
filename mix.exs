@@ -77,7 +77,10 @@ defmodule StatifierExamples.MixProject do
 
       # The authoring layer this app is the reference embedder for.
       # `phoenix_live_view` is optional there and supplied by this app above.
-      {:statifier_blocks, "~> 0.5"},
+      # Campaign-018 pin: sb main carrying the findings_count/3 seam and the
+      # `fit` attr; re-pinned to Hex 0.6.0 when the campaign wraps.
+      {:statifier_blocks,
+       github: "riddler/statifier_blocks", ref: "0c37c28f1f87d6317a710e76c298246ed703edf9"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
