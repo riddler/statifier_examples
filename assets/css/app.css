@@ -3,6 +3,12 @@
 
 @import "tailwindcss" source(none);
 @import "phoenix-colocated/statifier_examples/colocated.css";
+/* The editor's structural CSS: the column layout, the drag affordances, the
+   finding treatments. It is imported after Tailwind so that a tie in
+   specificity goes the package's way, and the host themes below are declared
+   after it so that a tie there goes ours - which is the load order
+   deps/statifier_blocks/docs/theming.md asks for. */
+@import "../../deps/statifier_blocks/assets/css/statifier_blocks.css";
 @source "../css";
 @source "../js";
 @source "../../lib/statifier_examples_web";
@@ -103,3 +109,214 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* ==========================================================================
+   The editor host page (se-06z)
+   ========================================================================== */
+
+/* The page the editor sits on. Host chrome, so it is written in ordinary CSS
+   rather than in `--sb-*` properties - but it reads the editor's tokens for
+   its ground, so the page behind the editor changes with the theme instead of
+   framing a dark editor in a white sheet. */
+.myapp-page {
+  min-height: 100vh;
+  /* A literal rather than `var(--sb-space-2)`: the package declares its space
+     scale on `.sb-editor`, one level in, so a token reference up here resolves
+     to nothing and the page loses its gutter entirely. Host chrome's own
+     spacing is the host's to write in ordinary CSS anyway - the `--sb-*` rule
+     is about what a THEME may declare, not about what the page around the
+     editor is allowed to be. */
+  padding: 1rem;
+  /* The fallback is the package's own default: the light theme below sets no
+     surface tokens, because the shipped defaults already are that theme, and
+     they are declared on `.sb-editor` rather than up here. */
+  background: var(--sb-bg-canvas, #f4f5f7);
+}
+
+/* The header the host owns, rendered into the package's `:header` slot (the
+   ADR-0005 shell amendment). Every colour here is a `--sb-*` reference rather
+   than a literal, which is what makes one set of theme blocks below dress the
+   header and the editor together. */
+.myapp-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-space-2);
+  padding: var(--sb-space) var(--sb-space-half);
+  color: var(--sb-fg);
+  font-family: var(--sb-font);
+  font-size: var(--sb-text-md);
+}
+
+.myapp-header__identity {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sb-space);
+  margin-right: auto;
+  min-width: 0;
+}
+
+.myapp-header__title {
+  font-weight: var(--sb-weight-strong);
+  font-size: var(--sb-text-md);
+}
+
+.myapp-header__meta {
+  color: var(--sb-fg-muted);
+  font-size: var(--sb-text-sm);
+}
+
+.myapp-header__control {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-space-half);
+}
+
+.myapp-header__label {
+  color: var(--sb-fg-muted);
+  font-size: var(--sb-text-xs);
+  letter-spacing: var(--sb-tracking-caps);
+  text-transform: uppercase;
+}
+
+.myapp-header__select {
+  border: var(--sb-border-width) solid var(--sb-border);
+  border-radius: var(--sb-radius-sm);
+  background: var(--sb-bg);
+  color: var(--sb-fg);
+  font: inherit;
+  font-size: var(--sb-text-sm);
+  padding: var(--sb-space-half);
+}
+
+.myapp-header__button {
+  border: var(--sb-border-width) solid transparent;
+  border-radius: var(--sb-radius-sm);
+  background: var(--sb-accent);
+  color: var(--sb-fg-on-accent);
+  font: inherit;
+  font-size: var(--sb-text-sm);
+  font-weight: var(--sb-weight-medium);
+  padding: var(--sb-space-half) var(--sb-space-2);
+  cursor: pointer;
+}
+
+.myapp-header__button:hover {
+  background: var(--sb-accent-hover);
+}
+
+.myapp-header__verdict {
+  color: var(--sb-fg-muted);
+  font-size: var(--sb-text-sm);
+  min-width: 6ch;
+}
+
+/* --------------------------------------------------------------- themes
+ *
+ * Three host themes, each a block of `--sb-*` custom properties and nothing
+ * else - the rule deps/statifier_blocks/docs/theming.md holds a host theme to.
+ * They are declared on `.sb-editor` itself and on `.myapp-page`, never on an
+ * ancestor of the editor: `.sb-editor` declares every token on itself, and an
+ * element's own declaration beats an inherited value however specific the
+ * ancestor's selector is.
+ *
+ * Every theme declares `--sb-accent-myapp`, the accent token every block type
+ * this app registers points at (`StatifierExamples.Charts.Step.accent_token/0`).
+ * A palette entry carries the NAME; what colour the name means is the theme's
+ * to say, and a well-formed name nobody defines falls back silently to the
+ * editor's own accent - which is what the whole family of example steps looked
+ * like before these blocks existed.
+ */
+
+/* Light: the package's shipped defaults are a light theme already, so this
+   states the scheme, the host accent, and nothing it would only be restating. */
+.myapp-page[data-theme="light"] .sb-editor,
+.myapp-page[data-theme="light"] {
+  --sb-color-scheme: light;
+  --sb-accent-myapp: #5b46d6;
+}
+
+/* Dark. `--sb-color-scheme` first, because it is the line that gets forgotten:
+   the half of a control the browser paints - a select's drop-down, the
+   scrollbars, the caret - is reachable by no colour token at all. */
+.myapp-page[data-theme="dark"] .sb-editor,
+.myapp-page[data-theme="dark"] {
+  --sb-color-scheme: dark;
+
+  --sb-bg-canvas: #0f1216;
+  --sb-bg: #171b21;
+  --sb-bg-muted: #1e232b;
+  --sb-bg-sunken: #0b0e12;
+
+  --sb-fg: #eceff4;
+  --sb-fg-muted: #a4adbb;
+  --sb-fg-subtle: #8d97a6;
+  --sb-fg-on-accent: #0b0e12;
+
+  --sb-border: #2a313b;
+  --sb-border-strong: #6d7889;
+
+  --sb-accent: #6aa6ff;
+  --sb-accent-hover: #93c0ff;
+  --sb-accent-muted: rgba(106, 166, 255, 0.16);
+
+  --sb-error: #ff8f80;
+  --sb-error-bg: rgba(255, 143, 128, 0.12);
+  --sb-warning: #e6b551;
+  --sb-warning-bg: rgba(230, 181, 81, 0.14);
+  --sb-info: #6aa6ff;
+  --sb-info-bg: rgba(106, 166, 255, 0.12);
+
+  --sb-drop-ok-border: #5cc98d;
+  --sb-drop-ok-bg: rgba(92, 201, 141, 0.12);
+
+  /* Tier 2 shaping, and the reason it is a token rather than a literal in a
+     rule: 14% of a pale accent over near-black is not a tint. */
+  --sb-block-accent-mix: 24%;
+
+  --sb-accent-myapp: #9d8cff;
+}
+
+/* Brand: adapted from the "complete host theme" in the package's
+   docs/theming.md, which is itself a credit-card processing host. Kept
+   deliberately distinct from `dark` above - a warmer ground and the family's
+   own violet - because two themes that differ only in hex values prove
+   nothing about whether the token surface actually reaches. */
+.myapp-page[data-theme="brand"] .sb-editor,
+.myapp-page[data-theme="brand"] {
+  --sb-color-scheme: dark;
+
+  --sb-bg-canvas: #14121f;
+  --sb-bg: #1d1a2c;
+  --sb-bg-muted: #262238;
+  --sb-bg-sunken: #100e19;
+
+  --sb-fg: #f2eefb;
+  --sb-fg-muted: #b3aacb;
+  --sb-fg-subtle: #9c92b7;
+  --sb-fg-on-accent: #100e19;
+
+  --sb-border: #332d4a;
+  --sb-border-strong: #7f75a3;
+
+  --sb-accent: #b79cff;
+  --sb-accent-hover: #cfbcff;
+  --sb-accent-muted: rgba(183, 156, 255, 0.18);
+
+  --sb-error: #ff9a8b;
+  --sb-error-bg: rgba(255, 154, 139, 0.12);
+  --sb-warning: #f0c46a;
+  --sb-warning-bg: rgba(240, 196, 106, 0.14);
+  --sb-info: #7fc4ff;
+  --sb-info-bg: rgba(127, 196, 255, 0.12);
+
+  --sb-drop-ok-border: #63d39a;
+  --sb-drop-ok-bg: rgba(99, 211, 154, 0.12);
+
+  --sb-block-accent-mix: 26%;
+
+  /* One name, because every example step points at exactly this one. A
+     per-type name declared here would be a token nothing reads, which is the
+     mistake theming.md names: a host sets it, nothing moves, and there is no
+     way to tell that from a bug in the host's own stylesheet. */
+  --sb-accent-myapp: #b79cff;
+}

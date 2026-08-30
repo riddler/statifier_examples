@@ -55,11 +55,47 @@ defmodule StatifierExamples.ChartsTest do
     assert Charts.themes() == [:light, :dark, :brand]
   end
 
-  # Sabotage: made icon/1 return the name it was given; this went red, then
-  # reverted.
-  test "the icon seam resolves nothing yet" do
-    assert Charts.icon("core.sequence") == nil
-    assert Charts.icon(:compile) == nil
+  # The property that matters for the icon seam, asserted by walking the
+  # palette rather than a list of names copied into this file: a block type
+  # declares an icon NAME, and a name the host cannot resolve is a tile the
+  # editor silently does not draw. Walking the palette is what makes a new
+  # block type with a new icon fail here rather than in a screenshot.
+  #
+  # Sabotage: dropped "bolt.svg" from the wildcard Charts.Icons reads; this
+  # went red naming the icon, then reverted.
+  test "every icon name the palette declares resolves" do
+    %Palette{types: types} = Charts.palette()
+
+    declared =
+      types
+      |> Map.values()
+      |> Enum.map(&Map.get(&1.palette_entry(), :icon))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    # A palette that declared no icons at all would pass every assertion
+    # below by vacuity, which is the one way this walk could be green and
+    # mean nothing.
+    assert length(declared) > 10
+
+    for name <- declared do
+      assert Charts.icon(name) == name, "#{name} resolves to no icon"
+      assert is_binary(Charts.Icons.body(name))
+    end
+  end
+
+  # Sabotage: made icon/1 return its argument unconditionally; this went red,
+  # then reverted.
+  test "a name the icon set does not have resolves to nil" do
+    assert Charts.icon("no-such-heroicon") == nil
+    assert Charts.icon(:no_such_heroicon) == nil
+  end
+
+  # Sabotage: made icon/1 skip the Atom.to_string/1 clause; this went red,
+  # then reverted.
+  test "the icon seam answers an atom the same way it answers a string" do
+    assert Charts.icon(:clock) == "clock"
+    assert Charts.icon("clock") == "clock"
   end
 
   # Sabotage: made fixtures/0 read only Signup.fixtures(); this went red, then
