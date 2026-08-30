@@ -12,7 +12,7 @@ defmodule StatifierExamples.Charts do
 
   alias StatifierBlocks.Palette
   alias StatifierExamples.{CardAuth, Signup}
-  alias StatifierExamples.Charts.{Fixture, Messaging}
+  alias StatifierExamples.Charts.{Fixture, Icons, Messaging}
 
   @themes [:light, :dark, :brand]
 
@@ -39,16 +39,29 @@ defmodule StatifierExamples.Charts do
   def themes, do: @themes
 
   @doc """
-  Resolves a block type or control name to an icon name.
+  Resolves a block type or control name to an icon name this app can render.
 
-  A seam: `se-06z` decides the icon set and the naming. Block types carry
-  their own `icon` in `palette_entry/0` - heroicon outline names, per
-  ADR-0005 decision 10k - so this answers only for the names that are not
-  a block type's, and until `se-06z` lands every name resolves to `nil`,
-  which callers must render as "no icon" rather than as an error.
+  The seam `se-06z` filled in. Block types carry their own `icon` in
+  `palette_entry/0` - heroicon outline names, per ADR-0005 decision 10k - and
+  this app carries the `heroicons` dependency the Phoenix generator installs,
+  so the answer for a name the set has is the name itself.
+
+  It answers a **name**, never markup: what turns a name into an `<svg>` is
+  `StatifierExamplesWeb.Icons.icon/1`, the component the editor's `icon`
+  assign takes. Keeping the two apart is what lets the resolution be asserted
+  without a renderer, which is what the palette walk in
+  `test/statifier_examples/charts_test.exs` does.
+
+  A name the set does not have resolves to `nil`, which callers render as "no
+  icon" rather than as an error - a block type naming a glyph nobody drew is
+  a missing tile, not a broken page.
   """
   @spec icon(String.t() | atom()) :: String.t() | nil
-  def icon(name) when is_binary(name) or is_atom(name), do: nil
+  def icon(name) when is_atom(name), do: icon(Atom.to_string(name))
+
+  def icon(name) when is_binary(name) do
+    if Icons.known?(name), do: name, else: nil
+  end
 
   @doc """
   The example block documents this app hosts, in the order the DOCUMENT
