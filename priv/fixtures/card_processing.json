@@ -48,8 +48,7 @@
                       "type_version": 1,
                       "config": {
                         "event": "card.authorization_timed_out",
-                        "delay": "15m",
-                        "label": "Arm the authorization deadline"
+                        "delay": "15m"
                       }
                     },
                     {
@@ -227,8 +226,7 @@
                       "config": {
                         "invoke_type": "myapp:authorize",
                         "assign_to": "auth",
-                        "params": "amount=amount_cents\ncurrency=currency\ncustomer=customer.id",
-                        "label": "Authorize the card"
+                        "params": "amount=amount_cents\ncurrency=currency\ncustomer=customer.id"
                       },
                       "slots": {
                         "on_error": [
@@ -283,8 +281,7 @@
                       "config": {
                         "event": "card.authorization_timed_out",
                         "cond": "three_ds.completed == false OR fraud.cleared == false",
-                        "outcome": "abandon",
-                        "label": "Give up on the authorization"
+                        "outcome": "abandon"
                       }
                     }
                   ]
@@ -339,8 +336,7 @@
                       "type_version": 1,
                       "config": {
                         "invoke_type": "myapp:capture",
-                        "params": "amount=amount_cents\nauth_code=auth.code",
-                        "label": "Capture the funds"
+                        "params": "amount=amount_cents\nauth_code=auth.code"
                       },
                       "slots": {
                         "on_error": [
@@ -472,8 +468,7 @@
                       "type_version": 1,
                       "config": {
                         "path": "review.parked",
-                        "value": "false",
-                        "label": "Clear the parked flag"
+                        "value": "false"
                       }
                     }
                   ],

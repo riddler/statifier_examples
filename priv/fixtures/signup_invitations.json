@@ -19,17 +19,13 @@
           "type_version": 1,
           "config": {
             "invoke_type": "myapp:notify",
-            "params": "email=signup.email\nseats=signup.seats",
-            "label": "Email the invitations"
+            "params": "email=signup.email\nseats=signup.seats"
           }
         },
         {
           "type": "core.group",
           "id": "blk_si_onboarding",
           "type_version": 1,
-          "config": {
-            "label": "While an invitee is signing up"
-          },
           "slots": {
             "body": [
               {
@@ -38,8 +34,7 @@
                 "type_version": 1,
                 "config": {
                   "items": "signup.invitees",
-                  "item_as": "invitee",
-                  "label": "For each invitee"
+                  "item_as": "invitee"
                 },
                 "slots": {
                   "body": [
@@ -50,8 +45,7 @@
                       "config": {
                         "chart": "bdoc_signup_demo",
                         "params": "email=signup.email\nplan=signup.plan",
-                        "assign_to": "onboarding",
-                        "label": "Run the signup wizard for the invitee"
+                        "assign_to": "onboarding"
                       },
                       "slots": {
                         "on_error": [
@@ -59,9 +53,6 @@
                             "type": "core.sequence",
                             "id": "blk_si_signup_failed",
                             "type_version": 1,
-                            "config": {
-                              "label": "The invitee never got through"
-                            },
                             "slots": {
                               "body": [
                                 {
@@ -70,8 +61,7 @@
                                   "type_version": 1,
                                   "config": {
                                     "invoke_type": "myapp:notify",
-                                    "params": "email=signup.email",
-                                    "label": "Tell the account owner"
+                                    "params": "email=signup.email"
                                   }
                                 },
                                 {
@@ -96,8 +86,7 @@
                 "id": "blk_si_settle",
                 "type_version": 1,
                 "config": {
-                  "duration": "24h",
-                  "label": "Give the rest of the team a day"
+                  "duration": "24h"
                 }
               }
             ],
