@@ -119,18 +119,54 @@
    its ground, so the page behind the editor changes with the theme instead of
    framing a dark editor in a white sheet. */
 .myapp-page {
+  /* The page's gutter, named rather than repeated: the padding below is one
+     reader and the viewport bound further down is the other, and a literal in
+     the second place would drift the day this one changes. */
+  --myapp-page-gutter: 1rem;
   min-height: 100vh;
-  /* A literal rather than `var(--sb-space-2)`: the package declares its space
-     scale on `.sb-editor`, one level in, so a token reference up here resolves
-     to nothing and the page loses its gutter entirely. Host chrome's own
+  /* A host length of its own - named just above - rather than
+     `var(--sb-space-2)`: the package declares its space scale on
+     `.sb-editor`, one level in, so a token reference up here resolves to
+     nothing and the page loses its gutter entirely. Host chrome's own
      spacing is the host's to write in ordinary CSS anyway - the `--sb-*` rule
      is about what a THEME may declare, not about what the page around the
      editor is allowed to be. */
-  padding: 1rem;
+  padding: var(--myapp-page-gutter);
   /* The fallback is the package's own default: the light theme below sets no
      surface tokens, because the shipped defaults already are that theme, and
      they are declared on `.sb-editor` rather than up here. */
   background: var(--sb-bg-canvas, #f4f5f7);
+}
+
+/* The editor is a pane on this page, not a column the page scrolls (se-5bj).
+   `--sb-editor-height` is the package's tier-2 token - see "Bounding the
+   editor's height" in `deps/statifier_blocks/docs/theming.md`. Given a length
+   the editor takes it, the canvas panel scrolls inside it, and the drawer
+   strip stays pinned at the bottom of the editor instead of sitting below the
+   fold on a document taller than the window. The default is `auto`, which is
+   the right default for a page whose only content is the editor and the wrong
+   one for this page, which is an application shell.
+
+   The selector has to reach `.sb-editor` rather than stopping at the page
+   root: the package declares `--sb-editor-height: auto` on `.sb-editor`
+   itself, and a declaration on the element beats an inherited one however far
+   up the ancestry it is set. Setting the token on `.myapp-page` alone reaches
+   nothing. This descendant form is the recipe theming.md documents, and it is
+   still a token this host sets rather than a `height` it writes on a package
+   element - which is the bargain that page opens with, and which does not
+   work anyway: the outer box would be bounded and the grid one level in would
+   still be as tall as the tree.
+
+   The length is the viewport less this page's gutter twice, and nothing else,
+   because the reference header this app renders is in the editor's OWN header
+   slot - inside `.sb-editor`, inside the bound - so the only thing between
+   the editor's box and the viewport is the page's padding. A page whose
+   header sat outside the editor would subtract that header's height here
+   instead. Nothing measures anything at runtime: the gutter is a length this
+   file already knows, so the arithmetic is the stylesheet's and there is no
+   JavaScript in this seam at all. */
+.myapp-page .sb-editor {
+  --sb-editor-height: calc(100vh - 2 * var(--myapp-page-gutter));
 }
 
 /* The header the host owns, rendered into the package's `:header` slot (the

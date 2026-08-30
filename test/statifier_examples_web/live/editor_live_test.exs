@@ -297,6 +297,72 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
   end
 
+  describe "the viewport bound" do
+    # The bound itself is a stylesheet rule and has to be: the package
+    # declares `--sb-editor-height: auto` on `.sb-editor` itself, so a
+    # declaration on an ancestor - the page root, an inline style this app
+    # could stamp there - loses to it and reaches nothing. The token is set
+    # through a descendant selector, which is the recipe the package's
+    # docs/theming.md documents, and a LiveViewTest cannot see a stylesheet.
+    #
+    # So the two halves are asserted against each other instead. The
+    # declaration is read out of `assets/css/app.css`, and the selector it is
+    # written with is run - as a selector - against the document the page
+    # actually renders. A rule that stops declaring a length goes red on the
+    # first test; a page root or an editor element that stops matching the
+    # rule that bounds it goes red on the second. Neither half can drift away
+    # from the other quietly, which is the failure this seam actually has:
+    # everything still renders, and the drawer strip is simply below the fold.
+    @bound_selector ".myapp-page .sb-editor"
+
+    # Sabotage: replaced the calc with `auto` in app.css; this went red on the
+    # `calc(100vh` assertion, then reverted.
+    test "the stylesheet bounds the editor to the viewport" do
+      declaration = bound_declaration()
+
+      # A length, and the viewport is where it comes from.
+      assert declaration =~ "calc(100vh"
+      # The page's gutter is subtracted twice, because the editor's box is
+      # inset by the page padding on both edges and the reference header is
+      # inside the editor's own header slot rather than above it.
+      assert declaration =~ "2 * var(--myapp-page-gutter)"
+      refute declaration =~ "auto"
+    end
+
+    # Sabotage: renamed the page root's class to `myapp-shell` in render/1;
+    # every fixture went red here while every other test in this file stayed
+    # green, then reverted.
+    test "every fixture page matches the selector the bound is written with", %{conn: conn} do
+      for fixture <- Charts.fixtures() do
+        {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
+
+        assert html
+               |> LazyHTML.from_document()
+               |> LazyHTML.query(@bound_selector)
+               |> Enum.count() == 1
+      end
+    end
+
+    # The value side of `--sb-editor-height` in the one rule that sets it, or
+    # a failure naming what was looked for - an empty string would let the
+    # assertions above pass against a stylesheet that lost the rule entirely.
+    @spec bound_declaration() :: String.t()
+    defp bound_declaration do
+      css = File.read!("assets/css/app.css")
+      pattern = ~r/#{Regex.escape(@bound_selector)}\s*\{([^}]*)\}/
+
+      with [_, body] <- Regex.run(pattern, css),
+           [_, value] <- Regex.run(~r/--sb-editor-height:\s*([^;]+);/, body) do
+        String.trim(value)
+      else
+        _ ->
+          flunk(
+            "no `--sb-editor-height` declaration on `#{@bound_selector}` in assets/css/app.css"
+          )
+      end
+    end
+  end
+
   @spec card(Phoenix.LiveViewTest.View.t(), String.t(), String.t()) :: String.t()
   defp card(view, block_id, class) do
     view

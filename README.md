@@ -104,6 +104,14 @@ drawer". To copy the host's half:
    `assets/package.json` and an npm install.
 3. Style the page root, not the editor's internals: `assets/css/app.css`
    redeclares the package's tokens under `.myapp-page[data-theme="..."]`.
+4. Bound the editor's height if the page is an application shell rather than
+   a page whose only content is the editor. `.myapp-page .sb-editor` sets
+   `--sb-editor-height` to the viewport less the page's gutter, which makes
+   the editor a pane: the canvas scrolls inside it and the drawer strip stays
+   pinned at the bottom of the window instead of falling below the fold on a
+   long document. The selector reaches the editor element rather than the
+   page root on purpose - the package declares the token's `auto` default on
+   `.sb-editor` itself, and a declaration there beats an inherited one.
 
 ## The gate
 
@@ -163,5 +171,6 @@ Every fixture, seed and example value in this repository is fictional.
 
 ## The rules that are not in this file
 
-`CLAUDE.md` carries the ones a change here has to honour, including the rule
-that the example domains are the two canonical ones and nothing else.
+`CLAUDE.md` carries the ones a change here has to honour: the git-SHA pin on
+`statifier_blocks` and the bead that swaps it for the Hex release, and the
+rule that the example domains are the two canonical ones and nothing else.
