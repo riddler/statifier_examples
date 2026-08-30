@@ -53,6 +53,19 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
+  # The database file. SQLite keeps a release as self-contained as the dev
+  # app is; a host wanting a server-backed database points the repo at one
+  # here rather than anywhere this app compiles.
+  config :statifier_examples, StatifierExamples.Repo,
+    database:
+      System.get_env("DATABASE_PATH") ||
+        raise("""
+        environment variable DATABASE_PATH is missing.
+        For example: /etc/statifier_examples/statifier_examples.db
+        """)
+end
+
+if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want

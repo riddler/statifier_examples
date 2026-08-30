@@ -75,6 +75,27 @@ defmodule StatifierExamples.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
 
+      # Persistence. SQLite keeps `mix setup` zero-service: the database is a
+      # file under `priv/`, so a fresh clone needs no server to run the suite
+      # or the dev app (se-cnv, campaign-021 ruling R11).
+      {:ecto_sql, "~> 3.13"},
+      {:ecto_sqlite3, "~> 0.22"},
+
+      # The engine, held at its Hex release. `statifier_persistence`'s git
+      # ref carries a git dependency on `statifier-ex`'s main branch, for a
+      # queue-discard fix that release 2.2.0 lacked; 2.2.1 ships it (the fix
+      # commit is an ancestor of the v2.2.1 tag), so the override keeps this
+      # app on the released engine rather than inheriting a branch pin.
+      {:statifier, "~> 2.2", override: true},
+
+      # The durable stepper. INTERIM git pin: Hex 0.1.3 predates both the
+      # `:blob_type` option and the run `metadata` column this app configures,
+      # so the released package cannot express what is wired up here. Re-pin
+      # to a Hex release once one carries them (se-p22).
+      {:statifier_persistence,
+       git: "https://github.com/riddler/statifier_persistence.git",
+       ref: "ca8a7d8921a321491843934386e3ffa4ddf85f65"},
+
       # The authoring layer this app is the reference embedder for.
       # `phoenix_live_view` is optional there and supplied by this app above.
       statifier_blocks_dep(),
@@ -112,7 +133,10 @@ defmodule StatifierExamples.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup", "assets.build"],
+      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      "ecto.setup": ["ecto.create --quiet", "ecto.migrate --quiet"],
+      "ecto.reset": ["ecto.drop", "ecto.setup"],
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind statifier_examples", "esbuild statifier_examples"],
       "assets.deploy": [

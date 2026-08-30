@@ -8,7 +8,18 @@
 import Config
 
 config :statifier_examples,
+  ecto_repos: [StatifierExamples.Repo],
   generators: [timestamp_type: :utc_datetime]
+
+# The repo is SQLite so that `mix setup` starts no service: the database is
+# a file, created on demand, and a fresh clone runs the suite and the dev
+# app with nothing installed alongside. Each environment names its own file
+# in its own config; there is no shared default to accidentally share.
+config :statifier_examples, StatifierExamples.Repo,
+  pool_size: 5,
+  # SQLite serializes writers at the database, so a busy write waits rather
+  # than failing outright.
+  busy_timeout: 5_000
 
 # Configure the endpoint
 config :statifier_examples, StatifierExamplesWeb.Endpoint,

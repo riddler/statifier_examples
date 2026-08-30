@@ -122,8 +122,13 @@ The seams the domains fill:
 - `StatifierExamples.Charts` - shared host plumbing: the palette, the icon
   seam, the theme tokens, the fixture list (`se-06z` builds the host page on it)
 
-There is **no database yet** - Postgres joins when a later campaign needs
-persistence; the app is generated `--no-ecto` and nothing here stores state.
+The database is **SQLite**, through `ecto_sqlite3`: one repo,
+`StatifierExamples.Repo`, over a file under `priv/`. Alongside the app's own
+tables it carries `statifier_persistence`'s durable chart, position and run
+storage, configured on `StatifierExamples.Persistence`. SQLite is what keeps
+`mix setup` **zero-service** - a fresh clone runs the suite and the dev app
+with no server, no container and no credentials - and what it costs is
+written down where it bites, in that module's moduledoc.
 
 Always refer to state machines as **state charts**, as statifier-ex does.
 
