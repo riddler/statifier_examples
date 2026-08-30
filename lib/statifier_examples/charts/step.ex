@@ -83,11 +83,40 @@ defmodule StatifierExamples.Charts.Step do
   end
 
   @doc """
-  `invoke_type` first, then whatever else the step declares.
+  The optional `label` field: the name this particular step goes by on the
+  card, above the block type's own label.
+
+  `statifier_blocks` titles a card from a declared `:string` field keyed
+  `"label"` and demotes the palette label to the subtitle
+  (`StatifierBlocks.ViewModel.title/1` and `subtitle/1`). Declaring it is
+  the whole of what a host does to opt in - the fixtures have carried
+  `config["label"]` since they were ported from the spike, and without the
+  declaration nothing read them.
+
+  It is `required?: false` with an empty default, the package's spelling
+  for an optional string: a step that names nothing is titled by its type,
+  which is the `core.*` vocabulary's own state.
+  """
+  @spec label_field() :: BlockType.field_decl()
+  def label_field do
+    %{
+      key: "label",
+      type: :string,
+      label: "Label",
+      required?: false,
+      default: ""
+    }
+  end
+
+  @doc """
+  `label` first, then `invoke_type`, then whatever else the step declares.
+
+  `label` leads because it is the field an author reaches for first - it is
+  what the card says - and the inspector renders declaration order.
   """
   @spec config_schema(String.t(), [BlockType.field_decl()]) :: [BlockType.field_decl()]
   def config_schema(default, extra \\ []) when is_binary(default) and is_list(extra) do
-    [invoke_type_field(default) | extra]
+    [label_field(), invoke_type_field(default) | extra]
   end
 
   @doc """

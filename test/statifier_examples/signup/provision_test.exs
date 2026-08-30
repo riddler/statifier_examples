@@ -6,11 +6,13 @@ defmodule StatifierExamples.Signup.ProvisionTest do
 
   defp config, do: %{"invoke_type" => "myapp:provision"}
 
-  # Sabotage: added a second field to config_schema/1; this went red, then
+  # Sabotage: added a third field to config_schema/1; this went red, then
   # reverted.
-  test "provisioning has nothing to configure but the handler it names" do
-    assert [%{key: "invoke_type", required?: true, default: "myapp:provision"}] =
-             Provision.config_schema(config())
+  test "provisioning has nothing to configure but the label and the handler" do
+    assert [
+             %{key: "label", type: :string, required?: false},
+             %{key: "invoke_type", required?: true, default: "myapp:provision"}
+           ] = Provision.config_schema(config())
 
     assert Provision.slots(config()) == []
     assert Provision.current_version() == 1
