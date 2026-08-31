@@ -16,8 +16,12 @@ defmodule StatifierExamples.Signup.Handlers do
   answers directly, without a caller reaching into a map of functions to
   find out what this module can do.
 
-  `myapp:signup` logs a line and answers `{:ok, %{}}`: collecting a form is
-  the chart's interesting part, not the host's. `myapp:provision` is the
+  `myapp:signup` logs a line and answers with what its step collected -
+  canned values, because there is no form here to fill in, but canned in
+  the handler, which is where a real deployment's answers come from. The
+  chart writes them wherever the calling block's `assign_to` says, and
+  that is how the wizard's plan branch gets a plan to guard on.
+  `myapp:provision` is the
   one call in this app that writes - the wizard exists to create an
   account, and a handler that only logged would leave the run having meant
   nothing. Every value that reaches either is fictional -
@@ -75,9 +79,11 @@ defmodule StatifierExamples.Signup.Handlers do
   def handle(invoke_type, params, context \\ %{})
 
   def handle("myapp:signup", params, _context) do
-    Logger.info("myapp:signup collected step #{inspect(Map.get(params, "step"))}")
+    step = Map.get(params, "step")
 
-    {:ok, %{}}
+    Logger.info("myapp:signup collected step #{inspect(step)}")
+
+    {:ok, answers(step)}
   end
 
   def handle("myapp:provision", _params, %{run_id: run_id}) when is_binary(run_id) do
@@ -102,4 +108,25 @@ defmodule StatifierExamples.Signup.Handlers do
 
   def handle(invoke_type, _params, _context),
     do: {:error, {:unknown_invoke_type, invoke_type}}
+
+  # What each step of the wizard comes back with.
+  #
+  # There is no form here to fill in, so the answers are canned - but they
+  # are canned in the HANDLER, which is where a real deployment's answers
+  # would come from too. That is the whole of se-dyo: the wizard used to
+  # carry a `core.assign` block holding these three values as an object
+  # literal, because the handler answered `{:ok, %{}}` and the plan branch
+  # downstream had nothing to guard on. A stand-in inside the document
+  # taught the reader that a chart invents its own data, which is the one
+  # thing this reference embedder should not teach.
+  #
+  # Only `account` answers with anything. The other four steps are calls
+  # whose result the chart keeps nothing of, and the blocks that name them
+  # carry no `assign_to`, so an answer from them would be discarded on the
+  # way past. Every value is fictional.
+  @spec answers(term()) :: map()
+  defp answers("account"),
+    do: %{"plan" => "business", "seats" => 5, "email_verified" => false}
+
+  defp answers(_step), do: %{}
 end

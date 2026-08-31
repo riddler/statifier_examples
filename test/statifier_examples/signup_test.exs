@@ -96,6 +96,46 @@ defmodule StatifierExamples.SignupTest do
     assert invitations.declare == []
   end
 
+  # se-dyo: where `signup` comes from, in the wizard's own bytes. The
+  # account step names the root, so the answers `myapp:signup` collects are
+  # what the plan branch downstream guards on - and the `core.assign` block
+  # that used to hold those three values as an object literal is gone,
+  # because a chart that invents its own data is the one thing a reference
+  # embedder should not be teaching.
+  #
+  # Both halves are asserted: an `assign_to` added and the stand-in left in
+  # would still be green on the first.
+  #
+  # Sabotage: put the `blk_su_collected` block back into
+  # `signup_wizard.json`; the second assertion went red. Reverted from a
+  # scratchpad copy.
+  test "the wizard collects its plan rather than assigning one to itself" do
+    [wizard | _rest] = Signup.fixtures()
+
+    assert %{"assign_to" => "signup", "step" => "account"} = config(wizard, "blk_su_account")
+
+    refute Enum.any?(
+             StatifierBlocks.Document.blocks(wizard.document),
+             &(&1.type == "core.assign")
+           )
+  end
+
+  # The same fact one layer down, on the chart rather than on the bytes:
+  # the answer is written on the call's SUCCESS transition, so a signup
+  # step that failed writes nothing.
+  #
+  # Sabotage: made Step.emit/4 put the `<assign>` on the error transition
+  # instead; this went red, then reverted.
+  test "the wizard's chart writes the collected answers on the call's success transition" do
+    [wizard | _rest] = Signup.fixtures()
+
+    assert {:ok, compiled} = Compiler.compile(wizard.document, palette(), [])
+
+    assert compiled.scxml =~
+             ~s(<transition event="done.invoke" target="s_blk_su_account__o_done">) <>
+               ~s(<assign expr="_event.data" location="signup"/></transition>)
+  end
+
   # Sabotage: dropped the `<param>` from SignupStep.emit/2; this went red,
   # then reverted.
   test "a wizard step sends the step it collects to the handler" do
@@ -104,5 +144,17 @@ defmodule StatifierExamples.SignupTest do
     assert {:ok, compiled} = Compiler.compile(wizard.document, palette(), [])
     assert compiled.scxml =~ ~s(name="step")
     assert compiled.scxml =~ ~s(expr="'company_details'")
+  end
+
+  @spec config(map(), String.t()) :: map()
+  defp config(fixture, block_id) do
+    block =
+      fixture.document
+      |> StatifierBlocks.Document.blocks()
+      |> Enum.find(&(&1.id == block_id))
+
+    assert block, "#{block_id} is not in #{fixture.key}"
+
+    block.config
   end
 end

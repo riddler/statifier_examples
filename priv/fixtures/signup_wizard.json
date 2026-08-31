@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "bdoc_signup_demo",
-  "revision": 10,
+  "revision": 11,
   "metadata": {
     "name": "Signup wizard",
     "description": "Collect an account, verify the email, branch on the chosen plan, and provision.",
@@ -10,7 +10,7 @@
   "datamodel": [
     {
       "id": "signup",
-      "description": "The signup under construction: the collect step assigns it, and the plan branch guards on its plan, seats and email_verified."
+      "description": "The signup under construction: the account step writes what myapp:signup collected here, and the plan branch guards on its plan, seats and email_verified."
     }
   ],
   "root": {
@@ -26,16 +26,8 @@
           "config": {
             "invoke_type": "myapp:signup",
             "step": "account",
+            "assign_to": "signup",
             "label": "Collect email and password"
-          }
-        },
-        {
-          "type": "core.assign",
-          "id": "blk_su_collected",
-          "type_version": 1,
-          "config": {
-            "path": "signup",
-            "value": "{'plan': 'business', 'seats': 5, 'email_verified': false}"
           }
         },
         {

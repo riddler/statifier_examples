@@ -20,13 +20,45 @@ defmodule StatifierExamples.Signup.SignupStepTest do
 
   # Sabotage: made config_schema/1 return only the invoke_type field; this
   # went red, then reverted.
-  test "config_schema/1 declares the label, the handler and the step, and the step is a select" do
-    assert [label, invoke_type, step] = SignupStep.config_schema(config())
+  test "config_schema/1 declares the label, the handler, the step and where the answers go" do
+    assert [label, invoke_type, step, assign_to] = SignupStep.config_schema(config())
 
     assert %{key: "label", type: :string, required?: false, default: ""} = label
     assert %{key: "invoke_type", required?: true, default: "myapp:signup"} = invoke_type
     assert %{key: "step", required?: true, default: "account", type: {:select, options}} = step
     assert {"send_verification", "send verification"} in options
+
+    assert %{key: "assign_to", type: :string, required?: false, default: ""} = assign_to
+  end
+
+  # se-dyo: the answers a step collects go where `assign_to` says, so the
+  # key is a datamodel path in the sense ADR-0002 decision 7 means - an
+  # author who writes a root the document does not declare gets the
+  # editor's advisory rather than an `error.execution` at run time.
+  #
+  # Sabotage: dropped `datamodel_path?: true` from the declaration; this
+  # went red, then reverted.
+  test "the answers key is declared as a datamodel path" do
+    [_label, _invoke_type, _step, assign_to] = SignupStep.config_schema(config())
+
+    assert BlockType.datamodel_path?(assign_to)
+  end
+
+  # An optional key: a step that keeps nothing leaves it empty, and a step
+  # that keeps something has to name a root the chart can read.
+  #
+  # Sabotage: made Step.check_assign_to/2 return its findings untouched;
+  # the last assertion went red, then reverted.
+  test "validate_config/1 passes a blank assign_to and refuses one that is not an identifier" do
+    assert :ok == SignupStep.validate_config(config())
+    assert :ok == SignupStep.validate_config(config(%{"assign_to" => ""}))
+    assert :ok == SignupStep.validate_config(config(%{"assign_to" => "signup"}))
+
+    assert {:error, findings} =
+             SignupStep.validate_config(config(%{"assign_to" => "signup.plan"}))
+
+    assert {"assign_to", message} = List.keyfind(findings, "assign_to", 0)
+    assert message =~ "identifier"
   end
 
   # Sabotage: made check_step/2 accept any binary; this went red, then

@@ -96,7 +96,7 @@ defmodule StatifierExamples.Charts.InvokeHandlerTest do
   # Sabotage: dropped "myapp:signup" from `Signup.Handlers`' `@invoke_types`;
   # this went red on the routing assertion, then reverted.
   test "dispatch routes a registered name to the module that registered it" do
-    assert Charts.dispatch("myapp:signup", %{"step" => "account"}) == {:ok, %{}}
+    assert Charts.dispatch("myapp:signup", %{"step" => "confirm"}) == {:ok, %{}}
     assert Charts.dispatch("myapp:authorize", %{}) == {:ok, %{}}
   end
 
