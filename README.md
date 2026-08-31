@@ -163,6 +163,10 @@ Two host pieces make that work and both are worth reading before copying:
   :not_supported}}` before a run can start. A host on Postgres takes the
   default; a host on SQLite writes the twenty lines this one writes.
 
+`docs/demo-script.md` is the same ground as a numbered beat list to read out
+loud with the app in front of you - what to press, and what you should see
+when you press it, through to the account the wizard creates.
+
 ### The walkthrough
 
 1. Start the app and open the signup wizard:
@@ -253,12 +257,14 @@ come from the stored position.
   says `provisioned=existing` instead of `created`. No dedup table, no
   guessing.
 
-One caveat the shipped fixture makes visible: the signup wizard's plan
-branch reads `signup.plan` and `signup.seats` from a datamodel the
-document does not declare, so every run of *that* document takes the
-`otherwise` arm and abandons before it reaches its provision block. The
-write is exercised by `StatifierExamples.Charts.DurableTest`, on a
-document built in the test for the purpose.
+The shipped fixture reaches that block. Its plan branch guards on
+`signup.plan` and `signup.seats`, and both halves of making that work are
+the host's: the fixture declares the `signup` root the guards read - a
+block document cannot declare its own datamodel roots - and a `core.assign`
+near the top of the document sets the two values, standing in for the step
+that would collect them. `StatifierExamples.Charts.DurableTest` exercises
+the write on that fixture rather than on a document built in the test, so
+the run the demo does is the run the suite covers.
 
 ### The abandonment reminder, and why it is a row rather than a timer
 
