@@ -12,13 +12,18 @@ defmodule StatifierExamples.Charts.RunTest do
   defp signup do
     {:ok, fixture} = Charts.fixture("signup_wizard")
 
-    # `declare:` from the fixture, exactly as the editor page compiles it:
-    # the wizard's plan branch guards on `signup.plan`, and a guard reading
-    # a root nothing declared raises `error.execution`.
+    # `declare:` and `terminate:` from the fixture and the page, exactly as
+    # the editor page compiles it: the wizard's plan branch guards on
+    # `signup.plan`, and a guard reading a root nothing declared raises
+    # `error.execution`; `terminate: true` is what lets the session reach
+    # `:done` at all rather than resting on its root outcome forever. The
+    # in-memory driver and the durable one run the same bytes, which is the
+    # only way their statuses can be compared.
     {:ok, compiled} =
       Compiler.compile(fixture.document, Charts.palette(),
         known_invoke_types: Charts.invoke_types(),
-        declare: fixture.declare
+        declare: fixture.declare,
+        terminate: true
       )
 
     {compiled, fixture.document}
@@ -168,6 +173,32 @@ defmodule StatifierExamples.Charts.RunTest do
     details = run |> Run.entries() |> Enum.map(& &1.detail)
 
     assert "signup.email_verified" in details
+  end
+
+  # se-k4a, and the in-memory half of the same fix: compiled with
+  # `terminate: true`, a run that gets past the verification wait reaches
+  # the top-level `<final>` the option emitted, the session halts, and the
+  # feed draws the row that says so. Without the option the same run rested
+  # on its root outcome with `:running` forever - the in-memory driver had
+  # no way to say a chart was over, which is the visible half of the durable
+  # driver's record never reaching `:completed`.
+  #
+  # The wait's own event is what steps it, the same one
+  # `StatifierExamples.Charts.DurableTest` sends: the 24-hour `core.wait`
+  # is not something a test waits out.
+  #
+  # Sabotage: dropped `terminate: true` from `signup/0`'s compile; the run
+  # stayed `:running` with no halted row and this went red on the status.
+  # Reverted.
+  test "a run that finishes halts and the feed says so" do
+    run =
+      start_run()
+      |> drain()
+      |> Run.send_event("statifier_blocks.wait.blk_su_verify_wait")
+      |> drain()
+
+    assert run.status == :done
+    assert :halted in (run |> Run.entries() |> Enum.map(& &1.kind))
   end
 
   # The buttons the page draws come off the document, not off a list beside
