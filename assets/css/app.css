@@ -246,6 +246,140 @@
   min-width: 6ch;
 }
 
+/* --------------------------------------------------- the run feed tab
+ *
+ * The panel this app contributes to the drawer through the `drawer_tabs`
+ * seam. The package draws the tab and the strip; everything inside the
+ * panel is markup this app wrote, so it is styled here and nowhere else -
+ * which is the point of the seam being a function component rather than
+ * something the package renders on a host's behalf.
+ *
+ * Every colour and length is a `--sb-*` reference, for the same reason the
+ * header above is: one set of theme blocks then dresses the header, the
+ * editor and this panel together, and a literal here would be the one
+ * thing on the page that did not change with the theme. The tokens resolve
+ * because the panel renders INSIDE `.sb-editor`, where they are declared.
+ */
+.myapp-runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sb-space);
+  padding: var(--sb-space);
+  color: var(--sb-fg);
+  font-family: var(--sb-font);
+  font-size: var(--sb-text-sm);
+}
+
+.myapp-runs__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sb-space-half);
+}
+
+.myapp-runs__button {
+  border: var(--sb-border-width) solid var(--sb-border);
+  border-radius: var(--sb-radius-sm);
+  background: var(--sb-bg);
+  color: var(--sb-fg);
+  font: inherit;
+  font-size: var(--sb-text-sm);
+  padding: var(--sb-space-half) var(--sb-space);
+  cursor: pointer;
+}
+
+.myapp-runs__button:hover:not(:disabled) {
+  border-color: var(--sb-accent);
+}
+
+/* A disabled event button is kept rather than hidden: the events a chart
+   accepts are a fact about the document, and a reader with no run going
+   should still be able to see what the run will be able to do. */
+.myapp-runs__button:disabled {
+  color: var(--sb-fg-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.myapp-runs__button--primary {
+  border-color: transparent;
+  background: var(--sb-accent);
+  color: var(--sb-fg-on-accent);
+  font-weight: var(--sb-weight-medium);
+}
+
+.myapp-runs__button--primary:hover:not(:disabled) {
+  background: var(--sb-accent-hover);
+}
+
+.myapp-runs__button--event {
+  font-family: var(--sb-font-mono, monospace);
+  font-size: var(--sb-text-xs);
+}
+
+.myapp-runs__status {
+  color: var(--sb-fg-muted);
+  font-size: var(--sb-text-xs);
+  letter-spacing: var(--sb-tracking-caps);
+  text-transform: uppercase;
+  margin-right: auto;
+}
+
+.myapp-runs__empty {
+  color: var(--sb-fg-muted);
+  margin: 0;
+}
+
+.myapp-runs__table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.myapp-runs__table th {
+  border-bottom: var(--sb-border-width) solid var(--sb-border);
+  color: var(--sb-fg-muted);
+  font-size: var(--sb-text-xs);
+  font-weight: var(--sb-weight-medium);
+  letter-spacing: var(--sb-tracking-caps);
+  text-transform: uppercase;
+  padding: var(--sb-space-half);
+}
+
+.myapp-runs__table td {
+  border-bottom: var(--sb-border-width) solid var(--sb-border-subtle, var(--sb-border));
+  padding: var(--sb-space-half);
+  vertical-align: top;
+}
+
+.myapp-runs__seq {
+  color: var(--sb-fg-muted);
+  font-variant-numeric: tabular-nums;
+  width: 3ch;
+}
+
+.myapp-runs__what {
+  font-weight: var(--sb-weight-medium);
+  white-space: nowrap;
+}
+
+.myapp-runs__detail {
+  color: var(--sb-fg-muted);
+  font-family: var(--sb-font-mono, monospace);
+  font-size: var(--sb-text-xs);
+}
+
+/* The two rows worth picking out of a scroll: the call going out, and the
+   run ending. Everything else is deliberately uniform - a feed where every
+   row shouts is a feed nobody reads. */
+.myapp-runs__table tr[data-run-entry="invoked"] .myapp-runs__what {
+  color: var(--sb-accent);
+}
+
+.myapp-runs__table tr[data-run-entry="halted"] .myapp-runs__what {
+  color: var(--sb-fg-muted);
+}
+
 /* --------------------------------------------------------------- themes
  *
  * Three host themes, each a block of `--sb-*` custom properties and nothing

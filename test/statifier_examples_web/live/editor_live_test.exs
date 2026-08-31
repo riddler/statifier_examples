@@ -444,6 +444,170 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
   end
 
+  describe "running the open document" do
+    # The bead's acceptance criteria, machine-checked against the rendered
+    # page rather than against the run struct: a Run press starts a session,
+    # and the editor paints the marks the host hands it.
+    #
+    # Sabotage: made `push_run/1` push `active_marks: []`; the
+    # `data-run-active` assertion went red, then reverted.
+    test "a Run press marks the active blocks on the canvas", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      assert run(view) =~ ~s(data-run-active="true")
+
+      assert view
+             |> element(~s([data-block-id="blk_su_verify_wait"]))
+             |> render() =~ ~s(data-run-active="true")
+    end
+
+    # The invoke mark and its outcome, on the block whose call came back.
+    #
+    # Sabotage: made `push_run/1` push `invoke_mark: nil`; this went red on
+    # the outcome attribute, then reverted.
+    test "the block whose call came back carries the outcome", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+
+      assert view
+             |> element(~s([data-block-id="blk_su_send_verification"]))
+             |> render() =~ ~s(data-invoke-outcome="done")
+    end
+
+    # The drawer's first host tenant. The tab is the package's markup and the
+    # panel is this app's, so both halves are asserted: the strip names it,
+    # and the rows are the feed's own.
+    #
+    # Sabotage: gave the descriptor the reserved id `tables`, which
+    # `Shell.host_tabs/1` drops; the tab vanished and this went red, then
+    # reverted.
+    test "the run feed is a drawer tab, with the run's rows in it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+      html = open_runs(view)
+
+      assert html =~ "Runs"
+      assert html =~ "myapp-runs"
+      assert html =~ "Invoke dispatched"
+      assert html =~ "Collect email and password"
+      assert html =~ ~s(data-run-entry="outcome")
+    end
+
+    # The event affordance: one button per event the document declares, and
+    # pressing it puts a row in the feed.
+    #
+    # The assertion is on the feed's DETAIL CELL and not on the string: the
+    # button that sends the event carries the same name, so a page that
+    # dropped the press entirely would still contain it.
+    #
+    # Sabotage: made the `run-send` handler drop the press instead of
+    # sending the event; the row never appeared and this went red, then
+    # reverted.
+    test "an event button steps the run", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+      open_runs(view)
+
+      view
+      |> element(~s(button[phx-value-event="signup.email_verified"]))
+      |> render_click()
+
+      assert render_until(view, cell("signup.email_verified"))
+    end
+
+    # A run is a run OF a document, so switching documents ends it. The
+    # assertion is on the HOST's own status, not on the marks: the editor
+    # clears those itself on a document switch, so a host that kept its
+    # session running would look identical on the canvas and differ only
+    # here, which is exactly the defect worth catching.
+    #
+    # Sabotage: made `end_run_on_switch/2` return the socket unchanged; the
+    # header still said `running` and this went red, then reverted.
+    test "switching documents ends the run", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      assert run(view) =~ ~s(data-run-status="running")
+
+      html =
+        view
+        |> form("#document-switcher", %{"doc" => "card_processing"})
+        |> render_change()
+
+      refute html =~ "data-run-status"
+      refute html =~ ~s(data-run-active="true")
+    end
+
+    # The invoke-type suggestions. The datalist stamps its own count, so the
+    # assertion is that the host's list arrived rather than that some list
+    # did: an empty `invoke_types` renders the same element with a 0.
+    #
+    # Sabotage: dropped the `invoke_types` attr from the component call; the
+    # count came back 0 and this went red, then reverted.
+    test "the host's invoke types reach the invoke_type field", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      html =
+        view
+        |> element(~s([data-block-id="blk_su_account"] .sb-node__label))
+        |> render_click()
+
+      assert html =~ ~s(data-invoke-types="#{length(Charts.invoke_types())}")
+      assert html =~ "myapp:signup"
+    end
+  end
+
+  # Presses Run in the host header, then renders until the run has actually
+  # reached the page. The press only starts the session; the effects arrive
+  # as ordinary messages afterwards, so the render the click returns is the
+  # one taken before the first of them was handled. Polling the render is
+  # what a subscriber-driven page makes available - there is no callback to
+  # await and no state to peek at from out here - and the deadline is what
+  # turns a stalled run into a failure rather than a hang.
+  @spec run(Phoenix.LiveViewTest.View.t()) :: String.t()
+  defp run(view) do
+    view |> element(~s(button[phx-click="run-start"])) |> render_click()
+
+    render_until(view, ~s(data-run-active="true"))
+  end
+
+  # A feed row's detail cell, verbatim, so an assertion about the feed
+  # cannot be satisfied by a control that happens to carry the same text.
+  @spec cell(String.t()) :: String.t()
+  defp cell(text), do: ~s(<td class="myapp-runs__detail">#{text}</td>)
+
+  @spec render_until(Phoenix.LiveViewTest.View.t(), String.t(), non_neg_integer()) :: String.t()
+  defp render_until(view, needle, attempts \\ 100) do
+    html = render(view)
+
+    cond do
+      html =~ needle ->
+        html
+
+      attempts == 0 ->
+        flunk("the page never rendered #{needle}")
+
+      true ->
+        # The pause is load-bearing, not padding: a render is a round-trip
+        # through the LiveView process and costs microseconds, so a hundred
+        # of them back to back all happen before the session has done any
+        # work at all. What is being waited for is another process, so the
+        # poll has to give it time rather than only give it turns.
+        Process.sleep(10)
+        render_until(view, needle, attempts - 1)
+    end
+  end
+
+  # Opens the drawer and selects the host's own tab. The drawer starts
+  # closed, which is why Run is in the header and not in the panel.
+  @spec open_runs(Phoenix.LiveViewTest.View.t()) :: String.t()
+  defp open_runs(view) do
+    view |> element(".sb-drawer__strip") |> render_click()
+    view |> element(~s(button[phx-value-tab="runs"])) |> render_click()
+  end
+
   # The host's compile, run outside the page so a test can hold both numbers
   # the page has to choose between: what the compiler reported, and what the
   # package counts once its own derives are folded in. The `findings:` option

@@ -13,6 +13,14 @@ defmodule StatifierExamples.Application do
       {DNSCluster,
        query: Application.get_env(:statifier_examples, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: StatifierExamples.PubSub},
+      # The engine's own runtime: `Statifier.Registry` and
+      # `Statifier.SessionSupervisor` (st-ADR-0027). A session started
+      # anywhere in this app registers under that registry, which is how a
+      # handler holding only a `session_id` - all the plan context carries -
+      # finds the session to report its answer back to
+      # (`StatifierExamples.Charts.InvokeHandler`). Without it the sessions
+      # still run and the handlers have no way home.
+      Statifier.Supervisor,
       # Start a worker by calling: StatifierExamples.Worker.start_link(arg)
       # {StatifierExamples.Worker, arg},
       # Start to serve requests, typically the last entry
