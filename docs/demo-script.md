@@ -79,19 +79,19 @@ outside world, and it did that in the time it took the button to come back up.
 
 ## 4. Read the feed
 
-**Do**: look at the Runs tab, which now says `Runs (18)`.
+**Do**: look at the Runs tab, which now says `Runs (16)`.
 
-**See**: eighteen rows, numbered, three columns - `#`, `WHAT`, `DETAIL`. The
+**See**: sixteen rows, numbered, three columns - `#`, `WHAT`, `DETAIL`. The
 ones worth reading out:
 
 ```
 0  | Run started       | 868edf9bf6eb15ac3e3e58427b57a105
 2  | Invoke dispatched | myapp:signup on Collect email and password
-3  | Performed         | myapp:signup
-9  | Invoke dispatched | myapp:signup on Send the verification email
-14 | Delayed send      | signup.reminder_due in 90000 ms
-16 | Entered           | blk_su_verify_wait
-17 | Delayed send      | statifier_blocks.wait.blk_su_verify_wait in 86400000 ms
+3  | Performed         | myapp:signup -> email_verified=false, plan=business, seats=5
+7  | Invoke dispatched | myapp:signup on Send the verification email
+12 | Delayed send      | signup.reminder_due in 90000 ms
+14 | Entered           | blk_su_verify_wait
+15 | Delayed send      | statifier_blocks.wait.blk_su_verify_wait in 86400000 ms
 ```
 
 Two calls out to the host, then two delays: the abandonment nudge at 90
@@ -148,7 +148,7 @@ to lose.
 - The Runs tab says `Runs (1)`, and the one row is
   `Run resumed from storage | 868edf9bf6eb15ac3e3e58427b57a105 (active)`.
 
-One row and not eighteen, and the difference is worth saying out loud: the
+One row and not sixteen, and the difference is worth saying out loud: the
 **marks** come from the stored position, so they are exact. The **feed** is
 derived from the effects each step returned, and effects are not stored, so a
 resumed run opens with the fact that it was resumed rather than a replay of
@@ -247,10 +247,10 @@ re-enters, and the 90-second reminder and the 24-hour wait are both armed
 again -
 
 ```
-18 | Event        | signup.email_verified
-20 | Event        | statifier_blocks.interrupt.resume
-22 | Delayed send | signup.reminder_due in 90000 ms
-26 | Delayed send | statifier_blocks.wait.blk_su_verify_wait in 86400000 ms
+16 | Event        | signup.email_verified
+18 | Event        | statifier_blocks.interrupt.resume
+20 | Delayed send | signup.reminder_due in 90000 ms
+24 | Delayed send | statifier_blocks.wait.blk_su_verify_wait in 86400000 ms
 ```
 
 The run is back where it started, one round later. The only event that

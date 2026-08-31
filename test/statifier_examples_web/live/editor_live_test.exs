@@ -625,9 +625,11 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # And it steps: a resumed run answers the event buttons the same way,
     # which is what "continues" means on this page.
     #
-    # Sabotage: guarded `send_run_event/2` on `is_pid(run.session)`; a
-    # durable run has no session process, the press did nothing, and this
-    # went red - along with the in-memory feed test - then reverted.
+    # Sabotage: made `send_run_event/2` drop its `Durable.send_event/3` and
+    # answer the socket unchanged; the press did nothing and this went red,
+    # along with the two other tests that step a run by pressing. Reverted.
+    # (se-b2f: the note here used to name `run.session`, a field the deleted
+    # in-memory driver owned.)
     test "a resumed run steps on the next press", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 

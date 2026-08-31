@@ -439,6 +439,20 @@
   --sb-drop-ok-border: #5cc98d;
   --sb-drop-ok-bg: rgba(92, 201, 141, 0.12);
 
+  /* The done outcome of an invoke mark (sb PR 192). Tier 2, and a token a
+     dark theme has to restate even though the package's hue is already a
+     green: #0e7a5f is tuned for near-white surfaces and reaches 2.98:1 on
+     `--sb-bg-muted` here, the worst of the four this mark is drawn on, and
+     so under the 3:1 a mark carrying information is held to.
+     The same green lifted rather than a different one - a theme retunes
+     the mark, it does not redefine what green means - reaches 8.75:1 there
+     and 10.72:1 on `--sb-bg-sunken`. Held off `--sb-drop-ok-border` above
+     the way the package holds its own pair: the drop affordance is the
+     grassier green and the run mark the colder one, so a token list read on
+     its own does not suggest the two are one idea. */
+  --sb-run-done: #5fd6a4;
+  --sb-run-done-bg: rgba(95, 214, 164, 0.12);
+
   /* Tier 2 shaping, and the reason it is a token rather than a literal in a
      rule: 14% of a pale accent over near-black is not a tint. */
   --sb-block-accent-mix: 24%;
@@ -493,6 +507,15 @@
 
   --sb-drop-ok-border: #63d39a;
   --sb-drop-ok-bg: rgba(99, 211, 154, 0.12);
+
+  /* The done outcome, on this theme's own violet ground: mintier than
+     `dark`'s for the same reason every other hue here is warmer or louder -
+     two themes that differ only in hex values prove nothing. The shipped
+     hue reaches 2.90:1 on this theme's `--sb-bg-muted`, the worst of the
+     four surfaces the mark is drawn on; this one reaches 9.48:1 there and
+     11.8:1 on `--sb-bg-sunken`. */
+  --sb-run-done: #6fe0b0;
+  --sb-run-done-bg: rgba(111, 224, 176, 0.12);
 
   --sb-block-accent-mix: 26%;
 
