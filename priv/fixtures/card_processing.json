@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "bdoc_cp_demo",
-  "revision": 42,
+  "revision": 43,
   "metadata": {
     "name": "Card processing",
     "description": "Intake, validation, a three-lane authorization group with interrupts, an outcome branch with capture retry and manual review, and a receipt tail. The authorize and capture calls carry on_error subtrees, so the slot idiom and the retry-predicate idiom can be read side by side. Ported from the statifier_blocks spike: the proposed core.timeout block became the shipped pair that models a clock interrupt - a core.send arming card.authz_timed_out at the head of the authorization group's body, and a core.on_event on its interrupt rail listening for that event. One block type is deliberately unregistered, myapp.legacy_check, so the unavailable-block chrome is exercised at depth 7.",
@@ -324,7 +324,7 @@
                       "type_version": 1,
                       "config": {
                         "event": "customer.cancelled",
-                        "cond": "event.customer_cancelled.reason == 'customer_request' AND auth.captured == false",
+                        "cond": "_event.data.reason == 'customer_request' AND auth.captured == false",
                         "outcome": "abandon"
                       }
                     },
@@ -533,7 +533,7 @@
                       "type_version": 1,
                       "config": {
                         "event": "review.resolved",
-                        "cond": "event.review_resolved.decision == 'approve' AND review.parked",
+                        "cond": "_event.data.decision == 'approve' AND review.parked",
                         "outcome": "resume"
                       }
                     }

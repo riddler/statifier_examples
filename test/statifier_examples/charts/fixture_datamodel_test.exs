@@ -53,11 +53,13 @@ defmodule StatifierExamples.Charts.FixtureDatamodelTest do
   # expression reads and stay green on the derived check above. The lists
   # are the emission order of each document's `datamodel` key.
   #
-  # `three_ds` is the one entry the derived check does not cover: the
-  # challenge lane's interrupt guard names `three_ds.completed`, but
-  # `core.on_event` has no `cond` in its schema at the pinned editor, so
-  # the compiler emits nothing that loads it yet. It is declared because
-  # the document's own guard names it.
+  # Every entry here is also covered by the derived check above, including
+  # `three_ds`: `core.on_event` carries a `cond` from `statifier_blocks`
+  # 0.10.0, so the challenge lane's interrupt guard naming
+  # `three_ds.completed` is emitted and the root is loaded as well as
+  # declared. Under the git pin this list stood ahead of that - the guard
+  # compiled to nothing, and `three_ds` was declared only because the
+  # document's own guard named it.
   #
   # Sabotage: appended `{"id": "unread"}` to `signup_wizard.json`'s
   # `datamodel`; this went red on the wizard's list. Reverted.

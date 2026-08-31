@@ -1,40 +1,40 @@
 defmodule StatifierExamples.MixDepsTest do
   use ExUnit.Case, async: true
 
-  # `statifier_blocks` main at the commit that accepted ADR-0001 decision 11
-  # (sb PR 188), which is the first commit whose decoder reads the document
-  # `datamodel` key this app's fixtures now carry.
-  @statifier_blocks_ref "4561598f703fbae565be9e38bf540a764930fff2"
-
   # `STATIFIER_BLOCKS_PATH` swaps the editor dep for a path dep on a local
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is an INTERIM git pin, for the second time. It was one
-  # for the length of campaign 021 and came out at 0.9.0 (se-p22); it is one
-  # again for se-1xc, because sb ADR-0001 decision 11's document `datamodel`
-  # key postdates 0.9.0 and the three fixtures under `priv/fixtures/` now
-  # carry it. Verified rather than assumed: with the ref moved back to the
-  # 0.9.0 release-prep commit the fixtures still decode - the older decoder
-  # drops an envelope key it does not recognize in silence, which is the
-  # round-trip hole decision 11e closes - and every declaration in them is
-  # simply gone. That is why this is a floor and not a preference. Re-pin
-  # to `~> 0.10` once that release exists.
+  # That default arm is the Hex requirement. It was an INTERIM git pin twice:
+  # for the length of campaign 021, until 0.9.0 shipped the seams it stood in
+  # for (se-p22); and again for campaign 022, on the `statifier_blocks` commit
+  # accepting ADR-0001 decision 11, because the document `datamodel` key the
+  # three fixtures under `priv/fixtures/` carry postdates 0.9.0 - the older
+  # decoder drops an envelope key it does not recognize in silence, which is
+  # the round-trip hole decision 11e closes, so on 0.9.0 the fixtures decoded
+  # and every declaration in them was simply gone. 0.10.0 ships the key, the
+  # allowlist and the `core.on_event` `cond`, so the pin came out (se-1xc).
   #
   # `mix.exs` and `mix.lock` are checked against each other rather than each
-  # against a hope, the way `DependencyPinsTest` checks the other git pin: a
-  # `mix.exs` edit without the matching lock entry resolves to whatever was
-  # already fetched.
+  # against a hope, the way `DependencyPinsTest` checks the remaining git pin:
+  # a `mix.exs` edit without the matching lock entry resolves to whatever was
+  # already fetched. The lock assertion is what makes the requirement a floor
+  # rather than a spelling - `~> 0.10` is satisfied by a range of releases,
+  # and this records which one the app is actually built and tested against.
   #
-  # Sabotage: pointed the `ref:` at
-  # c35c02baba49631dee61c5aa9e75d0f1342e7b08 - the real `statifier_blocks`
-  # main commit before this one, so `mix deps.get` still succeeds and ExUnit
-  # still runs, which a nonexistent ref would not - then `mix deps.get`;
-  # both assertions went red reporting that ref. Reverted.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the recorded git ref" do
+  # Sabotage: changed the expected requirement here to the real-but-wrong
+  # previous spelling `"~> 0.9"` and re-ran; the membership assertion went red
+  # reporting `{:statifier_blocks, "~> 0.10"}` against a deps list holding
+  # nothing of the sort. `"~> 0.9"` still admits 0.10.0, so `mix` resolved and
+  # the lock did not move, which is why the run reached ExUnit at all - a
+  # nonexistent version would have aborted at resolution and proved nothing.
+  # Reverted from a backup copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex release" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
-    assert File.read!("mix.exs") =~ ~s(ref: "#{@statifier_blocks_ref}")
+    deps = Mix.Project.config()[:deps]
+
+    assert {:statifier_blocks, "~> 0.10"} in deps
 
     lock_line =
       "mix.lock"
@@ -43,7 +43,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ @statifier_blocks_ref
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.10.0",)
   end
 
   # The durable-timer package is held at `~> 0.3.1`, not `~> 0.3`: 0.3.0's
