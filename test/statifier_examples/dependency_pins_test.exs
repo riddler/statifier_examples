@@ -12,12 +12,13 @@ defmodule StatifierExamples.DependencyPinsTest do
 
   use ExUnit.Case, async: true
 
-  @statifier_persistence_ref "ca8a7d8921a321491843934386e3ffa4ddf85f65"
+  @statifier_persistence_ref "08c991cf5fbce37d7de81a05be60b64b92b9bb02"
 
-  # Sabotage: point mix.exs's `ref:` at 36eafe28d446880152f296db055f1e3a0a4790f9
-  # (the real commit before it on that branch, so `mix deps.get` still
-  # succeeds and ExUnit still runs), then `mix deps.get` -> red, both
-  # assertions below report the previous ref. Verified red, reverted.
+  # Sabotage: point mix.exs's `ref:` at ca8a7d8921a321491843934386e3ffa4ddf85f65
+  # (the ref this app carried before se-4dt.3, a real commit, so
+  # `mix deps.get` still succeeds and ExUnit still runs), then
+  # `mix deps.get` -> red, both assertions below report the previous ref.
+  # Verified red, reverted.
   test "statifier_persistence is pinned to the recorded git ref, in mix.exs and mix.lock alike" do
     assert File.read!("mix.exs") =~ ~s(ref: "#{@statifier_persistence_ref}")
 
