@@ -8,27 +8,14 @@ defmodule StatifierExamples.CardAuth.Park do
   answer the call.
   """
 
-  @behaviour StatifierBlocks.BlockType
-
+  alias StatifierBlocks.InvokeStep
   alias StatifierExamples.Charts.Step
-
-  @invoke_type "myapp:park"
 
   @queue_message "must be a bare lowercase identifier, like manual_review"
 
-  @doc "The invoke type this step names when its config does not say otherwise."
-  @spec invoke_type() :: String.t()
-  def invoke_type, do: @invoke_type
-
-  @impl true
-  def current_version, do: 1
-
-  @impl true
-  def slots(_config), do: []
-
-  @impl true
-  def config_schema(_config) do
-    Step.config_schema(@invoke_type, [
+  use StatifierBlocks.InvokeStep,
+    invoke_type: "myapp:park",
+    fields: [
       %{
         key: "queue",
         type: :string,
@@ -36,35 +23,27 @@ defmodule StatifierExamples.CardAuth.Park do
         required?: true,
         default: "manual_review"
       }
-    ])
-  end
-
-  @impl true
-  def validate_config(config) do
-    []
-    |> Step.check_invoke_type(config)
-    |> Step.check_identifier(config, "queue", @queue_message)
-    |> Step.verdict()
-  end
-
-  @impl true
-  def io(_config), do: Step.io()
-
-  @impl true
-  def outcomes(_config), do: Step.outcomes()
-
-  @impl true
-  def palette_entry do
-    Step.palette_entry(%{
+    ],
+    palette: %{
       label: "Park",
       group: "Card processing",
       description: "Puts the work on a queue and waits for a human.",
       icon: "pause",
       keywords: ["park", "queue", "hold", "wait"],
-      order: 6
-    })
-  end
+      order: 6,
+      accent_token: Step.accent_token()
+    }
 
-  @impl true
-  def emit(block, context), do: Step.emit(block, context, @invoke_type)
+  @doc """
+  The base's `invoke_type` check, plus this type's own: a queue nobody can
+  name is not a queue, so `queue` is required and has to be a bare
+  lowercase identifier.
+  """
+  @impl StatifierBlocks.BlockType
+  def validate_config(config) do
+    []
+    |> InvokeStep.check_invoke_type(config)
+    |> InvokeStep.check_identifier(config, "queue", @queue_message)
+    |> InvokeStep.verdict()
+  end
 end

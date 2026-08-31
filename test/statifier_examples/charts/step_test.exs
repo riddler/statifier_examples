@@ -4,17 +4,23 @@ defmodule StatifierExamples.Charts.StepTest do
   alias StatifierBlocks.{Compiler, Decode}
   alias StatifierExamples.Charts
 
-  # The app's one step helper, asserted on the rule that is easiest to lose
-  # when two helpers become one: what a step means when its config stores no
-  # `invoke_type` at all. Both domains reach the rule through
-  # `StatifierExamples.Charts.Step` now, so both are in the document below -
+  # The leaf-step shape both example domains declare themselves on -
+  # `StatifierBlocks.InvokeStep`, since se-4dt.1 - asserted end to end through
+  # this app's own types rather than against the base directly. The rule
+  # easiest to lose is what a step means when its config stores no
+  # `invoke_type` at all, so both domains are in the document below:
   # `myapp.receipt` from card processing and `myapp.provision` from the
   # wizard, each with an empty config.
   #
   # The shipped fixtures all author the key, so nothing else in the suite
   # walks this path.
+  #
+  # The sabotage notes below name functions that were this app's own when the
+  # notes were written and are `StatifierBlocks.InvokeStep`'s since se-4dt.1.
+  # The mutations were run against the app's copy; the tests are unchanged and
+  # still pass against the base.
 
-  # Sabotage: made Step.invoke_type/2 answer "" for an absent key; this went
+  # Sabotage: made invoke_type/2 answer "" for an absent key; this went
   # red with an invoke_type finding, then reverted.
   test "a step that stores no invoke type names the one its schema declares" do
     assert {:ok, compiled} = compile(document(%{}, %{}))
@@ -24,7 +30,7 @@ defmodule StatifierExamples.Charts.StepTest do
     assert compiled.scxml =~ ~s(type="myapp:provision")
   end
 
-  # Sabotage: made Step.emit/4 ignore its `default` argument and read only
+  # Sabotage: made emit/4 ignore its `default` argument and read only
   # the config; this went red, then reverted.
   test "a stored invoke type is what the call names" do
     config = %{"invoke_type" => "myapp:notify"}
@@ -63,7 +69,7 @@ defmodule StatifierExamples.Charts.StepTest do
   # The other half, and the one that keeps every step in this app that
   # keeps nothing exactly as it was: no key, no `<assign>`.
   #
-  # Sabotage: made Step.assign/1 answer the `<assign>` list for a nil
+  # Sabotage: made assign/1 answer the `<assign>` list for a nil
   # location too; this went red, then reverted.
   test "a step that names no place for its answer emits no assign at all" do
     assert {:ok, compiled} = compile(document(%{}, %{}))
@@ -77,7 +83,7 @@ defmodule StatifierExamples.Charts.StepTest do
   # is the block here because it declares no `assign_to` of its own, so the
   # refusal can only be coming from the shared emission path.
   #
-  # Sabotage: made Step.assign/1 fall through to the identifier branch for
+  # Sabotage: made assign/1 fall through to the identifier branch for
   # any binary; this went red - the document compiled - then reverted.
   test "an assign_to that is not an identifier is refused at the author's key" do
     assert {:error, findings} =
@@ -92,11 +98,11 @@ defmodule StatifierExamples.Charts.StepTest do
   # se-dyo's side effect, pinned because it is a behaviour change rather
   # than a new surface: `StatifierExamples.CardAuth.Authorize` has always
   # DECLARED `assign_to` - required, and a datamodel path - and validated
-  # it, but it emits through this helper, which until now built two bare
-  # transitions. An author's decision key was accepted and then silently
+  # it, but it emits through the shared shape, which until then built two
+  # bare transitions. An author's decision key was accepted and then silently
   # dropped. It is live now, and this is what says so.
   #
-  # Sabotage: reverted Step.emit/4's `with` clause to ignore
+  # Sabotage: reverted emit/4's `with` clause to ignore
   # `config["assign_to"]`; this went red, then reverted.
   test "myapp.authorize's declared assign_to reaches the chart" do
     assert {:ok, compiled} = compile(authorizing("authorization"))
@@ -149,7 +155,7 @@ defmodule StatifierExamples.Charts.StepTest do
 
   # A one-block document holding the card-processing step that requires an
   # `assign_to`. It is here rather than in the card-auth tests because the
-  # emission it is asserting is this helper's, shared by both domains.
+  # emission it is asserting is the shared base's, reached by both domains.
   @spec authorizing(String.t()) :: StatifierBlocks.Document.t()
   defp authorizing(assign_to) do
     config = %{"invoke_type" => "myapp:authorize", "assign_to" => assign_to}

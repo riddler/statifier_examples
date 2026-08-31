@@ -78,7 +78,7 @@ defmodule StatifierExamples.Charts.RunTest do
   end
 
   # And the answer: the internal `done.outcome.<state>.<outcome>` event that
-  # `StatifierExamples.Charts.Step.emit/4` raises on entering an outcome
+  # `StatifierBlocks.InvokeStep.emit/4` raises on entering an outcome
   # `<final>` turns the bare mark into `{block_id, outcome}`, which is what
   # the editor tints.
   #

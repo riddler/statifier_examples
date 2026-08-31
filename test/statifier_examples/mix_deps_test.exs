@@ -1,40 +1,42 @@
 defmodule StatifierExamples.MixDepsTest do
   use ExUnit.Case, async: true
 
+  @statifier_blocks_ref "957ea91ed54abecdc91cc9ae9c6e4c9314e15417"
+
   # `STATIFIER_BLOCKS_PATH` swaps the editor dep for a path dep on a local
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is the Hex requirement. It was an INTERIM git pin twice:
-  # for the length of campaign 021, until 0.9.0 shipped the seams it stood in
-  # for (se-p22); and again for campaign 022, on the `statifier_blocks` commit
-  # accepting ADR-0001 decision 11, because the document `datamodel` key the
-  # three fixtures under `priv/fixtures/` carry postdates 0.9.0 - the older
-  # decoder drops an envelope key it does not recognize in silence, which is
-  # the round-trip hole decision 11e closes, so on 0.9.0 the fixtures decoded
-  # and every declaration in them was simply gone. 0.10.0 ships the key, the
-  # allowlist and the `core.on_event` `cond`, so the pin came out (se-1xc).
+  # That default arm is an INTERIM git pin, the third this dep has carried
+  # (se-p22's pattern: pin to the pushed upstream commit, re-pin to Hex at
+  # the release). It stands on the `statifier_blocks` commit accepting
+  # ADR-0007, which adds the block-type defaults layer and
+  # `StatifierBlocks.InvokeStep` - the base every `myapp.*` step in this app
+  # is now one declaration on. 0.10.0 predates both, so on the released
+  # package the twelve step modules do not compile at all (se-4dt.1).
   #
   # `mix.exs` and `mix.lock` are checked against each other rather than each
-  # against a hope, the way `DependencyPinsTest` checks the remaining git pin:
-  # a `mix.exs` edit without the matching lock entry resolves to whatever was
-  # already fetched. The lock assertion is what makes the requirement a floor
-  # rather than a spelling - `~> 0.10` is satisfied by a range of releases,
-  # and this records which one the app is actually built and tested against.
+  # against a hope, the way `DependencyPinsTest` checks the other git pin: a
+  # `mix.exs` edit without the matching lock entry resolves to whatever was
+  # already fetched.
   #
-  # Sabotage: changed the expected requirement here to the real-but-wrong
-  # previous spelling `"~> 0.9"` and re-ran; the membership assertion went red
-  # reporting `{:statifier_blocks, "~> 0.10"}` against a deps list holding
-  # nothing of the sort. `"~> 0.9"` still admits 0.10.0, so `mix` resolved and
-  # the lock did not move, which is why the run reached ExUnit at all - a
-  # nonexistent version would have aborted at resolution and proved nothing.
-  # Reverted from a backup copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex release" do
+  # Sabotage: pointed the expectation here at the real-but-wrong previous
+  # `statifier_blocks` main 5c45f9b0d9460cfa0a0b5fa8911b2bdc58b66fe4 (the
+  # 0.10.0 release prep) and left `mix.exs` alone; both assertions went red,
+  # reporting the ADR-0007 ref against the mutated expectation. Reverted from
+  # a backup copy.
+  #
+  # Mutating `mix.exs` instead was tried first and proves less, not more: on
+  # 5c45f9b the package has no `StatifierBlocks.InvokeStep` at all, so every
+  # step module fails to compile and the run never reaches ExUnit. That the
+  # pin is load-bearing is worth knowing; it is not this test going red.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the interim git pin" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.10"} in deps
+    assert {:statifier_blocks,
+            git: "https://github.com/riddler/statifier_blocks.git", ref: @statifier_blocks_ref} in deps
 
     lock_line =
       "mix.lock"
@@ -43,7 +45,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.10.0",)
+    assert lock_line =~ @statifier_blocks_ref
   end
 
   # The durable-timer package is held at `~> 0.3.1`, not `~> 0.3`: 0.3.0's

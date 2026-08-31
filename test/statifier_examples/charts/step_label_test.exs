@@ -33,7 +33,7 @@ defmodule StatifierExamples.Charts.StepLabelTest do
               |> Enum.map(fn {_type, module} -> module end)
               |> Enum.uniq()
 
-  # Sabotage: dropped label_field/0 from Charts.Step.config_schema/2; this
+  # Sabotage: dropped label_field/0 from the step config_schema/2; this
   # went red, then reverted. One mutation reaches every host type now that
   # both domains route through the one helper; it took two before se-lin.
   test "every host block type declares label, first in the inspector form" do

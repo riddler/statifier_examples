@@ -72,11 +72,12 @@ defmodule StatifierExamples.Signup.SignupStepTest do
     assert message =~ "account"
   end
 
-  # Sabotage: relaxed @invoke_type to accept any namespace; this went red,
-  # then reverted.
-  test "validate_config/1 refuses an invoke type outside the example namespace" do
+  # Sabotage: dropped the `InvokeStep.check_invoke_type/2` step from
+  # SignupStep.validate_config/1; this went red, then reverted from a backup
+  # copy.
+  test "validate_config/1 refuses an invoke type outside the namespace:name grammar" do
     assert {:error, findings} =
-             SignupStep.validate_config(config(%{"invoke_type" => "otherapp:signup"}))
+             SignupStep.validate_config(config(%{"invoke_type" => "not an invoke type"}))
 
     assert {"invoke_type", _message} = List.keyfind(findings, "invoke_type", 0)
   end
