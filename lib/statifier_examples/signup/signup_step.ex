@@ -11,6 +11,14 @@ defmodule StatifierExamples.Signup.SignupStep do
   The step name is sent to the handler as a literal `<param>`, so
   `myapp:signup` learns which form to put up without reading anything out of
   the datamodel.
+
+  What comes back goes wherever the block's optional `assign_to` says, on
+  the shape `StatifierBlocks.Core.Invoke` spells for the same key. That is
+  how the wizard's plan branch gets something to guard on: the account
+  step writes the answers to `signup`, and the branch downstream reads
+  `signup.plan` and `signup.seats` out of them. A step that keeps nothing
+  - the verification mail, the preferences - leaves the key empty and
+  writes nothing.
   """
 
   @behaviour StatifierBlocks.BlockType
@@ -43,6 +51,14 @@ defmodule StatifierExamples.Signup.SignupStep do
           label: "Wizard step",
           required?: true,
           default: "account"
+        },
+        %{
+          key: "assign_to",
+          type: :string,
+          label: "Write the answers to",
+          required?: false,
+          default: "",
+          datamodel_path?: true
         }
       ])
 
@@ -51,6 +67,7 @@ defmodule StatifierExamples.Signup.SignupStep do
     []
     |> Step.check_invoke_type(config)
     |> check_step(config)
+    |> Step.check_assign_to(config)
     |> Step.verdict()
   end
 
@@ -67,6 +84,10 @@ defmodule StatifierExamples.Signup.SignupStep do
   A step with two outcomes, so `produces` is `:unknown` for the reason
   `core.invoke` declares it. `consumes` is absent: what the wizard collects
   arrives from the person filling the form in, not from the type flow.
+
+  It stays `:unknown` even though `assign_to` now writes the answer
+  somewhere: which keys a step comes back with is a fact about the handler
+  the deployment registered, and a block type does not know it.
   """
   @impl true
   def io(_config), do: %{kinds: [:step], produces: :unknown}

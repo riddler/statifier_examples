@@ -338,9 +338,14 @@ defmodule StatifierExamples.Charts.DurableTest do
   # wizard's plan branch raised it twice on the way past - once per arm -
   # before `signup` was declared and assigned.
   #
-  # Sabotage: deleted the `core.assign` block from `priv/fixtures/signup_wizard.json`,
-  # leaving the declared root undefined; both guards raised and this went red
-  # on the second `refute`. Reverted from a scratchpad copy.
+  # se-dyo moved where the value comes from without moving this: the
+  # `core.assign` stand-in that used to hold the three values is gone, and
+  # `myapp:signup` answers with them instead.
+  #
+  # Sabotage: made `StatifierExamples.Signup.Handlers`' `answers/1` answer
+  # `%{}` for the account step, so the assign wrote an empty map and the
+  # declared root held nothing the guards could read; both guards raised and
+  # this went red on the second `refute`. Reverted.
   test "no guard in the shipped wizard raises error.execution", %{run_id: run_id} do
     {compiled, document} = signup()
     {:ok, {durable, run}} = Durable.start(compiled, document, run_id)
@@ -351,5 +356,36 @@ defmodule StatifierExamples.Charts.DurableTest do
              Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
 
     refute "error.execution" in details(stepped)
+  end
+
+  # se-dyo, and the one test that closes the loop end to end: WHICH arm the
+  # plan branch takes is now decided by data the handler supplied, because
+  # the document no longer carries any. The business arm is taken - the run
+  # enters "Collect the company details" - and the `otherwise` arm's nudge
+  # is not, which together say `signup.plan == 'business' AND
+  # signup.seats > 1` evaluated true against `myapp:signup`'s answer.
+  #
+  # The `Performed` row is asserted beside it because it is what the demo
+  # points at: the answer is visible in the feed on the way in, not only in
+  # the arm taken on the way out.
+  #
+  # Sabotage: changed `answers/1`'s account clause to `"plan" => "personal"`;
+  # the run took the personal arm, and this went red on both the company-details
+  # assertion and the plan detail. Reverted.
+  test "the wizard's plan branch guards on what myapp:signup answered", %{run_id: run_id} do
+    {compiled, document} = signup()
+    {:ok, {durable, run}} = Durable.start(compiled, document, run_id)
+
+    assert {:ok, {_driver, stepped}} =
+             Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
+
+    details = Enum.filter(details(stepped), &is_binary/1)
+
+    assert Enum.any?(details, &(&1 =~ "myapp:signup on Collect the company details"))
+    refute Enum.any?(details, &(&1 =~ "Nudge them to pick a plan"))
+
+    assert Enum.any?(details, fn detail ->
+             detail =~ "myapp:signup ->" and detail =~ "plan=business" and detail =~ "seats=5"
+           end)
   end
 end

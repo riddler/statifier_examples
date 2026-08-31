@@ -22,7 +22,8 @@ defmodule StatifierExamples.Charts.Step do
     * the two outcomes a call has, `done` and `error`;
     * the emission - an `<invoke>` in an inner state, one transition per
       outcome, one `<final>` per outcome, with whatever `<param>` children
-      the calling type wants - modelled on `StatifierBlocks.Core.Invoke`;
+      the calling type wants and an optional `<assign>` of the answer on
+      the success transition - modelled on `StatifierBlocks.Core.Invoke`;
     * the palette-entry defaults, including the one accent token the
       example CSS declares.
 
@@ -59,6 +60,12 @@ defmodule StatifierExamples.Charts.Step do
   @error_event "error.communication.invoke"
 
   @invoke_type_message ~s(must look like "myapp:capture")
+
+  # The wording `StatifierBlocks.Core.Invoke` uses for the same key, on
+  # purpose: an author who meets `assign_to` on a core block and on a
+  # `myapp.*` step is meeting one field, and two spellings of its
+  # complaint would suggest otherwise.
+  @assign_to_message "must be a bare lowercase identifier, like authorization"
 
   @doc """
   The two ways a call can finish, in the order they compile in.
@@ -172,6 +179,31 @@ defmodule StatifierExamples.Charts.Step do
   end
 
   @doc """
+  Checks an `assign_to` a step declared as optional: a blank one is a step
+  that throws its answer away, which is an answer rather than a gap.
+
+  A step that requires the key instead - `myapp.authorize` does, because a
+  card decision nobody keeps is not a decision - keeps using
+  `check_identifier/4`, which refuses the blank.
+  """
+  @spec check_assign_to([BlockType.finding()], Block.config()) :: [BlockType.finding()]
+  def check_assign_to(findings, config) when is_list(findings) and is_map(config) do
+    case Map.get(config, "assign_to") do
+      blank when blank in [nil, ""] -> findings
+      stored -> check_stored_assign_to(findings, stored)
+    end
+  end
+
+  @spec check_stored_assign_to([BlockType.finding()], term()) :: [BlockType.finding()]
+  defp check_stored_assign_to(findings, stored) do
+    if identifier?(stored) do
+      findings
+    else
+      [{"assign_to", @assign_to_message} | findings]
+    end
+  end
+
+  @doc """
   Checks that `key` holds a bare lowercase identifier, the check the
   spike's `queue` and `template` fields both spell.
   """
@@ -281,6 +313,16 @@ defmodule StatifierExamples.Charts.Step do
   `params` are the `<param>` children the calling type wants on the
   `<invoke>`, in the order it wants them - `literal_param/3` builds one.
   A step with nothing to send omits the argument.
+
+  ## What the call answers with
+
+  A config carrying `assign_to` puts an `<assign expr="_event.data">` on
+  the success transition, writing the handler's answer to that location -
+  `StatifierBlocks.Core.Invoke`'s shape, spelled once here so every
+  `myapp.*` step in this app has it rather than each one re-deriving it.
+  A step that stores nothing there emits no `<assign>`, and an
+  `assign_to` that is not a bare identifier is an `:error` finding on the
+  author's key rather than an attribute nobody can read.
   """
   @spec emit(Block.t(), Context.t(), String.t(), [Emission.t()]) ::
           {:ok, Emission.t()} | {:error, BlockType.emit_error()}
@@ -291,11 +333,12 @@ defmodule StatifierExamples.Charts.Step do
     with {:ok, running} <- Context.role_id(context, "running"),
          {:ok, done_final} <- Context.outcome_id(context, "done"),
          {:ok, error_final} <- Context.outcome_id(context, "error"),
-         {:ok, invoke_type} <- checked_invoke_type(config, default) do
+         {:ok, invoke_type} <- checked_invoke_type(config, default),
+         {:ok, result} <- assign(Map.get(config, "assign_to")) do
       inner =
         Emit.state(running, nil, [
           call(config, invoke_type, params),
-          Emit.transition(event: @done_event, target: done_final),
+          Emit.transition([event: @done_event, target: done_final], result),
           Emit.transition(event: @error_event, target: error_final)
         ])
 
@@ -305,6 +348,31 @@ defmodule StatifierExamples.Charts.Step do
          Emit.final(done_final),
          Emit.final(error_final)
        ])}
+    end
+  end
+
+  # `assign_to` is written on the success transition rather than in a
+  # `<finalize>`, for the reason `StatifierBlocks.Core.Invoke` gives: the
+  # answer is only an answer when the call succeeded, and `<finalize>`
+  # runs for every event the invocation delivers. The `location`'s value
+  # is stamped as coming from `assign_to` so a finding inside it points at
+  # the author's field rather than at this module.
+  #
+  # A step that stores no `assign_to` emits no `<assign>` at all, which is
+  # every step in this app that has nothing to keep.
+  @spec assign(term()) :: {:ok, [Emission.t()]} | {:error, [BlockType.finding()]}
+  defp assign(location) when location in [nil, ""], do: {:ok, []}
+
+  defp assign(location) do
+    if identifier?(location) do
+      {:ok,
+       [
+         "assign"
+         |> Emission.element([{"expr", "_event.data"}, {"location", location}])
+         |> Emission.attribute_from_config("location", "assign_to")
+       ]}
+    else
+      {:error, [{"assign_to", @assign_to_message}]}
     end
   end
 

@@ -263,13 +263,21 @@ included.
 
 **"Where do the plan and the seat count come from? Nobody typed them."**
 
-They are a `core.assign` block near the top of the document
-(`blk_su_collected`), which sets `signup.plan` and `signup.seats` so the A/B
-branch downstream has something to guard on. It is a stand-in for the step
-that would collect them, not a claim that the form collects them. The `signup`
-root the block writes into is declared by the document itself, in a top-level
-`datamodel` key beside the tree: which roots a chart's guards read is a
-property of that chart, so it travels in the bytes an author edits rather than
-in every host that runs it. A host can still declare roots of its own at
+From the first step, the one that says "Collect email and password". Point at
+the `Performed` row under it - `myapp:signup -> email_verified=false,
+plan=business, seats=5`. That is the handler answering, and the account block
+names `signup` in its `assign_to`, so the chart writes the answer there on the
+call's success transition. The A/B branch downstream reads `signup.plan` and
+`signup.seats` out of it.
+
+The values are canned, because there is no form on this page to fill in - but
+they are canned in the *handler*, which is where a real deployment's answers
+come from too. A call that fails writes nothing, because the assign is on the
+success transition rather than in a `<finalize>`.
+
+The `signup` root the answer lands in is declared by the document itself, in a
+top-level `datamodel` key beside the tree: which roots a chart's guards read is
+a property of that chart, so it travels in the bytes an author edits rather
+than in every host that runs it. A host can still declare roots of its own at
 compile time, over and above what the document asks for. This one declares
 none.
