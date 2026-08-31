@@ -1,20 +1,22 @@
 defmodule StatifierExamples.MixDepsTest do
   use ExUnit.Case, async: true
 
-  @statifier_blocks_ref "957ea91ed54abecdc91cc9ae9c6e4c9314e15417"
+  @statifier_blocks_ref "487cebf146c5e46f0e674c57a85f4806aeeec8ac"
   @statifier_ref "a0f965e6b15868fb05bd0d05981ac18d64d0344c"
 
   # `STATIFIER_BLOCKS_PATH` swaps the editor dep for a path dep on a local
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is an INTERIM git pin, the third this dep has carried
+  # That default arm is an INTERIM git pin, the fourth this dep has carried
   # (se-p22's pattern: pin to the pushed upstream commit, re-pin to Hex at
-  # the release). It stands on the `statifier_blocks` commit accepting
-  # ADR-0007, which adds the block-type defaults layer and
-  # `StatifierBlocks.InvokeStep` - the base every `myapp.*` step in this app
-  # is now one declaration on. 0.10.0 predates both, so on the released
-  # package the twelve step modules do not compile at all (se-4dt.1).
+  # the release). It stands on the `statifier_blocks` commit documenting the
+  # shipped subchart handler, which carries both surfaces this app is
+  # written against: ADR-0007's `StatifierBlocks.InvokeStep` - the base
+  # every `myapp.*` step is one declaration on (se-4dt.1) - and
+  # `StatifierBlocks.Runtime.Subchart` (se-4dt.4). 0.10.0 predates both, so
+  # on the released package the twelve step modules do not compile at all
+  # and there is no subchart handler to register.
   #
   # `mix.exs` and `mix.lock` are checked against each other rather than each
   # against a hope, the way `DependencyPinsTest` checks the other git pin: a
@@ -22,15 +24,15 @@ defmodule StatifierExamples.MixDepsTest do
   # already fetched.
   #
   # Sabotage: pointed the expectation here at the real-but-wrong previous
-  # `statifier_blocks` main 5c45f9b0d9460cfa0a0b5fa8911b2bdc58b66fe4 (the
-  # 0.10.0 release prep) and left `mix.exs` alone; both assertions went red,
-  # reporting the ADR-0007 ref against the mutated expectation. Reverted from
-  # a backup copy.
+  # `statifier_blocks` main 957ea91ed54abecdc91cc9ae9c6e4c9314e15417 (the
+  # ADR-0007 pin this bead moved off) and left `mix.exs` alone; both
+  # assertions went red, reporting the subchart-handler ref against the
+  # mutated expectation. Reverted from a backup copy.
   #
-  # Mutating `mix.exs` instead was tried first and proves less, not more: on
-  # 5c45f9b the package has no `StatifierBlocks.InvokeStep` at all, so every
-  # step module fails to compile and the run never reaches ExUnit. That the
-  # pin is load-bearing is worth knowing; it is not this test going red.
+  # Mutating `mix.exs` instead proves less, not more: on an earlier ref the
+  # package has no `StatifierBlocks.InvokeStep` at all, so every step module
+  # fails to compile and the run never reaches ExUnit. That the pin is
+  # load-bearing is worth knowing; it is not this test going red.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the interim git pin" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 

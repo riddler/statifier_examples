@@ -134,14 +134,19 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is an INTERIM git pin, the third one this dep has carried
+  # The default arm is an INTERIM git pin, the fourth one this dep has carried
   # (se-p22's pattern: pin to the pushed upstream commit, re-pin to Hex at the
-  # release). It stands on the commit accepting `statifier_blocks` ADR-0007,
-  # which adds the block-type defaults layer and `StatifierBlocks.InvokeStep` -
-  # the base every `myapp.*` step in this app is now a declaration on. 0.10.0
-  # predates both, so on the released package the twelve step modules cannot
-  # compile at all. The re-pin to a Hex requirement happens when the operator
-  # publishes the release carrying ADR-0007 (se-4dt.1).
+  # release). It stands on the commit that documents the shipped subchart
+  # handler, and so carries two things this app is written against: ADR-0007's
+  # block-type defaults layer with `StatifierBlocks.InvokeStep` - the base
+  # every `myapp.*` step in this app is a declaration on (se-4dt.1) - and
+  # `StatifierBlocks.Runtime.Subchart`, the canonical
+  # `statifier_blocks:subchart` handler `StatifierExamples.Charts.Subchart`
+  # supplies this host's two callbacks to (se-4dt.4). 0.10.0 predates both,
+  # so on the released package the twelve step modules cannot compile at all
+  # and there is no subchart handler to register. The re-pin to a Hex
+  # requirement happens when the operator publishes the release carrying
+  # them.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
@@ -150,7 +155,7 @@ defmodule StatifierExamples.MixProject do
       _ ->
         {:statifier_blocks,
          git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "957ea91ed54abecdc91cc9ae9c6e4c9314e15417"}
+         ref: "487cebf146c5e46f0e674c57a85f4806aeeec8ac"}
     end
   end
 

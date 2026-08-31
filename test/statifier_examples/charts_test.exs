@@ -104,13 +104,19 @@ defmodule StatifierExamples.ChartsTest do
     assert [
              %{key: "card_processing", name: "Card processing"},
              %{key: "signup_wizard"},
-             %{key: "signup_invitations"}
+             %{key: "signup_invitations"},
+             %{key: "signup_onboarding"}
            ] = Charts.fixtures()
   end
 
-  # Sabotage: dropped Signup.Handlers from invoke_types/0; this went red, then
-  # reverted.
-  test "the invoke-type list is every handler all three registries answer" do
+  # The union of both kinds of handler this app registers: the three sync
+  # domain modules the adapter is generated over, and the one full
+  # `Statifier.Invoke.Handler` `StatifierExamples.Charts.Subchart` serves
+  # (se-4dt.4). The subchart type sorts last, after every `myapp:` name.
+  #
+  # Sabotage: dropped Signup.Handlers from the sync adapter's handler list;
+  # this went red, then reverted.
+  test "the invoke-type list is every handler all three registries answer, plus the subchart" do
     assert Charts.invoke_types() == [
              "myapp:authorize",
              "myapp:balance_check",
@@ -124,7 +130,8 @@ defmodule StatifierExamples.ChartsTest do
              "myapp:resolve_review",
              "myapp:risk_rating",
              "myapp:signup",
-             "myapp:three_ds"
+             "myapp:three_ds",
+             "statifier_blocks:subchart"
            ]
   end
 

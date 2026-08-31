@@ -96,7 +96,7 @@ defmodule StatifierExamples.Charts.Durable do
   alias Statifier.Invoke.Types
   alias StatifierBlocks.{Compiled, Compiler, Document}
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Fixture, Run, RunLock, Timers}
+  alias StatifierExamples.Charts.{Fixture, Run, RunLock, Subchart, Timers}
   alias StatifierPersistence.{Driver, Runs, Storage}
 
   # The run-record metadata key that says which shipped fixture a run is a
@@ -104,6 +104,12 @@ defmodule StatifierExamples.Charts.Durable do
   # cold node that can name the chart again - the job itself holds a run
   # id and an event, and a chart is neither.
   @fixture_key "fixture"
+
+  # The run-record metadata key carrying the host-provenance pin: which
+  # child chart each `core.subchart` in this run's document resolved to
+  # when the run was created (campaign-023 ruling R-d). See
+  # `StatifierExamples.Charts.Subchart.identities/1`, which builds it.
+  @subcharts_key "subcharts"
 
   @type t :: %__MODULE__{
           run_id: String.t(),
@@ -138,6 +144,21 @@ defmodule StatifierExamples.Charts.Durable do
   run steps and resumes exactly as before, and a timer fired for it is
   discarded rather than delivered, which `deliver/2` says in its own
   words.
+
+  ## What else the metadata carries: the subchart pin
+
+  A `core.subchart` names its child by **document id**, which is stable
+  across every revision of that child, so the run record would otherwise
+  say nothing about which revision this run actually ran. Campaign-023
+  ruling R-d puts it in the metadata at create: one content hash per
+  document the chart names as a child, taken over the child exactly as the
+  handler compiles it (`StatifierExamples.Charts.Subchart.identities/1`).
+
+  It is written at create and never rewritten, which is what makes it a
+  pin rather than a cache. A document naming no child records no key at
+  all - most runs of this app - and a child that cannot be resolved or
+  compiled today is left out rather than recorded as an error, because a
+  pin to nothing is not a pin.
   """
   @spec start(Compiled.t(), Document.t(), String.t(), String.t() | nil) ::
           {:ok, driven()} | {:error, term()}
@@ -151,7 +172,11 @@ defmodule StatifierExamples.Charts.Durable do
       run = Run.reading(machine, compiled, document, run_id)
       run = Run.note(run, :started, "Run started", run_id)
 
-      settle(durable, run, Driver.create(driver(durable), run_id, create_opts(fixture_key)))
+      settle(
+        durable,
+        run,
+        Driver.create(driver(durable), run_id, create_opts(fixture_key, document))
+      )
     end
   end
 
@@ -336,14 +361,33 @@ defmodule StatifierExamples.Charts.Durable do
     )
   end
 
-  @spec create_opts(String.t() | nil) :: keyword()
-  defp create_opts(fixture_key) do
-    [initialize: [trace: true], metadata: metadata(fixture_key)]
+  @spec create_opts(String.t() | nil, Document.t()) :: keyword()
+  defp create_opts(fixture_key, document) do
+    [initialize: [trace: true], metadata: metadata(fixture_key, document)]
   end
 
-  @spec metadata(String.t() | nil) :: %{optional(String.t()) => String.t()}
-  defp metadata(nil), do: %{}
-  defp metadata(fixture_key) when is_binary(fixture_key), do: %{@fixture_key => fixture_key}
+  # The two facts a created run records about the chart it is a run of:
+  # which shipped fixture it came from, for a cold node rebuilding it, and
+  # which child charts its subcharts resolved to, for a reader asking
+  # afterwards what actually ran (campaign-023 ruling R-d).
+  @spec metadata(String.t() | nil, Document.t()) :: %{optional(String.t()) => term()}
+  defp metadata(fixture_key, document) do
+    %{}
+    |> put_present(@fixture_key, fixture_key)
+    |> put_present(@subcharts_key, subcharts(document))
+  end
+
+  @spec subcharts(Document.t()) :: %{optional(String.t()) => String.t()} | nil
+  defp subcharts(%Document{} = document) do
+    case Subchart.identities(document) do
+      empty when empty == %{} -> nil
+      identities -> identities
+    end
+  end
+
+  @spec put_present(map(), String.t(), term()) :: map()
+  defp put_present(metadata, _key, nil), do: metadata
+  defp put_present(metadata, key, value), do: Map.put(metadata, key, value)
 
   # Folds one drive's whole buffer into the reading and finishes it on the
   # status the last durable step wrote.
@@ -432,13 +476,19 @@ defmodule StatifierExamples.Charts.Durable do
   # session run answering the same refusal differently is exactly what
   # se-4dt.3 was closing.
   #
-  # One clause, because `Charts.dispatch/3` refuses one way: a type no
-  # handler module registered. Dialyzer says so - a binary arm and an
-  # `inspect/1` fall-through are both unreachable against that spec - which
-  # makes this the place the spec widening would surface, rather than
-  # somewhere the widened shape is quietly `inspect/1`-ed instead.
-  @spec reason({:unknown_invoke_type, String.t()}) :: String.t()
+  # One clause per way `Charts.dispatch/3` refuses, and no fall-through:
+  # dialyzer reports a binary arm or an `inspect/1` default as unreachable
+  # against that spec, which is what makes this the place a widened refusal
+  # surfaces rather than somewhere the new shape is quietly `inspect/1`-ed.
+  # se-4dt.4 widened it - `statifier_blocks:subchart` is registered and is
+  # not a sync call - and this is where that showed up, exactly as the
+  # paragraph above predicted.
+  @spec reason({:unknown_invoke_type | :durable_subchart_unsupported, String.t()}) :: String.t()
   defp reason({:unknown_invoke_type, type}), do: "unknown_invoke_type:#{type}"
+  # The subchart refusal names no type: unlike `:unknown_invoke_type`, where
+  # the type IS what went wrong, this refusal is about one constant type
+  # the note beside it already spells.
+  defp reason({:durable_subchart_unsupported, _type}), do: "durable_subchart_unsupported"
 
   @spec note(pid(), String.t(), String.t(), String.t()) :: :ok
   defp note(reader, run_id, label, detail) do

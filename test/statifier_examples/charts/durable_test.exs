@@ -7,7 +7,8 @@ defmodule StatifierExamples.Charts.DurableTest do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias StatifierBlocks.{Compiler, Decode}
+  alias Statifier.Machine.Identity
+  alias StatifierBlocks.{Compiled, Compiler, Decode}
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{Durable, Run}
   alias StatifierExamples.Repo
@@ -425,5 +426,78 @@ defmodule StatifierExamples.Charts.DurableTest do
     assert Enum.any?(details, fn detail ->
              detail =~ "myapp:signup ->" and detail =~ "plan=business" and detail =~ "seats=5"
            end)
+  end
+
+  # Campaign-023 ruling R-d: what a run records about the children its chart
+  # names. `core.subchart` names a child by DOCUMENT id, which is stable
+  # across every revision of that child, so without this the run record
+  # would say nothing about which revision actually ran. The pin is written
+  # at create, beside the fixture key, and it is a content hash of the
+  # child compiled exactly as the handler compiles it - so the value is
+  # re-derived here from the child fixture rather than read back out of the
+  # code under test.
+  #
+  # That the pin names the chart a live child session actually runs on is
+  # asserted in `StatifierExamples.Charts.SubchartTest`, against a real
+  # child. This is the durable half: that it reaches the record at all.
+  #
+  # Sabotage: made `metadata/2` drop the subcharts key when a fixture key
+  # was present; this went red on the pin. Reverted from a backup copy.
+  test "a run of a chart with a subchart pins the child it resolved to", %{run_id: run_id} do
+    {:ok, parent} = Charts.fixture("signup_onboarding")
+    {:ok, child} = Charts.fixture("signup_wizard")
+
+    {:ok, %Compiled{scxml: child_scxml}} =
+      Compiler.compile(child.document, Charts.palette(),
+        child_use: true,
+        known_invoke_types: Charts.invoke_types()
+      )
+
+    {:ok, compiled} = Durable.compile(parent.document, parent.declare)
+
+    assert {:ok, {_durable, _run}} =
+             Durable.start(compiled, parent.document, run_id, "signup_onboarding")
+
+    assert record!(run_id).metadata == %{
+             "fixture" => "signup_onboarding",
+             "subcharts" => %{"bdoc_signup_demo" => Identity.of_source(child_scxml).content_hash}
+           }
+  end
+
+  # And a chart that names no child records no key: a pin to nothing is not
+  # a pin, and every other run in this app is one of these.
+  #
+  # Sabotage: made `subcharts/1` answer `%{}` rather than `nil` for a
+  # document with no subchart, so the key was written empty; this went red.
+  # Reverted from a backup copy.
+  test "a run of a chart that names no child records no pin", %{run_id: run_id} do
+    {compiled, document} = signup()
+
+    assert {:ok, {_durable, _run}} = Durable.start(compiled, document, run_id, "signup_wizard")
+    assert record!(run_id).metadata == %{"fixture" => "signup_wizard"}
+  end
+
+  # A durable run that reaches a subchart is refused, by name. Starting a
+  # child chart is a `{:start_child, _, _}` instruction, which
+  # `Statifier.Session` executes and `StatifierPersistence.Driver` has no
+  # executor for - so the app's `dispatch:` fun answers the refusal and the
+  # chart routes it, exactly as it routes any other failed call. Durable
+  # subcharts are campaign-023 ruling R-e's follow-up, and this is what the
+  # app does until that lands.
+  #
+  # Sabotage: made `Charts.dispatch/3` answer `{:ok, %{}}` for the subchart
+  # type; this went red - the run reported a performed call instead of a
+  # refusal. Reverted from a backup copy.
+  test "a durable run refuses a subchart rather than pretending to run one", %{run_id: run_id} do
+    {:ok, parent} = Charts.fixture("signup_onboarding")
+    {:ok, compiled} = Durable.compile(parent.document, parent.declare)
+
+    {:ok, {_durable, run}} =
+      Durable.start(compiled, parent.document, run_id, "signup_onboarding")
+
+    details = Enum.filter(details(run), &is_binary/1)
+
+    assert Enum.any?(details, &(&1 =~ "durable_subchart_unsupported"))
+    assert Enum.any?(details, &(&1 =~ "Tell the owner the child chart refused"))
   end
 end
