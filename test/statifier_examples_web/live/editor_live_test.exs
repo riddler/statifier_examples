@@ -559,6 +559,97 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
   end
 
+  describe "picking a durable run back up" do
+    # The run id is in the URL because a durable run outlives the process
+    # that started it, and a run nobody can name again is not much use
+    # after a restart. This is the affordance the README's kill-and-resume
+    # walkthrough turns into a step.
+    #
+    # Sabotage: made `patch_to_run/1` patch with `nil` for the run id; this
+    # went red, then reverted.
+    test "the Run press puts the run id in the URL", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+
+      assert_patch(view) =~ "run="
+    end
+
+    # The restart, as the page sees it: a second mount that shares nothing
+    # with the first but the URL, and comes up on the configuration the run
+    # was left in.
+    #
+    # Sabotage: made `restore_run/2` ignore its run id and answer the
+    # socket unchanged; the marks were gone and this went red, then
+    # reverted.
+    test "reloading the run URL resumes the stored run", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+      path = assert_patch(view)
+
+      {:ok, resumed, html} = live(conn, path)
+
+      assert html =~ ~s(data-run-status="running")
+
+      assert resumed
+             |> element(~s([data-block-id="blk_su_verify_wait"]))
+             |> render() =~ ~s(data-run-active="true")
+
+      assert open_runs(resumed) =~ "Run resumed from storage"
+    end
+
+    # And it steps: a resumed run answers the event buttons the same way,
+    # which is what "continues" means on this page.
+    #
+    # Sabotage: guarded `send_run_event/2` on `is_pid(run.session)`; a
+    # durable run has no session process, the press did nothing, and this
+    # went red - along with the in-memory feed test - then reverted.
+    test "a resumed run steps on the next press", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+      {:ok, resumed, _html} = live(conn, assert_patch(view))
+
+      open_runs(resumed)
+
+      resumed
+      |> element(~s(button[phx-value-event="signup.abandoned"]))
+      |> render_click()
+
+      assert render_until(resumed, cell("signup.abandoned"))
+    end
+
+    # A link that outlived its run, or one somebody typed. The page says so
+    # rather than showing an empty canvas and letting a reader guess.
+    #
+    # Sabotage: made `adopt/2`'s error clause answer the socket unchanged;
+    # this went red, then reverted.
+    test "a run id nobody stored is refused on the page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: "signup_wizard", run: "no-such-run"]}")
+
+      assert html =~ "run refused"
+      assert html =~ "run_not_found"
+    end
+
+    # Stop is the host's own terminal transition, and the page stops naming
+    # a run it has abandoned.
+    #
+    # Sabotage: made the `run-stop` handler skip its patch; the run id
+    # stayed in the URL and this went red, then reverted.
+    test "Stop drops the run from the page and from the URL", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+      assert_patch(view)
+
+      html = view |> element(~s(button[phx-click="run-stop"])) |> render_click()
+
+      refute html =~ "data-run-status"
+      refute assert_patch(view) =~ "run="
+    end
+  end
+
   # Presses Run in the host header, then renders until the run has actually
   # reached the page. The press only starts the session; the effects arrive
   # as ordinary messages afterwards, so the render the click returns is the

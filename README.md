@@ -142,6 +142,110 @@ drawer". To copy the host's half:
    page root on purpose - the package declares the token's `auto` default on
    `.sb-editor` itself, and a declaration there beats an inherited one.
 
+## Durable runs, and picking one up after a `kill -9`
+
+Pressing **Run** on the editor page starts a *durable* run. There is no
+process holding the chart between steps: every step goes
+`load -> step -> execute effects -> persist` through
+`StatifierPersistence.Runs`, and the chart's position lands in the
+`statifier_runs` table before the press returns. The run id goes into the
+page URL, which is what makes a run something you can come back to.
+
+Two host pieces make that work and both are worth reading before copying:
+
+- `StatifierExamples.Charts.Durable` is the driver - the loop that steps,
+  answers the calls the chart made, and steps again.
+- `StatifierExamples.Charts.RunLock` is this app's per-run serialization
+  strategy. It is **not optional**: `StatifierPersistence.Runs` defaults to
+  the storage adapter's `lock_run/3`, `StatifierExamples.Persistence`
+  declines that callback because SQLite has no row lock to take, and the
+  default therefore refuses with `{:error, {:serialization,
+  :not_supported}}` before a run can start. A host on Postgres takes the
+  default; a host on SQLite writes the twenty lines this one writes.
+
+### The walkthrough
+
+1. Start the app and open the signup wizard:
+
+   ```sh
+   mix setup
+   mix phx.server
+   ```
+
+   Then <http://127.0.0.1:8645/editor?doc=signup_wizard>.
+
+2. Press **Run** in the header. The chart runs through two `myapp:signup`
+   calls and parks in its verification group, waiting on the 24-hour
+   `core.wait` with both interrupts armed. Open the drawer's **Runs** tab
+   to watch it: `Run started`, two `Invoke dispatched` / `Performed`
+   pairs, and a `Delayed send` for the wait.
+
+3. Look at the address bar. It now carries a `run=` parameter - that is
+   the run id, and it is the only thing you need to find this run again.
+
+4. Confirm the run is durable rather than merely running:
+
+   ```sh
+   sqlite3 priv/repo/statifier_examples_dev.db \
+     "select run_id, status, length(position_blob) from statifier_runs;"
+   ```
+
+   One row, `active`, with a position blob of about a kilobyte.
+
+5. Kill the server the hard way, from another shell - no shutdown hook, no
+   flush:
+
+   ```sh
+   kill -9 $(lsof -nP -tiTCP:8645 -sTCP:LISTEN)
+   ```
+
+6. Start it again with `mix phx.server`, and reload the **same URL**,
+   `run=` parameter included.
+
+7. The page comes back on the configuration the run was left in: the wait
+   block and both interrupt rules are marked active on the canvas, the
+   header says `running`, and the Runs tab opens with one row -
+   `Run resumed from storage`, naming the run id and its stored status.
+
+8. Press **signup.abandoned** in the Runs panel. The resumed run steps on
+   from exactly where it was: the abandon interrupt fires, the
+   verification group finishes, onboarding runs its branch, and the chart
+   reaches its root outcome. Nothing about the step knows a server died.
+
+### What survives and what does not
+
+Durable: the chart's position after every step, the run's status, and the
+account `myapp:provision` writes.
+
+Not durable: the **feed**. Its rows are derived from the effects each step
+returns, and effects are not stored, so a resumed run opens with one row
+rather than a replay of the run so far. The marks are not affected - those
+come from the stored position.
+
+### The one call that writes
+
+`myapp:provision` creates the account row the wizard exists to produce, in
+`StatifierExamples.Signup.Accounts`. Two things about it are the point:
+
+- **The run is the key.** The chart carries no datamodel and no personal
+  data, so the address is derived from the run id -
+  `signup-<run id>@example.com`, fiction like every value in this repo.
+- **It is idempotent on that key, honestly.** `StatifierPersistence`'s
+  executor contract is at-least-once: a host that crashed between
+  executing an effect and persisting the step re-drives the same event and
+  gets the same call again, and the stepper never dedupes. The `users`
+  table has a unique index on `email` and the write is an upsert against
+  it, so a second delivery finds the row and the feed's `Performed` row
+  says `provisioned=existing` instead of `created`. No dedup table, no
+  guessing.
+
+One caveat the shipped fixture makes visible: the signup wizard's plan
+branch reads `signup.plan` and `signup.seats` from a datamodel the
+document does not declare, so every run of *that* document takes the
+`otherwise` arm and abandons before it reaches its provision block. The
+write is exercised by `StatifierExamples.Charts.DurableTest`, on a
+document built in the test for the purpose.
+
 ## The gate
 
 ```sh
@@ -159,6 +263,9 @@ the gate does and the one recorded deviation from the family's defaults.
 | `StatifierExamples.CardAuth` | the card-processing block types and their invoke handlers |
 | `StatifierExamples.Signup` | the signup-wizard block types and their invoke handlers |
 | `StatifierExamples.Charts` | shared host plumbing: the palette, the icon seam, the theme tokens, the fixture list |
+| `StatifierExamples.Charts.Durable` | the durable run driver: step, answer the chart's calls, step again |
+| `StatifierExamples.Charts.RunLock` | the per-run serialization strategy durable steps run inside |
+| `StatifierExamples.Persistence` | the storage adapter and the `statifier_persistence` host declaration |
 
 Both domains are filled. `StatifierExamples.Charts` also carries the shared
 messaging block type `myapp.notify`, which belongs to neither domain, and
@@ -176,9 +283,12 @@ teaching the reader to pick, so there is one of each and both domains use it:
   `emit/4` - which takes the type's own invoke type as the default and
   whatever `<param>` children it wants. It lives under `Charts` because that
   is the seam the domains meet in, next to the palette and the fixture list.
-- **A handler module** is `invoke_types/0` plus `handle/2`: every name the
-  module registers, and one call answered or refused with
-  `{:error, {:unknown_invoke_type, type}}`. That shape is the one the
+- **A handler module** is `invoke_types/0` plus `handle/3`: every name the
+  module registers, and one call - `type`, the `<param>` values, and the
+  driver's own call context - answered or refused with
+  `{:error, {:unknown_invoke_type, type}}`. The context is empty from the
+  in-memory driver and carries `run_id` from the durable one; only
+  `myapp:provision` reads it, because only it writes. That shape is the one the
   runtime asks for - st-ADR-0051 registers handlers per session as a
   `%{invoke type => module}` map - and it is what makes
   `Charts.invoke_types/0` a concatenation of three identical calls.

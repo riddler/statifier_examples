@@ -22,6 +22,16 @@ defmodule StatifierExamples.Charts do
   # else.
   @handler_modules [CardAuth.Handlers, Messaging.Handlers, Signup.Handlers]
 
+  @typedoc """
+  What the driver of a call knows about the call that the chart does not.
+
+  Empty from the in-memory driver, which has nothing durable to name.
+  `StatifierExamples.Charts.Durable` puts the run id in it, because a
+  handler that writes needs a stable key and the run is the only one this
+  app has (see `StatifierExamples.Signup.Accounts`).
+  """
+  @type call_context :: %{optional(:run_id) => String.t()}
+
   @doc """
   The palette the editor is given: `statifier_blocks`' `core.*` structural
   vocabulary with this app's own types on top.
@@ -141,13 +151,20 @@ defmodule StatifierExamples.Charts do
   `{:error, {:unknown_invoke_type, type}}`, which is what the handler
   modules themselves answer for a name they do not hold - the same event,
   raised one level up, so a caller routes on one shape rather than two.
+
+  `context` is what the *driver* knows and the chart does not: which run
+  this call belongs to, when a durable stepper is driving. It is optional
+  because the in-memory driver has no run - a handler that needs it says
+  so by matching on it, and this app has exactly one that does
+  (`StatifierExamples.Signup.Handlers`' provisioning, which keys its write
+  on the run).
   """
-  @spec dispatch(String.t(), map()) ::
+  @spec dispatch(String.t(), map(), call_context()) ::
           {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
-  def dispatch(type, params) when is_binary(type) and is_map(params) do
+  def dispatch(type, params, context \\ %{}) when is_binary(type) and is_map(params) do
     case Enum.find(@handler_modules, &(type in &1.invoke_types())) do
       nil -> {:error, {:unknown_invoke_type, type}}
-      module -> module.handle(type, params)
+      module -> module.handle(type, params, context)
     end
   end
 

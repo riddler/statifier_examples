@@ -18,6 +18,8 @@ defmodule StatifierExamples.CardAuth.Handlers do
 
   require Logger
 
+  alias StatifierExamples.Charts
+
   @invoke_types [
     "myapp:authorize",
     "myapp:balance_check",
@@ -49,18 +51,28 @@ defmodule StatifierExamples.CardAuth.Handlers do
   family's rule is that errors are events, and a leaf never rescues to a
   default.
   """
-  @spec handle(String.t(), map()) :: {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
-  def handle("myapp:authorize", params), do: completed("myapp:authorize", params)
-  def handle("myapp:balance_check", params), do: completed("myapp:balance_check", params)
-  def handle("myapp:capture", params), do: completed("myapp:capture", params)
-  def handle("myapp:intake", params), do: completed("myapp:intake", params)
-  def handle("myapp:manual_flag", params), do: completed("myapp:manual_flag", params)
-  def handle("myapp:park", params), do: completed("myapp:park", params)
-  def handle("myapp:receipt", params), do: completed("myapp:receipt", params)
-  def handle("myapp:resolve_review", params), do: completed("myapp:resolve_review", params)
-  def handle("myapp:risk_rating", params), do: completed("myapp:risk_rating", params)
-  def handle("myapp:three_ds", params), do: completed("myapp:three_ds", params)
-  def handle(invoke_type, _params), do: {:error, {:unknown_invoke_type, invoke_type}}
+  @spec handle(String.t(), map(), Charts.call_context()) ::
+          {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
+  def handle(invoke_type, params, context \\ %{})
+  def handle("myapp:authorize", params, _context), do: completed("myapp:authorize", params)
+
+  def handle("myapp:balance_check", params, _context),
+    do: completed("myapp:balance_check", params)
+
+  def handle("myapp:capture", params, _context), do: completed("myapp:capture", params)
+  def handle("myapp:intake", params, _context), do: completed("myapp:intake", params)
+  def handle("myapp:manual_flag", params, _context), do: completed("myapp:manual_flag", params)
+  def handle("myapp:park", params, _context), do: completed("myapp:park", params)
+  def handle("myapp:receipt", params, _context), do: completed("myapp:receipt", params)
+
+  def handle("myapp:resolve_review", params, _context),
+    do: completed("myapp:resolve_review", params)
+
+  def handle("myapp:risk_rating", params, _context), do: completed("myapp:risk_rating", params)
+  def handle("myapp:three_ds", params, _context), do: completed("myapp:three_ds", params)
+
+  def handle(invoke_type, _params, _context),
+    do: {:error, {:unknown_invoke_type, invoke_type}}
 
   @spec completed(String.t(), map()) :: {:ok, map()}
   defp completed(invoke_type, params) do

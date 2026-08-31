@@ -21,6 +21,12 @@ defmodule StatifierExamples.Application do
       # (`StatifierExamples.Charts.InvokeHandler`). Without it the sessions
       # still run and the handlers have no way home.
       Statifier.Supervisor,
+      # The per-run exclusion durable runs step inside. It has to be this
+      # app's own: `StatifierExamples.Persistence` declines the optional
+      # `lock_run/3` that `StatifierPersistence.Runs`' default strategy
+      # asks for, so without a strategy the host supplies, every durable
+      # step refuses. See `StatifierExamples.Charts.RunLock`.
+      StatifierExamples.Charts.RunLock,
       # Start a worker by calling: StatifierExamples.Worker.start_link(arg)
       # {StatifierExamples.Worker, arg},
       # Start to serve requests, typically the last entry
