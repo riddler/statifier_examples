@@ -8,6 +8,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   alias StatifierBlocks.Finding
   alias StatifierBlocks.Shell
   alias StatifierExamples.Charts
+  alias StatifierExamples.Charts.Durable
 
   @themes ["light", "dark", "brand"]
 
@@ -441,6 +442,82 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
           flunk(
             "no `--sb-editor-height` declaration on `#{@bound_selector}` in assets/css/app.css"
           )
+      end
+    end
+  end
+
+  describe "the disabled Run button" do
+    # Run refuses on a document that does not compile - `@compiled` is nil
+    # and the button renders `disabled` - and that refusal has to be legible
+    # from the page. The two halves are asserted against each other the way
+    # the viewport bound above is: the attribute is read off the document the
+    # app actually renders, and the treatment that attribute selects is read
+    # out of `assets/css/app.css`, because a LiveViewTest cannot see a
+    # stylesheet.
+    #
+    # Which fixtures compile is deliberately not written down here. The
+    # expectation is taken from the same compiler call the page makes, so a
+    # fixture that starts or stops compiling moves both sides at once instead
+    # of turning this file red for a reason that is not about the button.
+    @run_button ~s(.myapp-header__button[phx-click="run-start"])
+    @disabled_rule ".myapp-header__button:disabled"
+
+    # Sabotage: made the button's `disabled` read `is_nil(@run)` instead of
+    # `is_nil(@compiled)` in render/1; this went red on the first compiling
+    # fixture - which then renders disabled - along with the eleven run tests
+    # that can no longer press Run, then reverted.
+    test "Run carries `disabled` exactly when the document does not compile", %{conn: conn} do
+      for fixture <- Charts.fixtures() do
+        {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
+
+        compiles? = match?({:ok, _}, Durable.compile(fixture.document, fixture.declare))
+        document = LazyHTML.from_document(html)
+        expected = if compiles?, do: 0, else: 1
+
+        assert document |> LazyHTML.query(@run_button) |> Enum.count() == 1
+
+        assert document |> LazyHTML.query(@run_button <> "[disabled]") |> Enum.count() ==
+                 expected
+      end
+    end
+
+    # Sabotage: deleted the `background` and `color` lines from the rule in
+    # app.css; this went red on both, then reverted.
+    test "the stylesheet gives the disabled Run button its own treatment" do
+      body = disabled_body()
+
+      # Not a press, and it says so twice: the pointer, and the accent fill
+      # every other header button wears taken off rather than kept and dimmed.
+      assert body =~ "cursor: not-allowed"
+      assert body =~ "background: transparent"
+      assert body =~ "color: var(--sb-fg-muted)"
+
+      # Every colour here is a theme token, which is what makes the enabled
+      # and disabled buttons distinct in light and in dark rather than in
+      # whichever one a literal was picked against.
+      refute body =~ ~r/#[0-9a-fA-F]{3}/
+    end
+
+    # Sabotage: put the hover rule back as a bare `:hover`; this went red on
+    # the `refute`, then reverted.
+    test "the hover fill does not reach the disabled Run button" do
+      css = File.read!("assets/css/app.css")
+
+      assert css =~ ".myapp-header__button:hover:not(:disabled)"
+      refute css =~ ~r/\.myapp-header__button:hover\s*\{/
+    end
+
+    # The body of the one rule that dresses the disabled state, or a failure
+    # naming what was looked for - an empty string would let the assertions
+    # above pass against a stylesheet that lost the rule entirely.
+    @spec disabled_body() :: String.t()
+    defp disabled_body do
+      css = File.read!("assets/css/app.css")
+      pattern = ~r/#{Regex.escape(@disabled_rule)}\s*\{([^}]*)\}/
+
+      case Regex.run(pattern, css) do
+        [_, body] -> body
+        _ -> flunk("no `#{@disabled_rule}` rule in assets/css/app.css")
       end
     end
   end

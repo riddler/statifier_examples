@@ -236,8 +236,27 @@
   cursor: pointer;
 }
 
-.myapp-header__button:hover {
+.myapp-header__button:hover:not(:disabled) {
   background: var(--sb-accent-hover);
+}
+
+/* Run is disabled while the open document does not compile, and a disabled
+   control that looks exactly like an enabled one reads as a broken page
+   rather than as a refusal: the press does nothing and nothing says why.
+   So the accent fill - the thing that says "press me" about every other
+   header button - comes off, and what is left is the muted, outlined,
+   not-allowed treatment the drawer's event buttons already use for the same
+   fact. Both halves are `--sb-*` references, so the distinction is the
+   theme's in light and in dark rather than one hard-coded grey that
+   disappears against one of the two backgrounds.
+   Why the button disables at all is not settled here; this rule only makes
+   the state legible. */
+.myapp-header__button:disabled {
+  border-color: var(--sb-border);
+  background: transparent;
+  color: var(--sb-fg-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .myapp-header__verdict {
