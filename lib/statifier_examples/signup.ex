@@ -9,11 +9,17 @@ defmodule StatifierExamples.Signup do
 
   Two block types, both of them a call to a host handler with an outcome:
   `myapp.signup_step` collects one step of the wizard and `myapp.provision`
-  creates the workspace at the end of it. Everything else the two fixture
+  creates the workspace at the end of it. Everything else the three fixture
   documents are made of - the sequencing, the branch on the chosen plan, the
   interrupt rails, the child chart - is `statifier_blocks`' own `core.*`
   vocabulary, which is the division of labour this app exists to
   demonstrate: a host adds the steps its product has, and nothing else.
+
+  `signup_onboarding` is the smallest of the three and exists for one
+  reading: a parent chart that embeds the wizard as a `core.subchart` and
+  routes on the outcome it finished with. It is deliberately one level
+  deep - see `StatifierExamples.Charts.Subchart` on st-pvpz, and on what
+  a durable run does with a subchart.
   """
 
   alias StatifierBlocks.{Block, Decode, Document, Edit}
@@ -53,7 +59,8 @@ defmodule StatifierExamples.Signup do
   # deployment's own additions, and this deployment adds none.
   @documents [
     {"signup_wizard", "signup_wizard.json", []},
-    {"signup_invitations", "signup_invitations.json", []}
+    {"signup_invitations", "signup_invitations.json", []},
+    {"signup_onboarding", "signup_onboarding.json", []}
   ]
 
   # The `core.send` whose delay is host configuration rather than a fact

@@ -21,28 +21,47 @@ defmodule StatifierExamples.Charts.InvokeAdapterTest do
   and which module answers a given name. Every sabotage below is therefore
   a mutation of that list or of a domain module's own `invoke_types/0` -
   app code, not the dependency's.
+
+  Since se-4dt.4 the list is not the app's only source of registrations:
+  `statifier_blocks:subchart` is a full `Statifier.Invoke.Handler` rather
+  than a sync call, so `StatifierExamples.Charts` unions the adapter's
+  answers - held as `StatifierExamples.Charts.SyncAdapter` - with that
+  one. The join is this app's own code and is asserted here too.
   """
 
   use ExUnit.Case, async: true
 
+  alias StatifierBlocks.Runtime
   alias StatifierExamples.Charts
+  alias StatifierExamples.Charts.{Subchart, SyncAdapter}
 
-  # Sabotage: dropped `Signup.Handlers` from the `use ... handlers:` list in
-  # `StatifierExamples.Charts`; this went red on the key-set assertion, with
-  # the two signup names missing from both readings. Reverted from a backup
-  # copy.
-  test "the compiler's set and the session's map are two readings of one handler list" do
+  # Sabotage: made `invoke_handlers/0` answer the sync adapter's map alone,
+  # dropping the subchart merge; this went red on the key-set assertion,
+  # with a type the compiler lints against that no session could answer.
+  # Reverted from a backup copy.
+  #
+  # Dropping a handler MODULE from the adapter's list instead does NOT go
+  # red here, and that is the honest reading rather than a gap: both
+  # readings are derived from that one list, so they stay equal to each
+  # other while both shrink. What that mutation reddens is the exact list
+  # in `StatifierExamples.ChartsTest`, which is where it is noted.
+  test "the compiler's set and the session's map are two readings of one registration" do
     handlers = Charts.invoke_handlers()
 
     assert handlers |> Map.keys() |> Enum.sort() == Charts.invoke_types()
-    assert Enum.all?(Map.values(handlers), &(&1 == Charts))
+
+    {subchart, sync} = Map.split(handlers, [Runtime.Subchart.invoke_type()])
+
+    assert subchart == %{"statifier_blocks:subchart" => Subchart}
+    assert Enum.all?(Map.values(sync), &(&1 == SyncAdapter))
   end
 
   # The list is what the adapter routes against, in the order this app
   # wrote it.
   #
   # Sabotage: dropped `Messaging.Handlers` from the `use ... handlers:`
-  # list; this went red on the list assertion. Reverted from a backup copy.
+  # list in `StatifierExamples.Charts.SyncAdapter`; this went red on the
+  # list assertion. Reverted from a backup copy.
   #
   # What this does NOT prove is that the ORDER is load-bearing: it is not,
   # today. `dispatch/4` resolves a type to the first module claiming it,
@@ -70,6 +89,23 @@ defmodule StatifierExamples.Charts.InvokeAdapterTest do
   test "dispatch refuses a name no handler module registered" do
     assert Charts.dispatch("myapp:nobody", %{}) ==
              {:error, {:unknown_invoke_type, "myapp:nobody"}}
+  end
+
+  # The subchart type IS registered and is not a sync call: this routing is
+  # the durable driver's, and a `{:start_child, _, _}` has no executor
+  # there (campaign-023 ruling R-e). Refusing it by its own name rather
+  # than as `:unknown_invoke_type` is what keeps the feed's account of a
+  # durable run true - the type is registered, and a `Statifier.Session`
+  # answers it.
+  #
+  # Sabotage: deleted the subchart clause so the name fell through to the
+  # `Enum.find`; this went red, reporting `:unknown_invoke_type` for a type
+  # the line above proves is registered. Reverted from a backup copy.
+  test "dispatch refuses the subchart type by name, not as an unknown one" do
+    assert Runtime.Subchart.invoke_type() in Charts.invoke_types()
+
+    assert Charts.dispatch("statifier_blocks:subchart", %{}) ==
+             {:error, {:durable_subchart_unsupported, "statifier_blocks:subchart"}}
   end
 
   # Sabotage: dropped "myapp:signup" from `Signup.Handlers`' `@invoke_types`;

@@ -99,6 +99,7 @@ defmodule StatifierExamples.Charts.StepLabelTest do
     assert counts == %{
              "card_processing" => {17, 0},
              "signup_invitations" => {1, 0},
+             "signup_onboarding" => {3, 0},
              "signup_wizard" => {7, 0}
            }
   end

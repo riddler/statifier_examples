@@ -21,13 +21,14 @@ defmodule StatifierExamples.SignupTest do
            }
   end
 
-  # Sabotage: swapped the two entries in @documents; this went red, then
-  # reverted.
-  test "fixtures/0 lists both documents, keyed and named from the documents themselves" do
-    assert [wizard, invitations] = Signup.fixtures()
+  # Sabotage: swapped the first two entries in @documents; this went red,
+  # then reverted.
+  test "fixtures/0 lists the three documents, keyed and named from the documents themselves" do
+    assert [wizard, invitations, onboarding] = Signup.fixtures()
 
     assert %{key: "signup_wizard", name: "Signup wizard"} = wizard
     assert %{key: "signup_invitations", name: "Signup invitations"} = invitations
+    assert %{key: "signup_onboarding", name: "Signup onboarding"} = onboarding
   end
 
   # Sabotage: pointed load/1 at a file that does not exist; this went red,
@@ -47,7 +48,7 @@ defmodule StatifierExamples.SignupTest do
   # signup_invitations.json; this went red with
   # `{:malformed_block, _, {:unexpected_key, "_comment"}}`, then reverted.
   test "every shipped fixture decodes strictly" do
-    for file <- ["signup_wizard.json", "signup_invitations.json"] do
+    for file <- ["signup_wizard.json", "signup_invitations.json", "signup_onboarding.json"] do
       path = Path.join([Application.app_dir(:statifier_examples), "priv", "fixtures", file])
       assert {:ok, _document} = Decode.decode(File.read!(path))
     end
@@ -89,11 +90,12 @@ defmodule StatifierExamples.SignupTest do
   # `datamodel` key; this went red here and took the two provisioning
   # tests in `DurableTest` with it. Reverted.
   test "the wizard's own bytes declare the root its plan branch guards on" do
-    [wizard, invitations] = Signup.fixtures()
+    [wizard, invitations, onboarding] = Signup.fixtures()
 
     assert Enum.map(wizard.document.datamodel, & &1.id) == ["signup"]
     assert wizard.declare == []
     assert invitations.declare == []
+    assert onboarding.declare == []
   end
 
   # se-dyo: where `signup` comes from, in the wizard's own bytes. The

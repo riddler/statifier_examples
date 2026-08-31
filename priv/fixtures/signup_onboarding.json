@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_su_onboarding_demo",
+  "revision": 1,
+  "metadata": {
+    "name": "Signup onboarding",
+    "description": "Run the signup wizard as a child chart, then route on the outcome it finished with. One level deep on purpose: a child session is started without the parent's invoke handlers (statifier-ex st-pvpz), so a child that needs its own handlers cannot finish inside it.",
+    "domain": "signup"
+  },
+  "datamodel": [
+    {
+      "id": "signup",
+      "description": "The signup this onboarding run is for: the child chart is passed its email and chosen plan."
+    },
+    {
+      "id": "onboarding",
+      "description": "Where the wizard's outcome lands when the child finishes."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_so_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.subchart",
+          "id": "blk_so_wizard",
+          "type_version": 1,
+          "config": {
+            "chart": "bdoc_signup_demo",
+            "outcomes": "done\nabandon",
+            "assign_to": "onboarding",
+            "params": "email=signup.email\nplan=signup.plan"
+          },
+          "slots": {
+            "on_done": [
+              {
+                "type": "myapp.notify",
+                "id": "blk_so_welcome",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "template": "workspace_ready",
+                  "label": "Welcome them to the new workspace"
+                }
+              }
+            ],
+            "on_abandon": [
+              {
+                "type": "myapp.notify",
+                "id": "blk_so_win_back",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "template": "signup_reminder",
+                  "label": "Offer to pick the signup back up"
+                }
+              }
+            ],
+            "on_error": [
+              {
+                "type": "myapp.notify",
+                "id": "blk_so_tell_owner",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "template": "choose_a_plan",
+                  "label": "Tell the owner the child chart refused"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

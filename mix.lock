@@ -38,7 +38,7 @@
   "predicator": {:hex, :predicator, "9.0.2", "c8e4eda1e23f34b54f38c0e2f44a06aa40d54d68b5bb5e16cfe1b61b787eb843", [:mix], [], "hexpm", "5b43496b11548a1f0ed9fef3632ce5bc2784076f972927a085cff2148519f855"},
   "saxy": {:hex, :saxy, "1.6.1", "742eff28f553c066d0b54e84662dbf384a1d1f38595472ed15f6e0a33038bbe1", [:mix], [], "hexpm", "8989d504424ba29460a61950f8968380651413fa05e63b6118084db057da1a6b"},
   "statifier": {:git, "https://github.com/riddler/statifier-ex.git", "a0f965e6b15868fb05bd0d05981ac18d64d0344c", [ref: "a0f965e6b15868fb05bd0d05981ac18d64d0344c"]},
-  "statifier_blocks": {:git, "https://github.com/riddler/statifier_blocks.git", "957ea91ed54abecdc91cc9ae9c6e4c9314e15417", [ref: "957ea91ed54abecdc91cc9ae9c6e4c9314e15417"]},
+  "statifier_blocks": {:git, "https://github.com/riddler/statifier_blocks.git", "487cebf146c5e46f0e674c57a85f4806aeeec8ac", [ref: "487cebf146c5e46f0e674c57a85f4806aeeec8ac"]},
   "statifier_oban": {:hex, :statifier_oban, "0.3.1", "57b0d4fe35b593e5eb88eca017788cdce37e214b567a1d90ba3b75d42b1ea123", [:mix], [{:oban, "~> 2.19", [hex: :oban, repo: "hexpm", optional: false]}, {:statifier, "~> 2.2", [hex: :statifier, repo: "hexpm", optional: false]}], "hexpm", "ae6d3660b80dfae44267aa55f35d9af1bed44a4a51a10e9f64f1a922f5bc37cd"},
   "statifier_persistence": {:git, "https://github.com/riddler/statifier_persistence.git", "08c991cf5fbce37d7de81a05be60b64b92b9bb02", [ref: "08c991cf5fbce37d7de81a05be60b64b92b9bb02"]},
   "tailwind": {:hex, :tailwind, "0.5.1", "35435b13158c90d37da11e1cfc808755fca1d7b6c5ab87b1b19c5de87e2f0a10", [:mix], [], "hexpm", "c4e26302a59fec72abc5610ecb6ad2116d9aa31f31aab2d4b8eb6e95d25a689c"},

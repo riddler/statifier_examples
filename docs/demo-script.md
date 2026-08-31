@@ -237,6 +237,87 @@ the 24-hour wait, and finishing onboarding took down its two-hour deadline.
 idempotent on the run id: deliver it twice and the second says
 `provisioned=existing`.
 
+## 11. Run a chart that embeds another chart
+
+**Do**: switch the DOCUMENT select to `Signup onboarding`, or go straight to
+<http://127.0.0.1:8645/editor?doc=signup_onboarding>.
+
+**See**: a five-block document at `revision 1`, id `bdoc_su_onboarding_demo`,
+and `Findings 0`. The one thing worth pointing at is that zero: the chart's
+first block is a `core.subchart` naming the wizard's document id
+(`bdoc_signup_demo`), and this app registers a handler for
+`statifier_blocks:subchart` - the canonical one `statifier_blocks` ships,
+given a resolver over this app's own fixture list. Before it did, this
+document and `Signup invitations` both opened at `Findings 1`, on
+`no handler registered for invoke type "statifier_blocks:subchart"`.
+`Signup invitations` opens at `Findings 0` now too.
+
+**Do**: press **Run**.
+
+**See**: a run that starts, is refused, takes the block's `on_error` path and
+finishes - sixteen rows, of which these five are the beat:
+
+```
+2  | Invoke dispatched | statifier_blocks:subchart on blk_so_wizard
+3  | Call refused      | statifier_blocks:subchart: durable_subchart_unsupported
+4  | Event             | error.communication.invoke.blk_so_wizard
+6  | Invoke dispatched | myapp:notify on Tell the owner the child chart refused
+11 | Outcome           | error on blk_so_wizard
+```
+
+That refusal is the honest answer and not a bug: starting a child chart is a
+`{:start_child, _, _}` instruction, which a live `Statifier.Session` executes
+and the durable driver has no executor for. A child as its own persisted run,
+with the parent linkage stored, is the deliberate follow-up (campaign-023
+ruling R-e). What the page shows meanwhile is a chart routing a refused call
+the same way it routes any other one - which is the thing to say out loud,
+because it is what an author gets for free from having declared an `on_error`
+path.
+
+**What does run the child**: a `Statifier.Session` started with
+`StatifierExamples.Charts.invoke_handlers/0`. There
+`blk_so_wizard` starts a child session whose machine is the wizard, compiled
+as a child - byte for byte the chart the run record pinned at create, which
+is what `StatifierExamples.Charts.SubchartTest` asserts by comparing the
+child's content hash with the pin.
+
+**One level deep, on purpose**: a child session is started without the
+parent's invoke handlers (statifier-ex `st-pvpz`), so the wizard child sits
+at its first step - `myapp:signup` reaches a session that has no handler for
+it - and a subchart inside a subchart would not run at all. The fixture is
+written to that limit and says so in its own description.
+
+## 12. Read what the run pinned
+
+**Do**: in the second shell, read the run's metadata.
+
+```sh
+sqlite3 priv/repo/statifier_examples_dev.db \
+  "select metadata from statifier_runs order by inserted_at desc limit 1;"
+```
+
+**See**: two keys - the fixture the run is of, and the child chart it
+resolved:
+
+```json
+{"fixture":"signup_onboarding",
+ "subcharts":{"bdoc_signup_demo":"sha256:<64 hex characters>"}}
+```
+
+`core.subchart` names its child by **document id**, and a document id is
+stable across every revision of that child - so the record would otherwise
+say nothing about which revision this run actually ran. The hash is that
+missing fact, written once at create and never rewritten (campaign-023 ruling
+R-d). Edit the wizard, start a second onboarding run, and the two runs' pins
+differ while both still say `bdoc_signup_demo`. The digits are not quoted
+here for the same reason: they are a hash of the child's bytes, and this
+deployment writes its configured reminder delay into them before compiling
+(beat 8's 90 seconds), so the demo machine's hash is its own.
+
+It is the host's fact, not the compiler's: `StatifierBlocks.Core.Subchart`
+says so in as many words - pinning a particular child revision at publish
+time is a host provenance concern, carried in run metadata.
+
 ---
 
 ## Two things a viewer will ask

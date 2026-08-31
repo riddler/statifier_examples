@@ -9,37 +9,36 @@ defmodule StatifierExamples.Charts do
   block-type registry and the compiler, and this app owns only the choices
   a host makes. Bead `se-06z` builds the editor host page on top of it.
 
-  ## It is also this app's invoke adapter
+  ## It is also this app's invoke registration
 
   Two registries meet here, and they are still two. A block type **names**
   an invoke type and `invoke_types/0` is the union of the names; a handler
   **runs** one, and `Statifier.Session`'s `:invoke_handlers` is a
-  `%{type => module}` map of the modules. This module is the join, and it
-  is the join by `use`-ing `Statifier.Invoke.SyncHandler.Adapter` over the
-  three domain handler modules: that macro supplies the four
-  `Statifier.Invoke.Handler` callbacks and both derived registrations -
-  `invoke_types/0` for the compiler's `:known_invoke_types` and
-  `invoke_handlers/0` for the session - from the one handler list, so the
-  set a document is linted against and the set a session will answer
-  cannot come apart.
+  `%{type => module}` map of the modules. This module is the join.
 
-  The app used to write that adapter itself, as
-  `StatifierExamples.Charts.InvokeHandler`. The engine writes it now, the
-  same way for every host, and the app's three domain modules are plain
+  Two kinds of handler are joined, and they are written by two different
+  packages rather than by this app. The three domain modules are plain
   `Statifier.Invoke.SyncHandler` implementations - `invoke_types/0` and
-  `handle/3` - with no lifecycle of their own (se-4dt.2).
+  `handle/3`, no lifecycle of their own - and the engine wraps them in the
+  `Statifier.Invoke.Handler` every host would otherwise write by hand,
+  which this app holds as `StatifierExamples.Charts.SyncAdapter`
+  (se-4dt.2; that module says why the `use` lives there and not here).
+  `statifier_blocks:subchart` is the other kind: a full handler with a
+  lifecycle, written once in `statifier_blocks` and given this app's two
+  callbacks by `StatifierExamples.Charts.Subchart` (se-4dt.4).
+
+  `invoke_types/0` and `invoke_handlers/0` below are the union of the two,
+  built one from the other so the set a document is linted against and the
+  set a session will answer still cannot come apart. Registering the
+  subchart handler is what retired this app's standing
+  `no handler registered for invoke type "statifier_blocks:subchart"`
+  warning on `signup_invitations`.
   """
 
-  alias Statifier.Invoke.SyncHandler.Adapter
   alias StatifierBlocks.Palette
+  alias StatifierBlocks.Runtime
   alias StatifierExamples.{CardAuth, Signup}
-  alias StatifierExamples.Charts.{Fixture, Icons, Messaging}
-
-  # The three domain handler modules, named once. `invoke_types/0`,
-  # `invoke_handlers/0` and the `Statifier.Invoke.Handler` callbacks are all
-  # generated over this list, and `dispatch/3` reads it back as
-  # `sync_handlers/0`. A fourth domain's module joins here and nowhere else.
-  use Adapter, handlers: [CardAuth.Handlers, Messaging.Handlers, Signup.Handlers]
+  alias StatifierExamples.Charts.{Fixture, Icons, Messaging, Subchart, SyncAdapter}
 
   @themes [:light, :dark, :brand]
 
@@ -133,6 +132,44 @@ defmodule StatifierExamples.Charts do
   end
 
   @doc """
+  Every `<invoke type>` this app answers, sorted - the list a document is
+  linted against as `:known_invoke_types`.
+
+  The sync adapter's own union with the one type
+  `StatifierExamples.Charts.Subchart` serves. Two sources because the two
+  handlers are two kinds; one answer because a document is linted against
+  one set.
+  """
+  @spec invoke_types() :: [String.t()]
+  def invoke_types, do: Enum.sort([Runtime.Subchart.invoke_type() | SyncAdapter.invoke_types()])
+
+  @doc """
+  The `%{invoke type => module}` map a `Statifier.Session` is started with
+  (st-ADR-0051).
+
+  Built from the same two sources as `invoke_types/0`, and the keys are
+  exactly its answer - which
+  `StatifierExamples.Charts.InvokeAdapterTest` asserts, because a set the
+  compiler lints against that a session cannot answer is the failure this
+  join exists to prevent.
+  """
+  @spec invoke_handlers() :: %{String.t() => module()}
+  def invoke_handlers do
+    Map.merge(SyncAdapter.invoke_handlers(), Runtime.Subchart.handlers(Subchart))
+  end
+
+  @doc """
+  The `Statifier.Invoke.SyncHandler` modules the adapter is generated
+  over, in dispatch order.
+
+  The subchart handler is deliberately not in it: it is not a sync call
+  and `dispatch/3` cannot perform one. See that function on what the
+  durable driver does with a subchart.
+  """
+  @spec sync_handlers() :: [module()]
+  def sync_handlers, do: SyncAdapter.sync_handlers()
+
+  @doc """
   Runs one call, by routing `type` to whichever handler module registered
   it.
 
@@ -151,7 +188,7 @@ defmodule StatifierExamples.Charts do
   with no session to report to, so it routes through this function and
   feeds the resulting event back into its own step.
 
-  It is a four-line `Enum.find` over `sync_handlers/0` rather than a call
+  It is an `Enum.find` over `sync_handlers/0` rather than a call
   to that same `dispatch/4`, which the engine does make public for a host
   in exactly this position - because the engine types its fourth argument
   as the plan context a session hands a handler, and what this driver has
@@ -164,13 +201,32 @@ defmodule StatifierExamples.Charts do
   `context` is what the *driver* knows and the chart does not; see
   `t:call_context/0`. It defaults to the empty map so a caller with nothing
   to say says nothing, rather than inventing a shape.
+
+  ## The subchart type is refused here by name
+
+  `statifier_blocks:subchart` is registered by this app and is **not** a
+  sync call: starting a child chart is a `{:start_child, _, _}`
+  instruction, which `Statifier.Session` executes and
+  `StatifierPersistence.Driver` has no executor for. A durable run that
+  reaches one is therefore refused, and it is refused as
+  `{:error, {:durable_subchart_unsupported, type}}` rather than falling
+  through to `:unknown_invoke_type` - which would be untrue in the one way
+  that matters to a reader of the feed, since the type *is* registered and
+  a `Statifier.Session` answers it. Durable subcharts are campaign-023
+  ruling R-e's follow-up.
   """
   @spec dispatch(String.t(), map(), call_context()) ::
-          {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
+          {:ok, map()}
+          | {:error,
+             {:unknown_invoke_type, String.t()} | {:durable_subchart_unsupported, String.t()}}
   def dispatch(type, params, context \\ %{}) when is_binary(type) and is_map(params) do
-    case Enum.find(sync_handlers(), &(type in &1.invoke_types())) do
-      nil -> {:error, {:unknown_invoke_type, type}}
-      module -> module.handle(type, params, context)
+    if type == Runtime.Subchart.invoke_type() do
+      {:error, {:durable_subchart_unsupported, type}}
+    else
+      case Enum.find(sync_handlers(), &(type in &1.invoke_types())) do
+        nil -> {:error, {:unknown_invoke_type, type}}
+        module -> module.handle(type, params, context)
+      end
     end
   end
 
