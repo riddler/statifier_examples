@@ -101,7 +101,11 @@ defmodule StatifierExamples.MixProject do
       # the wizard's abandonment reminder is a stored job rather than a
       # `Process.send_after/3` that dies with the node. Oban itself
       # arrives through this package rather than being named again here.
-      {:statifier_oban, "~> 0.3"},
+      #
+      # 0.3.1 is REQUIRED, not merely permitted: 0.3.0's cancellation query
+      # matches the delivering job itself, so the reminder job cancels its
+      # own delivery mid-flight and the live 90s reminder never arrives.
+      {:statifier_oban, "~> 0.3.1"},
 
       # The authoring layer this app is the reference embedder for.
       # `phoenix_live_view` is optional there and supplied by this app above.
