@@ -10,10 +10,10 @@ defmodule StatifierExamples.CardAuth do
   ## Ten types, one shape
 
   Every type is a leaf step that **names** a `myapp:*` invoke type and
-  compiles to a call the host answers - `StatifierExamples.Charts.Step`
-  holds the shape they share, and `StatifierExamples.CardAuth.Handlers`
-  holds the other half of the two-registry seam. Two of them carry
-  something the others do not:
+  compiles to a call the host answers - `StatifierBlocks.InvokeStep`, over
+  the `use StatifierBlocks.BlockType` defaults layer, holds the shape they
+  share, and `StatifierExamples.CardAuth.Handlers` holds the other half of
+  the two-registry seam. Two of them carry something the others do not:
   `StatifierExamples.CardAuth.Authorize` is at version 2 and migrates a
   version 1 config, and `StatifierExamples.CardAuth.ThreeDsChallenge` is
   at version 2 with no migration, because the fixture stores it there
