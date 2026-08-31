@@ -97,7 +97,7 @@ defmodule StatifierExamplesWeb.RunFeed do
       </div>
 
       <p :if={is_nil(@run)} class="myapp-runs__empty">
-        Nothing is running. Run, in the header, starts a session on this document in memory.
+        Nothing is running. Run, in the header, starts a durable run on this document - stored, so it outlives this page.
       </p>
 
       <table :if={@run} class="myapp-runs__table">
