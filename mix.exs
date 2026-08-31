@@ -125,29 +125,26 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is an INTERIM git pin, for the second time. It was one
-  # for the length of campaign 021, on the commit carrying the host marking
-  # seam, the drawer host-tab seam and the `invoke_types` assign; 0.9.0
-  # shipped all three and the pin came out (se-p22). It is one again for
-  # campaign 022: ADR-0001 decision 11 gives a block document a top-level
-  # `datamodel` key, and the three fixtures under `priv/fixtures/` now use
-  # it to declare the `<data>` roots their own guards and assigns read.
-  # Hex 0.9.0 predates the key, and its decoder drops an envelope key it
-  # does not recognize in silence - so on the release the fixtures decode,
-  # compile without their roots, and raise `error.execution` on the first
-  # guard that reads one. Decision 11e closes that hole with an
-  # envelope-key allowlist, which is another reason the floor is this
-  # commit and not the release. Re-pin to `~> 0.10` once that release
-  # exists (se-1xc); the bead stays open until then.
+  # The default arm is the Hex release. It was an INTERIM git pin twice: for
+  # the length of campaign 021, on the commit carrying the host marking seam,
+  # the drawer host-tab seam and the `invoke_types` assign, until 0.9.0
+  # shipped all three (se-p22); and again for campaign 022, on the commit
+  # accepting ADR-0001 decision 11, which gives a block document a top-level
+  # `datamodel` key the three fixtures under `priv/fixtures/` use to declare
+  # the `<data>` roots their own guards and assigns read. 0.9.0 predates that
+  # key, and its decoder drops an envelope key it does not recognize in
+  # silence, so on that release the fixtures decoded, compiled without their
+  # roots, and would raise `error.execution` on the first guard reading one;
+  # decision 11e closes that hole with an envelope-key allowlist. 0.10.0
+  # ships the key, the allowlist and the `core.on_event` `cond` the
+  # `three_ds` root is reached through, so the pin came out (se-1xc).
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "4561598f703fbae565be9e38bf540a764930fff2"}
+        {:statifier_blocks, "~> 0.10"}
     end
   end
 

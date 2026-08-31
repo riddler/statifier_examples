@@ -73,6 +73,6 @@ defmodule StatifierExamples.CardAuthTest do
 
     assert File.exists?(fixture.path)
     assert fixture.document.id == "bdoc_cp_demo"
-    assert fixture.document.revision == 42
+    assert fixture.document.revision == 43
   end
 end

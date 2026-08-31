@@ -67,7 +67,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert html =~ "sb-editor__header"
       assert html =~ "myapp-header__title"
       assert html =~ "Card processing"
-      assert html =~ "revision 42"
+      assert html =~ "revision 43"
       assert html =~ "bdoc_cp_demo"
       assert html =~ ~s(id="doc-select")
       assert html =~ ~s(id="theme-select")

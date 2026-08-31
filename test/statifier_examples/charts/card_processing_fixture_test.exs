@@ -39,7 +39,7 @@ defmodule StatifierExamples.Charts.CardProcessingFixtureTest do
 
     assert compiled.warnings == []
     assert compiled.record.document_id == "bdoc_cp_demo"
-    assert compiled.record.revision == 42
+    assert compiled.record.revision == 43
   end
 
   # Sabotage: dropped the core.send block the timeout port added; this went
