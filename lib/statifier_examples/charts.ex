@@ -12,9 +12,15 @@ defmodule StatifierExamples.Charts do
 
   alias StatifierBlocks.Palette
   alias StatifierExamples.{CardAuth, Signup}
-  alias StatifierExamples.Charts.{Fixture, Icons, Messaging}
+  alias StatifierExamples.Charts.{Fixture, Icons, InvokeHandler, Messaging}
 
   @themes [:light, :dark, :brand]
+
+  # The three handler modules, in one list because two functions read them:
+  # `invoke_types/0` for the union of the names, `dispatch/2` for which
+  # module answers one. A fourth domain's module joins here and nowhere
+  # else.
+  @handler_modules [CardAuth.Handlers, Messaging.Handlers, Signup.Handlers]
 
   @doc """
   The palette the editor is given: `statifier_blocks`' `core.*` structural
@@ -106,11 +112,43 @@ defmodule StatifierExamples.Charts do
   """
   @spec invoke_types() :: [String.t()]
   def invoke_types do
-    Enum.sort(
-      CardAuth.Handlers.invoke_types() ++
-        Messaging.Handlers.invoke_types() ++
-        Signup.Handlers.invoke_types()
-    )
+    @handler_modules |> Enum.flat_map(& &1.invoke_types()) |> Enum.sort()
+  end
+
+  @doc """
+  The `%{invoke type => module}` map a session is started with
+  (st-ADR-0051's per-session registration).
+
+  Every name points at `StatifierExamples.Charts.InvokeHandler`, the one
+  adapter that implements `Statifier.Invoke.Handler` for this app and
+  routes back through `dispatch/2`. Built from `invoke_types/0` rather than
+  written out, so registering a new handler name is one line in one handler
+  module and nothing here - and so the set the compiler lints against and
+  the set a session will actually answer cannot come apart.
+  """
+  @spec invoke_handlers() :: %{String.t() => module()}
+  def invoke_handlers do
+    Map.new(invoke_types(), &{&1, InvokeHandler})
+  end
+
+  @doc """
+  Runs one call, by routing `type` to whichever handler module registered
+  it.
+
+  The deployment half of ADR-0002's two-registry seam, read the running way
+  round: `invoke_types/0` answers "what can this app be asked", and this
+  answers "who answers it". A name no module registered is
+  `{:error, {:unknown_invoke_type, type}}`, which is what the handler
+  modules themselves answer for a name they do not hold - the same event,
+  raised one level up, so a caller routes on one shape rather than two.
+  """
+  @spec dispatch(String.t(), map()) ::
+          {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
+  def dispatch(type, params) when is_binary(type) and is_map(params) do
+    case Enum.find(@handler_modules, &(type in &1.invoke_types())) do
+      nil -> {:error, {:unknown_invoke_type, type}}
+      module -> module.handle(type, params)
+    end
   end
 
   @spec registrations() :: [Palette.registration()]

@@ -114,14 +114,20 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is the Hex requirement `{:statifier_blocks, "~> 0.8"}`.
+  # The default arm is INTERIM (campaign 021, bead se-p22): it is a git dep
+  # pinned to the `statifier_blocks` main commit that carries the host
+  # marking seam, the drawer host-tab seam and the `invoke_types` assign,
+  # none of which are on Hex. It returns to
+  # `{:statifier_blocks, "~> 0.9"}` from Hex once 0.9.0 is published.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.8"}
+        {:statifier_blocks,
+         git: "https://github.com/riddler/statifier_blocks.git",
+         ref: "093836a79ddfb29a6de545f597c272b19111d630"}
     end
   end
 
