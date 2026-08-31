@@ -1,7 +1,7 @@
 defmodule StatifierExamples.Charts.Durable do
   @moduledoc """
   One durable run of one compiled document, driven through
-  `StatifierPersistence.Runs`: load, step, execute effects, persist -
+  `StatifierPersistence.Driver`: load, step, execute effects, persist -
   every step, with no live process holding the chart between steps.
 
   This is the restart demo `statifier_persistence` was built for,
@@ -21,29 +21,50 @@ defmodule StatifierExamples.Charts.Durable do
   would be a second write path for something the position already implies,
   and this app would rather show the seam than paper over it.
 
-  ## The drive loop
+  ## The drive loop is upstream's
 
-  `StatifierPersistence.Runs` hands every non-lifecycle effect to an
-  executor and then persists. This app's executor does two things and
-  neither of them is "step the run": it records the effect for the feed,
-  and it notes the `<invoke>`s it saw. Stepping happens *after* the
-  stepper's tail has returned, in `drive/2` below, and that ordering is
-  forced rather than stylistic - the tail runs inside
-  `StatifierExamples.Charts.RunLock`'s exclusion for this run id, and a
-  step issued from inside it would ask for a lock its own caller is
-  holding.
-
-  So one press of an event button is: step, drain what the executor saw,
-  perform each call the chart made, step again with each answer, repeat
-  until the chart asks for nothing more. `Statifier.Session` runs the same
-  loop; the difference is that every turn of it here leaves a row in
+  One press of an event button is: step, perform each call the chart made,
+  step again with each answer, repeat until the chart asks for nothing
+  more. `Statifier.Session` runs that loop for a live session and
+  `StatifierPersistence.Driver` runs it over `StatifierPersistence.Runs`,
+  which is what this module calls. Every turn of it leaves a row in
   `statifier_runs` that survives the process.
 
-  The executor communicates through the driving process' own mailbox. It
-  is called synchronously, inside `Runs.create/4` and `Runs.step/5`, in
-  this very process, so a message tagged with the run id and drained with
-  a zero timeout is an ordered buffer that needs no second process and
-  cannot outlive the turn that filled it.
+  This app wrote that loop itself until se-4dt.3, and getting it out of
+  here was worth more than the lines it saved: the app's hand-built answer
+  events were **not** the ones `Statifier.Session` builds. They carried no
+  `origin`/`origintype` pair, and a refused call reported `inspect(reason)`
+  under a lone `"reason"` key rather than st-ADR-0068's
+  `reason`/`attempts`/`detail`. The same chart, answered the same way,
+  meant one thing in a session and another in storage. Upstream builds both
+  events from `Statifier.Session`'s own writers, so the divergence is gone
+  rather than fixed twice.
+
+  ## The two funs this app hands the driver
+
+  What stays here is the part that is genuinely this host's.
+
+  `effects:` is an executor - every non-lifecycle effect, in the order the
+  stepper hands them over. It does two things and neither of them is "step
+  the run": it records the effect for the feed, and it lets
+  `StatifierExamples.Charts.Timers` claim the ones that are timers.
+
+  `dispatch:` performs one `<invoke>`, through
+  `StatifierExamples.Charts.dispatch/3` with the run id as its context, and
+  records the answer for the feed. What the *chart* is told is the driver's
+  to build.
+
+  Both report through the driving process' own mailbox. They are called
+  synchronously, inside the driver's own `Runs.create/4` and `Runs.step/5`,
+  in this very process, so a message tagged with the run id and drained
+  with a zero timeout is an ordered buffer that needs no second process and
+  cannot outlive the drive that filled it. It is drained once, after the
+  drive has returned, so a feed row's place in it is the order things
+  happened in across every turn rather than within one.
+
+  That the driver reports only the *final* step's result is all a reading
+  needs: a run's status is `:active` until it is terminal, so every
+  intermediate turn's status word is the one this module already ignores.
 
   ## The effects the executor performs
 
@@ -61,8 +82,9 @@ defmodule StatifierExamples.Charts.Durable do
 
   ## Serialization
 
-  Every entry point passes `serialization: {RunLock, RunLock}` explicitly.
-  It has to: the default strategy asks the adapter for `lock_run/3` and
+  The driver is built with `serialization: {RunLock, RunLock}` and
+  `abandon/1`, which does not go through it, passes the same pair by hand.
+  They have to: the default strategy asks the adapter for `lock_run/3` and
   `StatifierExamples.Persistence` does not export it, so the default
   refuses with `{:error, {:serialization, :not_supported}}` before
   anything runs. `StatifierExamples.Charts.RunLock`'s moduledoc has the
@@ -70,13 +92,12 @@ defmodule StatifierExamples.Charts.Durable do
   refusal.
   """
 
-  alias Statifier.Effect.Invoke
   alias Statifier.{Event, Machine}
   alias Statifier.Invoke.Types
   alias StatifierBlocks.{Compiled, Compiler, Document}
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{Fixture, Run, RunLock, Timers}
-  alias StatifierPersistence.{Runs, Storage}
+  alias StatifierPersistence.{Driver, Runs, Storage}
 
   # The run-record metadata key that says which shipped fixture a run is a
   # run OF. It is the only thing a fired timer job carries back into a
@@ -95,6 +116,12 @@ defmodule StatifierExamples.Charts.Durable do
 
   @typedoc "A driver and the reading it produced, threaded together."
   @type driven :: {t(), Run.t()}
+
+  # One entry in a drive's buffer: an effect the stepper produced, or a row
+  # the host wrote about a call it performed. Both shapes travel the one
+  # mailbox so the feed reads in the order things actually happened.
+  @typep buffered ::
+           {:effect, Statifier.Effect.t()} | {:note, Run.entry_kind(), String.t(), String.t()}
 
   @doc """
   Starts a durable run of `compiled` and drives it to its first rest.
@@ -124,7 +151,7 @@ defmodule StatifierExamples.Charts.Durable do
       run = Run.reading(machine, compiled, document, run_id)
       run = Run.note(run, :started, "Run started", run_id)
 
-      drive(durable, run, create_run(store, run_id, machine, fixture_key))
+      settle(durable, run, Driver.create(driver(durable), run_id, create_opts(fixture_key)))
     end
   end
 
@@ -166,7 +193,9 @@ defmodule StatifierExamples.Charts.Durable do
   """
   @spec send_event(t(), Run.t(), String.t()) :: {:ok, driven()} | {:error, term()}
   def send_event(%__MODULE__{} = durable, %Run{} = run, name) when is_binary(name) do
-    drive(durable, run, step(durable, Event.external(name)))
+    event = Event.external(name)
+
+    settle(durable, run, Driver.send_event(driver(durable), durable.run_id, event))
   end
 
   @doc """
@@ -290,125 +319,65 @@ defmodule StatifierExamples.Charts.Durable do
     end
   end
 
-  # ------------------------------------------------------------- the loop
+  # ----------------------------------------------------------- the driver
 
-  # One turn: fold what the executor saw into the reading, then answer
-  # every call the chart made and step again for each answer. Recursion
-  # ends when a turn produces no `<invoke>`, which is what "the chart is
-  # waiting on the outside world" looks like from here.
-  @spec drive(t(), Run.t(), term()) :: {:ok, driven()} | {:error, term()}
-  defp drive(durable, run, {:ok, record, _machine_state}) do
-    {run, invokes} = absorb_effects(durable, run)
-    run = finish(run, record.status)
-
-    case invokes do
-      [] -> {:ok, {durable, run}}
-      _pending -> answer(durable, run, invokes)
-    end
-  end
-
-  defp drive(durable, run, {:discarded, record}) do
-    {run, _invokes} = absorb_effects(durable, run)
-
-    {:ok, {durable, finish(run, record.status)}}
-  end
-
-  defp drive(_durable, _run, {:error, reason}), do: {:error, reason}
-
-  @spec answer(t(), Run.t(), [Invoke.t()]) :: {:ok, driven()} | {:error, term()}
-  defp answer(durable, run, invokes) do
-    Enum.reduce_while(invokes, {:ok, {durable, run}}, fn invoke, {:ok, {durable, run}} ->
-      case answer_one(durable, run, invoke) do
-        {:ok, driven} -> {:cont, {:ok, driven}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-  end
-
-  @spec answer_one(t(), Run.t(), Invoke.t()) :: {:ok, driven()} | {:error, term()}
-  defp answer_one(durable, run, %Invoke{} = invoke) do
-    context = %{run_id: durable.run_id}
-
-    case Charts.dispatch(invoke.type, params(invoke.params), context) do
-      {:ok, donedata} ->
-        run = Run.note(run, :performed, "Performed", performed(invoke, donedata))
-
-        drive(durable, run, step(durable, done_event(durable, invoke, donedata)))
-
-      {:error, reason} ->
-        run = Run.note(run, :performed, "Call refused", "#{invoke.type}: #{inspect(reason)}")
-
-        drive(durable, run, step(durable, failure_event(durable, invoke, reason)))
-    end
-  end
-
-  @spec step(t(), Event.t()) :: term()
-  defp step(durable, event) do
-    Runs.step(durable.store, durable.run_id, durable.machine, event, step_opts(durable.run_id))
-  end
-
-  # The create is its own one-line function so that the suppression below
-  # reaches exactly this call and nothing else.
-  #
-  # `StatifierPersistence.Runs.create/4` declares `[Runs.opt()]` and its
-  # `executor:` is REQUIRED - `Keyword.fetch!/2` on the first line. But the
-  # body then hands the same list to
-  # `StatifierPersistence.Storage.check_metadata/2`, whose contract is the
-  # much narrower `[Storage.run_write_opt()]`
-  # (`:failure` / `:metadata` / `:position`), so the success typing
-  # dialyzer derives for `create/4` accepts no `executor:` at all and every
-  # correct call is reported as one that "will never return". `step/5`,
-  # which does not call `check_metadata/2`, is clean.
-  #
-  # That is an upstream spec inconsistency in `statifier_persistence`, not
-  # a fact about this app's options: the call is correct, it runs, and
-  # `StatifierExamples.Charts.DurableTest` asserts what it produces. The
-  # finding belongs upstream and is reported there; suppressing it on a
-  # three-line function is the smallest thing that does not either hide it
-  # or blind `start/3`.
-  @dialyzer {:nowarn_function, create_run: 4}
-  @spec create_run(Storage.t(), String.t(), Machine.t(), String.t() | nil) :: term()
-  defp create_run(store, run_id, machine, fixture_key) do
-    Runs.create(store, run_id, machine, create_opts(run_id, fixture_key))
-  end
-
-  @spec create_opts(String.t(), String.t() | nil) :: keyword()
-  defp create_opts(run_id, fixture_key) do
-    [
-      executor: executor(run_id),
-      initialize: [trace: true, invoke_types: invoke_types()],
-      metadata: metadata(fixture_key),
+  # The driver, rebuilt per entry point rather than held on the struct:
+  # both funs below close over `self()`, and the process that resumes a run
+  # is routinely not the one that started it (a fired timer's Oban worker,
+  # a second LiveView). A driver carried across processes would report into
+  # a mailbox nobody is draining.
+  @spec driver(t()) :: Driver.t()
+  defp driver(%__MODULE__{} = durable) do
+    Driver.new(durable.store, durable.machine,
+      dispatch: dispatch(durable.run_id),
+      effects: executor(durable.run_id),
+      invoke_types: invoke_types(),
       serialization: serialization()
-    ]
+    )
+  end
+
+  @spec create_opts(String.t() | nil) :: keyword()
+  defp create_opts(fixture_key) do
+    [initialize: [trace: true], metadata: metadata(fixture_key)]
   end
 
   @spec metadata(String.t() | nil) :: %{optional(String.t()) => String.t()}
   defp metadata(nil), do: %{}
   defp metadata(fixture_key) when is_binary(fixture_key), do: %{@fixture_key => fixture_key}
 
-  @spec step_opts(String.t()) :: keyword()
-  defp step_opts(run_id) do
-    [executor: executor(run_id), invoke_types: invoke_types(), serialization: serialization()]
+  # Folds one drive's whole buffer into the reading and finishes it on the
+  # status the last durable step wrote.
+  #
+  # The buffer is drained on the error arm too, and thrown away. Nothing
+  # reads it - the page keeps the reading it had - and a drive that failed
+  # part way through has still filled it, so leaving it would let a later
+  # drive in this process narrate a run that is over.
+  @spec settle(t(), Run.t(), Driver.result()) :: {:ok, driven()} | {:error, term()}
+  defp settle(durable, run, {:ok, record, _machine_state}), do: rest(durable, run, record.status)
+  defp settle(durable, run, {:discarded, record}), do: rest(durable, run, record.status)
+
+  defp settle(durable, _run, {:error, reason}) do
+    _discarded = drain(durable.run_id, [])
+
+    {:error, reason}
   end
 
-  # `Statifier.Session` builds exactly these two events for an answered and
-  # a refused call (6.4.3: an invocation's answer is an external event), so
-  # a durable driver that built them differently would be a chart running
-  # one way in a session and another way in storage.
-  @spec done_event(t(), Invoke.t(), map()) :: Event.t()
-  defp done_event(_durable, %Invoke{invoke_id: invoke_id}, donedata) do
-    Event.external("done.invoke." <> invoke_id, data: donedata, invokeid: invoke_id)
+  @spec rest(t(), Run.t(), atom()) :: {:ok, driven()}
+  defp rest(durable, run, status) do
+    run =
+      durable.run_id
+      |> drain([])
+      |> Enum.reduce(run, &fold(&2, &1))
+      |> finish(status)
+
+    {:ok, {durable, run}}
   end
 
-  @spec failure_event(t(), Invoke.t(), term()) :: Event.t()
-  defp failure_event(_durable, %Invoke{invoke_id: invoke_id}, reason) do
-    Event.external("error.communication.invoke." <> invoke_id,
-      data: %{"reason" => inspect(reason)},
-      invokeid: invoke_id
-    )
-  end
+  @spec fold(Run.t(), buffered()) :: Run.t()
+  defp fold(run, {:effect, effect}), do: Run.absorb(run, {:effect, effect})
+  defp fold(run, {:note, kind, label, detail}), do: Run.note(run, kind, label, detail)
 
-  # ---------------------------------------------------------- the executor
+  # ------------------------------------------------------ the host's funs
 
   # An arity-2 fun rather than a module, because what it closes over - the
   # run id it tags with and the process it reports to - is per-call state a
@@ -420,28 +389,73 @@ defmodule StatifierExamples.Charts.Durable do
     fn effect, _context ->
       :ok = Timers.consume(run_id, effect)
 
-      send(reader, {:durable_effect, run_id, effect})
+      send(reader, {:durable_buffered, run_id, {:effect, effect}})
 
       :ok
     end
   end
 
-  # Drains this turn's effects, in the order the stepper handed them over,
-  # folding each into the reading and keeping the `<invoke>`s aside.
-  @spec absorb_effects(t(), Run.t()) :: {Run.t(), [Invoke.t()]}
-  defp absorb_effects(durable, run) do
-    effects = drain(durable.run_id, [])
+  # Performs one call and says so in the feed. What the *chart* is told is
+  # `StatifierPersistence.Driver`'s to build, from `Statifier.Session`'s own
+  # writers, which is the whole reason this returns an answer rather than
+  # an event.
+  #
+  # A refusal is answered with st-ADR-0068's `failure` keyword list. Only
+  # `:reason` is filled: this app makes one attempt through
+  # `Charts.dispatch/3` and has no detail to add, and the driver spells an
+  # absent key `:undefined` rather than `nil`.
+  @spec dispatch(String.t()) :: Driver.dispatch()
+  defp dispatch(run_id) do
+    reader = self()
+    context = %{run_id: run_id}
 
-    run = Enum.reduce(effects, run, &Run.absorb(&2, {:effect, &1}))
-    invokes = for {:invoke, %Invoke{} = invoke} <- effects, do: invoke
+    fn type, params, _executor_context ->
+      case Charts.dispatch(type, params(params), context) do
+        {:ok, donedata} ->
+          note(reader, run_id, "Performed", performed(type, donedata))
 
-    {run, invokes}
+          {:ok, donedata}
+
+        {:error, refusal} ->
+          reason = reason(refusal)
+          note(reader, run_id, "Call refused", "#{type}: #{reason}")
+
+          {:error, [reason: reason]}
+      end
+    end
   end
 
-  @spec drain(String.t(), [Statifier.Effect.t()]) :: [Statifier.Effect.t()]
+  # The failure class the chart reads as `_event.data.reason`, spelled the
+  # way `Statifier.Invoke.SyncHandler.Adapter` spells the same refusal for
+  # a session run of the same chart. The adapter keeps its copy private, so
+  # this is the one place the app repeats it, and a durable run and a
+  # session run answering the same refusal differently is exactly what
+  # se-4dt.3 was closing.
+  #
+  # One clause, because `Charts.dispatch/3` refuses one way: a type no
+  # handler module registered. Dialyzer says so - a binary arm and an
+  # `inspect/1` fall-through are both unreachable against that spec - which
+  # makes this the place the spec widening would surface, rather than
+  # somewhere the widened shape is quietly `inspect/1`-ed instead.
+  @spec reason({:unknown_invoke_type, String.t()}) :: String.t()
+  defp reason({:unknown_invoke_type, type}), do: "unknown_invoke_type:#{type}"
+
+  @spec note(pid(), String.t(), String.t(), String.t()) :: :ok
+  defp note(reader, run_id, label, detail) do
+    send(reader, {:durable_buffered, run_id, {:note, :performed, label, detail}})
+
+    :ok
+  end
+
+  # Drains this drive's buffer, in the order the two funs above filled it.
+  # One `receive` over both shapes rather than two passes: the mailbox is
+  # scanned in arrival order and the first message matching either clause
+  # is taken, so a `Performed` row keeps its place beside the effects of
+  # the turn it belongs to.
+  @spec drain(String.t(), [buffered()]) :: [buffered()]
   defp drain(run_id, acc) do
     receive do
-      {:durable_effect, ^run_id, effect} -> drain(run_id, [effect | acc])
+      {:durable_buffered, ^run_id, item} -> drain(run_id, [item | acc])
     after
       0 -> Enum.reverse(acc)
     end
@@ -476,10 +490,10 @@ defmodule StatifierExamples.Charts.Durable do
     }
   end
 
-  @spec performed(Invoke.t(), map()) :: String.t()
-  defp performed(%Invoke{type: type}, donedata) when map_size(donedata) == 0, do: type
+  @spec performed(String.t(), map()) :: String.t()
+  defp performed(type, donedata) when map_size(donedata) == 0, do: type
 
-  defp performed(%Invoke{type: type}, donedata) do
+  defp performed(type, donedata) do
     detail = Enum.map_join(Enum.sort(donedata), ", ", fn {key, value} -> "#{key}=#{value}" end)
 
     "#{type} -> #{detail}"

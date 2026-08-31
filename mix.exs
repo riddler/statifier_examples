@@ -95,13 +95,15 @@ defmodule StatifierExamples.MixProject do
        ref: "a0f965e6b15868fb05bd0d05981ac18d64d0344c",
        override: true},
 
-      # The durable stepper. INTERIM git pin: Hex 0.1.3 predates both the
-      # `:blob_type` option and the run `metadata` column this app configures,
-      # so the released package cannot express what is wired up here. Re-pin
-      # to a Hex release once one carries them (se-p22).
+      # The durable stepper, and now `StatifierPersistence.Driver` - the
+      # run-to-quiescence loop `StatifierExamples.Charts.Durable` used to
+      # write for itself (se-4dt.3). INTERIM git pin: Hex 0.1.3 predates the
+      # driver, the `:blob_type` option and the run `metadata` column this app
+      # configures, so the released package cannot express what is wired up
+      # here. Re-pin to a Hex release once one carries them (se-p22).
       {:statifier_persistence,
        git: "https://github.com/riddler/statifier_persistence.git",
-       ref: "ca8a7d8921a321491843934386e3ffa4ddf85f65"},
+       ref: "08c991cf5fbce37d7de81a05be60b64b92b9bb02"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so

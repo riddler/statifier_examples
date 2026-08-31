@@ -278,6 +278,44 @@ defmodule StatifierExamples.Charts.DurableTest do
     assert accounts(run_id) == 1
   end
 
+  # se-4dt.3, and what the uptake put at risk. The app used to fold the
+  # effects of one turn into the reading and then answer that turn's calls,
+  # so the feed was assembled turn by turn. `StatifierPersistence.Driver`
+  # returns only the LAST step's result, so the reading is now folded once,
+  # from a buffer both host funs wrote into across every turn of the drive.
+  # If that buffer were drained out of order, or per turn, this narration
+  # would come apart - and it is the narration a reader watches.
+  #
+  # The wizard is the fixture because one press of its wait drives ten-odd
+  # turns through four separate calls, which is the only run here long
+  # enough for the ordering to mean anything.
+  #
+  # Sabotage: made the driver's `drain/2` return its accumulator without
+  # `Enum.reverse/1`; this went red - the halt row came first and every
+  # `Performed` row preceded its own `Invoke dispatched` - then reverted.
+  test "one drive's feed reads in the order things happened, across every turn",
+       %{run_id: run_id} do
+    {compiled, document} = signup()
+    {:ok, {durable, run}} = Durable.start(compiled, document, run_id)
+
+    {:ok, {_driver, stepped}} =
+      Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
+
+    kinds = kinds(stepped)
+
+    assert List.first(kinds) == :started
+    assert List.last(kinds) == :halted
+
+    # Five calls across the two drives, each answered where it was made: a
+    # `Performed` row never appears except directly after the
+    # `Invoke dispatched` row it answers.
+    assert Enum.count(kinds, &(&1 == :performed)) == 5
+
+    pairs = Enum.zip(kinds, tl(kinds))
+
+    assert Enum.count(pairs, &(&1 == {:invoked, :performed})) == 5
+  end
+
   # Chart identity is what stops a run resuming onto a document that has
   # been edited underneath it, and the guard is the storage layer's rather
   # than this app's - this asserts the app surfaces it instead of eating it.
