@@ -18,19 +18,21 @@ defmodule StatifierExamples.Signup.ProvisionTest do
     assert Provision.current_version() == 1
   end
 
-  # se-lin moved this type onto the app's one step helper, and with it onto
-  # that helper's rule for an absent `invoke_type`: a config that stores none
-  # is naming the declared default, which is the one place "the usual
-  # handler" is written down. A stored value is still checked.
+  # se-4dt.1 moved this type onto `StatifierBlocks.InvokeStep`, and with it
+  # onto that base's rule for an absent `invoke_type`: a config that stores
+  # none is naming the declared default, which is the one place "the usual
+  # handler" is written down. A stored value is still checked, against the
+  # shared `namespace:name` grammar rather than this app's old `myapp:*`
+  # narrowing.
   #
-  # Sabotage: dropped the invoke_type check from validate_config/1; the
-  # otherapp assertion went red, then reverted.
+  # Sabotage: overrode Provision.validate_config/1 to answer `:ok`; the
+  # ungrammatical assertion went red, then reverted from a backup copy.
   test "validate_config/1 checks a stored handler name and passes an absent one" do
     assert :ok == Provision.validate_config(config())
     assert :ok == Provision.validate_config(%{})
 
     assert {:error, [{"invoke_type", _message}]} =
-             Provision.validate_config(%{"invoke_type" => "otherapp:provision"})
+             Provision.validate_config(%{"invoke_type" => "not an invoke type"})
   end
 
   # Sabotage: changed the group to "Structure"; this went red, then

@@ -12,27 +12,14 @@ defmodule StatifierExamples.Charts.Messaging.Notify do
   six times and the signup wizard will use it too.
   """
 
-  @behaviour StatifierBlocks.BlockType
-
+  alias StatifierBlocks.InvokeStep
   alias StatifierExamples.Charts.Step
-
-  @invoke_type "myapp:notify"
 
   @template_message "must be a bare lowercase identifier, like receipt_ready"
 
-  @doc "The invoke type this step names when its config does not say otherwise."
-  @spec invoke_type() :: String.t()
-  def invoke_type, do: @invoke_type
-
-  @impl true
-  def current_version, do: 1
-
-  @impl true
-  def slots(_config), do: []
-
-  @impl true
-  def config_schema(_config) do
-    Step.config_schema(@invoke_type, [
+  use StatifierBlocks.InvokeStep,
+    invoke_type: "myapp:notify",
+    fields: [
       %{
         key: "template",
         type: :string,
@@ -40,35 +27,26 @@ defmodule StatifierExamples.Charts.Messaging.Notify do
         required?: true,
         default: ""
       }
-    ])
-  end
-
-  @impl true
-  def validate_config(config) do
-    []
-    |> Step.check_invoke_type(config)
-    |> Step.check_identifier(config, "template", @template_message)
-    |> Step.verdict()
-  end
-
-  @impl true
-  def io(_config), do: Step.io()
-
-  @impl true
-  def outcomes(_config), do: Step.outcomes()
-
-  @impl true
-  def palette_entry do
-    Step.palette_entry(%{
+    ],
+    palette: %{
       label: "Notify",
       group: "Messaging",
       description: "Sends one templated message.",
       icon: "megaphone",
       keywords: ["notify", "message", "template", "email"],
-      order: 0
-    })
-  end
+      order: 0,
+      accent_token: Step.accent_token()
+    }
 
-  @impl true
-  def emit(block, context), do: Step.emit(block, context, @invoke_type)
+  @doc """
+  The base's `invoke_type` check, plus the template this type renders
+  from: a message with no template is not a message.
+  """
+  @impl StatifierBlocks.BlockType
+  def validate_config(config) do
+    []
+    |> InvokeStep.check_invoke_type(config)
+    |> InvokeStep.check_identifier(config, "template", @template_message)
+    |> InvokeStep.verdict()
+  end
 end

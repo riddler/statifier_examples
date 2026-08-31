@@ -4,16 +4,24 @@ defmodule StatifierExamples.CardAuth.ConfigTest do
   alias StatifierExamples.CardAuth.{Authorize, Capture, Intake, Park}
 
   describe "the shared invoke_type check" do
-    # Sabotage: made Step.check_invoke_type/2 pass every stored value; this
-    # went red, then reverted.
-    test "refuses a stored invoke type outside the myapp namespace" do
+    # se-4dt.1 moved this check onto `StatifierBlocks.InvokeStep`, and with
+    # it onto the one `namespace:name` grammar ADR-0007 decision 2 gives
+    # `core.invoke` and every host step alike. This app's types used to
+    # narrow it further to `myapp:*`; they no longer do, because two
+    # spellings of one field are two chances for a core block and a host
+    # step to disagree about it. A stored value still has to be in the
+    # grammar, which is what this asserts.
+    #
+    # Sabotage: overrode Intake.validate_config/1 to answer `:ok`; this went
+    # red, then reverted from a backup copy.
+    test "refuses a stored invoke type outside the namespace:name grammar" do
       assert {:error, [{"invoke_type", message}]} =
-               Intake.validate_config(%{"invoke_type" => "other:intake"})
+               Intake.validate_config(%{"invoke_type" => "not an invoke type"})
 
-      assert message =~ "myapp:"
+      assert message =~ "namespace:name"
     end
 
-    # Sabotage: made Step.check_invoke_type/2 refuse an absent key; this went
+    # Sabotage: made the app's step types refuse an absent key; this went
     # red, then reverted.
     test "reads an absent invoke type through the declared default" do
       assert Intake.validate_config(%{}) == :ok

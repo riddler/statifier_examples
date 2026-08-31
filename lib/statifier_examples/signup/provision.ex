@@ -7,38 +7,12 @@ defmodule StatifierExamples.Signup.Provision do
   not the chart's.
   """
 
-  @behaviour StatifierBlocks.BlockType
-
   alias StatifierExamples.Charts.Step
 
-  @invoke_type "myapp:provision"
-
-  @impl true
-  def current_version, do: 1
-
-  @impl true
-  def slots(_config), do: []
-
-  @impl true
-  def config_schema(_config), do: Step.config_schema(@invoke_type)
-
-  @impl true
-  def validate_config(config) do
-    []
-    |> Step.check_invoke_type(config)
-    |> Step.verdict()
-  end
-
-  @doc "`StatifierExamples.Signup.SignupStep.io/1`'s reasoning, unchanged."
-  @impl true
-  def io(_config), do: %{kinds: [:step], produces: :unknown}
-
-  @impl true
-  def outcomes(_config), do: Step.outcomes()
-
-  @impl true
-  def palette_entry,
-    do: %{
+  use StatifierBlocks.InvokeStep,
+    invoke_type: "myapp:provision",
+    produces: :unknown,
+    palette: %{
       label: "Provision",
       group: "Signup wizard",
       description: "Creates the account's workspace once signup completes.",
@@ -47,7 +21,4 @@ defmodule StatifierExamples.Signup.Provision do
       order: 1,
       accent_token: Step.accent_token()
     }
-
-  @impl true
-  def emit(block, context), do: Step.emit(block, context, @invoke_type)
 end

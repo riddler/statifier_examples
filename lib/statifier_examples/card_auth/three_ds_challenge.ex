@@ -10,50 +10,27 @@ defmodule StatifierExamples.CardAuth.ThreeDsChallenge do
   what this app registers to answer the call.
   """
 
-  @behaviour StatifierBlocks.BlockType
-
   alias StatifierExamples.Charts.Step
 
-  @invoke_type "myapp:three_ds"
-
-  @doc "The invoke type this step names when its config does not say otherwise."
-  @spec invoke_type() :: String.t()
-  def invoke_type, do: @invoke_type
-
-  @impl true
-  def current_version, do: 2
-
-  @impl true
-  def slots(_config), do: []
-
-  @impl true
-  def config_schema(_config), do: Step.config_schema(@invoke_type)
-
-  @impl true
-  def validate_config(config) do
-    []
-    |> Step.check_invoke_type(config)
-    |> Step.verdict()
-  end
-
-  @impl true
-  def io(_config), do: Step.io()
-
-  @impl true
-  def outcomes(_config), do: Step.outcomes()
-
-  @impl true
-  def palette_entry do
-    Step.palette_entry(%{
+  use StatifierBlocks.InvokeStep,
+    invoke_type: "myapp:three_ds",
+    palette: %{
       label: "3-D Secure",
       group: "Card processing",
       description: "Sends the cardholder a step-up authentication challenge.",
       icon: "device-phone-mobile",
       keywords: ["3ds", "challenge", "step-up"],
-      order: 5
-    })
-  end
+      order: 5,
+      accent_token: Step.accent_token()
+    }
 
-  @impl true
-  def emit(block, context), do: Step.emit(block, context, @invoke_type)
+  @doc """
+  Version 2 with no migration: the fixture stores this type at
+  `type_version` 2 already, so no block of it has ever carried a version 1
+  shape to migrate from. The injected `migrate_config/2` refuses every
+  `from` it is asked about, which is the right answer for a type with no
+  older shape.
+  """
+  @impl StatifierBlocks.BlockType
+  def current_version, do: 2
 end

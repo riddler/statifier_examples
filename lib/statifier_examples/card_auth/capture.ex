@@ -9,32 +9,19 @@ defmodule StatifierExamples.CardAuth.Capture do
 
   The card-processing fixture uses this type inside the retry arm, where
   its block carries no `invoke_type` at all - the case
-  `StatifierExamples.Charts.Step.invoke_type/2` reads through the declared
+  `StatifierBlocks.InvokeStep.invoke_type/2` reads through the declared
   default.
   """
 
-  @behaviour StatifierBlocks.BlockType
-
+  alias StatifierBlocks.InvokeStep
   alias StatifierExamples.Charts.Step
-
-  @invoke_type "myapp:capture"
 
   @amount_key_message "must be a bare lowercase identifier, like amount_cents"
   @retries_message "must be a whole number"
 
-  @doc "The invoke type this step names when its config does not say otherwise."
-  @spec invoke_type() :: String.t()
-  def invoke_type, do: @invoke_type
-
-  @impl true
-  def current_version, do: 1
-
-  @impl true
-  def slots(_config), do: []
-
-  @impl true
-  def config_schema(_config) do
-    Step.config_schema(@invoke_type, [
+  use StatifierBlocks.InvokeStep,
+    invoke_type: "myapp:capture",
+    fields: [
       %{
         key: "amount_key",
         type: :string,
@@ -50,16 +37,27 @@ defmodule StatifierExamples.CardAuth.Capture do
         required?: false,
         default: 2
       }
-    ])
-  end
+    ],
+    palette: %{
+      label: "Capture funds",
+      group: "Card processing",
+      description: "Captures a previously authorized amount.",
+      icon: "banknotes",
+      keywords: ["capture", "settle", "payment"],
+      order: 1,
+      accent_token: Step.accent_token()
+    }
 
-  @impl true
+  @doc """
+  The base's `invoke_type` check, plus the two fields this type declares.
+  """
+  @impl StatifierBlocks.BlockType
   def validate_config(config) do
     []
-    |> Step.check_invoke_type(config)
-    |> Step.check_identifier(config, "amount_key", @amount_key_message)
+    |> InvokeStep.check_invoke_type(config)
+    |> InvokeStep.check_identifier(config, "amount_key", @amount_key_message)
     |> check_retries(config)
-    |> Step.verdict()
+    |> InvokeStep.verdict()
   end
 
   # An absent `retries` reads through the declared default; a stored one
@@ -75,24 +73,11 @@ defmodule StatifierExamples.CardAuth.Capture do
     end
   end
 
-  @impl true
+  @doc """
+  What this step needs rather than what it produces: the base's
+  `:produces` declaration has no room for a `consumes`, so the callback is
+  written out here.
+  """
+  @impl StatifierBlocks.BlockType
   def io(_config), do: %{kinds: [:step], consumes: "myapp.authorization"}
-
-  @impl true
-  def outcomes(_config), do: Step.outcomes()
-
-  @impl true
-  def palette_entry do
-    Step.palette_entry(%{
-      label: "Capture funds",
-      group: "Card processing",
-      description: "Captures a previously authorized amount.",
-      icon: "banknotes",
-      keywords: ["capture", "settle", "payment"],
-      order: 1
-    })
-  end
-
-  @impl true
-  def emit(block, context), do: Step.emit(block, context, @invoke_type)
 end

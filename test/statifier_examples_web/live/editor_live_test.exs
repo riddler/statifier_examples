@@ -123,7 +123,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # own label drops to the subtitle underneath it. Three named blocks, each
     # a leaf, so the child combinator addresses one card and not a subtree.
     #
-    # Sabotage: dropped label_field/0 from Charts.Step.config_schema/2 - the
+    # Sabotage: dropped label_field/0 from the step config_schema/2 - the
     # declaration is the whole of what ViewModel.title/1 reads - and all three
     # rows went red with the type name where the label belongs; then reverted.
     test "a step's label titles its card and its type becomes the subtitle",
@@ -141,7 +141,8 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
 
     # The wizard's two types reached the field through a second helper of
-    # their own until se-lin folded it into `StatifierExamples.Charts.Step`.
+    # their own until se-lin folded it into the app's step helper, and se-4dt.1
+    # moved that helper's job to `StatifierBlocks.InvokeStep`.
     # A card-processing-only assertion would not have noticed that copy at
     # all, which is why this one covers the other domain too.
     #
@@ -161,7 +162,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # the app declares is only observably the form's order here.
     #
     # Sabotage: put label_field/0 after invoke_type_field/1 in
-    # Charts.Step.config_schema/2; this went red, then reverted.
+    # the step config_schema/2; this went red, then reverted.
     test "the label is the first control in the inspector form", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
 

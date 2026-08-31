@@ -44,10 +44,11 @@ defmodule StatifierExamples.Charts.Run do
 
   The answer arrives as the internal event
   `done.outcome.<state id>.<outcome>` that
-  `StatifierExamples.Charts.Step.emit/4` raises on entering an outcome
+  `StatifierBlocks.InvokeStep.emit/4` raises on entering an outcome
   `<final>`. Reading it here is not a package internal read: that emission
-  is this app's own step shape, written in this app's own module, and the
-  outcome names are `Step.outcomes/0`'s. The mark becomes
+  is the leaf-step shape `statifier_blocks` ADR-0007 records and every
+  `myapp.*` type in this app declares itself on, and the outcome names are
+  `StatifierBlocks.InvokeStep.outcomes/0`'s. The mark becomes
   `{block_id, outcome}` and the editor tints what it knows.
   """
 

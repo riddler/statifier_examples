@@ -19,7 +19,7 @@ defmodule StatifierExamples.Charts.FixtureHygieneTest do
   # meant to learn the vocabulary from.
   #
   # This app's own types DO declare the field
-  # (`StatifierExamples.Charts.Step.label_field/0`), so their labels are live
+  # (`StatifierBlocks.InvokeStep.label_field/0`), so their labels are live
   # and this test is careful to leave them alone -
   # `StatifierExamples.Charts.StepLabelTest` counts the half this one refuses.
   #

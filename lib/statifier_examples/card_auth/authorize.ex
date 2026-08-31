@@ -17,29 +17,17 @@ defmodule StatifierExamples.CardAuth.Authorize do
   and compiles as a v2 one.
   """
 
-  @behaviour StatifierBlocks.BlockType
-
   alias StatifierBlocks.Core.Duration
+  alias StatifierBlocks.InvokeStep
   alias StatifierExamples.Charts.Step
-
-  @invoke_type "myapp:authorize"
 
   @assign_to_message "must be a bare lowercase identifier, like authorization"
   @timeout_message "must be a duration - 30s or 1h30m - or ISO-8601 like PT30S"
 
-  @doc "The invoke type this step names when its config does not say otherwise."
-  @spec invoke_type() :: String.t()
-  def invoke_type, do: @invoke_type
-
-  @impl true
-  def current_version, do: 2
-
-  @impl true
-  def slots(_config), do: []
-
-  @impl true
-  def config_schema(_config) do
-    Step.config_schema(@invoke_type, [
+  use StatifierBlocks.InvokeStep,
+    invoke_type: "myapp:authorize",
+    produces: "myapp.authorization",
+    fields: [
       %{
         key: "assign_to",
         type: :string,
@@ -55,16 +43,35 @@ defmodule StatifierExamples.CardAuth.Authorize do
         required?: false,
         default: "30s"
       }
-    ])
-  end
+    ],
+    palette: %{
+      label: "Authorize card",
+      group: "Card processing",
+      description: "Authorizes the transaction against the card network.",
+      icon: "credit-card",
+      keywords: ["authorize", "card", "payment"],
+      order: 0,
+      accent_token: Step.accent_token()
+    }
 
-  @impl true
+  @impl StatifierBlocks.BlockType
+  def current_version, do: 2
+
+  @doc """
+  The base's `invoke_type` check, plus this type's two.
+
+  `assign_to` goes through `check_identifier/4` rather than the base's
+  `check_assign_to/2`, which passes a blank: a card decision nobody keeps
+  is not a decision, so this type declares the field required and refuses
+  the blank.
+  """
+  @impl StatifierBlocks.BlockType
   def validate_config(config) do
     []
-    |> Step.check_invoke_type(config)
-    |> Step.check_identifier(config, "assign_to", @assign_to_message)
+    |> InvokeStep.check_invoke_type(config)
+    |> InvokeStep.check_identifier(config, "assign_to", @assign_to_message)
     |> check_timeout(config)
-    |> Step.verdict()
+    |> InvokeStep.verdict()
   end
 
   # An absent `timeout` is read through the declared default rather than
@@ -88,12 +95,6 @@ defmodule StatifierExamples.CardAuth.Authorize do
     end
   end
 
-  @impl true
-  def io(_config), do: %{kinds: [:step], produces: "myapp.authorization"}
-
-  @impl true
-  def outcomes(_config), do: Step.outcomes()
-
   @doc """
   The single hop from version 1's `field` to version 2's `assign_to`.
 
@@ -103,7 +104,7 @@ defmodule StatifierExamples.CardAuth.Authorize do
   `assign_to` would turn an old document's authoring error into a new
   one's compile error at a key the author never wrote.
   """
-  @impl true
+  @impl StatifierBlocks.BlockType
   def migrate_config(1, config) do
     {field, rest} = Map.pop(config, "field")
 
@@ -111,19 +112,4 @@ defmodule StatifierExamples.CardAuth.Authorize do
   end
 
   def migrate_config(from, _config), do: {:error, {:no_migration_from, from}}
-
-  @impl true
-  def palette_entry do
-    Step.palette_entry(%{
-      label: "Authorize card",
-      group: "Card processing",
-      description: "Authorizes the transaction against the card network.",
-      icon: "credit-card",
-      keywords: ["authorize", "card", "payment"],
-      order: 0
-    })
-  end
-
-  @impl true
-  def emit(block, context), do: Step.emit(block, context, @invoke_type)
 end
