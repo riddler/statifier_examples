@@ -12,9 +12,13 @@ defmodule StatifierExamples.Charts.RunTest do
   defp signup do
     {:ok, fixture} = Charts.fixture("signup_wizard")
 
+    # `declare:` from the fixture, exactly as the editor page compiles it:
+    # the wizard's plan branch guards on `signup.plan`, and a guard reading
+    # a root nothing declared raises `error.execution`.
     {:ok, compiled} =
       Compiler.compile(fixture.document, Charts.palette(),
-        known_invoke_types: Charts.invoke_types()
+        known_invoke_types: Charts.invoke_types(),
+        declare: fixture.declare
       )
 
     {compiled, fixture.document}
@@ -66,6 +70,21 @@ defmodule StatifierExamples.Charts.RunTest do
 
     assert run.status == :running
     assert "blk_su_verify_wait" in run.active
+  end
+
+  # se-5ep: the wizard's `core.assign` runs two blocks in, before the wait
+  # this drains to, and an assign writing to a root nothing declared raises
+  # `error.execution` exactly as a guard reading one does. So the in-memory
+  # driver - the one the editor page runs on - has its own refutation, and
+  # not only the durable one.
+  #
+  # Sabotage: emptied the wizard's declaration list in
+  # `StatifierExamples.Signup`'s `@documents`; the assign raised and this
+  # went red. Reverted.
+  test "the shipped wizard raises nothing on the way to its wait" do
+    details = start_run() |> drain() |> Run.entries() |> Enum.map(& &1.detail)
+
+    refute "error.execution" in details
   end
 
   # The active marks the editor paints. Atomic states only: the
