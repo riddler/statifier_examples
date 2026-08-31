@@ -81,29 +81,22 @@ defmodule StatifierExamples.MixProject do
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.22"},
 
-      # The engine. INTERIM git pin, on the commit that adds
-      # `Statifier.Invoke.SyncHandler` and its wrapping adapter: 2.2.1 has
-      # neither, and this app's handlers are written against them (se-4dt.2).
-      # Re-pin to a Hex release once one carries them, the way the editor dep
-      # has been re-pinned twice (se-p22's pattern).
-      #
-      # `override: true` stays: `statifier_persistence`'s git ref carries its
-      # own dependency on `statifier-ex`, and the override is what lets this
-      # app's pin be the one that wins rather than the one it inherits.
-      {:statifier,
-       git: "https://github.com/riddler/statifier-ex.git",
-       ref: "a0f965e6b15868fb05bd0d05981ac18d64d0344c",
-       override: true},
+      # The engine. 2.3.0 is the floor: the first release carrying
+      # `Statifier.Invoke.SyncHandler` and its wrapping adapter, which this
+      # app's handlers are written against (se-4dt.2). The interim git pin
+      # this arm carried between 2.2.1 and that release is retired
+      # (se-p22's pattern), and with every statifier-family dep back on Hex
+      # no `override: true` is needed - each package states a requirement
+      # the resolver can satisfy at one version.
+      {:statifier, "~> 2.3"},
 
-      # The durable stepper, and now `StatifierPersistence.Driver` - the
+      # The durable stepper, and `StatifierPersistence.Driver` - the
       # run-to-quiescence loop `StatifierExamples.Charts.Durable` used to
-      # write for itself (se-4dt.3). INTERIM git pin: Hex 0.1.3 predates the
-      # driver, the `:blob_type` option and the run `metadata` column this app
-      # configures, so the released package cannot express what is wired up
-      # here. Re-pin to a Hex release once one carries them (se-p22).
-      {:statifier_persistence,
-       git: "https://github.com/riddler/statifier_persistence.git",
-       ref: "08c991cf5fbce37d7de81a05be60b64b92b9bb02"},
+      # write for itself (se-4dt.3). 0.2.0 is the floor: the first release
+      # carrying the driver, the `:blob_type` option and the run `metadata`
+      # column this app configures. The interim git pin this arm carried
+      # before that release is retired (se-p22's pattern).
+      {:statifier_persistence, "~> 0.2"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -134,28 +127,24 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is an INTERIM git pin, the fourth one this dep has carried
-  # (se-p22's pattern: pin to the pushed upstream commit, re-pin to Hex at the
-  # release). It stands on the commit that documents the shipped subchart
-  # handler, and so carries two things this app is written against: ADR-0007's
-  # block-type defaults layer with `StatifierBlocks.InvokeStep` - the base
-  # every `myapp.*` step in this app is a declaration on (se-4dt.1) - and
-  # `StatifierBlocks.Runtime.Subchart`, the canonical
+  # The default arm is a Hex requirement with 0.11.0 as the floor: the first
+  # release carrying the two surfaces this app is written against -
+  # ADR-0007's block-type defaults layer with `StatifierBlocks.InvokeStep`,
+  # the base every `myapp.*` step in this app is a declaration on
+  # (se-4dt.1), and `StatifierBlocks.Runtime.Subchart`, the canonical
   # `statifier_blocks:subchart` handler `StatifierExamples.Charts.Subchart`
   # supplies this host's two callbacks to (se-4dt.4). 0.10.0 predates both,
-  # so on the released package the twelve step modules cannot compile at all
-  # and there is no subchart handler to register. The re-pin to a Hex
-  # requirement happens when the operator publishes the release carrying
-  # them.
+  # so on the earlier release the twelve step modules cannot compile at all
+  # and there is no subchart handler to register. Four interim git pins
+  # served this arm across the campaign era (se-p22's pattern); they are
+  # retired.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "487cebf146c5e46f0e674c57a85f4806aeeec8ac"}
+        {:statifier_blocks, "~> 0.11"}
     end
   end
 
