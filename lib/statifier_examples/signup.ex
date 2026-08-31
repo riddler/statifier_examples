@@ -25,10 +25,10 @@ defmodule StatifierExamples.Signup do
 
   `key` is URL-safe and stable - it is what a page puts in a path - and
   `name` is the document's own `metadata["name"]` rather than a second
-  spelling of it that could drift. `declare` is the `<data>` roots the
-  chart's own guards read, which the host has to declare at compile time
-  because a block document cannot: see `StatifierExamples.Charts.Fixture`,
-  which carries the reasoning and the same key.
+  spelling of it that could drift. `declare` is the `<data>` roots this
+  *deployment* adds at compile time, over and above the ones the document
+  declares for itself: see `StatifierExamples.Charts.Fixture`, which
+  carries the reasoning and the same key.
   """
   @type fixture :: %{
           key: String.t(),
@@ -38,17 +38,21 @@ defmodule StatifierExamples.Signup do
           declare: [Fixture.declaration()]
         }
 
-  # `{key, file, declared roots}`. Listed rather than globbed: which
+  # `{key, file, host-declared roots}`. Listed rather than globbed: which
   # documents this app ships is a fact worth reading in the source, and a
   # stray file in `priv/` should not silently become an example.
   #
-  # The wizard declares `signup` because its plan branch guards on
-  # `signup.plan` and `signup.seats`, and a guard reading a root nothing
-  # declared raises `error.execution` instead of reading it as undefined -
-  # which is what used to send every run of it down the `otherwise` arm.
-  # The invitations chart guards on nothing, so it declares nothing.
+  # Both lists are empty, and that is the point rather than an oversight.
+  # The wizard used to declare `signup` here because a guard reading a root
+  # nothing declared raises `error.execution` instead of reading it as
+  # undefined - which is what used to send every run of it down the
+  # `otherwise` arm - and a block document had nowhere to say so. It has
+  # somewhere now: sb ADR-0001 decision 11 gives the envelope a `datamodel`
+  # key, and each fixture declares its own roots in the bytes an author
+  # edits and a reviewer diffs. This list is the other half, the
+  # deployment's own additions, and this deployment adds none.
   @documents [
-    {"signup_wizard", "signup_wizard.json", [{"signup", nil}]},
+    {"signup_wizard", "signup_wizard.json", []},
     {"signup_invitations", "signup_invitations.json", []}
   ]
 

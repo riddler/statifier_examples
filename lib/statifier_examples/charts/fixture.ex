@@ -11,27 +11,37 @@ defmodule StatifierExamples.Charts.Fixture do
   | `name` | the document's own `metadata["name"]` | the switcher's label |
   | `path` | where the JSON is on disk | a reader who wants the bytes |
   | `document` | the decoded `StatifierBlocks.Document` | the editor and the compiler |
-  | `declare` | the `<data>` roots this chart's guards read | the compiler, as `:declare` |
+  | `declare` | the `<data>` roots this **deployment** adds | the compiler, as `:declare` |
 
-  ## Why a fixture carries its own declared roots
+  ## Why a fixture carries a declare list at all
 
-  A block document cannot declare the datamodel roots its own guards read.
-  `StatifierBlocks.Compiler.compile/3`'s `:declare` option is, in its own
-  words, "the compile call's declaration surface and the only one", and a
-  guard reading a root nothing declared raises `error.execution` rather
-  than reading it as undefined - as does an assign writing to one. So a
+  A guard reading a root nothing declared raises `error.execution` rather
+  than reading it as undefined - as does an assign writing to one - so a
   chart whose branch reads `signup.plan` only reaches the arm it guards
-  when the **host** declares `signup`, and the host has to be told which
-  roots those are.
+  when `signup` is declared somewhere. There are two somewheres, and sb
+  ADR-0001 decision 11 is what put the second one there.
 
-  They are recorded per fixture, beside the chart whose guards read them,
-  rather than in one app-wide list: which roots a chart needs is a fact
-  about that chart, and a shared list would declare every name this app
-  ever ships for every document it ever loads.
+  The **document** declares the roots without which its own expressions
+  are nonsense on every host, in its top-level `datamodel` key: a property
+  of the tree an author edits, in the bytes the hash covers. Every fixture
+  this app ships does that, which is why all three declare lists here are
+  now empty.
 
-  A fixture whose guards read nothing declares nothing, which is why the
-  key defaults to `[]` - and a document compiled with no declarations
-  compiles to exactly the bytes it did before the key existed.
+  This key is the other half, the **deployment's**: roots a particular
+  host seeds over and above what the document asks for. Decision 11f makes
+  it lead - the compile call's roots come first in the emitted
+  `<datamodel>`, the document's follow, and an id both surfaces name is
+  host-wins with a `:shadowed_document_root` warning on the artifact.
+
+  The list is recorded per fixture, beside the chart it is compiled with,
+  rather than in one app-wide list: what a deployment adds is a fact about
+  that pairing, and a shared list would declare every name this app ever
+  ships for every document it ever loads.
+
+  A fixture the deployment adds nothing for declares nothing, which is why
+  the key defaults to `[]` - and a document compiled with no host
+  declarations compiles to exactly the bytes it did before the option
+  existed.
 
   `key` is what a URL carries, so it is a bare lowercase identifier and
   never derived from `name`: a title people rewrite would silently break
@@ -74,10 +84,10 @@ defmodule StatifierExamples.Charts.Fixture do
 
   @doc """
   Reads and strictly decodes the fixture `file` under `priv/fixtures`, keys
-  it as `key`, and records the `<data>` roots its guards read.
+  it as `key`, and records the `<data>` roots this deployment adds.
 
-  `declare` defaults to `[]`: the shape of a chart that reads nothing out
-  of a datamodel, which is most of them.
+  `declare` defaults to `[]`: the shape of a document that declares every
+  root it reads for itself, which is all of them here.
   """
   @spec load!(String.t(), String.t(), [declaration()]) :: t()
   def load!(key, file, declare \\ []) do
