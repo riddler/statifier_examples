@@ -10,6 +10,8 @@ defmodule StatifierExamples.Charts.Messaging.Handlers do
 
   require Logger
 
+  alias StatifierExamples.Charts
+
   @invoke_types ["myapp:notify"]
 
   @doc "Every invoke type this module answers."
@@ -19,12 +21,16 @@ defmodule StatifierExamples.Charts.Messaging.Handlers do
   @doc """
   Answers a notify call, or refuses a name this module does not register.
   """
-  @spec handle(String.t(), map()) :: {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
-  def handle("myapp:notify", params) do
+  @spec handle(String.t(), map(), Charts.call_context()) ::
+          {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
+  def handle(invoke_type, params, context \\ %{})
+
+  def handle("myapp:notify", params, _context) do
     Logger.info("myapp:notify completed with #{map_size(params)} params")
 
     {:ok, %{}}
   end
 
-  def handle(invoke_type, _params), do: {:error, {:unknown_invoke_type, invoke_type}}
+  def handle(invoke_type, _params, _context),
+    do: {:error, {:unknown_invoke_type, invoke_type}}
 end

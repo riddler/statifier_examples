@@ -6,6 +6,8 @@ defmodule StatifierExamples.Signup.HandlersTest do
 
   import ExUnit.CaptureLog
 
+  alias Ecto.Adapters.SQL.Sandbox
+  alias StatifierExamples.Signup.Accounts
   alias StatifierExamples.Signup.Handlers
 
   # `config/test.exs` puts the Logger at :warning, and `capture_log`'s own
@@ -16,6 +18,10 @@ defmodule StatifierExamples.Signup.HandlersTest do
     level = Logger.level()
     Logger.configure(level: :info)
     on_exit(fn -> Logger.configure(level: level) end)
+
+    :ok = Sandbox.checkout(StatifierExamples.Repo)
+
+    %{run: "handlers-#{System.unique_integer([:positive])}"}
   end
 
   # Sabotage: dropped "myapp:provision" from @invoke_types; this went red,
@@ -36,16 +42,37 @@ defmodule StatifierExamples.Signup.HandlersTest do
     assert log =~ "confirm"
   end
 
-  # Sabotage: made the myapp:provision clause answer `:ok`; this went red,
-  # then reverted.
-  test "myapp:provision logs one line and answers an empty result" do
+  # Sabotage: dropped the run-less provisioning clause's "skipped" answer to
+  # `{:ok, %{}}`; this went red, then reverted.
+  test "myapp:provision with no run to key on writes nothing and says so" do
     log =
       capture_log(fn ->
-        assert {:ok, %{}} ==
+        assert {:ok, %{"provisioned" => "skipped"}} ==
                  Handlers.handle("myapp:provision", %{"email" => "someone@example.com"})
       end)
 
     assert log =~ "myapp:provision"
+    assert log =~ "skipped"
+  end
+
+  # The clause a durable run reaches: the context names the run, so the
+  # write has a key and happens. The row itself is
+  # `StatifierExamples.Signup.AccountsTest`'s subject; what this asserts is
+  # that the handler routes on the context rather than ignoring it.
+  #
+  # Sabotage: narrowed the `%{run_id: run_id}` clause's guard to
+  # `is_atom(run_id)`, so the call fell through to the run-less clause;
+  # this went red, then reverted.
+  test "myapp:provision with a run provisions the account and reports it", %{run: run_id} do
+    log =
+      capture_log(fn ->
+        assert {:ok, %{"account" => account, "provisioned" => "created"}} =
+                 Handlers.handle("myapp:provision", %{}, %{run_id: run_id})
+
+        assert account == Accounts.email_for(run_id)
+      end)
+
+    assert log =~ "created the account"
   end
 
   # The half the map-of-functions shape could not express at all: a name

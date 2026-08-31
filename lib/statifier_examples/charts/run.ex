@@ -1,24 +1,30 @@
 defmodule StatifierExamples.Charts.Run do
   @moduledoc """
-  One in-memory run of one compiled document: the session, the marks the
-  editor paints from it, and the feed of what happened.
+  The reading of one run of one compiled document: the marks the editor
+  paints, and the feed of what happened.
+
+  Two drivers produce it and it does not care which.
+  `StatifierExamples.Charts.Durable` steps a durable run through
+  `statifier_persistence` and folds the effects each step returns;
+  `start/3` below runs the same chart in a `Statifier.Session` whose
+  lifetime is the caller's, and folds the messages a subscriber receives.
+  The fold is the same function either way, because an effect is an
+  effect - `{tag, payload}` in `Statifier.Effect`'s vocabulary - whether
+  it arrived in a return value or in a mailbox.
 
   ## Why a struct and not a process
 
-  The session is already a process, and it already has an owner: whoever
-  called `start/2` and was handed the `subscribers` seat. What this module
-  holds is the *reading* of that stream - which blocks are lit, which call
-  is out, and the rows a reader sees - and that is a fold over messages,
-  not a second process. `absorb/2` is pure, so every derivation below is
-  tested by feeding it effects rather than by driving a browser.
+  What this module holds is the *reading* - which blocks are lit, which
+  call is out, and the rows a reader sees - and that is a fold, not a
+  second process. `absorb/2` is pure, so every derivation below is tested
+  by feeding it effects rather than by driving a browser.
 
-  The owner in this app is the LiveView. That is the simplest shape that is
-  honest about the lifetime on offer: an in-memory run lasts as long as the
-  page that started it, `Statifier.Session.start_link/2` links the two so
-  closing the page ends the run, and nothing pretends otherwise. A run that
-  outlives its page is a different thing entirely - it needs a store, an
-  owner that is not a viewer, and a way back in - and that is the durable
-  bead's, not a flag on this one.
+  The in-memory driver's owner is whoever called `start/3` and was handed
+  the `subscribers` seat - the LiveView, historically. That shape is
+  honest about the lifetime it offers: `Statifier.Session.start_link/2`
+  links the two, so closing the page ends the run. A run that outlives its
+  page needs a store, an owner that is not a viewer, and a way back in,
+  and that is `StatifierExamples.Charts.Durable`.
 
   ## The three derivations
 
@@ -51,18 +57,34 @@ defmodule StatifierExamples.Charts.Run do
   alias StatifierExamples.Charts
 
   @typedoc """
+  What a row is about. `started` opens a run and reopens a resumed one,
+  `performed` is a call the host answered, and the rest name what the
+  chart did.
+  """
+  @type entry_kind ::
+          :started
+          | :entered
+          | :invoked
+          | :performed
+          | :outcome
+          | :event
+          | :delayed
+          | :log
+          | :halted
+
+  @typedoc """
   One row of the feed. `kind` is what the row is about and is what the
   stylesheet tints; `label` and `detail` are the two columns a reader sees.
   """
   @type entry :: %{
           seq: non_neg_integer(),
-          kind: :started | :entered | :invoked | :outcome | :event | :delayed | :log | :halted,
+          kind: entry_kind(),
           label: String.t(),
           detail: String.t() | nil
         }
 
   @type t :: %__MODULE__{
-          session: pid(),
+          session: pid() | nil,
           session_id: String.t(),
           machine: Machine.t(),
           provenance: Provenance.t(),
@@ -75,7 +97,10 @@ defmodule StatifierExamples.Charts.Run do
           status: :running | :done | :cancelled | :budget_exhausted
         }
 
-  @enforce_keys [:session, :session_id, :machine, :provenance, :labels, :events]
+  # `session` is not enforced: a durable run has no session process, and
+  # `session_id` is then the run id it goes by. Every other key is a fact
+  # the reading cannot be built without.
+  @enforce_keys [:session_id, :machine, :provenance, :labels, :events]
   defstruct [
     :session,
     :session_id,
@@ -124,18 +149,52 @@ defmodule StatifierExamples.Charts.Run do
              subscribers: [owner],
              invoke_handlers: Charts.invoke_handlers()
            ) do
-      run = %__MODULE__{
-        session: session,
-        session_id: Session.session_id(session),
-        machine: machine,
-        provenance: compiled.provenance,
-        labels: labels(document),
-        events: event_names(document)
-      }
+      run =
+        machine
+        |> reading(compiled, document, Session.session_id(session))
+        |> Map.put(:session, session)
 
       {:ok, append(run, :started, "Run started", run.session_id)}
     end
   end
+
+  @doc """
+  The reading of a run with no session process, identified by `run_id`.
+
+  The durable driver's constructor. It takes the `machine` explicitly
+  rather than compiling one, because the machine a durable run resumes on
+  has to be the one whose identity matched the stored position - deriving
+  a second one here would be the same bytes compiled twice and a place for
+  them to disagree.
+
+  No opening row: a created run and a resumed one open with different
+  words, and which of the two this is belongs to the driver that knows.
+  """
+  @spec reading(Machine.t(), Compiled.t(), Document.t(), String.t()) :: t()
+  def reading(%Machine{} = machine, %Compiled{} = compiled, %Document{} = document, run_id)
+      when is_binary(run_id) do
+    %__MODULE__{
+      session: nil,
+      session_id: run_id,
+      machine: machine,
+      provenance: compiled.provenance,
+      labels: labels(document),
+      events: event_names(document)
+    }
+  end
+
+  @doc """
+  Appends one row the *driver* wrote rather than one the chart produced.
+
+  The feed is a fold over effects, and almost every row is. Three things a
+  reader needs to see are not effects at all: that a run started, that a
+  run was picked back up out of storage, and what a call the host
+  performed actually did. Those come through here, and they are marked as
+  their own kinds so the stylesheet can tell them apart from the chart's
+  own narration.
+  """
+  @spec note(t(), entry_kind(), String.t(), String.t() | nil) :: t()
+  def note(%__MODULE__{} = run, kind, label, detail), do: append(run, kind, label, detail)
 
   @doc """
   Stops the session. A run whose session is already gone stops fine: the
@@ -300,7 +359,7 @@ defmodule StatifierExamples.Charts.Run do
     end
   end
 
-  @spec append(t(), atom(), String.t(), String.t() | nil) :: t()
+  @spec append(t(), entry_kind(), String.t(), String.t() | nil) :: t()
   defp append(run, kind, label, detail) do
     entry = %{seq: run.seq, kind: kind, label: label, detail: detail}
 

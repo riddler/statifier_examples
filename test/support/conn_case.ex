@@ -17,6 +17,8 @@ defmodule StatifierExamplesWeb.ConnCase do
 
   use ExUnit.CaseTemplate
 
+  alias Ecto.Adapters.SQL.Sandbox
+
   using do
     quote do
       # The default endpoint for testing
@@ -31,7 +33,29 @@ defmodule StatifierExamplesWeb.ConnCase do
     end
   end
 
-  setup _tags do
+  setup tags do
+    :ok = checkout(tags)
+
     {:ok, conn: Phoenix.ConnTest.build_conn()}
+  end
+
+  @doc """
+  Checks this test out a sandboxed connection, shared with every other
+  process unless the case is async.
+
+  The sharing is the part that matters here rather than the checkout: a
+  LiveView test drives a *separate* process, and this app's Run button now
+  starts a durable run that writes to the database from inside it. Without
+  the shared owner that write finds no connection and the page fails in a
+  way that says nothing about the page.
+  """
+  @spec checkout(map()) :: :ok
+  def checkout(tags) do
+    pid =
+      Sandbox.start_owner!(StatifierExamples.Repo, shared: not tags[:async])
+
+    on_exit(fn -> Sandbox.stop_owner(pid) end)
+
+    :ok
   end
 end

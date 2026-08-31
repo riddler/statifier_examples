@@ -1,7 +1,12 @@
 defmodule StatifierExamplesWeb.RunFeed do
   @moduledoc """
-  The drawer tab this app contributes: the feed of one in-memory run, and
-  the buttons that step it.
+  The drawer tab this app contributes: the feed of one run, and the buttons
+  that step it.
+
+  The run it draws is a `StatifierExamples.Charts.Run` reading and it does
+  not care what produced one - a durable run stepped through storage and an
+  in-memory session fold render identically here, which is the point of the
+  reading being a struct rather than a view of a process.
 
   ## Why it belongs in the drawer at all
 

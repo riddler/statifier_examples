@@ -16,14 +16,31 @@ defmodule StatifierExamples.Signup.Handlers do
   answers directly, without a caller reaching into a map of functions to
   find out what this module can do.
 
-  What the handlers do here is log a line and answer `{:ok, %{}}`. That is
-  the whole point of an example: the chart is the interesting part, and a
-  handler that pretended to create a workspace would only be fiction with
-  more moving parts. Every value that reaches them is fictional too -
+  `myapp:signup` logs a line and answers `{:ok, %{}}`: collecting a form is
+  the chart's interesting part, not the host's. `myapp:provision` is the
+  one call in this app that writes - the wizard exists to create an
+  account, and a handler that only logged would leave the run having meant
+  nothing. Every value that reaches either is fictional -
   `@example.com` addresses and made-up plan names.
+
+  ## The call that writes needs to know which run it is
+
+  `StatifierPersistence.Executor`'s at-least-once contract means a
+  provision can be delivered twice, so the write has to be idempotent on
+  something stable. Nothing in the chart is: it carries no datamodel and
+  no identity. The *run* is, and a durable driver passes it in the call
+  context `StatifierExamples.Charts.dispatch/3` takes - which is why the
+  provisioning clause matches on `%{run_id: run_id}` and the in-memory
+  driver, which has no run to name, gets the clause that says so.
+
+  `StatifierExamples.Signup.Accounts` holds the write and the reasoning
+  about the key.
   """
 
   require Logger
+
+  alias StatifierExamples.Charts
+  alias StatifierExamples.Signup.Accounts
 
   @invoke_types [
     "myapp:provision",
@@ -53,18 +70,36 @@ defmodule StatifierExamples.Signup.Handlers do
   which form to put up without reading the datamodel. `myapp:provision`
   creates the workspace the finished signup gets.
   """
-  @spec handle(String.t(), map()) :: {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
-  def handle("myapp:signup", params) do
+  @spec handle(String.t(), map(), Charts.call_context()) ::
+          {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
+  def handle(invoke_type, params, context \\ %{})
+
+  def handle("myapp:signup", params, _context) do
     Logger.info("myapp:signup collected step #{inspect(Map.get(params, "step"))}")
 
     {:ok, %{}}
   end
 
-  def handle("myapp:provision", params) do
-    Logger.info("myapp:provision created a workspace from #{inspect(Map.keys(params))}")
+  def handle("myapp:provision", _params, %{run_id: run_id}) when is_binary(run_id) do
+    {result, user} = Accounts.provision(run_id)
 
-    {:ok, %{}}
+    Logger.info("myapp:provision #{result} the account #{user.email}")
+
+    {:ok, %{"account" => user.email, "provisioned" => Atom.to_string(result)}}
   end
 
-  def handle(invoke_type, _params), do: {:error, {:unknown_invoke_type, invoke_type}}
+  # No run to key the write on, so there is nothing durable to write. The
+  # in-memory driver is the caller here, and its runs do not outlive the
+  # page that started them; provisioning an account from one would leave a
+  # row nothing can ever find its way back to.
+  def handle("myapp:provision", params, _context) do
+    Logger.info(
+      "myapp:provision skipped the write for a run-less call, #{inspect(Map.keys(params))}"
+    )
+
+    {:ok, %{"provisioned" => "skipped"}}
+  end
+
+  def handle(invoke_type, _params, _context),
+    do: {:error, {:unknown_invoke_type, invoke_type}}
 end

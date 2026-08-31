@@ -24,9 +24,13 @@ defmodule StatifierExamplesWeb.EditorLive do
       deliberately **not** here - they are the package's toolbar, and a second
       pair in the header would be two controls over one history;
     * the documents themselves, which live in this process' assigns and
-      nowhere else. There is no database in this app yet, so an edit survives
-      a document switch and does not survive a reload, and that is the whole
-      persistence story until a later campaign gives it one;
+      nowhere else. An edit survives a document switch and does not survive a
+      reload: what this app stores is *runs*, not drafts;
+    * the run id, which is a query parameter for the same reason the other
+      two are. A durable run outlives the process that started it, so the
+      page needs a name for the one it is showing, and a name in the URL is
+      one a reader can come back to after the server was killed. See
+      `StatifierExamples.Charts.Durable`;
     * the compile, which is the host's call to make and the host's findings to
       route back in;
     * the drawer height, per ADR-0005 2A: the package hands each new height
@@ -52,6 +56,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   alias StatifierBlocks.Finding
   alias StatifierBlocks.Shell
   alias StatifierExamples.Charts
+  alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Charts.Run
   alias StatifierExamplesWeb.Icons
   alias StatifierExamplesWeb.RunFeed
@@ -70,6 +75,8 @@ defmodule StatifierExamplesWeb.EditorLive do
        documents: %{},
        drawer_height: nil,
        run: nil,
+       durable: nil,
+       run_error: nil,
        on_change: fn document -> send(parent, {:document_changed, document}) end,
        on_drawer_resize: fn height -> send(parent, {:drawer_resized, height}) end
      )}
@@ -82,6 +89,7 @@ defmodule StatifierExamplesWeb.EditorLive do
       |> assign(:theme, theme_param(params))
       |> load_document(document_param(socket, params))
       |> compile()
+      |> restore_run(params["run"])
       |> push_run()
 
     {:noreply, socket}
@@ -89,23 +97,28 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   @impl Phoenix.LiveView
   def handle_event("run-start", _params, socket) do
-    {:noreply, socket |> start_run() |> push_run()}
+    socket = start_run(socket)
+
+    {:noreply, socket |> push_run() |> patch_to_run()}
   end
 
   def handle_event("run-stop", _params, socket) do
-    {:noreply, socket |> stop_run() |> push_run()}
+    socket = stop_run(socket)
+
+    {:noreply, socket |> push_run() |> patch_to_run()}
   end
 
   def handle_event("run-send", %{"event" => event}, socket) do
-    {:noreply, socket |> update(:run, &send_run_event(&1, event)) |> push_run()}
+    {:noreply, socket |> send_run_event(event) |> push_run()}
   end
 
   def handle_event("select-document", %{"doc" => key}, socket) do
-    {:noreply, push_patch(socket, to: editor_path(key, socket.assigns.theme))}
+    {:noreply, push_patch(socket, to: editor_path(key, socket.assigns.theme, nil))}
   end
 
   def handle_event("select-theme", %{"theme" => theme}, socket) do
-    {:noreply, push_patch(socket, to: editor_path(socket.assigns.fixture.key, theme))}
+    {:noreply,
+     push_patch(socket, to: editor_path(socket.assigns.fixture.key, theme, run_id(socket)))}
   end
 
   def handle_event("compile", _params, socket) do
@@ -126,17 +139,6 @@ defmodule StatifierExamplesWeb.EditorLive do
   def handle_info({:drawer_resized, height}, socket) do
     {:noreply, assign(socket, :drawer_height, height)}
   end
-
-  # The one subscriber stream, folded by `Run.absorb/2`. The guard is what
-  # keeps a message from a session this page has already replaced out of the
-  # run it is showing: a stopped session's last effects can still be in this
-  # mailbox when the next Run press has already installed a new one.
-  def handle_info({:statifier, session_id, message}, %{assigns: %{run: %Run{} = run}} = socket)
-      when run.session_id == session_id do
-    {:noreply, socket |> assign(:run, Run.absorb(run, message)) |> push_run()}
-  end
-
-  def handle_info({:statifier, _session_id, _message}, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -213,6 +215,10 @@ defmodule StatifierExamplesWeb.EditorLive do
             <span :if={@run} class="myapp-header__verdict" data-run-status={@run.status}>
               {@run.status}
             </span>
+
+            <span :if={@run_error} class="myapp-header__verdict" data-run-error={@run_error}>
+              {@run_error}
+            </span>
           </div>
         </:header>
       </.live_component>
@@ -245,8 +251,11 @@ defmodule StatifierExamplesWeb.EditorLive do
   # Named `editor_path` rather than `path`: `Phoenix.VerifiedRoutes` imports a
   # `path/2` macro, and a private function of the same arity does not shadow
   # an imported macro - the macro wins and fails to expand.
-  @spec editor_path(String.t(), atom() | String.t()) :: String.t()
-  defp editor_path(key, theme), do: ~p"/editor?#{[doc: key, theme: to_string(theme)]}"
+  @spec editor_path(String.t(), atom() | String.t(), String.t() | nil) :: String.t()
+  defp editor_path(key, theme, nil), do: ~p"/editor?#{[doc: key, theme: to_string(theme)]}"
+
+  defp editor_path(key, theme, run_id),
+    do: ~p"/editor?#{[doc: key, theme: to_string(theme), run: run_id]}"
 
   # ---------------------------------------------------------------- editing
 
@@ -262,50 +271,127 @@ defmodule StatifierExamplesWeb.EditorLive do
     |> assign(:page_title, fixture.name)
   end
 
-  # A run is a run OF a document, so opening a different one ends it. The
-  # editor clears its own marks on a document switch for the same reason,
-  # and a host that kept the run would be holding marks the editor has
-  # already dropped and a feed about a chart nobody is looking at.
+  # A run is a run OF a document, so opening a different one stops showing
+  # it. The editor clears its own marks on a document switch for the same
+  # reason, and a host that kept the run would be holding marks the editor
+  # has already dropped and a feed about a chart nobody is looking at.
+  #
+  # Stops *showing*, not stops: the run is durable, so forgetting it here
+  # loses a page's worth of assigns and nothing else. Coming back to the
+  # same URL picks it up again, which is the whole point of the run id
+  # being in the URL.
   @spec end_run_on_switch(Phoenix.LiveView.Socket.t(), Charts.Fixture.t()) ::
           Phoenix.LiveView.Socket.t()
   defp end_run_on_switch(socket, fixture) do
     if Map.get(socket.assigns, :fixture) == fixture do
       socket
     else
-      stop_run(socket)
+      forget_run(socket)
     end
   end
 
   # --------------------------------------------------------------- running
 
-  # The Run press. `Run.start/3` links the session to this LiveView, so the
-  # run's lifetime is the page's and closing the tab ends it - which is the
-  # whole of what "in memory" buys and costs. A press while one is already
-  # running replaces it, because two sessions over one document would be two
-  # sets of marks for one canvas.
+  # The Run press. Every run this page starts is durable: the position is
+  # in SQLite after every step, the run id goes into the URL, and the page
+  # holds no more of the run than a reader is looking at. Pressing Run
+  # while one is showing starts a second run rather than replacing a
+  # process, because there is no process - the one already stored keeps
+  # whatever it had reached, and the URL now names the new one.
   @spec start_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp start_run(%{assigns: %{compiled: nil}} = socket), do: socket
 
   defp start_run(socket) do
-    socket = stop_run(socket)
+    socket = forget_run(socket)
+    run_id = Durable.new_run_id()
 
-    case Run.start(socket.assigns.compiled, socket.assigns.document, self()) do
-      {:ok, run} -> assign(socket, :run, run)
-      {:error, _reason} -> socket
+    adopt(socket, Durable.start(socket.assigns.compiled, socket.assigns.document, run_id))
+  end
+
+  # The Stop press: the host's own terminal transition (ADR-0004 decision
+  # 6), so the stored record says a host stopped this run rather than the
+  # chart finishing it.
+  @spec stop_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp stop_run(%{assigns: %{durable: %Durable{} = durable}} = socket) do
+    :ok = Durable.abandon(durable)
+
+    forget_run(socket)
+  end
+
+  defp stop_run(socket), do: forget_run(socket)
+
+  @spec forget_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp forget_run(socket) do
+    socket
+    |> assign(:run, nil)
+    |> assign(:durable, nil)
+    |> assign(:run_error, nil)
+  end
+
+  @spec send_run_event(Phoenix.LiveView.Socket.t(), String.t()) :: Phoenix.LiveView.Socket.t()
+  defp send_run_event(
+         %{assigns: %{durable: %Durable{} = durable, run: %Run{status: :running} = run}} = socket,
+         event
+       ) do
+    adopt(socket, Durable.send_event(durable, run, event))
+  end
+
+  defp send_run_event(socket, _event), do: socket
+
+  # Picking a stored run back up, which is what a reload after a `kill -9`
+  # is. Three cases and they are all ordinary: the page is already showing
+  # this run (a patch this page itself pushed), the document does not
+  # compile so there is no machine to resume onto, or the run is genuinely
+  # somewhere in storage and this is the first the process has heard of it.
+  @spec restore_run(Phoenix.LiveView.Socket.t(), String.t() | nil) ::
+          Phoenix.LiveView.Socket.t()
+  defp restore_run(socket, run_id) when is_binary(run_id) do
+    cond do
+      run_id(socket) == run_id ->
+        socket
+
+      is_nil(socket.assigns.compiled) ->
+        socket
+
+      true ->
+        adopt(socket, Durable.resume(socket.assigns.compiled, socket.assigns.document, run_id))
     end
   end
 
-  @spec stop_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
-  defp stop_run(%{assigns: %{run: %Run{} = run}} = socket) do
-    Run.stop(run)
-    assign(socket, :run, nil)
+  defp restore_run(socket, _absent), do: socket
+
+  # A refusal is shown rather than swallowed. `{:identity_mismatch, _, _}`
+  # is the one a reader will actually meet - it means the document was
+  # edited after the run started - and a page that quietly showed no run
+  # would be hiding the guard doing its job.
+  @spec adopt(Phoenix.LiveView.Socket.t(), {:ok, Durable.driven()} | {:error, term()}) ::
+          Phoenix.LiveView.Socket.t()
+  defp adopt(socket, {:ok, {durable, run}}) do
+    socket
+    |> assign(:durable, durable)
+    |> assign(:run, run)
+    |> assign(:run_error, nil)
   end
 
-  defp stop_run(socket), do: socket
+  defp adopt(socket, {:error, reason}) do
+    socket
+    |> forget_run()
+    |> assign(:run_error, "run refused: #{inspect(reason)}")
+  end
 
-  @spec send_run_event(Run.t() | nil, String.t()) :: Run.t() | nil
-  defp send_run_event(%Run{status: :running} = run, event), do: Run.send_event(run, event)
-  defp send_run_event(run, _event), do: run
+  @spec run_id(Phoenix.LiveView.Socket.t()) :: String.t() | nil
+  defp run_id(%{assigns: %{durable: %Durable{run_id: run_id}}}), do: run_id
+  defp run_id(_socket), do: nil
+
+  # The URL is where the run id lives, so every press that changes which
+  # run the page is showing ends in a patch. Pressing Run and then reading
+  # the address bar is how a reader gets a link they can come back to.
+  @spec patch_to_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp patch_to_run(socket) do
+    push_patch(socket,
+      to: editor_path(socket.assigns.fixture.key, socket.assigns.theme, run_id(socket))
+    )
+  end
 
   # ------------------------------------------------------------- the seams
 
