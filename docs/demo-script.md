@@ -35,9 +35,9 @@ and it is fine: nothing in this repo is precious.
 port is 8645 unless you set `PORT`.
 
 **See**: the host's header names the document - `Signup wizard`, at
-`revision 10`, id `bdoc_signup_demo` - beside the DOCUMENT and THEME
+`revision 11`, id `bdoc_signup_demo` - beside the DOCUMENT and THEME
 selects, a Compile button and `Findings 0`. The canvas opens at Fit width -
-`21 blocks`, `depth 4` - and the
+`20 blocks`, `depth 4` - and the
 palette on the left offers 26 block types. Nothing is running yet, so the
 header shows a **Run** button and no status beside it.
 
@@ -50,7 +50,8 @@ a viewer. The run you are about to start runs *this* document.
 
 **See**: three tabs - `Truth tables (0)`, `Findings (0)`, `Runs (0)`. The Runs
 panel says `no run` and, in place of a table, one sentence: *Nothing is
-running. Run, in the header, starts a session on this document in memory.*
+running. Run, in the header, starts a durable run on this document -
+stored, so it outlives this page.*
 The three event buttons - `signup.abandoned`, `signup.email_verified`,
 `signup.reminder_due` - are present but disabled.
 
