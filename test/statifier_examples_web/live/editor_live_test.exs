@@ -640,6 +640,30 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert render_until(resumed, cell("signup.abandoned"))
     end
 
+    # se-k4a, on the page rather than on the driver: a run driven past the
+    # verification wait finishes, and the header says `done` instead of
+    # sitting on `running` forever. The page compiles with
+    # `terminate: true`, and this is the only test that reads what that buys
+    # a reader.
+    #
+    # Sabotage: dropped `terminate: true` from `EditorLive`'s `compile/1`;
+    # the header stayed `running` and this went red on the status match.
+    # Reverted.
+    test "a run that reaches its root outcome finishes on the page", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+      assert_patch(view)
+      open_runs(view)
+
+      html =
+        view
+        |> element(~s(button[phx-value-event="signup.abandoned"]))
+        |> render_click()
+
+      assert html =~ ~s(data-run-status="done")
+    end
+
     # A link that outlived its run, or one somebody typed. The page says so
     # rather than showing an empty canvas and letting a reader guess.
     #
@@ -732,7 +756,8 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     raw =
       case Compiler.compile(fixture.document, palette,
              known_invoke_types: Charts.invoke_types(),
-             declare: fixture.declare
+             declare: fixture.declare,
+             terminate: true
            ) do
         {:ok, compiled} -> compiled.warnings
         {:error, findings} -> findings
