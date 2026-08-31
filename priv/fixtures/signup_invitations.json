@@ -7,6 +7,16 @@
     "description": "Invite teammates to a new workspace, run the signup wizard for each invitee as a child chart, and confirm the team once they are through.",
     "domain": "signup"
   },
+  "datamodel": [
+    {
+      "id": "signup",
+      "description": "The signup this invitation run belongs to: the loop iterates its invitees and every call passes its email, plan and seats."
+    },
+    {
+      "id": "onboarding",
+      "description": "Where the onboarding subchart's result lands."
+    }
+  ],
   "root": {
     "type": "core.sequence",
     "id": "blk_si_root",

@@ -7,6 +7,12 @@
     "description": "Collect an account, verify the email, branch on the chosen plan, and provision.",
     "domain": "signup"
   },
+  "datamodel": [
+    {
+      "id": "signup",
+      "description": "The signup under construction: the collect step assigns it, and the plan branch guards on its plan, seats and email_verified."
+    }
+  ],
   "root": {
     "type": "core.sequence",
     "id": "blk_su_root",

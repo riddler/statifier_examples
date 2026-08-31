@@ -77,19 +77,22 @@ defmodule StatifierExamples.SignupTest do
     assert "myapp:provision" in compiled.invoke_types
   end
 
-  # se-5ep: the wizard's plan branch guards on `signup.plan` and
-  # `signup.seats`, and a block document cannot declare the roots its own
-  # guards read - so the fixture entry carries them and every compile of it
-  # passes them. This asserts the record, and the run tests assert what it
-  # buys.
+  # se-5ep, amended by se-1xc: the wizard's plan branch guards on
+  # `signup.plan` and `signup.seats`, and the root has to be declared or
+  # the guard raises `error.execution` instead of reading it as undefined.
+  # The host used to carry that declaration because a block document had
+  # nowhere to put it; sb ADR-0001 decision 11 gave it somewhere, so the
+  # document carries it and the host's list is empty. This asserts the
+  # record, and the run tests assert what it buys.
   #
-  # Sabotage: emptied the wizard's declaration list in `@documents`; this
-  # went red here and took the two provisioning tests in `DurableTest` with
-  # it. Reverted.
-  test "the wizard declares the datamodel root its plan branch guards on" do
+  # Sabotage: removed the `signup` entry from `signup_wizard.json`'s
+  # `datamodel` key; this went red here and took the two provisioning
+  # tests in `DurableTest` with it. Reverted.
+  test "the wizard's own bytes declare the root its plan branch guards on" do
     [wizard, invitations] = Signup.fixtures()
 
-    assert wizard.declare == [{"signup", nil}]
+    assert Enum.map(wizard.document.datamodel, & &1.id) == ["signup"]
+    assert wizard.declare == []
     assert invitations.declare == []
   end
 

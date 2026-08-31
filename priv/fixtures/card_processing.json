@@ -7,6 +7,60 @@
     "description": "Intake, validation, a three-lane authorization group with interrupts, an outcome branch with capture retry and manual review, and a receipt tail. The authorize and capture calls carry on_error subtrees, so the slot idiom and the retry-predicate idiom can be read side by side. Ported from the statifier_blocks spike: the proposed core.timeout block became the shipped pair that models a clock interrupt - a core.send arming card.authz_timed_out at the head of the authorization group's body, and a core.on_event on its interrupt rail listening for that event. One block type is deliberately unregistered, myapp.legacy_check, so the unavailable-block chrome is exercised at depth 7.",
     "domain": "card-processing"
   },
+  "datamodel": [
+    {
+      "id": "amount_cents",
+      "description": "The amount to authorize, in minor units."
+    },
+    {
+      "id": "currency",
+      "description": "The currency the amount is denominated in."
+    },
+    {
+      "id": "customer",
+      "description": "The customer the payment is for; the intake branch reads verified and the authorize call reads id."
+    },
+    {
+      "id": "card",
+      "description": "The card presented; the intake branch reads active."
+    },
+    {
+      "id": "validation",
+      "description": "The intake check's result; the intake branch reads passed."
+    },
+    {
+      "id": "risk_rating",
+      "description": "The score the risk lane produced; the risk branch compares it against the ruleset thresholds."
+    },
+    {
+      "id": "fraud",
+      "description": "The fraud lane's result; the outcome branch reads verdict and cleared."
+    },
+    {
+      "id": "three_ds",
+      "description": "The challenge lane's result. Read by an interrupt guard rather than by an emitted expression, so the compiled chart does not load it yet - core.on_event has no cond in its schema at the pinned editor. Declared because the document's own guard names it and the root has to exist the moment that guard compiles."
+    },
+    {
+      "id": "auth",
+      "description": "The authorization call's result; the outcome branch reads approved and captured, and the capture call reads code."
+    },
+    {
+      "id": "balance",
+      "description": "The balance check's result; the outcome branch compares available_cents against the amount."
+    },
+    {
+      "id": "capture_attempts",
+      "description": "How many captures this run has tried; the retry branch compares it against the retry ceiling."
+    },
+    {
+      "id": "limits",
+      "description": "The deployment's operational limits; the manual-review arm reads manual_review_backlog."
+    },
+    {
+      "id": "review",
+      "description": "The manual review's state. The park step assigns parked and the resolution guard reads it back."
+    }
+  ],
   "root": {
     "type": "core.sequence",
     "id": "blk_cp_root",
