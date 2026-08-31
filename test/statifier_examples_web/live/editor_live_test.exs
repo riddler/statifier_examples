@@ -461,7 +461,10 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
              |> render() =~ ~s(data-run-active="true")
     end
 
-    # The invoke mark and its outcome, on the block whose call came back.
+    # The invoke mark and its outcome, on the block that finished last. Since
+    # the reminder window landed (se-hp2) that is the `core.send` arming the
+    # nudge: it completes in the same macrostep it is entered in, after the
+    # verification call has already come back.
     #
     # Sabotage: made `push_run/1` push `invoke_mark: nil`; this went red on
     # the outcome attribute, then reverted.
@@ -471,7 +474,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       run(view)
 
       assert view
-             |> element(~s([data-block-id="blk_su_send_verification"]))
+             |> element(~s([data-block-id="blk_su_reminder_timer"]))
              |> render() =~ ~s(data-invoke-outcome="done")
     end
 

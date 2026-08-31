@@ -111,13 +111,24 @@ defmodule StatifierExamples.Charts.RunTest do
   # observed after the drain - these handlers answer inside the same turn -
   # so it is asserted on the fold instead, below.
   #
+  # The mark holds the LATEST outcome, and since the reminder window landed
+  # (se-hp2) that is the `core.send` that arms the nudge rather than the
+  # verification call: arming a delayed send completes in the same
+  # macrostep, so it is the last thing that finishes before the wizard
+  # parks. The call's own outcome is the row before it, which is why both
+  # halves are asserted.
+  #
   # Sabotage: made `outcome_mark/3` set `run.invoke` to the block id alone;
   # this went red on the tuple match. Reverted.
   test "the invoke mark carries the block and the outcome the call came back with" do
     run = drain(start_run())
 
     assert {block_id, "done"} = run.invoke
-    assert block_id == "blk_su_send_verification"
+    assert block_id == "blk_su_reminder_timer"
+
+    assert "done on Send the verification email" in (run
+                                                     |> Run.entries()
+                                                     |> Enum.map(& &1.detail))
   end
 
   # The bare mark, on the fold rather than through a race: an `:invoke`
@@ -210,7 +221,8 @@ defmodule StatifierExamples.Charts.RunTest do
   test "the external events are read off the document's own interrupt blocks" do
     {_compiled, document} = signup()
 
-    assert Run.event_names(document) == ["signup.abandoned", "signup.email_verified"]
+    assert Run.event_names(document) ==
+             ["signup.abandoned", "signup.email_verified", "signup.reminder_due"]
   end
 
   # A block labelled by its author is named by that label in the feed; one

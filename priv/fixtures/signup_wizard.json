@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "bdoc_signup_demo",
-  "revision": 9,
+  "revision": 10,
   "metadata": {
     "name": "Signup wizard",
     "description": "Collect an account, verify the email, branch on the chosen plan, and provision.",
@@ -49,11 +49,50 @@
                 }
               },
               {
-                "type": "core.wait",
-                "id": "blk_su_verify_wait",
+                "type": "core.group",
+                "id": "blk_su_reminder_window",
+                "type_version": 1,
+                "slots": {
+                  "body": [
+                    {
+                      "type": "core.send",
+                      "id": "blk_su_reminder_timer",
+                      "type_version": 1,
+                      "config": {
+                        "event": "signup.reminder_due",
+                        "delay": "2d"
+                      }
+                    },
+                    {
+                      "type": "core.wait",
+                      "id": "blk_su_verify_wait",
+                      "type_version": 1,
+                      "config": {
+                        "duration": "24h"
+                      }
+                    }
+                  ],
+                  "interrupts": [
+                    {
+                      "type": "core.on_event",
+                      "id": "blk_su_reminder_due",
+                      "type_version": 1,
+                      "config": {
+                        "event": "signup.reminder_due",
+                        "outcome": "abandon"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "myapp.notify",
+                "id": "blk_su_reminder_notice",
                 "type_version": 1,
                 "config": {
-                  "duration": "24h"
+                  "invoke_type": "myapp:notify",
+                  "template": "signup_reminder",
+                  "label": "Remind them to finish signing up"
                 }
               }
             ],

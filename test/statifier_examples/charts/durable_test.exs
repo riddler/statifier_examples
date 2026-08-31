@@ -15,9 +15,16 @@ defmodule StatifierExamples.Charts.DurableTest do
   alias StatifierPersistence.{Runs, Storage}
 
   # Where the signup wizard parks itself: its verification group is waiting
-  # on the 24-hour `core.wait`, with both interrupts armed. This is the
-  # mid-flight configuration the restart walkthrough kills the server in.
-  @waiting ["blk_su_abandoned", "blk_su_verified", "blk_su_verify_wait"]
+  # on the 24-hour `core.wait`, with every interrupt armed - the group's own
+  # two, and the reminder window's, which is what the abandonment nudge
+  # arrives on (se-hp2). This is the mid-flight configuration the restart
+  # walkthrough kills the server in.
+  @waiting [
+    "blk_su_abandoned",
+    "blk_su_reminder_due",
+    "blk_su_verified",
+    "blk_su_verify_wait"
+  ]
 
   setup do
     :ok = Sandbox.checkout(Repo)

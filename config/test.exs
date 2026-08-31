@@ -7,6 +7,16 @@ config :statifier_examples, StatifierExamples.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 5
 
+# Jobs are inserted for real and executed only when a test says so, with
+# `Oban.drain_queue/2`. Inline execution would run a delayed send the
+# instant it was armed, which is precisely the behaviour under test.
+config :statifier_examples, Oban, testing: :manual
+
+# Deliberately not the dev value: the reminder delay is host configuration,
+# and a suite that read the same number as dev could not tell a wired-up
+# config from a hard-coded one.
+config :statifier_examples, :signup_reminder_delay, "45s"
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :statifier_examples, StatifierExamplesWeb.Endpoint,

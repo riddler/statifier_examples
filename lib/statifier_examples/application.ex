@@ -27,6 +27,12 @@ defmodule StatifierExamples.Application do
       # asks for, so without a strategy the host supplies, every durable
       # step refuses. See `StatifierExamples.Charts.RunLock`.
       StatifierExamples.Charts.RunLock,
+      # The host's own Oban instance. `statifier_oban` never starts one
+      # (its ADR-0002) and this app is the only thing that could, so the
+      # wizard's abandonment reminder has a scheduler to be stored in.
+      # It sits after the repo it runs on and before the endpoint, so a
+      # fired timer can never reach a run before the store is up.
+      {Oban, Application.fetch_env!(:statifier_examples, Oban)},
       # Start a worker by calling: StatifierExamples.Worker.start_link(arg)
       # {StatifierExamples.Worker, arg},
       # Start to serve requests, typically the last entry
