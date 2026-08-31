@@ -266,6 +266,10 @@ included.
 They are a `core.assign` block near the top of the document
 (`blk_su_collected`), which sets `signup.plan` and `signup.seats` so the A/B
 branch downstream has something to guard on. It is a stand-in for the step
-that would collect them, not a claim that the form collects them. The host
-declares the `signup` root at compile time, because a block document cannot
-declare the datamodel roots its own guards read.
+that would collect them, not a claim that the form collects them. The `signup`
+root the block writes into is declared by the document itself, in a top-level
+`datamodel` key beside the tree: which roots a chart's guards read is a
+property of that chart, so it travels in the bytes an author edits rather than
+in every host that runs it. A host can still declare roots of its own at
+compile time, over and above what the document asks for. This one declares
+none.

@@ -516,11 +516,17 @@ defmodule StatifierExamplesWeb.EditorLive do
   # being the only thing that runs it.
   #
   # `:declare` comes off the FIXTURE rather than off the document on the
-  # canvas, and it has to: a block document cannot declare the datamodel
-  # roots its own guards read, so the host declares them and the fixture is
-  # where this app records which ones (see
-  # `StatifierExamples.Charts.Fixture`). An edit on the canvas changes the
-  # document, never which roots the chart was shipped needing.
+  # canvas, and it still has to, though no longer for the reason it once
+  # did. The document declares the roots its own guards read - sb ADR-0001
+  # decision 11's top-level `datamodel` key, which every fixture this app
+  # ships uses - and the compiler reads that off the document it is handed.
+  # `:declare` is the other surface: what a *deployment* adds over the
+  # document, leading the emitted `<datamodel>` where both name a root.
+  # This app adds nothing, so every fixture's list is empty (see
+  # `StatifierExamples.Charts.Fixture`), and the list still belongs to the
+  # fixture because what a deployment adds is a fact about that pairing
+  # rather than about the tree an author edits. An edit on the canvas
+  # changes the document, never what the host declares over it.
   #
   # The rest of the recipe - `terminate: true`, the palette, the known
   # invoke types - is `StatifierExamples.Charts.Durable.compile/2`'s and
