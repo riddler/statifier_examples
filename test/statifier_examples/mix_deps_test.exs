@@ -1,45 +1,35 @@
 defmodule StatifierExamples.MixDepsTest do
   use ExUnit.Case, async: true
 
-  @statifier_blocks_ref "487cebf146c5e46f0e674c57a85f4806aeeec8ac"
-  @statifier_ref "a0f965e6b15868fb05bd0d05981ac18d64d0344c"
-
   # `STATIFIER_BLOCKS_PATH` swaps the editor dep for a path dep on a local
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is an INTERIM git pin, the fourth this dep has carried
-  # (se-p22's pattern: pin to the pushed upstream commit, re-pin to Hex at
-  # the release). It stands on the `statifier_blocks` commit documenting the
-  # shipped subchart handler, which carries both surfaces this app is
-  # written against: ADR-0007's `StatifierBlocks.InvokeStep` - the base
-  # every `myapp.*` step is one declaration on (se-4dt.1) - and
+  # That default arm is a Hex requirement with 0.11.0 as its floor: the
+  # first release carrying ADR-0007's `StatifierBlocks.InvokeStep` - the
+  # base every `myapp.*` step is one declaration on (se-4dt.1) - and
   # `StatifierBlocks.Runtime.Subchart` (se-4dt.4). 0.10.0 predates both, so
-  # on the released package the twelve step modules do not compile at all
-  # and there is no subchart handler to register.
+  # a resolution that could only reach it would leave the twelve step
+  # modules uncompilable and no subchart handler to register. Four interim
+  # git pins served this arm across the campaign era (se-p22's pattern);
+  # they are retired.
   #
-  # `mix.exs` and `mix.lock` are checked against each other rather than each
-  # against a hope, the way `DependencyPinsTest` checks the other git pin: a
-  # `mix.exs` edit without the matching lock entry resolves to whatever was
-  # already fetched.
+  # `mix.exs` and `mix.lock` are checked against each other rather than
+  # each against a hope: a `mix.exs` edit without the matching lock entry
+  # resolves to whatever was already fetched.
   #
-  # Sabotage: pointed the expectation here at the real-but-wrong previous
-  # `statifier_blocks` main 957ea91ed54abecdc91cc9ae9c6e4c9314e15417 (the
-  # ADR-0007 pin this bead moved off) and left `mix.exs` alone; both
-  # assertions went red, reporting the subchart-handler ref against the
-  # mutated expectation. Reverted from a backup copy.
-  #
-  # Mutating `mix.exs` instead proves less, not more: on an earlier ref the
-  # package has no `StatifierBlocks.InvokeStep` at all, so every step module
-  # fails to compile and the run never reaches ExUnit. That the pin is
-  # load-bearing is worth knowing; it is not this test going red.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the interim git pin" do
+  # Sabotage: pointed the requirement expectation here at the
+  # real-but-wrong previous floor `"~> 0.10"` and left `mix.exs` alone; the
+  # membership assertion went red reporting `"~> 0.11"` against the mutated
+  # expectation. Reverted from a backup copy. What that proves is textual -
+  # the committed requirement is the exact string asserted - and the lock
+  # assertion below is what ties it to a resolved 0.11-line Hex release.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks,
-            git: "https://github.com/riddler/statifier_blocks.git", ref: @statifier_blocks_ref} in deps
+    assert {:statifier_blocks, "~> 0.11"} in deps
 
     lock_line =
       "mix.lock"
@@ -48,38 +38,26 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ @statifier_blocks_ref
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.11.)
   end
 
-  # The engine carries an INTERIM git pin of its own, on the commit that
-  # adds `Statifier.Invoke.SyncHandler` and its wrapping adapter. Hex 2.2.1
-  # has neither, and this app's three domain handler modules are written
-  # against the behaviour while `StatifierExamples.Charts` is generated over
-  # the adapter, so on the released engine the app does not compile at all
-  # (se-4dt.2). `override: true` is part of the assertion rather than
-  # incidental: `statifier_persistence`'s git ref brings its own
-  # `statifier-ex` dependency, and dropping the override would let this app
-  # inherit that one instead of stating its own.
+  # The engine's floor is 2.3.0: the first release carrying
+  # `Statifier.Invoke.SyncHandler` and its wrapping adapter, which the
+  # three domain handler modules are written against while
+  # `StatifierExamples.Charts.SyncAdapter` is generated over the adapter
+  # (se-4dt.2). No `override: true` remains - with every statifier-family
+  # dep on Hex, each package states a requirement the resolver satisfies at
+  # one version, and asserting the bare two-tuple here is what would catch
+  # an override quietly returning.
   #
-  # Sabotage: pointed the expectation here at the real-but-wrong previous
-  # `statifier-ex` main caa9e215d3da3b88c9fe4760c028f9d0bcae1151 (the commit
-  # before the SyncHandler pair landed) and left `mix.exs` alone; both
-  # assertions went red, reporting the SyncHandler ref against the mutated
+  # Sabotage: pointed the requirement expectation at the real-but-wrong
+  # previous floor `"~> 2.2"` and left `mix.exs` alone; the membership
+  # assertion went red reporting `"~> 2.3"` against the mutated
   # expectation. Reverted from a backup copy.
-  #
-  # Mutating `mix.exs` instead proves less, for the same reason the
-  # `statifier_blocks` note above gives: on caa9e21 there is no
-  # `Statifier.Invoke.SyncHandler.Adapter` to `use`, so the app fails to
-  # compile and the run never reaches ExUnit.
-  test "the statifier dep is the interim git pin, override included" do
+  test "the statifier dep is the Hex requirement, with no override" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier,
-            [
-              git: "https://github.com/riddler/statifier-ex.git",
-              ref: @statifier_ref,
-              override: true
-            ]} in deps
+    assert {:statifier, "~> 2.3"} in deps
 
     lock_line =
       "mix.lock"
@@ -88,7 +66,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier": )))
 
     assert lock_line, "statifier has no mix.lock entry"
-    assert lock_line =~ @statifier_ref
+    assert lock_line =~ ~s({:hex, :statifier, "2.3.)
   end
 
   # The durable-timer package is held at `~> 0.3.1`, not `~> 0.3`: 0.3.0's
