@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "bdoc_signup_demo",
-  "revision": 8,
+  "revision": 9,
   "metadata": {
     "name": "Signup wizard",
     "description": "Collect an account, verify the email, branch on the chosen plan, and provision.",
@@ -21,6 +21,15 @@
             "invoke_type": "myapp:signup",
             "step": "account",
             "label": "Collect email and password"
+          }
+        },
+        {
+          "type": "core.assign",
+          "id": "blk_su_collected",
+          "type_version": 1,
+          "config": {
+            "path": "signup",
+            "value": "{'plan': 'business', 'seats': 5, 'email_verified': false}"
           }
         },
         {

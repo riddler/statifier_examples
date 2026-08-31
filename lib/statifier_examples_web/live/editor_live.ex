@@ -455,11 +455,19 @@ defmodule StatifierExamplesWeb.EditorLive do
   # whose compile is expensive wants one, and this page is what such a host
   # copies - but the button re-runs a pass that is already current rather than
   # being the only thing that runs it.
+  #
+  # `:declare` comes off the FIXTURE rather than off the document on the
+  # canvas, and it has to: a block document cannot declare the datamodel
+  # roots its own guards read, so the host declares them and the fixture is
+  # where this app records which ones (see
+  # `StatifierExamples.Charts.Fixture`). An edit on the canvas changes the
+  # document, never which roots the chart was shipped needing.
   @spec compile(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp compile(socket) do
     result =
       Compiler.compile(socket.assigns.document, socket.assigns.palette,
-        known_invoke_types: Charts.invoke_types()
+        known_invoke_types: Charts.invoke_types(),
+        declare: socket.assigns.fixture.declare
       )
 
     raw = compiler_findings(result)

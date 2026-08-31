@@ -17,6 +17,7 @@ defmodule StatifierExamples.Signup do
   """
 
   alias StatifierBlocks.{Decode, Document}
+  alias StatifierExamples.Charts.Fixture
   alias StatifierExamples.Signup.{Provision, SignupStep}
 
   @typedoc """
@@ -24,21 +25,31 @@ defmodule StatifierExamples.Signup do
 
   `key` is URL-safe and stable - it is what a page puts in a path - and
   `name` is the document's own `metadata["name"]` rather than a second
-  spelling of it that could drift.
+  spelling of it that could drift. `declare` is the `<data>` roots the
+  chart's own guards read, which the host has to declare at compile time
+  because a block document cannot: see `StatifierExamples.Charts.Fixture`,
+  which carries the reasoning and the same key.
   """
   @type fixture :: %{
           key: String.t(),
           name: String.t(),
           path: Path.t(),
-          document: Document.t()
+          document: Document.t(),
+          declare: [Fixture.declaration()]
         }
 
-  # `{key, file}`. Listed rather than globbed: which documents this app ships
-  # is a fact worth reading in the source, and a stray file in `priv/` should
-  # not silently become an example.
+  # `{key, file, declared roots}`. Listed rather than globbed: which
+  # documents this app ships is a fact worth reading in the source, and a
+  # stray file in `priv/` should not silently become an example.
+  #
+  # The wizard declares `signup` because its plan branch guards on
+  # `signup.plan` and `signup.seats`, and a guard reading a root nothing
+  # declared raises `error.execution` instead of reading it as undefined -
+  # which is what used to send every run of it down the `otherwise` arm.
+  # The invitations chart guards on nothing, so it declares nothing.
   @documents [
-    {"signup_wizard", "signup_wizard.json"},
-    {"signup_invitations", "signup_invitations.json"}
+    {"signup_wizard", "signup_wizard.json", [{"signup", nil}]},
+    {"signup_invitations", "signup_invitations.json", []}
   ]
 
   @doc """
@@ -66,8 +77,8 @@ defmodule StatifierExamples.Signup do
   @spec fixtures() :: [fixture()]
   def fixtures, do: Enum.map(@documents, &load/1)
 
-  @spec load({String.t(), String.t()}) :: fixture()
-  defp load({key, file}) do
+  @spec load({String.t(), String.t(), [Fixture.declaration()]}) :: fixture()
+  defp load({key, file, declare}) do
     path = Path.join([Application.app_dir(:statifier_examples), "priv", "fixtures", file])
     document = decode!(path)
 
@@ -75,7 +86,8 @@ defmodule StatifierExamples.Signup do
       key: key,
       name: Map.get(document.metadata, "name", key),
       path: path,
-      document: document
+      document: document,
+      declare: declare
     }
   end
 

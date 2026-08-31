@@ -495,6 +495,26 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert html =~ ~s(data-run-entry="outcome")
     end
 
+    # se-5ep: the page's own compile has to carry the fixture's declared
+    # `<data>` roots, because a guard reading a root nothing declared raises
+    # `error.execution` rather than reading it as undefined - and so does
+    # the wizard's `core.assign`, which runs two blocks into the run. The
+    # feed is where a reader would see it, so the feed is where it is
+    # refuted.
+    #
+    # Sabotage: dropped `declare:` from `compile/1` in `EditorLive`, leaving
+    # the page compiling the wizard the way it did before this bead; the
+    # `error.execution` row appeared in the drawer and this went red, then
+    # reverted.
+    test "the run of the shipped wizard raises nothing on the page", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+      html = open_runs(view)
+
+      refute html =~ "error.execution"
+    end
+
     # The event affordance: one button per event the document declares, and
     # pressing it puts a row in the feed.
     #
@@ -710,7 +730,10 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     palette = Charts.palette()
 
     raw =
-      case Compiler.compile(fixture.document, palette, known_invoke_types: Charts.invoke_types()) do
+      case Compiler.compile(fixture.document, palette,
+             known_invoke_types: Charts.invoke_types(),
+             declare: fixture.declare
+           ) do
         {:ok, compiled} -> compiled.warnings
         {:error, findings} -> findings
       end

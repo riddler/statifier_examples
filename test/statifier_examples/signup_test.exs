@@ -77,6 +77,22 @@ defmodule StatifierExamples.SignupTest do
     assert "myapp:provision" in compiled.invoke_types
   end
 
+  # se-5ep: the wizard's plan branch guards on `signup.plan` and
+  # `signup.seats`, and a block document cannot declare the roots its own
+  # guards read - so the fixture entry carries them and every compile of it
+  # passes them. This asserts the record, and the run tests assert what it
+  # buys.
+  #
+  # Sabotage: emptied the wizard's declaration list in `@documents`; this
+  # went red here and took the two provisioning tests in `DurableTest` with
+  # it. Reverted.
+  test "the wizard declares the datamodel root its plan branch guards on" do
+    [wizard, invitations] = Signup.fixtures()
+
+    assert wizard.declare == [{"signup", nil}]
+    assert invitations.declare == []
+  end
+
   # Sabotage: dropped the `<param>` from SignupStep.emit/2; this went red,
   # then reverted.
   test "a wizard step sends the step it collects to the handler" do
