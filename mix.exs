@@ -96,6 +96,13 @@ defmodule StatifierExamples.MixProject do
        git: "https://github.com/riddler/statifier_persistence.git",
        ref: "ca8a7d8921a321491843934386e3ffa4ddf85f65"},
 
+      # Durable timers. `statifier_oban` never owns an Oban instance
+      # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
+      # the wizard's abandonment reminder is a stored job rather than a
+      # `Process.send_after/3` that dies with the node. Oban itself
+      # arrives through this package rather than being named again here.
+      {:statifier_oban, "~> 0.3"},
+
       # The authoring layer this app is the reference embedder for.
       # `phoenix_live_view` is optional there and supplied by this app above.
       statifier_blocks_dep(),

@@ -260,6 +260,57 @@ document does not declare, so every run of *that* document takes the
 write is exercised by `StatifierExamples.Charts.DurableTest`, on a
 document built in the test for the purpose.
 
+### The abandonment reminder, and why it is a row rather than a timer
+
+The signup wizard nudges a visitor who never verified their email. In the
+chart that is two ordinary blocks - a `core.send` with a delay, and a
+`core.on_event` in the enclosing group's interrupts - and no new
+vocabulary at all. What makes it interesting is where the delay is kept.
+
+`Statifier.Session` arms a delayed send with `Process.send_after/3`, so
+the timer dies with the node: deploy during the window and the nudge is
+silently gone. A durable run has no process to hold one in the first
+place. So this app hands the effect to
+[`statifier_oban`](https://github.com/riddler/statifier_oban) instead
+(`StatifierExamples.Charts.Timers`), which stores it as an `oban_jobs`
+row on the same SQLite file everything else lives in. `statifier_oban`
+never owns an Oban instance - this app supplies one, on
+`Oban.Engines.Lite`, in `config/config.exs`.
+
+Three things follow, and each is worth seeing:
+
+- **The reminder survives a restart.** `kill -9` the server mid-window and
+  the job is still there. When it fires,
+  `StatifierExamples.Charts.Timers.Delivery` answers the run-liveness
+  question from the stored run's status and hands the event to
+  `StatifierExamples.Charts.Durable.deliver/2`, which rebuilds the chart
+  and the position out of storage. Nothing in that path has ever seen the
+  process that armed the timer.
+- **The compiler takes it back down.** Nothing in the document authors a
+  cancel: `statifier_blocks` emits one in the `<onexit>` of the scope the
+  send was armed in, so leaving the verification window cancels the stored
+  job. The same machinery makes the wizard's 24-hour `core.wait` durable,
+  because a wait compiles to a delayed send too.
+- **A page that is open redraws.** The drive announces itself on the run's
+  topic and the editor page adopts the reading, so the nudge appears in
+  the Runs feed while you are watching rather than on the next reload.
+
+The delay itself is **host configuration**, not a fact about the chart:
+
+```elixir
+config :statifier_examples, :signup_reminder_delay, "90s"
+```
+
+A real product waits a day or two, and the fixture ships `2d` so it says
+so. A demo cannot wait two days, and editing the chart down to ninety
+seconds would make the example lie about the product. So
+`StatifierExamples.Signup` applies the configured duration to the reminder
+block as the document is loaded, the test environment configures something
+else again, and neither has to pretend to be the other. It does change the
+document's bytes, and therefore the content hash chart identity is keyed
+on - so a run armed under one delay will not resume under another, which
+is the identity guard doing its job rather than a wrinkle to work around.
+
 ## The gate
 
 ```sh

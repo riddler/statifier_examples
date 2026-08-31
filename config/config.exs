@@ -21,6 +21,30 @@ config :statifier_examples, StatifierExamples.Repo,
   # than failing outright.
   busy_timeout: 5_000
 
+# Durable timers, on the same SQLite file everything else lives in.
+#
+# `statifier_oban` never owns an Oban instance (its ADR-0002), so this is
+# the host's own: `Oban.Engines.Lite` is the SQLite engine, and the
+# notifier has to be named with it because the default one is Postgres'
+# `LISTEN/NOTIFY`, which SQLite has no equivalent of. One queue, named
+# here rather than defaulted, because the package refuses a queue it was
+# not given.
+config :statifier_examples, Oban,
+  repo: StatifierExamples.Repo,
+  engine: Oban.Engines.Lite,
+  notifier: Oban.Notifiers.PG,
+  queues: [statifier_timers: 5]
+
+# How long an unverified signup waits before the wizard nudges it.
+#
+# Host configuration rather than a fact about the chart, and that is the
+# point: a real product waits a day or two, and a demo cannot. The
+# fixture ships the production framing (`2d`) and this value is what a
+# running app arms - see `StatifierExamples.Signup`, which applies it to
+# the reminder block when the document is loaded. Any duration
+# `StatifierBlocks.Core.Duration` accepts.
+config :statifier_examples, :signup_reminder_delay, "90s"
+
 # Configure the endpoint
 config :statifier_examples, StatifierExamplesWeb.Endpoint,
   url: [host: "localhost"],
