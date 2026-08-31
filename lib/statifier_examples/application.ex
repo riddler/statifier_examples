@@ -17,9 +17,11 @@ defmodule StatifierExamples.Application do
       # `Statifier.SessionSupervisor` (st-ADR-0027). A session started
       # anywhere in this app registers under that registry, which is how a
       # handler holding only a `session_id` - all the plan context carries -
-      # finds the session to report its answer back to
-      # (`StatifierExamples.Charts.InvokeHandler`). Without it the sessions
-      # still run and the handlers have no way home.
+      # finds the session to report its answer back to. That reporting is
+      # `Statifier.Invoke.SyncHandler.Adapter`'s, generated into
+      # `StatifierExamples.Charts`, which is this app's one
+      # `Statifier.Invoke.Handler`. Without the registry the sessions still
+      # run and the handlers have no way home.
       Statifier.Supervisor,
       # The per-run exclusion durable runs step inside. It has to be this
       # app's own: `StatifierExamples.Persistence` declines the optional
