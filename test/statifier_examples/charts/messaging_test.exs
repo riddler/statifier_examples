@@ -43,7 +43,8 @@ defmodule StatifierExamples.Charts.MessagingTest do
   test "myapp:notify logs one line and completes" do
     log =
       capture_log(fn ->
-        assert Handlers.handle("myapp:notify", %{"template" => "receipt_ready"}) == {:ok, %{}}
+        assert Handlers.handle("myapp:notify", %{"template" => "receipt_ready"}, %{}) ==
+                 {:ok, %{}}
       end)
 
     assert log =~ "myapp:notify completed with 1 params"
@@ -53,6 +54,8 @@ defmodule StatifierExamples.Charts.MessagingTest do
   # reverted.
   test "an invoke type this module does not register is refused" do
     assert Handlers.invoke_types() == ["myapp:notify"]
-    assert Handlers.handle("myapp:park", %{}) == {:error, {:unknown_invoke_type, "myapp:park"}}
+
+    assert Handlers.handle("myapp:park", %{}, %{}) ==
+             {:error, {:unknown_invoke_type, "myapp:park"}}
   end
 end

@@ -8,29 +8,57 @@ defmodule StatifierExamples.Charts do
   deliberately thin: `statifier_blocks` owns the document model, the
   block-type registry and the compiler, and this app owns only the choices
   a host makes. Bead `se-06z` builds the editor host page on top of it.
+
+  ## It is also this app's invoke adapter
+
+  Two registries meet here, and they are still two. A block type **names**
+  an invoke type and `invoke_types/0` is the union of the names; a handler
+  **runs** one, and `Statifier.Session`'s `:invoke_handlers` is a
+  `%{type => module}` map of the modules. This module is the join, and it
+  is the join by `use`-ing `Statifier.Invoke.SyncHandler.Adapter` over the
+  three domain handler modules: that macro supplies the four
+  `Statifier.Invoke.Handler` callbacks and both derived registrations -
+  `invoke_types/0` for the compiler's `:known_invoke_types` and
+  `invoke_handlers/0` for the session - from the one handler list, so the
+  set a document is linted against and the set a session will answer
+  cannot come apart.
+
+  The app used to write that adapter itself, as
+  `StatifierExamples.Charts.InvokeHandler`. The engine writes it now, the
+  same way for every host, and the app's three domain modules are plain
+  `Statifier.Invoke.SyncHandler` implementations - `invoke_types/0` and
+  `handle/3` - with no lifecycle of their own (se-4dt.2).
   """
 
+  alias Statifier.Invoke.SyncHandler.Adapter
   alias StatifierBlocks.Palette
   alias StatifierExamples.{CardAuth, Signup}
-  alias StatifierExamples.Charts.{Fixture, Icons, InvokeHandler, Messaging}
+  alias StatifierExamples.Charts.{Fixture, Icons, Messaging}
+
+  # The three domain handler modules, named once. `invoke_types/0`,
+  # `invoke_handlers/0` and the `Statifier.Invoke.Handler` callbacks are all
+  # generated over this list, and `dispatch/3` reads it back as
+  # `sync_handlers/0`. A fourth domain's module joins here and nowhere else.
+  use Adapter, handlers: [CardAuth.Handlers, Messaging.Handlers, Signup.Handlers]
 
   @themes [:light, :dark, :brand]
-
-  # The three handler modules, in one list because two functions read them:
-  # `invoke_types/0` for the union of the names, `dispatch/2` for which
-  # module answers one. A fourth domain's module joins here and nowhere
-  # else.
-  @handler_modules [CardAuth.Handlers, Messaging.Handlers, Signup.Handlers]
 
   @typedoc """
   What the driver of a call knows about the call that the chart does not.
 
-  Empty from the in-memory driver, which has nothing durable to name.
-  `StatifierExamples.Charts.Durable` puts the run id in it, because a
-  handler that writes needs a stable key and the run is the only one this
-  app has (see `StatifierExamples.Signup.Accounts`).
+  Two drivers reach the handlers, and they know different things.
+  `Statifier.Session` drives through the adapter, which hands a handler the
+  engine's own plan context - `session_id` and the two registrations, and
+  no run, because a session has none. `StatifierExamples.Charts.Durable`
+  drives the pure core itself and calls `dispatch/3` directly, so it passes
+  what it knows: the run id, because a handler that writes needs a stable
+  key and the run is the only one this app has (see
+  `StatifierExamples.Signup.Accounts`).
+
+  A handler says which it needs by matching on it, and gets the clause for
+  "not this driver" otherwise.
   """
-  @type call_context :: %{optional(:run_id) => String.t()}
+  @type call_context :: Statifier.Invoke.SyncHandler.ctx() | %{optional(:run_id) => String.t()}
 
   @doc """
   The palette the editor is given: `statifier_blocks`' `core.*` structural
@@ -105,43 +133,6 @@ defmodule StatifierExamples.Charts do
   end
 
   @doc """
-  Every invoke type this app registers a handler for, sorted.
-
-  The list a host hands `StatifierBlocks.Compiler.compile/3` as
-  `:known_invoke_types`, which is what turns "this document names a handler
-  nobody registered" from a runtime surprise into a compile-time warning.
-
-  It is the union of both domains' handlers and the shared messaging one -
-  the deployment half of ADR-0002's two-registry seam, assembled where the
-  palette is, because a document is compiled against both at once and this
-  is the one place that holds them together.
-
-  All three handler modules answer `invoke_types/0`, so the union is one
-  concatenation and not three spellings of "what can this module do": that
-  is the point of the app having a single handler-module shape.
-  """
-  @spec invoke_types() :: [String.t()]
-  def invoke_types do
-    @handler_modules |> Enum.flat_map(& &1.invoke_types()) |> Enum.sort()
-  end
-
-  @doc """
-  The `%{invoke type => module}` map a session is started with
-  (st-ADR-0051's per-session registration).
-
-  Every name points at `StatifierExamples.Charts.InvokeHandler`, the one
-  adapter that implements `Statifier.Invoke.Handler` for this app and
-  routes back through `dispatch/2`. Built from `invoke_types/0` rather than
-  written out, so registering a new handler name is one line in one handler
-  module and nothing here - and so the set the compiler lints against and
-  the set a session will actually answer cannot come apart.
-  """
-  @spec invoke_handlers() :: %{String.t() => module()}
-  def invoke_handlers do
-    Map.new(invoke_types(), &{&1, InvokeHandler})
-  end
-
-  @doc """
   Runs one call, by routing `type` to whichever handler module registered
   it.
 
@@ -152,17 +143,32 @@ defmodule StatifierExamples.Charts do
   modules themselves answer for a name they do not hold - the same event,
   raised one level up, so a caller routes on one shape rather than two.
 
-  `context` is what the *driver* knows and the chart does not: which run
-  this call belongs to, when a durable stepper is driving. It is optional
-  because the in-memory driver has no run - a handler that needs it says
-  so by matching on it, and this app has exactly one that does
-  (`StatifierExamples.Signup.Handlers`' provisioning, which keys its write
-  on the run).
+  This is the routing for the app's *other* driver.
+  `Statifier.Session` never comes through here: the adapter's generated
+  `perform/2` routes the call itself, through
+  `Statifier.Invoke.SyncHandler.Adapter.dispatch/4`, and reports the answer
+  to the session. `StatifierExamples.Charts.Durable` drives the pure core
+  with no session to report to, so it routes through this function and
+  feeds the resulting event back into its own step.
+
+  It is a four-line `Enum.find` over `sync_handlers/0` rather than a call
+  to that same `dispatch/4`, which the engine does make public for a host
+  in exactly this position - because the engine types its fourth argument
+  as the plan context a session hands a handler, and what this driver has
+  to say about a call is a run id (see `t:call_context/0`). Handing it a
+  context of that shape is a contract violation dialyzer reports, so the
+  app routes over the same list rather than through the same function. The
+  list is still the one place a handler module is named, which is what the
+  uptake was for (se-4dt.2).
+
+  `context` is what the *driver* knows and the chart does not; see
+  `t:call_context/0`. It defaults to the empty map so a caller with nothing
+  to say says nothing, rather than inventing a shape.
   """
   @spec dispatch(String.t(), map(), call_context()) ::
           {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
   def dispatch(type, params, context \\ %{}) when is_binary(type) and is_map(params) do
-    case Enum.find(@handler_modules, &(type in &1.invoke_types())) do
+    case Enum.find(sync_handlers(), &(type in &1.invoke_types())) do
       nil -> {:error, {:unknown_invoke_type, type}}
       module -> module.handle(type, params, context)
     end

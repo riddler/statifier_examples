@@ -16,6 +16,8 @@ defmodule StatifierExamples.CardAuth.Handlers do
   fictional in exactly the way this repo's fixtures are.
   """
 
+  @behaviour Statifier.Invoke.SyncHandler
+
   require Logger
 
   alias StatifierExamples.Charts
@@ -36,10 +38,12 @@ defmodule StatifierExamples.CardAuth.Handlers do
   @doc """
   Every invoke type this module answers, sorted.
 
-  The list a host hands the compiler as `:known_invoke_types`, which is
-  what turns "this document names a handler nobody registered" from a
-  runtime surprise into a compile-time warning.
+  Read twice, and `Statifier.Invoke.SyncHandler.Adapter` does both readings
+  over `StatifierExamples.Charts`' handler list: the union is the
+  `:known_invoke_types` a document is linted against and the key set of the
+  `:invoke_handlers` map a session answers with.
   """
+  @impl Statifier.Invoke.SyncHandler
   @spec invoke_types() :: [String.t()]
   def invoke_types, do: @invoke_types
 
@@ -49,11 +53,12 @@ defmodule StatifierExamples.CardAuth.Handlers do
   `{:error, {:unknown_invoke_type, type}}` rather than a raise, because an
   unregistered invoke type is an ordinary answer a caller routes on - this
   family's rule is that errors are events, and a leaf never rescues to a
-  default.
+  default. The engine's adapter reports it as a terminal
+  `error.communication.invoke`, never as a retry.
   """
+  @impl Statifier.Invoke.SyncHandler
   @spec handle(String.t(), map(), Charts.call_context()) ::
           {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
-  def handle(invoke_type, params, context \\ %{})
   def handle("myapp:authorize", params, _context), do: completed("myapp:authorize", params)
 
   def handle("myapp:balance_check", params, _context),

@@ -81,12 +81,19 @@ defmodule StatifierExamples.MixProject do
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.22"},
 
-      # The engine, held at its Hex release. `statifier_persistence`'s git
-      # ref carries a git dependency on `statifier-ex`'s main branch, for a
-      # queue-discard fix that release 2.2.0 lacked; 2.2.1 ships it (the fix
-      # commit is an ancestor of the v2.2.1 tag), so the override keeps this
-      # app on the released engine rather than inheriting a branch pin.
-      {:statifier, "~> 2.2", override: true},
+      # The engine. INTERIM git pin, on the commit that adds
+      # `Statifier.Invoke.SyncHandler` and its wrapping adapter: 2.2.1 has
+      # neither, and this app's handlers are written against them (se-4dt.2).
+      # Re-pin to a Hex release once one carries them, the way the editor dep
+      # has been re-pinned twice (se-p22's pattern).
+      #
+      # `override: true` stays: `statifier_persistence`'s git ref carries its
+      # own dependency on `statifier-ex`, and the override is what lets this
+      # app's pin be the one that wins rather than the one it inherits.
+      {:statifier,
+       git: "https://github.com/riddler/statifier-ex.git",
+       ref: "a0f965e6b15868fb05bd0d05981ac18d64d0344c",
+       override: true},
 
       # The durable stepper. INTERIM git pin: Hex 0.1.3 predates both the
       # `:blob_type` option and the run `metadata` column this app configures,

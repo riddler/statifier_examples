@@ -35,7 +35,7 @@ defmodule StatifierExamples.Signup.HandlersTest do
   test "myapp:signup logs the step it collected" do
     log =
       capture_log(fn ->
-        assert {:ok, _answers} = Handlers.handle("myapp:signup", %{"step" => "confirm"})
+        assert {:ok, _answers} = Handlers.handle("myapp:signup", %{"step" => "confirm"}, %{})
       end)
 
     assert log =~ "myapp:signup"
@@ -53,7 +53,7 @@ defmodule StatifierExamples.Signup.HandlersTest do
   # had nothing to guard on again. Reverted.
   test "myapp:signup answers with what the account step collected" do
     capture_log(fn ->
-      assert {:ok, answers} = Handlers.handle("myapp:signup", %{"step" => "account"})
+      assert {:ok, answers} = Handlers.handle("myapp:signup", %{"step" => "account"}, %{})
 
       assert answers == %{"plan" => "business", "seats" => 5, "email_verified" => false}
     end)
@@ -68,7 +68,7 @@ defmodule StatifierExamples.Signup.HandlersTest do
   test "the steps the wizard keeps nothing from answer with nothing" do
     capture_log(fn ->
       for step <- ["send_verification", "company_details", "preferences", "confirm"] do
-        assert {:ok, %{}} == Handlers.handle("myapp:signup", %{"step" => step})
+        assert {:ok, %{}} == Handlers.handle("myapp:signup", %{"step" => step}, %{})
       end
     end)
   end
@@ -79,7 +79,7 @@ defmodule StatifierExamples.Signup.HandlersTest do
     log =
       capture_log(fn ->
         assert {:ok, %{"provisioned" => "skipped"}} ==
-                 Handlers.handle("myapp:provision", %{"email" => "someone@example.com"})
+                 Handlers.handle("myapp:provision", %{"email" => "someone@example.com"}, %{})
       end)
 
     assert log =~ "myapp:provision"
@@ -112,6 +112,7 @@ defmodule StatifierExamples.Signup.HandlersTest do
   # Sabotage: dropped handle/2's catch-all clause; this went red with a
   # FunctionClauseError, then reverted.
   test "a name this module does not register is refused rather than raised" do
-    assert Handlers.handle("myapp:park", %{}) == {:error, {:unknown_invoke_type, "myapp:park"}}
+    assert Handlers.handle("myapp:park", %{}, %{}) ==
+             {:error, {:unknown_invoke_type, "myapp:park"}}
   end
 end

@@ -50,7 +50,8 @@ defmodule StatifierExamples.CardAuth.HandlersTest do
     test "#{invoke_type} logs one line and completes" do
       log =
         capture_log(fn ->
-          assert Handlers.handle(unquote(invoke_type), %{"amount_cents" => 42_350}) == {:ok, %{}}
+          assert Handlers.handle(unquote(invoke_type), %{"amount_cents" => 42_350}, %{}) ==
+                   {:ok, %{}}
         end)
 
       assert log =~ "#{unquote(invoke_type)} completed with 1 params"
@@ -60,7 +61,7 @@ defmodule StatifierExamples.CardAuth.HandlersTest do
   # Sabotage: made the fallback clause return {:ok, %{}}; this went red, then
   # reverted.
   test "an invoke type nobody registered is refused rather than answered" do
-    assert Handlers.handle("myapp:nowhere", %{}) ==
+    assert Handlers.handle("myapp:nowhere", %{}, %{}) ==
              {:error, {:unknown_invoke_type, "myapp:nowhere"}}
   end
 end

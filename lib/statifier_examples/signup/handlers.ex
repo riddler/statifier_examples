@@ -6,15 +6,16 @@ defmodule StatifierExamples.Signup.Handlers do
   name resolves to is deployment state supplied per session (statifier-ex
   ADR-0051). This module is the deployment half for this app's signup
   domain, written in the one shape every handler module here uses:
-  `invoke_types/0` answers every name it registers, and `handle/2` answers
+  `invoke_types/0` answers every name it registers, and `handle/3` answers
   one call or refuses a name it does not.
 
-  That shape is the one the runtime asks for. ADR-0051's per-session
-  registration is a `%{invoke type => module}` map, so a handler is a
-  *module* rather than a closure, and the set the compiler wants as
-  `:known_invoke_types` is the same map's keys - which `invoke_types/0`
-  answers directly, without a caller reaching into a map of functions to
-  find out what this module can do.
+  That shape is not this app's invention: it is
+  `Statifier.Invoke.SyncHandler`, the engine's narrow half of ADR-0051's
+  handler seam, for the ordinary case of an invoke that is a *call* - hand
+  these params to some code, take back a `donedata` map or a failure. The
+  lifecycle half (`start/2`, `cancel/2`, `forward/3`, `perform/2`) is
+  written once upstream, in the adapter `StatifierExamples.Charts` `use`s,
+  and a handler with nothing to cancel implements none of it.
 
   `myapp:signup` logs a line and answers with what its step collected -
   canned values, because there is no form here to fill in, but canned in
@@ -34,12 +35,16 @@ defmodule StatifierExamples.Signup.Handlers do
   something stable. Nothing in the chart is: it carries no datamodel and
   no identity. The *run* is, and a durable driver passes it in the call
   context `StatifierExamples.Charts.dispatch/3` takes - which is why the
-  provisioning clause matches on `%{run_id: run_id}` and the in-memory
-  driver, which has no run to name, gets the clause that says so.
+  provisioning clause matches on `%{run_id: run_id}` and every other
+  driver gets the clause that says so. A `Statifier.Session` is one of
+  those: the adapter hands a handler the engine's plan context, which
+  names a session and never a run, because a session has none.
 
   `StatifierExamples.Signup.Accounts` holds the write and the reasoning
   about the key.
   """
+
+  @behaviour Statifier.Invoke.SyncHandler
 
   require Logger
 
@@ -58,6 +63,7 @@ defmodule StatifierExamples.Signup.Handlers do
   which is what turns "this document names a handler nobody registered"
   from a runtime surprise into a compile-time warning.
   """
+  @impl Statifier.Invoke.SyncHandler
   @spec invoke_types() :: [String.t()]
   def invoke_types, do: @invoke_types
 
@@ -74,10 +80,9 @@ defmodule StatifierExamples.Signup.Handlers do
   which form to put up without reading the datamodel. `myapp:provision`
   creates the workspace the finished signup gets.
   """
+  @impl Statifier.Invoke.SyncHandler
   @spec handle(String.t(), map(), Charts.call_context()) ::
           {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
-  def handle(invoke_type, params, context \\ %{})
-
   def handle("myapp:signup", params, _context) do
     step = Map.get(params, "step")
 
@@ -94,10 +99,11 @@ defmodule StatifierExamples.Signup.Handlers do
     {:ok, %{"account" => user.email, "provisioned" => Atom.to_string(result)}}
   end
 
-  # No run to key the write on, so there is nothing durable to write. The
-  # in-memory driver is the caller here, and its runs do not outlive the
-  # page that started them; provisioning an account from one would leave a
-  # row nothing can ever find its way back to.
+  # No run to key the write on, so there is nothing durable to write. A
+  # bare `Statifier.Session` is the caller here - the adapter's plan
+  # context names a session, not a run - and a session's invocations do not
+  # outlive the process that started them; provisioning an account from one
+  # would leave a row nothing can ever find its way back to.
   def handle("myapp:provision", params, _context) do
     Logger.info(
       "myapp:provision skipped the write for a run-less call, #{inspect(Map.keys(params))}"

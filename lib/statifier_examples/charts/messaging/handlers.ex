@@ -8,6 +8,8 @@ defmodule StatifierExamples.Charts.Messaging.Handlers do
   line and completes; the messages are fictional and nothing is sent.
   """
 
+  @behaviour Statifier.Invoke.SyncHandler
+
   require Logger
 
   alias StatifierExamples.Charts
@@ -15,16 +17,16 @@ defmodule StatifierExamples.Charts.Messaging.Handlers do
   @invoke_types ["myapp:notify"]
 
   @doc "Every invoke type this module answers."
+  @impl Statifier.Invoke.SyncHandler
   @spec invoke_types() :: [String.t()]
   def invoke_types, do: @invoke_types
 
   @doc """
   Answers a notify call, or refuses a name this module does not register.
   """
+  @impl Statifier.Invoke.SyncHandler
   @spec handle(String.t(), map(), Charts.call_context()) ::
           {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
-  def handle(invoke_type, params, context \\ %{})
-
   def handle("myapp:notify", params, _context) do
     Logger.info("myapp:notify completed with #{map_size(params)} params")
 
