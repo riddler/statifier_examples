@@ -81,47 +81,34 @@ defmodule StatifierExamples.MixProject do
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.22"},
 
-      # The engine, on an INTERIM git pin (se-p22's pattern, campaign-024
-      # ruling R-e). 2.3.0 - the floor this arm held - carries
-      # `Statifier.Invoke.SyncHandler` and its wrapping adapter, which this
-      # app's handlers are written against (se-4dt.2). What it does not
-      # carry is `Statifier.Session`'s `:inherit_invoke_handlers` option
-      # (statifier-ex st-pvpz, PR 251): without it a child session starts
-      # with no `:invoke_handlers` at all, so the `signup_onboarding`
-      # wizard child cannot answer its own `myapp:signup` call and parks at
-      # its first step. This app is the reference embedder, so it consumes
-      # the merged engine commit rather than working around the gap.
+      # The engine. 2.4.0 is the floor: the first release carrying
+      # `Statifier.Session`'s `:inherit_invoke_handlers` option, without
+      # which a child session starts with no `:invoke_handlers` at all and
+      # the `signup_onboarding` wizard child cannot answer its own
+      # `myapp:signup` call. 2.3.0 - the floor this arm held before it -
+      # carries `Statifier.Invoke.SyncHandler` and its wrapping adapter,
+      # which this app's handlers are written against (se-4dt.2), but not
+      # the inherited handler map. The interim git pin this arm carried
+      # between the two releases is retired (se-p22's pattern).
       #
-      # `override: true` is what makes a git dep win over the Hex
-      # requirements `statifier_blocks`, `statifier_persistence` and
-      # `statifier_oban` each state on `statifier`; a git ref satisfies
-      # none of them. It goes when the pin does.
-      #
-      # FINAL re-pin after the operator publishes statifier 2.4.0:
-      # `{:statifier, "~> 2.4"}`, no override.
-      {:statifier,
-       github: "riddler/statifier-ex",
-       ref: "6b4ff697b6db3f8c7378001fa15a7f9f8b901ef6",
-       override: true},
+      # No `override: true` remains: with every statifier-family dep on
+      # Hex, `statifier_blocks`, `statifier_persistence` and
+      # `statifier_oban` each state a requirement on `statifier` the
+      # resolver satisfies at one version. The override existed only to
+      # make a git ref win over requirements no git ref can satisfy.
+      {:statifier, "~> 2.4"},
 
       # The durable stepper, and `StatifierPersistence.Driver` - the
       # run-to-quiescence loop `StatifierExamples.Charts.Durable` used to
-      # write for itself (se-4dt.3).
-      #
-      # On an INTERIM git pin (se-p22's pattern, campaign-024 ruling R-c).
-      # 0.2.0 - the floor this arm held - carries the driver, the
-      # `:blob_type` option and the run `metadata` column this app
-      # configures. What it does not carry is ADR-0007's asynchronous
-      # invocation seam: the dispatch fun's `:pending` arm, and the
+      # write for itself (se-4dt.3). 0.3.0 is the floor: the first release
+      # carrying ADR-0007's asynchronous invocation seam - the dispatch
+      # fun's `:pending` arm, and the
       # `StatifierPersistence.Driver.done_invocation/5` and
       # `failed_invocation/5` doors an answer arriving from an Oban job
-      # re-enters through. Without them a call cannot outlive the step
-      # that made it, which is the whole of se-d74.
-      #
-      # FINAL re-pin after the operator publishes statifier_persistence
-      # 0.3.0: `{:statifier_persistence, "~> 0.3"}`.
-      {:statifier_persistence,
-       github: "riddler/statifier_persistence", ref: "65ef280d77b70c7560fb045ae71e1ec3bc08709d"},
+      # re-enters through. On 0.2.0 a call cannot outlive the step that
+      # made it, which is the whole of se-d74. The interim git pin this
+      # arm carried before the release is retired (se-p22's pattern).
+      {:statifier_persistence, "~> 0.3"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -152,27 +139,24 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is an INTERIM git pin (se-ihm, campaign-024). 0.11.0 -
-  # the Hex floor this arm held - carries the two surfaces the app was
-  # written against, ADR-0007's block-type defaults layer with
+  # The default arm is a Hex requirement with 0.12.0 as the floor: the
+  # first release carrying the drafts shelf - `core.drafts` and
+  # `core.placeholder`, `StatifierBlocks.Shelf`, and the `.sb-slot--tray`
+  # strip the editor draws a parked fragment in. On 0.11.0 the
+  # `card_processing_sketch` fixture names two types no palette resolves,
+  # so the reference embedder cannot show the tray it exists to show; that
+  # release does carry the two earlier surfaces this app is written
+  # against, ADR-0007's block-type defaults layer with
   # `StatifierBlocks.InvokeStep` (se-4dt.1) and `StatifierBlocks.Runtime`'s
-  # `Subchart` handler (se-4dt.4). What it does not carry is the drafts
-  # shelf: `core.drafts` and `core.placeholder`, `StatifierBlocks.Shelf`,
-  # and the `.sb-slot--tray` strip the editor draws a parked fragment in.
-  # This app is the reference embedder, so it shows the tray before the
-  # release rather than after it.
-  #
-  # FINAL re-pin after the operator publishes statifier_blocks 0.12.0:
-  # `{:statifier_blocks, "~> 0.12"}`, retiring `@statifier_blocks_ref` in
-  # `test/statifier_examples/mix_deps_test.exs` with it.
+  # `Subchart` handler (se-4dt.4). Five interim git pins served this arm
+  # across the campaign era (se-p22's pattern); they are retired.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         github: "riddler/statifier_blocks", ref: "a3833479257fb0692eea65ed50c00c939b489f36"}
+        {:statifier_blocks, "~> 0.12"}
     end
   end
 
