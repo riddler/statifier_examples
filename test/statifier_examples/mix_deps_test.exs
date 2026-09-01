@@ -101,11 +101,19 @@ defmodule StatifierExamples.MixDepsTest do
   # status-bearing callback to the package's own Ecto adapter and matches no
   # status itself, so it rides the library's encoding.
   #
-  # Sabotage: pointed the LOCK assertion at the real-but-wrong ref of the
-  # commit before it (`187aac0...`) and left `mix.lock` alone; it went red
-  # reporting the resolved `1416a7b...` entry against the mutated
-  # expectation. Reverted from a backup copy.
-  @statifier_persistence_ref "1416a7b98ce70efe0511050d23dd9cc8f12d0d3e"
+  # The pin moved FORWARD for se-opg and is still interim: sp-i21 landed
+  # ADR-0009's storage-phase telemetry after 1416a7b, and
+  # `[:statifier_persistence, :run, :step, :start | :stop]` is the span
+  # every durable macrostep nests inside and the one the capstone's trace
+  # graph is built out of. On 1416a7b the durable subchart runs correctly
+  # and emits nothing.
+  #
+  # Sabotage: pointed the pin constant at the commit before this one
+  # (`b25dd5b`, padded to a full-length ref) and left `mix.exs` and
+  # `mix.lock` alone; it went red on the membership assertion, reporting
+  # the real `0749481...` arm against the mutated expectation. Reverted
+  # from a backup copy.
+  @statifier_persistence_ref "0749481762a0b06db6be5f0a6f71f13e658aa259"
 
   test "the statifier_persistence dep is the interim git pin" do
     deps = Mix.Project.config()[:deps]
@@ -136,15 +144,27 @@ defmodule StatifierExamples.MixDepsTest do
   # Hex release; without it the textual check below would pass against a
   # tree still holding 0.3.1.
   #
-  # Sabotage: pointed that lock assertion at the real-but-wrong
-  # previous line `"0.3."` and left `mix.lock` alone; it went red reporting
-  # the resolved `0.4.0` entry against the mutated expectation. Reverted
-  # from a backup copy. This arm had no lock assertion before se-t8a - the
-  # membership check alone would have passed against an unmoved tree.
-  test "the statifier_oban dep is on the line carrying the cancel fix" do
+  # It is an INTERIM GIT PIN as of se-opg, and no longer the `~> 0.4` Hex
+  # requirement. sob-43q landed ADR-0006's eleven telemetry events after
+  # 0.4.0, and two of them are edges the capstone's trace graph asserts:
+  # `[:statifier_oban, :timer, :scheduled]` and `[..., :timer, :fired]`.
+  # On 0.4.0 a timer arms and fires and the graph has no edge across the
+  # gap.
+  #
+  # **A re-pin to the Hex release carrying sob-43q is owed** (se-a5y), and
+  # this test is what makes forgetting it loud.
+  #
+  # Sabotage: pointed the pin constant at the commit before this one
+  # (`4f9df2e`, padded to a full-length ref) and left `mix.exs` and
+  # `mix.lock` alone; it went red on the membership assertion, reporting
+  # the real `4bf3a7d...` arm against the mutated expectation. Reverted
+  # from a backup copy.
+  @statifier_oban_ref "4bf3a7d195086e055bb9bc84fe174ed4a14e5d67"
+
+  test "the statifier_oban dep is the interim git pin" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_oban, "~> 0.4"} in deps
+    assert {:statifier_oban, github: "riddler/statifier_oban", ref: @statifier_oban_ref} in deps
 
     lock_line =
       "mix.lock"
@@ -153,6 +173,61 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_oban": )))
 
     assert lock_line, "statifier_oban has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_oban, "0.4.)
+    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_oban.git")
+    assert lock_line =~ @statifier_oban_ref
+  end
+
+  # The OTel bridge, which this app had no dependency on before se-opg -
+  # nothing here produced a trace, so there was nothing to bridge.
+  #
+  # Also an INTERIM GIT PIN: the two SIBLING setup calls the capstone needs,
+  # `OpentelemetryStatifier.Persistence.setup/1` and
+  # `OpentelemetryStatifier.Oban.setup/1`, landed after 0.2.0. On 0.2.0
+  # only the interpreter half exists, which in a durable run bridges
+  # nothing at all.
+  #
+  # **A re-pin to the Hex release carrying the sibling setups is owed**
+  # (se-a5y).
+  #
+  # Sabotage: pointed the pin constant at the commit before this one
+  # (`2ab436d`, padded to a full-length ref) and left `mix.exs` and
+  # `mix.lock` alone; it went red on the membership assertion, reporting
+  # the real `99d7791...` arm against the mutated expectation. Reverted
+  # from a backup copy.
+  @opentelemetry_statifier_ref "99d7791dcfd11918464b3a1ad3cdd43614379588"
+
+  test "the opentelemetry_statifier dep is the interim git pin" do
+    deps = Mix.Project.config()[:deps]
+
+    assert {:opentelemetry_statifier,
+            github: "riddler/opentelemetry_statifier", ref: @opentelemetry_statifier_ref} in deps
+
+    lock_line =
+      "mix.lock"
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.find(&String.starts_with?(&1, ~s(  "opentelemetry_statifier": )))
+
+    assert lock_line, "opentelemetry_statifier has no mix.lock entry"
+    assert lock_line =~ ~s({:git, "https://github.com/riddler/opentelemetry_statifier.git")
+    assert lock_line =~ @opentelemetry_statifier_ref
+  end
+
+  # The SDK behind the bridge. `opentelemetry_statifier` depends only on
+  # `opentelemetry_api` on purpose - a bridge that dragged an SDK into
+  # every host would be choosing the host's exporter for it - so the host
+  # is where both are named, and this asserts they are Hex requirements
+  # rather than pins that would need retiring with the others.
+  #
+  # Sabotage: changed the expected requirement for `opentelemetry` to
+  # `"~> 1.4"`; it went red on the membership assertion, which is the
+  # point - the resolved 1.7.0 satisfies `~> 1.4` perfectly well, so only
+  # a check on the literal arm catches the requirement being loosened.
+  # Reverted from a backup copy.
+  test "the OpenTelemetry SDK and API are plain Hex requirements" do
+    deps = Mix.Project.config()[:deps]
+
+    assert {:opentelemetry_api, "~> 1.5"} in deps
+    assert {:opentelemetry, "~> 1.5"} in deps
   end
 end

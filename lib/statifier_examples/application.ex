@@ -5,8 +5,18 @@ defmodule StatifierExamples.Application do
 
   use Application
 
+  alias StatifierExamples.Charts.Tracing
+
   @impl true
   def start(_type, _args) do
+    # The OTel bridge, attached before anything can emit. It is
+    # `:telemetry.attach/4` and an ETS table, not a process, so it belongs
+    # here rather than in the supervision tree - and attaching it after the
+    # tree started would lose the spans for whatever the tree did on its
+    # way up. `StatifierExamples.Charts.Tracing` says which three halves
+    # and why.
+    :ok = Tracing.setup()
+
     children = [
       StatifierExamplesWeb.Telemetry,
       StatifierExamples.Repo,
