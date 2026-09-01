@@ -45,14 +45,30 @@ defmodule StatifierExamples.Charts.Durable do
   What stays here is the part that is genuinely this host's.
 
   `effects:` is an executor - every non-lifecycle effect, in the order the
-  stepper hands them over. It does two things and neither of them is "step
-  the run": it records the effect for the feed, and it lets
-  `StatifierExamples.Charts.Timers` claim the ones that are timers.
+  stepper hands them over. It does three things and none of them is "step
+  the run": it records the effect for the feed, it lets
+  `StatifierExamples.Charts.Timers` claim the ones that are timers, and it
+  lets `StatifierExamples.Charts.AsyncCalls` claim the ones that start or
+  cancel an asynchronous invocation.
 
   `dispatch:` performs one `<invoke>`, through
   `StatifierExamples.Charts.dispatch/3` with the run id as its context, and
   records the answer for the feed. What the *chart* is told is the driver's
   to build.
+
+  ## One call is not answered here at all
+
+  `StatifierExamples.Charts.AsyncCalls` claims one of this app's calls -
+  the wizard's company-details step - and for that one `dispatch:` answers
+  `:pending` instead of a donedata map. Nothing is buffered, the drive
+  reaches quiescence, and the position persists with the invocation still
+  live in `active_invocations`: the run rests durably in the middle of a
+  call, with no process holding it and an Oban job carrying the work.
+  Whatever eventually finishes that job answers through
+  `complete_invocation/3` or `fail_invocation/3` below, which are
+  `deliver/2`'s siblings and just as cold. That arm is
+  `StatifierPersistence.Driver`'s ADR-0007, and that module's moduledoc
+  says why this app has one such call and which one.
 
   Both report through the driving process' own mailbox. They are called
   synchronously, inside the driver's own `Runs.create/4` and `Runs.step/5`,
@@ -96,7 +112,7 @@ defmodule StatifierExamples.Charts.Durable do
   alias Statifier.Invoke.Types
   alias StatifierBlocks.{Compiled, Compiler, Document}
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Fixture, Run, RunLock, Subchart, Timers}
+  alias StatifierExamples.Charts.{AsyncCalls, Fixture, Run, RunLock, Subchart, Timers}
   alias StatifierPersistence.{Driver, Runs, Storage}
 
   # The run-record metadata key that says which shipped fixture a run is a
@@ -308,6 +324,75 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
+  Answers one asynchronous invocation and drives the stored run on.
+
+  `deliver/2`'s sibling for the other kind of out-of-band arrival: where
+  that one feeds a fired timer's event into a run, this one feeds an
+  invocation's own answer through
+  `StatifierPersistence.Driver.done_invocation/5` - the public re-entry
+  door its ADR-0007 added, which builds the same `done.invoke.<invoke_id>`
+  event a live `Statifier.Session` would build and steps it inside the
+  run's serialization strategy.
+
+  Cold in exactly the way `deliver/2` is: everything it is given is a run
+  id, an invocation id and a result, and which chart, where the run had
+  got to and what it does next all come back out of SQLite. That is what
+  makes the answer survive the restart, and it is why this takes no
+  `%__MODULE__{}` - the process that started the call is gone.
+
+  `:delivered` when the answer was fed back, `{:discarded, reason}` when
+  it was not. Three reasons, and all three are ordinary:
+
+    * the run is no longer live - it finished or was abandoned while the
+      job ran;
+    * the chart cannot be rebuilt - the same
+      `StatifierExamples.Charts.Timers.Delivery` list, for the same
+      reasons;
+    * the invocation is no longer the live one under its state, which is
+      spec 6.4.3's cancellation. For this app that is the wizard's
+      abandonment deadline firing while the job was still running: the
+      interrupt exits the invoking state, the entry leaves
+      `active_invocations`, and the answer arrives for an invocation the
+      chart has already stopped waiting for. The driver decides it from
+      the loaded position, inside the run's own serialization strategy, so
+      a cancel cannot land between the read and the step.
+
+  The reason is the stored run's own status in all three cases, because
+  that is what tells the two apart - the driver's `{:discarded, run}`
+  deliberately does not (statifier_persistence ADR-0007's Consequences).
+  To a job they mean the same thing: do not retry, nothing to do.
+
+  The same discard is what makes redelivery safe: an at-least-once job
+  queue answering twice finds the invocation gone the second time, because
+  the chart left the invoking state on the first answer.
+  """
+  @spec complete_invocation(String.t(), String.t(), term()) :: :delivered | {:discarded, term()}
+  def complete_invocation(run_id, invoke_id, donedata)
+      when is_binary(run_id) and is_binary(invoke_id) do
+    answer(run_id, invoke_id, {:done, donedata})
+  end
+
+  @doc """
+  `complete_invocation/3`'s failing counterpart: reports one asynchronous
+  invocation **permanently** failed, through
+  `StatifierPersistence.Driver.failed_invocation/5`.
+
+  Permanent in st-ADR-0068's sense - the host's retries are exhausted and
+  no answer will follow - so the chart hears
+  `error.communication.invoke.<invoke_id>` carrying `failure`'s
+  `:reason`/`:attempts`/`:detail`. A transient failure never reaches here:
+  `StatifierOban.Invoke.Worker` retries it, and only the attempt that
+  gives up for good delivers.
+
+  Returns and discards are `complete_invocation/3`'s.
+  """
+  @spec fail_invocation(String.t(), String.t(), keyword()) :: :delivered | {:discarded, term()}
+  def fail_invocation(run_id, invoke_id, failure)
+      when is_binary(run_id) and is_binary(invoke_id) and is_list(failure) do
+    answer(run_id, invoke_id, {:failed, failure})
+  end
+
+  @doc """
   The PubSub topic one run's out-of-band advances are announced on.
 
   A run id and not a page: which processes are showing a run is not
@@ -319,6 +404,80 @@ defmodule StatifierExamples.Charts.Durable do
 
   @spec continue(driven(), String.t()) :: {:ok, driven()} | {:error, term()}
   defp continue({durable, run}, event), do: send_event(durable, run, event)
+
+  # The cold half both re-entry doors share, and `deliver/2`'s own `with`
+  # with one clause swapped: rebuild the chart from the record, resume onto
+  # the stored position, then re-enter through the driver rather than
+  # sending an event.
+  #
+  # It carries no `:active <- record.status` check of its own, and that is
+  # deliberate rather than an omission. `deliver/2` has one because it
+  # feeds an ordinary event and the driver would happily queue that against
+  # a finished run. An invocation answer has a stricter guard already, in a
+  # better place: `StatifierPersistence.Driver` reads liveness off the
+  # loaded position INSIDE the run's serialization strategy, so a cancel
+  # cannot land between the read and the step. A pre-check here would
+  # answer the same question earlier and worse, and would hide the one that
+  # counts.
+  @spec answer(String.t(), String.t(), {:done, term()} | {:failed, keyword()}) ::
+          :delivered | {:discarded, term()}
+  defp answer(run_id, invoke_id, outcome) do
+    with {:ok, store} <- store(),
+         {:ok, record} <- Storage.fetch_run(store, run_id),
+         {:ok, fixture} <- fixture_for(record),
+         {:ok, compiled} <- compile(fixture.document, fixture.declare),
+         {:ok, driven} <- resume(compiled, fixture.document, run_id),
+         {:ok, {durable, run}} <- reenter(driven, invoke_id, outcome) do
+      broadcast(run_id, {durable, run})
+
+      :delivered
+    else
+      {:discarded, reason} -> {:discarded, reason}
+      :error -> {:discarded, :chart_unknown}
+      {:error, reason} -> {:discarded, reason}
+    end
+  end
+
+  @spec reenter(driven(), String.t(), {:done, term()} | {:failed, keyword()}) ::
+          {:ok, driven()} | {:discarded, term()} | {:error, term()}
+  defp reenter({durable, run}, invoke_id, {:done, donedata}) do
+    settle_answer(
+      durable,
+      run,
+      Driver.done_invocation(driver(durable), durable.run_id, invoke_id, donedata)
+    )
+  end
+
+  defp reenter({durable, run}, invoke_id, {:failed, failure}) do
+    settle_answer(
+      durable,
+      run,
+      Driver.failed_invocation(driver(durable), durable.run_id, invoke_id, failure)
+    )
+  end
+
+  # `settle/3` for the doors, and it differs in exactly one place:
+  # `{:discarded, record}` is an answer nobody wanted rather than a run to
+  # keep reading, so it is reported rather than folded. The buffer is
+  # drained and thrown away on both non-delivering arms, for the reason
+  # `settle/3` gives - a drive that stopped part way through has still
+  # filled it.
+  @spec settle_answer(t(), Run.t(), Driver.result()) ::
+          {:ok, driven()} | {:discarded, term()} | {:error, term()}
+  defp settle_answer(durable, run, {:ok, record, _machine_state}),
+    do: rest(durable, run, record.status)
+
+  defp settle_answer(durable, _run, {:discarded, record}) do
+    _discarded = drain(durable.run_id, [])
+
+    {:discarded, record.status}
+  end
+
+  defp settle_answer(durable, _run, {:error, reason}) do
+    _discarded = drain(durable.run_id, [])
+
+    {:error, reason}
+  end
 
   @spec broadcast(String.t(), driven()) :: :ok
   defp broadcast(run_id, driven) do
@@ -432,6 +591,7 @@ defmodule StatifierExamples.Charts.Durable do
 
     fn effect, _context ->
       :ok = Timers.consume(run_id, effect)
+      :ok = AsyncCalls.consume(run_id, effect)
 
       send(reader, {:durable_buffered, run_id, {:effect, effect}})
 
@@ -454,18 +614,42 @@ defmodule StatifierExamples.Charts.Durable do
     context = %{run_id: run_id}
 
     fn type, params, _executor_context ->
-      case Charts.dispatch(type, params(params), context) do
-        {:ok, donedata} ->
-          note(reader, run_id, "Performed", performed(type, donedata))
-
-          {:ok, donedata}
-
-        {:error, refusal} ->
-          reason = reason(refusal)
-          note(reader, run_id, "Call refused", "#{type}: #{reason}")
-
-          {:error, [reason: reason]}
+      if AsyncCalls.async?(type, params(params)) do
+        pending(reader, run_id, type)
+      else
+        perform(reader, run_id, context, type, params(params))
       end
+    end
+  end
+
+  # The asynchronous arm. The job was stored by the executor a moment ago
+  # (`AsyncCalls`' moduledoc says why the enqueue lives there), so there is
+  # nothing left to do here but decline to answer: `:pending` buffers
+  # nothing, the drive reaches quiescence, and the position persists with
+  # the invocation live. What eventually answers it is
+  # `StatifierExamples.Charts.AsyncCalls.Delivery`, through
+  # `complete_invocation/3` below.
+  @spec pending(pid(), String.t(), String.t() | nil) :: :pending
+  defp pending(reader, run_id, type) do
+    note(reader, run_id, "Call started", "#{type}: running as a job, answer to follow")
+
+    :pending
+  end
+
+  @spec perform(pid(), String.t(), Charts.call_context(), String.t() | nil, map()) ::
+          {:ok, map()} | {:error, keyword()}
+  defp perform(reader, run_id, context, type, params) do
+    case Charts.dispatch(type, params, context) do
+      {:ok, donedata} ->
+        note(reader, run_id, "Performed", performed(type, donedata))
+
+        {:ok, donedata}
+
+      {:error, refusal} ->
+        reason = reason(refusal)
+        note(reader, run_id, "Call refused", "#{type}: #{reason}")
+
+        {:error, [reason: reason]}
     end
   end
 

@@ -106,11 +106,22 @@ defmodule StatifierExamples.MixProject do
 
       # The durable stepper, and `StatifierPersistence.Driver` - the
       # run-to-quiescence loop `StatifierExamples.Charts.Durable` used to
-      # write for itself (se-4dt.3). 0.2.0 is the floor: the first release
-      # carrying the driver, the `:blob_type` option and the run `metadata`
-      # column this app configures. The interim git pin this arm carried
-      # before that release is retired (se-p22's pattern).
-      {:statifier_persistence, "~> 0.2"},
+      # write for itself (se-4dt.3).
+      #
+      # On an INTERIM git pin (se-p22's pattern, campaign-024 ruling R-c).
+      # 0.2.0 - the floor this arm held - carries the driver, the
+      # `:blob_type` option and the run `metadata` column this app
+      # configures. What it does not carry is ADR-0007's asynchronous
+      # invocation seam: the dispatch fun's `:pending` arm, and the
+      # `StatifierPersistence.Driver.done_invocation/5` and
+      # `failed_invocation/5` doors an answer arriving from an Oban job
+      # re-enters through. Without them a call cannot outlive the step
+      # that made it, which is the whole of se-d74.
+      #
+      # FINAL re-pin after the operator publishes statifier_persistence
+      # 0.3.0: `{:statifier_persistence, "~> 0.3"}`.
+      {:statifier_persistence,
+       github: "riddler/statifier_persistence", ref: "65ef280d77b70c7560fb045ae71e1ec3bc08709d"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so

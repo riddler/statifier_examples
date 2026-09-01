@@ -8,7 +8,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   alias StatifierBlocks.Finding
   alias StatifierBlocks.Shell
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.Durable
+  alias StatifierExamples.Charts.{AsyncCalls, Durable}
 
   @themes ["light", "dark", "brand"]
 
@@ -729,9 +729,18 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # `terminate: true`, and this is the only test that reads what that buys
     # a reader.
     #
+    # se-d74 put one beat between the press and the finish. The abandon
+    # route lands in the onboarding group, whose company-details step is
+    # this app's one asynchronous call, so the press now leaves the run
+    # RESTING on that invocation with the header still reading `running` -
+    # which is the correct answer, not a stall. Draining the invocations
+    # queue is that call's job running; the answer re-enters the stored run
+    # and the page redraws off the broadcast, which is what `render_until/2`
+    # is waiting for.
+    #
     # Sabotage: dropped `terminate: true` from `EditorLive`'s `compile/1`;
-    # the header stayed `running` and this went red on the status match.
-    # Reverted.
+    # the header stayed `running` through the drain and this went red on
+    # the `render_until/2` flunk. Reverted.
     test "a run that reaches its root outcome finishes on the page", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 
@@ -744,7 +753,11 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
         |> element(~s(button[phx-value-event="signup.abandoned"]))
         |> render_click()
 
-      assert html =~ ~s(data-run-status="done")
+      assert html =~ ~s(data-run-status="running")
+
+      assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
+
+      assert render_until(view, ~s(data-run-status="done"))
     end
 
     # A link that outlived its run, or one somebody typed. The page says so

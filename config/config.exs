@@ -21,19 +21,27 @@ config :statifier_examples, StatifierExamples.Repo,
   # than failing outright.
   busy_timeout: 5_000
 
-# Durable timers, on the same SQLite file everything else lives in.
+# Durable timers and asynchronous invocations, on the same SQLite file
+# everything else lives in.
 #
 # `statifier_oban` never owns an Oban instance (its ADR-0002), so this is
 # the host's own: `Oban.Engines.Lite` is the SQLite engine, and the
 # notifier has to be named with it because the default one is Postgres'
-# `LISTEN/NOTIFY`, which SQLite has no equivalent of. One queue, named
-# here rather than defaulted, because the package refuses a queue it was
-# not given.
+# `LISTEN/NOTIFY`, which SQLite has no equivalent of. Both queues are
+# named here rather than defaulted, because the package refuses a queue it
+# was not given.
+#
+# Two queues and not one, because the two job kinds fail differently. A
+# timer job delivers an event and is over in milliseconds; an invoke job
+# runs the host's actual work, which is the thing that is slow, retries,
+# and can pile up. Sharing one queue would let a backlog of slow calls
+# delay every reminder behind it, and it would make a paused or drained
+# queue mean two things at once during an incident (se-d74).
 config :statifier_examples, Oban,
   repo: StatifierExamples.Repo,
   engine: Oban.Engines.Lite,
   notifier: Oban.Notifiers.PG,
-  queues: [statifier_timers: 5]
+  queues: [statifier_timers: 5, statifier_invocations: 5]
 
 # How long an unverified signup waits before the wizard nudges it.
 #

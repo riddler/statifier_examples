@@ -10,7 +10,7 @@ defmodule StatifierExamples.Charts.DurableTest do
   alias Statifier.Machine.Identity
   alias StatifierBlocks.{Compiled, Compiler, Decode}
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Durable, Run}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Accounts, User}
   alias StatifierPersistence.{Runs, Storage}
@@ -186,6 +186,12 @@ defmodule StatifierExamples.Charts.DurableTest do
   # And it keeps going: a resumed run steps on the next press exactly as
   # the one that created it would have.
   #
+  # Where it stops is se-d74's doing: the wizard's company-details step is
+  # this app's one asynchronous call, so the press drives as far as that
+  # invocation and rests ON it rather than running out to the root. The
+  # marks name the invoking state and the abandonment interrupt armed
+  # beside it, which is exactly the pair a run resting mid-call sits on.
+  #
   # Sabotage: made `resume/3` build its `Durable` struct with a freshly
   # generated run id; this went red - `:run_not_found` out of the step -
   # then reverted.
@@ -197,7 +203,7 @@ defmodule StatifierExamples.Charts.DurableTest do
     assert {:ok, {_driver, stepped}} =
              Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
 
-    assert stepped.active == ["blk_su_root"]
+    assert stepped.active == ["blk_su_company", "blk_su_onboarding_abandoned"]
     assert :event in kinds(stepped)
   end
 
@@ -291,9 +297,16 @@ defmodule StatifierExamples.Charts.DurableTest do
   # turns through four separate calls, which is the only run here long
   # enough for the ordering to mean anything.
   #
+  # se-d74 moved where this drive ends without moving what it asserts. The
+  # last call the wizard makes on this press is the asynchronous one, so
+  # the drive rests on it instead of halting, and its row says `Call
+  # started` rather than `Performed` - a `:performed` row either way,
+  # because what the kind means to the feed is "the host acted on the call
+  # it was just handed", and the pairing is the invariant under test.
+  #
   # Sabotage: made the driver's `drain/2` return its accumulator without
-  # `Enum.reverse/1`; this went red - the halt row came first and every
-  # `Performed` row preceded its own `Invoke dispatched` - then reverted.
+  # `Enum.reverse/1`; this went red, along with the three other tests in
+  # this file that read a reading built from that buffer - then reverted.
   test "one drive's feed reads in the order things happened, across every turn",
        %{run_id: run_id} do
     {compiled, document} = signup()
@@ -305,16 +318,19 @@ defmodule StatifierExamples.Charts.DurableTest do
     kinds = kinds(stepped)
 
     assert List.first(kinds) == :started
-    assert List.last(kinds) == :halted
+    assert List.last(kinds) == :performed
 
-    # Five calls across the two drives, each answered where it was made: a
-    # `Performed` row never appears except directly after the
-    # `Invoke dispatched` row it answers.
-    assert Enum.count(kinds, &(&1 == :performed)) == 5
+    # Four calls across the two drives - three answered where they were
+    # made, and the asynchronous fourth started and left unanswered: a host
+    # row never appears except directly after the `Invoke dispatched` row
+    # it belongs to.
+    assert Enum.count(kinds, &(&1 == :performed)) == 4
 
     pairs = Enum.zip(kinds, tl(kinds))
 
-    assert Enum.count(pairs, &(&1 == {:invoked, :performed})) == 5
+    assert Enum.count(pairs, &(&1 == {:invoked, :performed})) == 4
+
+    assert List.last(details(stepped)) =~ "myapp:signup: running as a job"
   end
 
   # Chart identity is what stops a run resuming onto a document that has
@@ -355,21 +371,29 @@ defmodule StatifierExamples.Charts.DurableTest do
   # the fixture shipped in before this bead; the plan guards raised, the run
   # took the `otherwise` arm, and this went red with `accounts/1` answering
   # 0. Reverted.
+  #
+  # se-d74 put one more beat in the middle of it: the company-details step
+  # is asynchronous now, so the press rests on that invocation and the run
+  # provisions only once the job answers. The drain is the job running -
+  # on a process that has never seen this run - and the run is started
+  # with its fixture key because that is what lets a cold answer rebuild
+  # the chart. What the test says is unchanged: the shipped wizard, driven
+  # the way the demo drives it, reaches `myapp:provision` and finishes.
   test "the wizard shipped in priv/fixtures provisions once its plan branch is taken",
        %{run_id: run_id} do
     {compiled, document} = signup()
-    {:ok, {durable, run}} = Durable.start(compiled, document, run_id)
+    {:ok, {durable, run}} = Durable.start(compiled, document, run_id, "signup_wizard")
 
     assert {:ok, {_driver, stepped}} =
              Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
 
-    assert accounts(run_id) == 1
-    assert stepped.status == :done
-    assert record!(run_id).status == :completed
+    assert stepped.status == :running
+    assert accounts(run_id) == 0
 
-    assert Enum.any?(details(stepped), fn detail ->
-             is_binary(detail) and detail =~ "myapp:provision"
-           end)
+    assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
+
+    assert accounts(run_id) == 1
+    assert record!(run_id).status == :completed
   end
 
   # The other half of the same fix, and the one that says why it works: a
