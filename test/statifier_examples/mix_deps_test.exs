@@ -1,61 +1,35 @@
 defmodule StatifierExamples.MixDepsTest do
   use ExUnit.Case, async: true
 
-  # The statifier-ex commit the interim pin names: PR 251's merge on that
-  # repo's main, which is the first commit carrying
-  # `:inherit_invoke_handlers`. Written once here so the `mix.exs`
-  # requirement and the `mix.lock` entry are asserted against the same
-  # string rather than two hand-copied ones.
-  @statifier_ref "6b4ff697b6db3f8c7378001fa15a7f9f8b901ef6"
-
-  # The statifier_persistence commit the second interim pin names: the tip
-  # of that repo's main carrying ADR-0007's asynchronous invocation seam
-  # (PR 35), which is the first commit with a `:pending` dispatch arm and
-  # the two re-entry doors. Written once here for the same reason
-  # `@statifier_ref` is: `mix.exs` and `mix.lock` are asserted against one
-  # string rather than two hand-copied ones.
-  @statifier_persistence_ref "65ef280d77b70c7560fb045ae71e1ec3bc08709d"
-
-  # The statifier_blocks commit the third interim pin names: the tip of that
-  # repo's main carrying the drafts shelf (PR 201), which is the first
-  # commit with `core.drafts`, `core.placeholder`, `StatifierBlocks.Shelf`
-  # and the `.sb-slot--tray` strip. Written once here for the same reason
-  # the two refs above are: `mix.exs` and `mix.lock` are asserted against
-  # one string rather than two hand-copied ones.
-  @statifier_blocks_ref "a3833479257fb0692eea65ed50c00c939b489f36"
-
   # `STATIFIER_BLOCKS_PATH` swaps the editor dep for a path dep on a local
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is an INTERIM git pin (se-ihm, campaign-024). 0.11.0 -
-  # the Hex floor this arm held - carries ADR-0007's
-  # `StatifierBlocks.InvokeStep`, the base every `myapp.*` step is one
-  # declaration on (se-4dt.1), and `StatifierBlocks.Runtime.Subchart`
-  # (se-4dt.4). What it does not carry is the drafts shelf: without
-  # `core.drafts` and `core.placeholder` the `card_processing_sketch`
-  # fixture names two types no palette resolves, so the reference embedder
-  # cannot show the tray it exists to show.
-  #
-  # No `override: true` here: nothing else in this tree states a
-  # requirement on `statifier_blocks`, so the git ref is the only claim on
-  # it and resolves on its own.
+  # That default arm is a Hex requirement with 0.12.0 as its floor: the
+  # first release carrying the drafts shelf - `core.drafts` and
+  # `core.placeholder`, `StatifierBlocks.Shelf`, and the `.sb-slot--tray`
+  # strip the editor draws a parked fragment in. On 0.11.0 the
+  # `card_processing_sketch` fixture names two types no palette resolves, so
+  # the reference embedder cannot show the tray it exists to show. Five
+  # interim git pins served this arm across the campaign era (se-p22's
+  # pattern); they are retired.
   #
   # `mix.exs` and `mix.lock` are checked against each other rather than
   # each against a hope: a `mix.exs` edit without the matching lock entry
   # resolves to whatever was already fetched.
   #
-  # Sabotage: pointed the `ref:` expectation at the real-but-wrong previous
-  # statifier_blocks main `487cebf146c5e46f0e674c57a85f4806aeeec8ac` (the
-  # commit se-4dt.4 pinned) and left `mix.exs` alone; the membership
-  # assertion went red reporting the real ref against the mutated
-  # expectation. Reverted from a backup copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the interim git pin" do
+  # Sabotage: pointed the requirement expectation here at the
+  # real-but-wrong previous floor `"~> 0.11"` and left `mix.exs` alone; the
+  # membership assertion went red reporting `"~> 0.12"` against the mutated
+  # expectation. Reverted from a backup copy. What that proves is textual -
+  # the committed requirement is the exact string asserted - and the lock
+  # assertion below is what ties it to a resolved 0.12-line Hex release.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, github: "riddler/statifier_blocks", ref: @statifier_blocks_ref} in deps
+    assert {:statifier_blocks, "~> 0.12"} in deps
 
     lock_line =
       "mix.lock"
@@ -64,35 +38,27 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-
-    assert lock_line =~
-             ~s({:git, "https://github.com/riddler/statifier_blocks.git", "#{@statifier_blocks_ref}")
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.12.)
   end
 
-  # The engine is on an INTERIM git pin (se-8zp, campaign-024): 2.3.0 - the
-  # floor this arm held - carries `Statifier.Invoke.SyncHandler` and its
-  # wrapping adapter (se-4dt.2) but not `Statifier.Session`'s
-  # `:inherit_invoke_handlers`, without which a child session holds no
-  # handler map and the `signup_onboarding` wizard child parks at its first
-  # step (statifier-ex st-pvpz, PR 251, merged as this ref).
+  # The engine's floor is 2.4.0: the first release carrying
+  # `Statifier.Session`'s `:inherit_invoke_handlers` option, without which a
+  # child session holds no handler map and the `signup_onboarding` wizard
+  # child parks at its first step (se-8zp). 2.3.0 carries
+  # `Statifier.Invoke.SyncHandler` and its wrapping adapter (se-4dt.2) but
+  # not the inherited map. No `override: true` remains - with every
+  # statifier-family dep on Hex, each package states a requirement the
+  # resolver satisfies at one version, and asserting the bare two-tuple here
+  # is what would catch an override quietly returning.
   #
-  # `override: true` is asserted rather than tolerated: a git ref satisfies
-  # none of the Hex requirements `statifier_blocks`, `statifier_persistence`
-  # and `statifier_oban` each state on `statifier`, so without it the tree
-  # does not resolve at all. Both go at the FINAL re-pin to 2.4.0.
-  #
-  # `mix.exs` and `mix.lock` are checked against each other, as the two
-  # assertions above are: an edit to one without the other resolves to
-  # whatever was already fetched.
-  #
-  # Sabotage: pointed the `ref:` expectation at the real-but-wrong previous
-  # statifier-ex main `df705b8` (the commit before PR 251) and left
-  # `mix.exs` alone; the membership assertion went red reporting the real
-  # ref against the mutated expectation. Reverted from a backup copy.
-  test "the statifier dep is the interim git pin, in mix.exs and mix.lock alike" do
+  # Sabotage: pointed the requirement expectation at the real-but-wrong
+  # previous floor `"~> 2.3"` and left `mix.exs` alone; the membership
+  # assertion went red reporting `"~> 2.4"` against the mutated
+  # expectation. Reverted from a backup copy.
+  test "the statifier dep is the Hex requirement, with no override" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier, github: "riddler/statifier-ex", ref: @statifier_ref, override: true} in deps
+    assert {:statifier, "~> 2.4"} in deps
 
     lock_line =
       "mix.lock"
@@ -101,36 +67,25 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier": )))
 
     assert lock_line, "statifier has no mix.lock entry"
-
-    assert lock_line =~
-             ~s({:git, "https://github.com/riddler/statifier-ex.git", "#{@statifier_ref}")
+    assert lock_line =~ ~s({:hex, :statifier, "2.4.)
   end
 
-  # The durable stepper is on an INTERIM git pin too (se-d74,
-  # campaign-024 ruling R-c). 0.2.0 - the floor this arm held - carries
-  # `StatifierPersistence.Driver`, but every call it drives is answered
-  # inside the step that made it: the `:pending` dispatch arm and the
-  # `done_invocation/5` / `failed_invocation/5` re-entry doors an Oban job
-  # answers through arrived with that package's ADR-0007, unpublished at
-  # the time of this pin.
+  # The durable stepper's floor is 0.3.0: the first release carrying
+  # ADR-0007's asynchronous invocation seam - the dispatch fun's `:pending`
+  # arm and the `done_invocation/5` / `failed_invocation/5` re-entry doors
+  # an answer arriving from an Oban job comes back through (se-d74). On
+  # 0.2.0 every call is answered inside the step that made it, so the
+  # asynchronous handler this app registers has no seam to hang on. The
+  # interim git pin this arm carried before the release is retired.
   #
-  # No `override: true` here, unlike the engine's pin above: nothing else
-  # in this tree states a requirement on `statifier_persistence`, so the
-  # git ref is the only claim on it and resolves on its own.
-  #
-  # `mix.exs` and `mix.lock` are checked against each other, as every
-  # assertion in this module is.
-  #
-  # Sabotage: pointed the `ref:` expectation at the real-but-wrong
-  # previous statifier_persistence main `6e64b81` (the ADR status flip,
-  # one commit before the 0.3.0 prep) and left `mix.exs` alone; the
-  # membership assertion went red reporting the real ref against the
-  # mutated expectation. Reverted from a backup copy.
-  test "the statifier_persistence dep is the interim git pin, in mix.exs and mix.lock alike" do
+  # Sabotage: pointed the requirement expectation at the real-but-wrong
+  # previous floor `"~> 0.2"` and left `mix.exs` alone; the membership
+  # assertion went red reporting `"~> 0.3"` against the mutated
+  # expectation. Reverted from a backup copy.
+  test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence,
-            github: "riddler/statifier_persistence", ref: @statifier_persistence_ref} in deps
+    assert {:statifier_persistence, "~> 0.3"} in deps
 
     lock_line =
       "mix.lock"
@@ -139,9 +94,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-
-    assert lock_line =~
-             ~s({:git, "https://github.com/riddler/statifier_persistence.git", "#{@statifier_persistence_ref}")
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.3.)
   end
 
   # The durable-timer package is held at `~> 0.3.1`, not `~> 0.3`: 0.3.0's
