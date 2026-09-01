@@ -81,14 +81,28 @@ defmodule StatifierExamples.MixProject do
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.22"},
 
-      # The engine. 2.3.0 is the floor: the first release carrying
+      # The engine, on an INTERIM git pin (se-p22's pattern, campaign-024
+      # ruling R-e). 2.3.0 - the floor this arm held - carries
       # `Statifier.Invoke.SyncHandler` and its wrapping adapter, which this
-      # app's handlers are written against (se-4dt.2). The interim git pin
-      # this arm carried between 2.2.1 and that release is retired
-      # (se-p22's pattern), and with every statifier-family dep back on Hex
-      # no `override: true` is needed - each package states a requirement
-      # the resolver can satisfy at one version.
-      {:statifier, "~> 2.3"},
+      # app's handlers are written against (se-4dt.2). What it does not
+      # carry is `Statifier.Session`'s `:inherit_invoke_handlers` option
+      # (statifier-ex st-pvpz, PR 251): without it a child session starts
+      # with no `:invoke_handlers` at all, so the `signup_onboarding`
+      # wizard child cannot answer its own `myapp:signup` call and parks at
+      # its first step. This app is the reference embedder, so it consumes
+      # the merged engine commit rather than working around the gap.
+      #
+      # `override: true` is what makes a git dep win over the Hex
+      # requirements `statifier_blocks`, `statifier_persistence` and
+      # `statifier_oban` each state on `statifier`; a git ref satisfies
+      # none of them. It goes when the pin does.
+      #
+      # FINAL re-pin after the operator publishes statifier 2.4.0:
+      # `{:statifier, "~> 2.4"}`, no override.
+      {:statifier,
+       github: "riddler/statifier-ex",
+       ref: "6b4ff697b6db3f8c7378001fa15a7f9f8b901ef6",
+       override: true},
 
       # The durable stepper, and `StatifierPersistence.Driver` - the
       # run-to-quiescence loop `StatifierExamples.Charts.Durable` used to

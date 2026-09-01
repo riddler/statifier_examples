@@ -1,6 +1,13 @@
 defmodule StatifierExamples.MixDepsTest do
   use ExUnit.Case, async: true
 
+  # The statifier-ex commit the interim pin names: PR 251's merge on that
+  # repo's main, which is the first commit carrying
+  # `:inherit_invoke_handlers`. Written once here so the `mix.exs`
+  # requirement and the `mix.lock` entry are asserted against the same
+  # string rather than two hand-copied ones.
+  @statifier_ref "6b4ff697b6db3f8c7378001fa15a7f9f8b901ef6"
+
   # `STATIFIER_BLOCKS_PATH` swaps the editor dep for a path dep on a local
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
@@ -41,23 +48,30 @@ defmodule StatifierExamples.MixDepsTest do
     assert lock_line =~ ~s({:hex, :statifier_blocks, "0.11.)
   end
 
-  # The engine's floor is 2.3.0: the first release carrying
-  # `Statifier.Invoke.SyncHandler` and its wrapping adapter, which the
-  # three domain handler modules are written against while
-  # `StatifierExamples.Charts.SyncAdapter` is generated over the adapter
-  # (se-4dt.2). No `override: true` remains - with every statifier-family
-  # dep on Hex, each package states a requirement the resolver satisfies at
-  # one version, and asserting the bare two-tuple here is what would catch
-  # an override quietly returning.
+  # The engine is on an INTERIM git pin (se-8zp, campaign-024): 2.3.0 - the
+  # floor this arm held - carries `Statifier.Invoke.SyncHandler` and its
+  # wrapping adapter (se-4dt.2) but not `Statifier.Session`'s
+  # `:inherit_invoke_handlers`, without which a child session holds no
+  # handler map and the `signup_onboarding` wizard child parks at its first
+  # step (statifier-ex st-pvpz, PR 251, merged as this ref).
   #
-  # Sabotage: pointed the requirement expectation at the real-but-wrong
-  # previous floor `"~> 2.2"` and left `mix.exs` alone; the membership
-  # assertion went red reporting `"~> 2.3"` against the mutated
-  # expectation. Reverted from a backup copy.
-  test "the statifier dep is the Hex requirement, with no override" do
+  # `override: true` is asserted rather than tolerated: a git ref satisfies
+  # none of the Hex requirements `statifier_blocks`, `statifier_persistence`
+  # and `statifier_oban` each state on `statifier`, so without it the tree
+  # does not resolve at all. Both go at the FINAL re-pin to 2.4.0.
+  #
+  # `mix.exs` and `mix.lock` are checked against each other, as the two
+  # assertions above are: an edit to one without the other resolves to
+  # whatever was already fetched.
+  #
+  # Sabotage: pointed the `ref:` expectation at the real-but-wrong previous
+  # statifier-ex main `df705b8` (the commit before PR 251) and left
+  # `mix.exs` alone; the membership assertion went red reporting the real
+  # ref against the mutated expectation. Reverted from a backup copy.
+  test "the statifier dep is the interim git pin, in mix.exs and mix.lock alike" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier, "~> 2.3"} in deps
+    assert {:statifier, github: "riddler/statifier-ex", ref: @statifier_ref, override: true} in deps
 
     lock_line =
       "mix.lock"
@@ -66,7 +80,9 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier": )))
 
     assert lock_line, "statifier has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier, "2.3.)
+
+    assert lock_line =~
+             ~s({:git, "https://github.com/riddler/statifier-ex.git", "#{@statifier_ref}")
   end
 
   # The durable-timer package is held at `~> 0.3.1`, not `~> 0.3`: 0.3.0's
