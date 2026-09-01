@@ -67,12 +67,34 @@ defmodule StatifierExamples.CardAuthTest do
 
   # Sabotage: pointed @documents at a file that does not exist; this went red,
   # then reverted.
-  test "the card-processing fixture is registered and decoded" do
-    assert [fixture] = CardAuth.fixtures()
+  #
+  # Sabotage (se-ihm): dropped the `card_processing_sketch` entry from
+  # @documents; this went red on the two-element match, then reverted from a
+  # backup copy.
+  test "the card-processing fixtures are registered and decoded" do
+    assert [fixture, sketch] = CardAuth.fixtures()
     assert %{key: "card_processing", name: "Card processing"} = fixture
 
     assert File.exists?(fixture.path)
     assert fixture.document.id == "bdoc_cp_demo"
     assert fixture.document.revision == 43
+
+    # The same flow caught mid-authoring, which is the surface se-ihm's
+    # sink-backwards beat is walked on: a `core.drafts` shelf holding the
+    # tail and a `core.placeholder` standing where the middle will go.
+    assert %{key: "card_processing_sketch", name: "Card processing (sketch)"} = sketch
+
+    assert File.exists?(sketch.path)
+    assert sketch.document.id == "bdoc_cp_sketch"
+
+    assert ["core.drafts", "core.placeholder"] --
+             Enum.map(blocks(sketch.document.root), & &1.type) == []
+  end
+
+  @spec blocks(StatifierBlocks.Block.t()) :: [StatifierBlocks.Block.t()]
+  defp blocks(%StatifierBlocks.Block{} = block) do
+    children = block.slots |> Map.values() |> List.flatten() |> Enum.flat_map(&blocks/1)
+
+    [block | children]
   end
 end

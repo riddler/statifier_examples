@@ -16,35 +16,46 @@ defmodule StatifierExamples.MixDepsTest do
   # string rather than two hand-copied ones.
   @statifier_persistence_ref "65ef280d77b70c7560fb045ae71e1ec3bc08709d"
 
+  # The statifier_blocks commit the third interim pin names: the tip of that
+  # repo's main carrying the drafts shelf (PR 201), which is the first
+  # commit with `core.drafts`, `core.placeholder`, `StatifierBlocks.Shelf`
+  # and the `.sb-slot--tray` strip. Written once here for the same reason
+  # the two refs above are: `mix.exs` and `mix.lock` are asserted against
+  # one string rather than two hand-copied ones.
+  @statifier_blocks_ref "a3833479257fb0692eea65ed50c00c939b489f36"
+
   # `STATIFIER_BLOCKS_PATH` swaps the editor dep for a path dep on a local
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is a Hex requirement with 0.11.0 as its floor: the
-  # first release carrying ADR-0007's `StatifierBlocks.InvokeStep` - the
-  # base every `myapp.*` step is one declaration on (se-4dt.1) - and
-  # `StatifierBlocks.Runtime.Subchart` (se-4dt.4). 0.10.0 predates both, so
-  # a resolution that could only reach it would leave the twelve step
-  # modules uncompilable and no subchart handler to register. Four interim
-  # git pins served this arm across the campaign era (se-p22's pattern);
-  # they are retired.
+  # That default arm is an INTERIM git pin (se-ihm, campaign-024). 0.11.0 -
+  # the Hex floor this arm held - carries ADR-0007's
+  # `StatifierBlocks.InvokeStep`, the base every `myapp.*` step is one
+  # declaration on (se-4dt.1), and `StatifierBlocks.Runtime.Subchart`
+  # (se-4dt.4). What it does not carry is the drafts shelf: without
+  # `core.drafts` and `core.placeholder` the `card_processing_sketch`
+  # fixture names two types no palette resolves, so the reference embedder
+  # cannot show the tray it exists to show.
+  #
+  # No `override: true` here: nothing else in this tree states a
+  # requirement on `statifier_blocks`, so the git ref is the only claim on
+  # it and resolves on its own.
   #
   # `mix.exs` and `mix.lock` are checked against each other rather than
   # each against a hope: a `mix.exs` edit without the matching lock entry
   # resolves to whatever was already fetched.
   #
-  # Sabotage: pointed the requirement expectation here at the
-  # real-but-wrong previous floor `"~> 0.10"` and left `mix.exs` alone; the
-  # membership assertion went red reporting `"~> 0.11"` against the mutated
-  # expectation. Reverted from a backup copy. What that proves is textual -
-  # the committed requirement is the exact string asserted - and the lock
-  # assertion below is what ties it to a resolved 0.11-line Hex release.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
+  # Sabotage: pointed the `ref:` expectation at the real-but-wrong previous
+  # statifier_blocks main `487cebf146c5e46f0e674c57a85f4806aeeec8ac` (the
+  # commit se-4dt.4 pinned) and left `mix.exs` alone; the membership
+  # assertion went red reporting the real ref against the mutated
+  # expectation. Reverted from a backup copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the interim git pin" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.11"} in deps
+    assert {:statifier_blocks, github: "riddler/statifier_blocks", ref: @statifier_blocks_ref} in deps
 
     lock_line =
       "mix.lock"
@@ -53,7 +64,9 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.11.)
+
+    assert lock_line =~
+             ~s({:git, "https://github.com/riddler/statifier_blocks.git", "#{@statifier_blocks_ref}")
   end
 
   # The engine is on an INTERIM git pin (se-8zp, campaign-024): 2.3.0 - the

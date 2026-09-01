@@ -152,24 +152,27 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is a Hex requirement with 0.11.0 as the floor: the first
-  # release carrying the two surfaces this app is written against -
-  # ADR-0007's block-type defaults layer with `StatifierBlocks.InvokeStep`,
-  # the base every `myapp.*` step in this app is a declaration on
-  # (se-4dt.1), and `StatifierBlocks.Runtime.Subchart`, the canonical
-  # `statifier_blocks:subchart` handler `StatifierExamples.Charts.Subchart`
-  # supplies this host's two callbacks to (se-4dt.4). 0.10.0 predates both,
-  # so on the earlier release the twelve step modules cannot compile at all
-  # and there is no subchart handler to register. Four interim git pins
-  # served this arm across the campaign era (se-p22's pattern); they are
-  # retired.
+  # The default arm is an INTERIM git pin (se-ihm, campaign-024). 0.11.0 -
+  # the Hex floor this arm held - carries the two surfaces the app was
+  # written against, ADR-0007's block-type defaults layer with
+  # `StatifierBlocks.InvokeStep` (se-4dt.1) and `StatifierBlocks.Runtime`'s
+  # `Subchart` handler (se-4dt.4). What it does not carry is the drafts
+  # shelf: `core.drafts` and `core.placeholder`, `StatifierBlocks.Shelf`,
+  # and the `.sb-slot--tray` strip the editor draws a parked fragment in.
+  # This app is the reference embedder, so it shows the tray before the
+  # release rather than after it.
+  #
+  # FINAL re-pin after the operator publishes statifier_blocks 0.12.0:
+  # `{:statifier_blocks, "~> 0.12"}`, retiring `@statifier_blocks_ref` in
+  # `test/statifier_examples/mix_deps_test.exs` with it.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.11"}
+        {:statifier_blocks,
+         github: "riddler/statifier_blocks", ref: "a3833479257fb0692eea65ed50c00c939b489f36"}
     end
   end
 

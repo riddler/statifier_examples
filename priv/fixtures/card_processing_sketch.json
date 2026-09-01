@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_cp_sketch",
+  "revision": 1,
+  "metadata": {
+    "name": "Card processing (sketch)",
+    "description": "The same payment flow as Card processing, caught halfway through being authored sink-backwards: the tail the author already knows is parked in the drafts tray, and the middle nobody has decided yet is a placeholder in the flow. Neither survives publication - a drafts shelf with anything in it and a placeholder each raise an author warning, so the document reads as unfinished until the tray is empty and the gap is filled.",
+    "domain": "card-processing"
+  },
+  "datamodel": [
+    {
+      "id": "amount",
+      "description": "The amount to capture. Declared ahead of the step that reads it: authoring sink-backwards means the roots the middle will use are known before the middle is."
+    },
+    {
+      "id": "authorization",
+      "description": "Where the authorization step will write its decision, once it is written."
+    },
+    {
+      "id": "capture",
+      "description": "What the capture produced. The sketch seeds its attempt counter before the steps that read it exist, which is the ordinary way round when a flow is authored from its sink backwards."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_cps_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.intake",
+          "id": "blk_cps_intake",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:intake",
+            "label": "Take the payment request"
+          }
+        },
+        {
+          "type": "core.assign",
+          "id": "blk_cps_reset_attempts",
+          "type_version": 1,
+          "config": {
+            "path": "capture.attempts",
+            "value": "0"
+          }
+        },
+        {
+          "type": "core.placeholder",
+          "id": "blk_cps_gap",
+          "type_version": 1,
+          "config": {
+            "note": "Authorize, then capture"
+          }
+        },
+        {
+          "type": "core.drafts",
+          "id": "blk_cps_drafts",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "core.sequence",
+                "id": "blk_cps_tail",
+                "type_version": 1,
+                "slots": {
+                  "body": [
+                    {
+                      "type": "myapp.receipt",
+                      "id": "blk_cps_receipt",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:receipt",
+                        "label": "Build the receipt"
+                      }
+                    },
+                    {
+                      "type": "myapp.notify",
+                      "id": "blk_cps_receipt_notify",
+                      "type_version": 1,
+                      "config": {
+                        "invoke_type": "myapp:notify",
+                        "template": "receipt_ready",
+                        "label": "Send the receipt"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

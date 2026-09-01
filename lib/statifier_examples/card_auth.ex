@@ -1,7 +1,13 @@
 defmodule StatifierExamples.CardAuth do
   @moduledoc """
   The card-processing example domain: its block types, their invoke
-  handlers, and the fixture document written against them.
+  handlers, and the fixture documents written against them.
+
+  Two documents, and the second is the first one caught mid-authoring:
+  `card_processing_sketch` parks the tail the author already knows in a
+  `core.drafts` shelf and marks the middle they have not decided with a
+  `core.placeholder`, which is the surface `docs/demo-script.md`'s
+  sink-backwards beat is read off (se-ihm).
 
   The vocabulary is one of the family's two canonical example domains. It
   models no real payment processor: every value that appears in a fixture
@@ -47,7 +53,10 @@ defmodule StatifierExamples.CardAuth do
   # `{key, file}`. Listed rather than globbed: which documents this app ships
   # is a fact worth reading in the source, and a stray file in `priv/` should
   # not silently become an example.
-  @documents [{"card_processing", "card_processing.json"}]
+  @documents [
+    {"card_processing", "card_processing.json"},
+    {"card_processing_sketch", "card_processing_sketch.json"}
+  ]
 
   @block_types %{
     "myapp.authorize" => Authorize,

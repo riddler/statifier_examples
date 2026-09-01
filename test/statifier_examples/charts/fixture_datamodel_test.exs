@@ -65,6 +65,14 @@ defmodule StatifierExamples.Charts.FixtureDatamodelTest do
   # `datamodel`; this went red on the wizard's list. Reverted.
   test "each fixture declares its roots in its own bytes" do
     assert declared_ids("signup_wizard") == ["signup"]
+
+    # The sketch declares three and its own expressions load one: a document
+    # authored from its sink backwards knows the roots the middle will use
+    # before the middle exists, and `docs/demo-script.md`'s beat 13 is what
+    # fills them in. The derived check above is a subset test, so it admits
+    # this; the beat's LiveView test is what says the two steps it drops in
+    # land on declared roots rather than raising findings of their own.
+    assert declared_ids("card_processing_sketch") == ["amount", "authorization", "capture"]
     assert declared_ids("signup_invitations") == ["signup", "onboarding"]
 
     assert declared_ids("card_processing") == [
