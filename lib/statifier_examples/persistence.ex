@@ -47,6 +47,15 @@ defmodule StatifierExamples.Persistence do
   JSON text, so metadata round-trips through the schema in full - the
   storage contract's metadata cases pass here - but that one query does
   not run.
+
+  As of `statifier_persistence` 0.4.0 that omission carries a second
+  consequence, and it is the contract working as designed rather than a
+  gap to paper over: exporting `list_runs_by_metadata/2` is how an adapter
+  opts into the child listing a durable subchart (ADR-0008) needs, so a
+  store on this adapter refuses a durable subchart before any write. This
+  app runs no durable subcharts today. A host that wants them over SQLite
+  wants an implementation of that callback in terms of the JSON-text
+  column, which is a bead for whenever an example here needs one.
   """
 
   @behaviour StatifierPersistence.Storage.Adapter

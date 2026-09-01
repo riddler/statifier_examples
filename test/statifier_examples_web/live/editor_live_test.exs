@@ -799,15 +799,32 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # rendered page rather than in prose: the shelf draws as a tray, the
     # parked fragment is inside it, and the gap marker draws in the flow.
     #
+    # `statifier_blocks` 0.13.0 changed what the editor shows FIRST: a
+    # stocked shelf opens folded, so this document opens showing its flow
+    # rather than its parked work, and the tray is not in the DOM until the
+    # author opens it. That opening is asserted here rather than worked
+    # around, because it is the behaviour a host embedding the editor now
+    # gets; what the tray holds once opened is unchanged.
+    #
     # Sabotage: retyped `blk_cps_drafts` to `core.sequence` in
     # `priv/fixtures/card_processing_sketch.json` - a real type, holding the
     # same child, in the same place - and the tray assertions went red with
     # an ordinary primary slot where the strip belongs. Reverted from a
     # backup copy. What the package draws is the package's; what this app
     # decides is that the fixture asks for it.
+    #
+    # Sabotage: dropped the `unfold/2` call, leaving the tray
+    # assertions to run against the freshly mounted page; this went red on
+    # `sb-slot--tray`, which is what says the fold is real and the unfold is
+    # load-bearing rather than decoration. Reverted from a backup copy.
     test "the sketch draws its shelf as a tray with the tail parked in it",
          %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/editor?#{[doc: "card_processing_sketch"]}")
+
+      # Opens folded: the parked work is there, and out of the way.
+      refute html =~ "sb-slot--tray"
+
+      html = unfold(view, "blk_cps_drafts")
 
       assert html =~ "sb-slot--tray"
 
@@ -857,6 +874,10 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # for the two types - unfinished work is *sayable* in the document, and
     # saying it is visible to a host deciding whether to publish.
     #
+    # The beat opens the shelf first, because as of `statifier_blocks`
+    # 0.13.0 a stocked shelf opens folded - which is the demo script's
+    # order too: the author looks at the flow, then at what they parked.
+    #
     # Sabotage: retyped `blk_cps_drafts` to `core.sequence` in the sketch
     # fixture, so the tail started in an ordinary slot rather than parked;
     # `tray_ids/1` found no tray and this went red before the sequence
@@ -871,6 +892,8 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
                "blk_cps_gap",
                "blk_cps_drafts"
              ]
+
+      unfold(view, "blk_cps_drafts")
 
       assert tray_ids(view) == ["blk_cps_tail"]
 
@@ -920,6 +943,18 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   # that pushes them lives.
   @spec canvas(Phoenix.LiveViewTest.View.t()) :: Phoenix.LiveViewTest.Element.t()
   defp canvas(view), do: element(view, "#sb-canvas")
+
+  # Unfolds a container by clicking its own fold control, the way an author
+  # does. As of `statifier_blocks` 0.13.0 a NON-EMPTY drafts shelf opens
+  # folded, so a tray assertion has to open the shelf first rather than
+  # expect it already open; an empty shelf still opens as it was, because
+  # its tray IS the drop target for the first parked fragment.
+  @spec unfold(Phoenix.LiveViewTest.View.t(), String.t()) :: String.t()
+  defp unfold(view, block_id) do
+    view
+    |> element(~s([data-block-id="#{block_id}"] > .sb-node__chrome .sb-node__fold))
+    |> render_click()
+  end
 
   # One palette drag: arm the type, then drop it on a gap in the root's body.
   @spec insert(Phoenix.LiveViewTest.View.t(), String.t(), non_neg_integer()) :: String.t()
