@@ -275,17 +275,30 @@ because it is what an author gets for free from having declared an `on_error`
 path.
 
 **What does run the child**: a `Statifier.Session` started with
-`StatifierExamples.Charts.invoke_handlers/0`. There
+`StatifierExamples.Charts.invoke_handlers/0` **and
+`inherit_invoke_handlers: true`**. There
 `blk_so_wizard` starts a child session whose machine is the wizard, compiled
 as a child - byte for byte the chart the run record pinned at create, which
 is what `StatifierExamples.Charts.SubchartTest` asserts by comparing the
 child's content hash with the pin.
 
-**One level deep, on purpose**: a child session is started without the
-parent's invoke handlers (statifier-ex `st-pvpz`), so the wizard child sits
-at its first step - `myapp:signup` reaches a session that has no handler for
-it - and a subchart inside a subchart would not run at all. The fixture is
-written to that limit and says so in its own description.
+**It runs to depth 2, and that is machine-verified**: the child does not
+merely start. It dispatches its own `myapp:signup` call, gets an answer,
+assigns it, advances to `s_blk_su_send_verification`, and on the wizard's
+own abandonment event it ends and reports an outcome the parent routes
+through its `on_done` slot before finishing. `SubchartTest` drives exactly
+that and asserts each step of it, together with the negative control: with
+`inherit_invoke_handlers` left at the engine's default of `false` the child
+holds no handler map at all and parks at `s_blk_su_account` forever, which
+is what this document did before statifier-ex `st-pvpz`. Nothing here is
+taken on a reading of the code; the assertions run the code path.
+
+The option is opt-in upstream on purpose - inheritance would otherwise run
+a host's handlers inside charts nobody registered them for - so a host that
+embeds charts states it, and this app is the reference embedder stating it.
+Inheritance is transitive, so a subchart inside a subchart would run too;
+that the shipped documents are one level deep is now an authoring choice
+about the example set rather than a limit.
 
 ## 12. Read what the run pinned
 

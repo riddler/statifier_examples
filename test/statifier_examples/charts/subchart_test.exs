@@ -7,9 +7,18 @@ defmodule StatifierExamples.Charts.SubchartTest do
 
   The refusal set and the planning are `statifier_blocks`' and are tested
   where they live (sb-6edf). What is this app's is the resolver over its
-  own fixtures, the pin `identities/1` builds, and the single-level limit
-  the shipped documents are written to - so those are what is asserted
-  here.
+  own fixtures, the pin `identities/1` builds, the option a root session is
+  started with, and the shape of the documents it ships - so those are what
+  is asserted here.
+
+  ## Depth 2
+
+  A parent that starts a child is depth 1 doing something; a child that
+  answers its own calls and finishes is depth 2 (se-8zp). The second needs
+  `Statifier.Session`'s `:inherit_invoke_handlers`, which this app passes
+  in `session_opts/0` below - see it for why the engine defaults it off.
+  The pair of tests around `@child_first_state` and `@child_verify_group`
+  is that difference, driven both ways round.
   """
 
   # Not async: a session registers under the application's own
@@ -39,30 +48,77 @@ defmodule StatifierExamples.Charts.SubchartTest do
   # the whole of what makes it `unknown_document`.
   @missing "bdoc_nothing_ships_this"
 
-  # The wizard's first step, which is where a child session sits as soon as
-  # it starts: `myapp:signup` is an invoke, and a child is started without
-  # the parent's handlers (st-pvpz), so it stays there. That it is REACHED
-  # is what makes it evidence that the child is the wizard.
+  # The wizard's first step. A child session that cannot answer
+  # `myapp:signup` sits here for the rest of the run, which is what the
+  # whole document did before handler inheritance arrived (st-pvpz).
   @child_first_state "s_blk_su_account"
+
+  # The group the wizard enters once its first step is DONE - the email
+  # verification block. A child only reaches it by running the account step
+  # to completion: `myapp:signup` dispatched, answered, and its result
+  # assigned. That is the depth-2 evidence, and the group rather than a
+  # step inside it is what is named because the group is where the child
+  # stays (it holds a 24h wait), while which of its body steps is current
+  # depends on how far the delayed sends have got.
+  @child_verify_group "s_blk_su_verify"
+
+  # The root of the wizard's datamodel. The document declares it, so the
+  # key is present from the start; the account step's `assign_to` is what
+  # puts a map in it. `nil` is therefore "declared and never written",
+  # which is exactly the parked child's state.
+  @child_assigned_root "signup"
+
+  # The parent's final state, and the value its `assign_to` lands. The
+  # child ends by reporting an outcome, the parent routes it through the
+  # `on_done` slot and the root sequence finishes.
+  @parent_done_state "s_blk_so_root__root_done"
+  @child_outcome %{"outcome" => "done"}
+
+  # The event that carries the wizard child to its end, out of the
+  # document's own interrupt vocabulary (`blk_su_abandoned`). Sent to the
+  # CHILD, which is the point: a chart deep in the tree answering its own
+  # events is what "runs to depth 2" means.
+  @child_end_event "signup.abandoned"
 
   defp fixture(key) do
     {:ok, fixture} = Charts.fixture(key)
     fixture
   end
 
-  defp session!(document, declare) do
+  # The options this app starts a ROOT session with, and the one place
+  # `:inherit_invoke_handlers` is passed (se-8zp). The engine defaults it
+  # to `false`, so a child would otherwise start with no `:invoke_handlers`
+  # at all and could not answer even the types its own document names
+  # (statifier-ex st-pvpz, PR 251). Opting in is transitive: a child
+  # started under it carries both the map and the flag, so a grandchild
+  # inherits too.
+  #
+  # It is an option and not the default upstream on purpose - inheritance
+  # runs a host's handlers inside charts nobody registered them for - so a
+  # host that embeds charts states it, and this is the reference embedder
+  # stating it.
+  defp session_opts do
+    [
+      invoke_handlers: Charts.invoke_handlers(),
+      record: true,
+      inherit_invoke_handlers: true
+    ]
+  end
+
+  defp session!(document, declare, opts \\ []) do
     {:ok, compiled} = Durable.compile(document, declare)
     {:ok, machine} = Statifier.compile(compiled.scxml)
 
-    {:ok, pid} =
-      Statifier.Session.start_link(machine,
-        invoke_handlers: Charts.invoke_handlers(),
-        record: true
-      )
+    {:ok, pid} = Statifier.Session.start_link(machine, Keyword.merge(session_opts(), opts))
 
     on_exit(fn -> if Process.alive?(pid), do: Statifier.Session.stop(pid) end)
 
     pid
+  end
+
+  defp child_states(pid) do
+    snapshot = Statifier.Session.snapshot(pid)
+    Enum.map(snapshot.configuration, &Machine.id(snapshot.machine, &1))
   end
 
   # A session answers `status/1` and `invocations/1` synchronously, and both
@@ -88,9 +144,9 @@ defmodule StatifierExamples.Charts.SubchartTest do
   # session exists, under the block's own id, and the machine it is running
   # is byte-for-byte the chart the run's pin names - the same content hash,
   # which is the identity statifier-ex ADR-0052 defines and the storage
-  # layer compares. Reaching the wizard's first step is the third half of
+  # layer compares. Being inside the wizard's own body is the third half of
   # it: an empty child chart would have the wrong hash, but a child sitting
-  # in `s_blk_su_account` is unambiguously the wizard.
+  # in `s_blk_su_verify` is unambiguously the wizard.
   #
   # Sabotage: pointed `resolve_chart/2` at the invitations document instead
   # of resolving `src`; this went red on the identity assertion, the child's
@@ -108,10 +164,90 @@ defmodule StatifierExamples.Charts.SubchartTest do
     assert Machine.identity(snapshot.machine).content_hash ==
              Map.fetch!(pinned, @child_document_id)
 
-    assert @child_first_state in Enum.map(
-             snapshot.configuration,
-             &Machine.id(snapshot.machine, &1)
-           )
+    assert @child_verify_group in child_states(child)
+  end
+
+  # Depth 2, driven rather than read (se-8zp). The parent is depth 1 and
+  # the wizard child is depth 2, and what makes it a *depth* rather than a
+  # process tree is that the child dispatches its own `myapp:signup` call,
+  # gets an answer, and assigns it - so the wizard's second step is
+  # reachable and its datamodel root is written. None of that happened
+  # before the root session opted into handler inheritance.
+  #
+  # Both halves are asserted because either alone is weak: a state can be
+  # entered without a call being answered, and a datamodel root can be
+  # seeded rather than assigned.
+  #
+  # Sabotage: dropped `inherit_invoke_handlers: true` from `session_opts/0`;
+  # this went red on the state assertion, the child still sitting in
+  # `s_blk_su_account` with `signup` still nil. Reverted from a backup copy.
+  test "the wizard child answers its own calls and advances past its first step" do
+    parent = fixture(@parent)
+    pid = session!(parent.document, parent.declare)
+
+    assert [%{pid: child}] = invocations(pid)
+
+    assert @child_verify_group in child_states(child)
+    refute @child_first_state in child_states(child)
+
+    assert %{@child_assigned_root => assigned} = Statifier.Session.snapshot(child).datamodel
+    assert is_map(assigned)
+  end
+
+  # The negative control for the test above, and the honest record of what
+  # this document did for its whole life before st-pvpz: with inheritance
+  # off - the engine's own default - the child starts, is the right chart,
+  # and then parks at its first step forever, because `myapp:signup`
+  # reaches a session holding no handler map at all.
+  #
+  # Worth keeping rather than deleting with the limitation: it is what
+  # pins the option as the cause. Without it, a passing depth-2 assertion
+  # says nothing about why it passes.
+  #
+  # Sabotage: flipped this call site's `inherit_invoke_handlers` to `true`;
+  # this went red on the first-step assertion, the child having advanced
+  # into `s_blk_su_verify`. Reverted from a backup copy.
+  test "with inheritance off the child parks at its first step, as it did before st-pvpz" do
+    parent = fixture(@parent)
+    pid = session!(parent.document, parent.declare, inherit_invoke_handlers: false)
+
+    assert [%{pid: child}] = invocations(pid)
+
+    assert @child_first_state in child_states(child)
+    assert Statifier.Session.snapshot(child).datamodel[@child_assigned_root] == nil
+  end
+
+  # The other end of depth 2: the child does not merely advance, it
+  # finishes, and the outcome it finished with reaches the parent - which
+  # is the one reading `signup_onboarding` exists for. The event goes to
+  # the CHILD, out of the wizard's own interrupt vocabulary, so what drives
+  # the run to its end is a chart one level down answering its own event.
+  #
+  # `{:halted, :done}` off a subscription rather than a poll: the parent's
+  # finish is several hops after this call returns (the child ends, reports
+  # `done.invoke`, the parent routes it through `on_done`, runs the notify
+  # there and completes), and a snapshot taken before those hops is a race,
+  # not a result. The subscription's halt message is the last one a session
+  # sends for a run (st ADR-0044 decision 2).
+  #
+  # Sabotage: dropped `inherit_invoke_handlers: true` from `session_opts/0`;
+  # this went red on `assert_receive` timing out - the parked child never
+  # ends, so the parent never finishes. Reverted from a backup copy.
+  test "the child runs to an outcome and the parent routes on it" do
+    parent = fixture(@parent)
+    pid = session!(parent.document, parent.declare)
+
+    :ok = Statifier.Session.subscribe(pid, self())
+    assert [%{pid: child}] = invocations(pid)
+
+    Statifier.Session.send_event(child, @child_end_event)
+
+    assert_receive {:statifier, _session_id, {:halted, :done}}, 5_000
+
+    assert %{status: :done, configuration: configuration} = Statifier.Session.status(pid)
+    assert @parent_done_state in configuration
+    assert Statifier.Session.snapshot(pid).datamodel["onboarding"] == @child_outcome
+    assert outcome_reported(pid) == @child_outcome
   end
 
   # `unknown_document`, the first of campaign-023 ruling R-b's three
@@ -166,11 +302,13 @@ defmodule StatifierExamples.Charts.SubchartTest do
   end
 
   # The single-level rule, asserted over the shipped set rather than left to
-  # a comment in a fixture. A child session is started without the parent's
-  # `:invoke_handlers` (statifier-ex st-pvpz), so a child that names a
-  # subchart of its own would start a grandchild nothing can run. This is
-  # also what makes `resolve_chart/2`'s missing `{:cycle, _}` arm honest:
-  # a graph one level deep, fixed at build time, has no cycle to refuse.
+  # a comment in a fixture. It is now an authoring choice about which
+  # documents this app ships and no longer an engine limit: with
+  # `inherit_invoke_handlers: true` a grandchild inherits the map too
+  # (statifier-ex st-pvpz), so a nested subchart would run. What the rule
+  # still buys is what makes `resolve_chart/2`'s missing `{:cycle, _}` arm
+  # honest: a graph one level deep, fixed at build time, has no cycle to
+  # refuse. Deepening the shipped set is the day that arm gets written.
   #
   # Sabotage: added a `core.subchart` naming `bdoc_su_invites_demo` to the
   # wizard document in memory before the walk; this went red naming
@@ -186,7 +324,7 @@ defmodule StatifierExamples.Charts.SubchartTest do
       {:ok, fixture} = Enum.find_value(Charts.fixtures(), :error, &child(&1, document_id))
 
       assert Subchart.references(fixture.document) == [],
-             "#{document_id} is used as a child and names a subchart of its own (st-pvpz)"
+             "#{document_id} is used as a child and names a subchart of its own (se-8zp)"
     end
   end
 
@@ -226,6 +364,20 @@ defmodule StatifierExamples.Charts.SubchartTest do
 
     Enum.find_value(recording.entries, fn
       {:internal, :platform, @refusal_event, _origin, opts, _routes} -> Keyword.get(opts, :data)
+      _other -> nil
+    end)
+  end
+
+  # The `data:` the child's `done.invoke` carried, read off the parent's
+  # recording. A finished child reports its outcome as an invoked event
+  # keyed on the block's own id, which is the value `assign_to` writes and
+  # the `on_*` slots route on - so this is the same fact as the datamodel
+  # assertion, read at the wire rather than after the assign.
+  defp outcome_reported(pid) do
+    {:ok, recording} = Statifier.Session.recording(pid)
+
+    Enum.find_value(recording.entries, fn
+      {:invoked_event, @subchart_block, %Statifier.Event{data: data}, _routes} -> data
       _other -> nil
     end)
   end

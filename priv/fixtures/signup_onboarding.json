@@ -4,7 +4,7 @@
   "revision": 1,
   "metadata": {
     "name": "Signup onboarding",
-    "description": "Run the signup wizard as a child chart, then route on the outcome it finished with. One level deep on purpose: a child session is started without the parent's invoke handlers (statifier-ex st-pvpz), so a child that needs its own handlers cannot finish inside it.",
+    "description": "Run the signup wizard as a child chart, then route on the outcome it finished with. The child runs to depth 2: it dispatches its own myapp:signup calls, advances through its own steps and ends with an outcome the on_done and on_abandon slots route on. That needs a root session started with inherit_invoke_handlers: true (statifier-ex st-pvpz), which is what a host embedding charts opts into; without it a child session holds no handler map at all and parks at its first step.",
     "domain": "signup"
   },
   "datamodel": [
