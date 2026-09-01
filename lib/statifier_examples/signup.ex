@@ -17,9 +17,13 @@ defmodule StatifierExamples.Signup do
 
   `signup_onboarding` is the smallest of the three and exists for one
   reading: a parent chart that embeds the wizard as a `core.subchart` and
-  routes on the outcome it finished with. It is deliberately one level
-  deep - see `StatifierExamples.Charts.Subchart` on st-pvpz, and on what
-  a durable run does with a subchart.
+  routes on the outcome it finished with. The child really runs - it
+  answers its own `myapp:signup` calls and ends with an outcome - because
+  a root session started with `inherit_invoke_handlers: true` hands its
+  handler map down (statifier-ex st-pvpz). It is still deliberately one
+  level deep, now as a choice about this example set rather than a limit:
+  see `StatifierExamples.Charts.Subchart` on that, and on what a durable
+  run does with a subchart.
   """
 
   alias StatifierBlocks.{Block, Decode, Document, Edit}

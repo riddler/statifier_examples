@@ -41,20 +41,36 @@ defmodule StatifierExamples.Charts.Subchart do
   the four shapes, and grows the third the day a host document graph stops
   being a list in `StatifierExamples.Signup`.
 
-  ## Single-level only, and why that is not a shortcut
+  ## Single-level only, and why that is now a choice rather than a limit
 
   A child session is started by `Statifier.Session` with `invoked_by:`, a
-  seeded datamodel and the parent's observer options - and **not** with
-  the parent's `:invoke_handlers` (statifier-ex `Session.start_session/4`).
-  So a child chart's own `<invoke>`s reach a session that has no handler
-  registered for them, whether they are `myapp:*` calls or a nested
-  `statifier_blocks:subchart`. That is filed upstream as **st-pvpz**; it is
-  the engine's to fix and not this app's to work around, which is the
-  posture `CLAUDE.md` requires of the reference embedder.
+  seeded datamodel and the parent's observer options. Whether it also gets
+  the parent's `:invoke_handlers` is the root session's call: the engine
+  defaults `:inherit_invoke_handlers` to `false`, and a root that opts in
+  hands every child its handler map along with the flag itself, so the
+  opt-in is transitive down the invoke tree (statifier-ex **st-pvpz**).
 
-  What it means here: a parent that embeds a child runs the child's chart,
-  and a child that needs its own handlers cannot finish inside it. The
-  fixture `signup_onboarding` is written to that limit and says so.
+  Off, a child chart's own `<invoke>`s reach a session with no handler
+  registered for them at all, whether they are `myapp:*` calls or a nested
+  `statifier_blocks:subchart` - which is what `signup_onboarding` did for
+  its whole life before that option existed, its wizard child parking at
+  its first step. On, the child answers them. This app opts in where it
+  starts a root session, so the shipped embed runs to depth 2: the wizard
+  child dispatches its own `myapp:signup` calls, advances through its own
+  steps and ends with an outcome the parent's `on_done` and `on_abandon`
+  slots route on. `StatifierExamples.Charts.SubchartTest` drives both
+  positions, which is what keeps the sentence above honest.
+
+  That the option is opt-in rather than the default is the engine's
+  deliberate stance and not a gap: inheritance would otherwise run a
+  host's handlers inside charts nobody registered them for. A host that
+  embeds charts states it, and this app is the reference embedder stating
+  it - the posture `CLAUDE.md` requires, in place of a workaround.
+
+  Inheritance is transitive, so a subchart inside a subchart would run
+  too. That the shipped documents stay one level deep is therefore an
+  authoring choice about the example set, and it is the choice that keeps
+  `resolve_chart/2`'s missing `{:cycle, _}` arm honest - see above.
 
   ## Durable runs are out of scope
 
