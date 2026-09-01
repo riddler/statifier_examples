@@ -8,6 +8,14 @@ defmodule StatifierExamples.MixDepsTest do
   # string rather than two hand-copied ones.
   @statifier_ref "6b4ff697b6db3f8c7378001fa15a7f9f8b901ef6"
 
+  # The statifier_persistence commit the second interim pin names: the tip
+  # of that repo's main carrying ADR-0007's asynchronous invocation seam
+  # (PR 35), which is the first commit with a `:pending` dispatch arm and
+  # the two re-entry doors. Written once here for the same reason
+  # `@statifier_ref` is: `mix.exs` and `mix.lock` are asserted against one
+  # string rather than two hand-copied ones.
+  @statifier_persistence_ref "65ef280d77b70c7560fb045ae71e1ec3bc08709d"
+
   # `STATIFIER_BLOCKS_PATH` swaps the editor dep for a path dep on a local
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
@@ -83,6 +91,44 @@ defmodule StatifierExamples.MixDepsTest do
 
     assert lock_line =~
              ~s({:git, "https://github.com/riddler/statifier-ex.git", "#{@statifier_ref}")
+  end
+
+  # The durable stepper is on an INTERIM git pin too (se-d74,
+  # campaign-024 ruling R-c). 0.2.0 - the floor this arm held - carries
+  # `StatifierPersistence.Driver`, but every call it drives is answered
+  # inside the step that made it: the `:pending` dispatch arm and the
+  # `done_invocation/5` / `failed_invocation/5` re-entry doors an Oban job
+  # answers through arrived with that package's ADR-0007, unpublished at
+  # the time of this pin.
+  #
+  # No `override: true` here, unlike the engine's pin above: nothing else
+  # in this tree states a requirement on `statifier_persistence`, so the
+  # git ref is the only claim on it and resolves on its own.
+  #
+  # `mix.exs` and `mix.lock` are checked against each other, as every
+  # assertion in this module is.
+  #
+  # Sabotage: pointed the `ref:` expectation at the real-but-wrong
+  # previous statifier_persistence main `6e64b81` (the ADR status flip,
+  # one commit before the 0.3.0 prep) and left `mix.exs` alone; the
+  # membership assertion went red reporting the real ref against the
+  # mutated expectation. Reverted from a backup copy.
+  test "the statifier_persistence dep is the interim git pin, in mix.exs and mix.lock alike" do
+    deps = Mix.Project.config()[:deps]
+
+    assert {:statifier_persistence,
+            github: "riddler/statifier_persistence", ref: @statifier_persistence_ref} in deps
+
+    lock_line =
+      "mix.lock"
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
+
+    assert lock_line, "statifier_persistence has no mix.lock entry"
+
+    assert lock_line =~
+             ~s({:git, "https://github.com/riddler/statifier_persistence.git", "#{@statifier_persistence_ref}")
   end
 
   # The durable-timer package is held at `~> 0.3.1`, not `~> 0.3`: 0.3.0's

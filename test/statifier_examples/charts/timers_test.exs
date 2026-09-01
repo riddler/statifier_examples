@@ -15,7 +15,7 @@ defmodule StatifierExamples.Charts.TimersTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Durable, Run, Timers}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run, Timers}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup
   alias StatifierPersistence.Storage
@@ -177,19 +177,41 @@ defmodule StatifierExamples.Charts.TimersTest do
 
     :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(run_id))
 
+    # Two drains, and se-d74 is why both counts moved.
+    #
+    # The first fires the two stored timers - the reminder and the
+    # verification wait, both scheduled at the moment of the drain. It used
+    # to report one success: whichever ran first drove the whole wizard to
+    # completion, and the other then found a finished run and discarded.
+    # Now the first one to run rests the wizard on its asynchronous
+    # company-details call instead, so the run is still live when the
+    # second arrives and both succeed.
+    #
+    # The second drain is that call's own job, which is in the app's OTHER
+    # queue: invoke jobs run the host's actual work and are kept apart from
+    # the timers for that reason (`config/config.exs`). Running it is what
+    # finishes the run.
     log =
       at_info(fn ->
-        assert %{success: 1} = Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
+        assert %{success: 2} = Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
+        assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
       end)
 
     assert log =~ "myapp:notify"
     assert record!(run_id).status == :completed
 
-    assert_receive {:run_advanced, ^run_id, {%Durable{}, %Run{status: :done} = run}}
+    # Two broadcasts now, one per drive, and they carry different readings:
+    # the fired timer's drive is the one that reaches `myapp:notify` and
+    # rests on the asynchronous call, and the job's answer opens its own
+    # reading from the resumed position and finishes. Both are asserted
+    # because a page showing this run redraws on each.
+    assert_receive {:run_advanced, ^run_id, {%Durable{}, %Run{status: :running} = nudged}}
 
-    assert Enum.any?(Run.entries(run), fn entry ->
+    assert Enum.any?(Run.entries(nudged), fn entry ->
              is_binary(entry.detail) and entry.detail =~ "myapp:notify"
            end)
+
+    assert_receive {:run_advanced, ^run_id, {%Durable{}, %Run{status: :done}}}
   end
 
   # Spec 6.2's discard, enforced at the delivery seam st-ADR-0054 decision 4
@@ -203,6 +225,12 @@ defmodule StatifierExamples.Charts.TimersTest do
   test "a reminder that fires after the run finished is discarded", %{run_id: run_id} do
     {durable, run} = start!(run_id)
     {:ok, _driven} = Durable.send_event(durable, run, @wait)
+
+    # The wait leaves the run resting on se-d74's asynchronous
+    # company-details call, so finishing it takes that call's job running -
+    # in the app's other queue, which is why the reminder job's own state
+    # is untouched by this drain.
+    assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
 
     assert record!(run_id).status == :completed
 

@@ -163,8 +163,8 @@ The script presses the button rather than waiting the 90-second window out,
 so the beat is repeatable and the demo stays under five minutes. The event it
 sends is the same one the stored job carries.
 
-**See**: the feed jumps to `Runs (38)` and the run finishes. The shape, in
-order:
+**See**: the feed jumps to `Runs (22)` and the run **stops in the middle of a
+call**. The shape, in order:
 
 ```
 1  | Event             | signup.reminder_due
@@ -175,18 +175,47 @@ order:
 15 | Entered           | blk_su_onboarding, blk_su_onboarding_deadline,
    |                   | blk_su_onboarding_abandoned
 20 | Invoke dispatched | myapp:signup on Collect the company details
-27 | Invoke dispatched | myapp:provision on Create the workspace
-28 | Performed         | myapp:provision -> account=signup-868edf...@example.com, provisioned=created
-37 | Run finished      | done
+21 | Call started      | myapp:signup: running as a job, answer to follow
 ```
 
-Narrate that honestly, because it is what the chart says: the nudge fires, the
-reminder window ends, the visitor is notified - **and then the signup
-completes anyway**. Nudged, then signed up. The wizard has no trailing park
-after the nudge; adding one is a change to the chart, not to this script.
+That last row is the beat worth stopping on. Every other call in this app is
+answered inside the step that made it; the company-details step is not.
+Collecting a company's details is a human step that takes hours, so the host
+starts it as an Oban job and tells the chart nothing yet. The drive reaches
+quiescence and the run **persists with the invocation still live** - no
+process is holding it, and the header reads `running` rather than `done`. Kill
+the server here and the call is still outstanding when it comes back.
+
+**See**, a moment later, without touching anything: the feed is replaced by a
+second, shorter reading of `Runs (17)`, and the run finishes.
+
+```
+0  | Run resumed from storage | 868edf9bf6eb15ac3e3e58427b57a105 (active)
+1  | Entered           | Collect the company details
+6  | Invoke dispatched | myapp:provision on Create the workspace
+7  | Performed         | myapp:provision -> account=signup-868edf...@example.com, provisioned=created
+16 | Run finished      | done
+```
+
+That is the job answering, on a process that has never seen this run: it
+rebuilt the chart, the position and the run out of SQLite, fed the answer back
+through the durable driver's completion door, and the page redrew because the
+answer was broadcast. Two readings and not one, for the same reason a resumed
+run opens with one row: the feed is derived from the effects a drive returned,
+and this was two drives.
+
+Narrate the whole thing honestly, because it is what the chart says: the nudge
+fires, the reminder window ends, the visitor is notified, the signup pauses on
+a call that takes real time - **and then it completes anyway**. Nudged, then
+signed up. The wizard has no trailing park after the nudge; adding one is a
+change to the chart, not to this script.
 
 The header now reads `done`, the three event buttons are disabled again, and
 the only active mark left is the root.
+
+If the run sits on `running` and never advances, the invocations queue is not
+draining - `select id, state, queue from oban_jobs` will show the invoke job
+`available`. It is a stored row either way, which is the point.
 
 ## 9. Look at what the run wrote
 

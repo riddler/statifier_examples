@@ -79,6 +79,17 @@ defmodule StatifierExamples.Charts.Timers do
   def queue, do: @queue
 
   @doc """
+  The Oban instance this app runs its statifier jobs on.
+
+  Named here rather than in each caller so the instance is stated once:
+  `StatifierExamples.Charts.AsyncCalls` builds a second
+  `StatifierOban.Config` for the invoke half and reads the instance and
+  the queue back through this module rather than repeating them.
+  """
+  @spec oban() :: atom()
+  def oban, do: @oban
+
+  @doc """
   Consumes one effect on behalf of the run named by `run_id`.
 
   Answers `:ok` for every effect, including the ones it does nothing
