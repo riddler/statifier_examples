@@ -118,7 +118,23 @@ defmodule StatifierExamples.MixProject do
       # status-bearing callback to the package's own Ecto adapter and
       # matches no status itself, so it rides the library's encoding and
       # needs no new clause.
-      {:statifier_persistence, "~> 0.4"},
+      #
+      # INTERIM GIT PIN, re-pin to Hex owed (se-6ag, campaign-026). This
+      # app now DOES consume ADR-0008's durable subcharts, and the one
+      # piece it needs is not in 0.4.0: sp-2yx widened
+      # `StatifierPersistence.Driver.dispatch_context/0` to carry
+      # `:invoke`, the whole `Statifier.Effect.Invoke` being dispatched.
+      # Without it a dispatch fun sees `type` and `params` only, and the
+      # subchart handler cannot reach `src` - the document id it resolves
+      # the child chart by - so `StatifierBlocks.Runtime.DurableSubchart`
+      # raises rather than guess. Everything else the durable subchart
+      # needs (the dispatch fun's `{:start_child, _, _}` arm, the
+      # `chart_resolver:` option, `parent_link/2`, `answer_parent/3`,
+      # `Runs.cascade_cancel/3`, `list_runs_by_metadata/2` on the storage
+      # behaviour) is already in 0.4.0. The pin retires the moment the
+      # operator publishes the release carrying sp-2yx.
+      {:statifier_persistence,
+       github: "riddler/statifier_persistence", ref: "1416a7b98ce70efe0511050d23dd9cc8f12d0d3e"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -155,8 +171,19 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is a Hex requirement on the 0.13 line. 0.12.0 was the
-  # floor it held before, as the first release carrying the drafts shelf -
+  # The default arm is an INTERIM GIT PIN, re-pin to Hex owed (se-6ag,
+  # campaign-026). `StatifierBlocks.Runtime.DurableSubchart` - the handler
+  # that answers `core.subchart` by starting the child as its own persisted
+  # `statifier_persistence` run - landed after 0.13.0 and is what this
+  # app's durable subchart proof is written against. 0.13.0 carries only
+  # the in-memory `StatifierBlocks.Runtime.Subchart`, whose
+  # `{:start_child, _, _}` nothing but `Statifier.Session` executes. The
+  # pin retires the moment the operator publishes the release carrying
+  # sb-2i04.
+  #
+  # The Hex requirement this arm held before the pin was the 0.13 line.
+  # 0.12.0 was the floor before that, as the first release carrying the
+  # drafts shelf -
   # `core.drafts` and
   # `core.placeholder`, `StatifierBlocks.Shelf`, and the `.sb-slot--tray`
   # strip the editor draws a parked fragment in. On 0.11.0 the
@@ -179,7 +206,8 @@ defmodule StatifierExamples.MixProject do
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.13"}
+        {:statifier_blocks,
+         github: "riddler/statifier_blocks", ref: "05f0a4ab0c9a1adb1c8857d0b5642a8b19cc7e98"}
     end
   end
 

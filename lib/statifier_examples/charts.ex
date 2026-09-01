@@ -202,26 +202,33 @@ defmodule StatifierExamples.Charts do
   `t:call_context/0`. It defaults to the empty map so a caller with nothing
   to say says nothing, rather than inventing a shape.
 
-  ## The subchart type is refused here by name
+  ## The subchart type is refused here by name, and that is not the same
+  ## as unsupported
 
   `statifier_blocks:subchart` is registered by this app and is **not** a
   sync call: starting a child chart is a `{:start_child, _, _}`
-  instruction, which `Statifier.Session` executes and
-  `StatifierPersistence.Driver` has no executor for. A durable run that
-  reaches one is therefore refused, and it is refused as
-  `{:error, {:durable_subchart_unsupported, type}}` rather than falling
-  through to `:unknown_invoke_type` - which would be untrue in the one way
-  that matters to a reader of the feed, since the type *is* registered and
-  a `Statifier.Session` answers it. Durable subcharts are campaign-023
-  ruling R-e's follow-up.
+  instruction, and no amount of routing turns it into a `donedata` map.
+  So it is refused here as `{:error, {:subchart_not_a_sync_call, type}}`
+  rather than falling through to `:unknown_invoke_type`, which would be
+  untrue in the one way that matters to a reader of the feed: the type
+  *is* registered, and both of this app's drivers answer it.
+
+  Both of them do it somewhere other than here. `Statifier.Session`
+  executes the instruction in memory through
+  `StatifierBlocks.Runtime.Subchart`, and
+  `StatifierExamples.Charts.Durable` routes the type to
+  `StatifierBlocks.Runtime.DurableSubchart` in its own dispatch fun,
+  *before* this function is reached, and the driver starts the child as
+  its own persisted run (se-6ag). This clause is what is left over: the
+  honest answer for anyone who asks the sync routing table to perform a
+  subchart, which no caller in this app does.
   """
   @spec dispatch(String.t(), map(), call_context()) ::
           {:ok, map()}
-          | {:error,
-             {:unknown_invoke_type, String.t()} | {:durable_subchart_unsupported, String.t()}}
+          | {:error, {:unknown_invoke_type, String.t()} | {:subchart_not_a_sync_call, String.t()}}
   def dispatch(type, params, context \\ %{}) when is_binary(type) and is_map(params) do
     if type == Runtime.Subchart.invoke_type() do
-      {:error, {:durable_subchart_unsupported, type}}
+      {:error, {:subchart_not_a_sync_call, type}}
     else
       case Enum.find(sync_handlers(), &(type in &1.invoke_types())) do
         nil -> {:error, {:unknown_invoke_type, type}}

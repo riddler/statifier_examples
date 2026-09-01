@@ -10,9 +10,10 @@ defmodule StatifierExamples.Charts.DurableTest do
   alias Statifier.Machine.Identity
   alias StatifierBlocks.{Compiled, Compiler, Decode}
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run, Subchart}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Accounts, User}
+  alias StatifierPersistence.Run.Linkage
   alias StatifierPersistence.{Runs, Storage}
 
   # Where the signup wizard parks itself: its verification group is waiting
@@ -501,27 +502,253 @@ defmodule StatifierExamples.Charts.DurableTest do
     assert record!(run_id).metadata == %{"fixture" => "signup_wizard"}
   end
 
-  # A durable run that reaches a subchart is refused, by name. Starting a
-  # child chart is a `{:start_child, _, _}` instruction, which
-  # `Statifier.Session` executes and `StatifierPersistence.Driver` has no
-  # executor for - so the app's `dispatch:` fun answers the refusal and the
-  # chart routes it, exactly as it routes any other failed call. Durable
-  # subcharts are campaign-023 ruling R-e's follow-up, and this is what the
-  # app does until that lands.
+  # --------------------------------------------------- durable subcharts
   #
-  # Sabotage: made `Charts.dispatch/3` answer `{:ok, %{}}` for the subchart
-  # type; this went red - the run reported a performed call instead of a
-  # refusal. Reverted from a backup copy.
-  test "a durable run refuses a subchart rather than pretending to run one", %{run_id: run_id} do
+  # se-6ag. A durable run that reaches a `core.subchart` used to be refused
+  # by name, because `{:start_child, _, _}` was `Statifier.Session`'s
+  # instruction and nobody else's. It is not any more: the app's dispatch
+  # fun routes the type to `StatifierBlocks.Runtime.DurableSubchart` and
+  # the driver executes the instruction by creating the child as its own
+  # persisted run (sp ADR-0008).
+  #
+  # These four tests are the proof the bead asks for, and they are written
+  # against the shipped `signup_onboarding` document rather than a stand-in
+  # because what is being proven is that the reference embedder does this,
+  # not that it could.
+
+  # The parent, started and left resting on its live child invocation.
+  defp onboarding!(run_id) do
     {:ok, parent} = Charts.fixture("signup_onboarding")
     {:ok, compiled} = Durable.compile(parent.document, parent.declare)
 
-    {:ok, {_durable, run}} =
-      Durable.start(compiled, parent.document, run_id, "signup_onboarding")
+    {:ok, driven} = Durable.start(compiled, parent.document, run_id, "signup_onboarding")
+
+    driven
+  end
+
+  # The wizard compiled the way a CHILD is compiled, which is the compile
+  # the child run's stored identity is keyed on - `child_use: true` against
+  # this app's palette, not the root compile `signup/0` above uses. Resuming
+  # the child with the wrong one is an identity mismatch, which is the guard
+  # working rather than a test problem.
+  defp child_compiled! do
+    {:ok, child} = Charts.fixture("signup_wizard")
+    {:ok, compiled} = Subchart.child_compile(child.document)
+
+    {compiled, child.document}
+  end
+
+  defp child_id(run_id), do: Linkage.child_run_id(run_id, "blk_so_wizard", 0)
+
+  # The whole of the first acceptance criterion: the child is a row in
+  # `statifier_runs` of its own, under a deterministic id that extends the
+  # parent's, carrying the package's reserved linkage key - the parent run,
+  # the invocation, the index, and the child's own content hash.
+  #
+  # The hash is re-derived here from the child fixture rather than read back
+  # out of the code under test, for the reason the pin test above gives.
+  #
+  # Sabotage: made `Durable`'s dispatch fun fall through to `perform/5` for
+  # the subchart type instead of routing it to `start_child/5`; this went
+  # red - no child record at all, `:run_not_found` - then reverted.
+  test "a durable subchart runs the child as its own persisted run", %{run_id: run_id} do
+    {child_compiled, _document} = child_compiled!()
+    child_hash = Identity.of_source(child_compiled.scxml).content_hash
+
+    {_durable, _run} = onboarding!(run_id)
+
+    child = record!(child_id(run_id))
+
+    assert child.run_id == run_id <> "/blk_so_wizard/0"
+    assert child.content_hash == child_hash
+
+    assert child.metadata == %{
+             "statifier_persistence" => %{
+               "parent_run_id" => run_id,
+               "invoke_id" => "blk_so_wizard",
+               "child_index" => 0,
+               "content_hash" => child_hash
+             }
+           }
+  end
+
+  # The parent's half of the same moment. `{:start_child, _, _}` is a
+  # PENDING answer: the child is created inside the parent's own exclusion
+  # and then the parent reaches quiescence with the invocation still live,
+  # exactly as it does for an asynchronous call. So the parent is `active`
+  # and has taken neither its `on_done` nor its `on_abandon` slot, and the
+  # `on_error` slot it used to take on the refusal is not taken either.
+  #
+  # The feed row is asserted beside it because it is what the demo points
+  # at: the child's run id is what a reader types into the page URL to open
+  # the child as a run of its own, and the feed is where they read it.
+  #
+  # Sabotage: made `start_child/5` answer `{:error, [reason: "no"]}` instead
+  # of returning the instruction; this went red - the parent completed down
+  # `on_error` and the child row was missing - then reverted.
+  test "the parent rests on the live child rather than answering it", %{run_id: run_id} do
+    {_durable, run} = onboarding!(run_id)
 
     details = Enum.filter(details(run), &is_binary/1)
 
-    assert Enum.any?(details, &(&1 =~ "durable_subchart_unsupported"))
-    assert Enum.any?(details, &(&1 =~ "Tell the owner the child chart refused"))
+    assert record!(run_id).status == :active
+    assert Enum.any?(details, &(&1 =~ "bdoc_signup_demo as run #{child_id(run_id)}"))
+    refute Enum.any?(details, &(&1 =~ "Tell the owner the child chart refused"))
+  end
+
+  # The second thing a browser capture found. Opening the child by URL is
+  # the whole point of "its own persisted run", and it did not work: the
+  # editor page compiles the document on its canvas with `compile/2`'s root
+  # recipe, and the child's stored identity is keyed on the CHILD recipe, so
+  # the page's resume was refused on identity - two compiles of the same
+  # document, and the guard doing its job for a reader who cannot act on it.
+  #
+  # `resume/1` reads the recipe off the record instead, which is the one
+  # place that knowledge belongs. Both halves are asserted here: the refusal
+  # is real (so the arity-3 form is not quietly doing something else) and
+  # the arity-1 form resolves past it.
+  #
+  # Sabotage: made `chart_for/1` take its `root_chart/1` arm for a record
+  # with no fixture key; this went red with the same `:identity_mismatch`
+  # the first assertion pins. Reverted.
+  test "a child is resumable by run id where the page's own compile is refused", %{
+    run_id: run_id
+  } do
+    {_durable, _run} = onboarding!(run_id)
+    {:ok, child} = Charts.fixture("signup_wizard")
+    {:ok, page_compile} = Durable.compile(child.document, child.declare)
+
+    assert {:error, {:identity_mismatch, _stored, _supplied}} =
+             Durable.resume(page_compile, child.document, child_id(run_id))
+
+    assert {:ok, {{durable, run}, document}} = Durable.resume(child_id(run_id))
+
+    assert durable.run_id == child_id(run_id)
+    assert document.id == "bdoc_signup_demo"
+    assert run.status == :running
+  end
+
+  # The restart half, and the one that closes the loop. The child is picked
+  # up by `resume/3` from a struct that has never seen the parent - the same
+  # cold pickup the `kill -9` walkthrough does - driven to its own end, and
+  # its completion re-enters the PARENT through the driver's own door.
+  #
+  # Nothing here calls `done_invocation/5`: the answer is automatic, and
+  # what makes it automatic is `chart_resolver:`, which is how the child's
+  # driver reaches a chart it does not hold. The parent completing is
+  # therefore an assertion about that seam and not only about the child.
+  #
+  # The child's own asynchronous call is drained on the way, which is worth
+  # saying out loud: a durable subchart child is an ordinary run, so the
+  # app's own async invocation seam works inside one with no extra wiring.
+  #
+  # Sabotage: dropped `chart_resolver:` from `driver/1`; this went red - the
+  # child completed but the parent stayed `:active` forever. Reverted.
+  test "the child resumes cold, finishes, and answers its parent", %{run_id: run_id} do
+    {_durable, _run} = onboarding!(run_id)
+    {child_compiled, child_document} = child_compiled!()
+
+    assert {:ok, {child_durable, child_run}} =
+             Durable.resume(child_compiled, child_document, child_id(run_id))
+
+    assert {:ok, {_driver, stepped}} =
+             Durable.send_event(
+               child_durable,
+               child_run,
+               "statifier_blocks.wait.blk_su_verify_wait"
+             )
+
+    assert stepped.status == :running
+    assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
+
+    assert record!(child_id(run_id)).status == :completed
+    assert record!(run_id).status == :completed
+  end
+
+  # The one that a browser capture found and no test had asked for. A child
+  # is driven by the parent's own driver with only the machine swapped, so
+  # the SAME `effects:` executor and `dispatch:` fun perform the child's
+  # effects and calls - and both used to key on the run id they closed over,
+  # which is the PARENT's.
+  #
+  # What that costs is not cosmetic. The wizard arms two durable timers on
+  # its way to resting: its 24-hour `core.wait` and its abandonment
+  # reminder. Stored against the parent's run id they fire into a chart with
+  # no such event, and the child waits forever for a clock nobody is holding
+  # for it. The fix is to key on `context.run_id`, which is the run the
+  # effect actually belongs to, and this asserts it where it is visible: the
+  # scope on the stored job rows.
+  #
+  # Sabotage: put the closed-over `run_id` back in `executor/1`'s two
+  # `consume/2` calls; this went red - every stored job carried the parent's
+  # id and the child's list was empty. Reverted.
+  test "the child's own durable timers are scoped to the child, not the parent", %{
+    run_id: run_id
+  } do
+    {_durable, _run} = onboarding!(run_id)
+
+    scopes =
+      Repo.all(from(j in "oban_jobs", select: j.args))
+      |> Enum.map(&Jason.decode!/1)
+      |> Enum.map(&Map.get(&1, "scope"))
+      |> Enum.uniq()
+
+    assert scopes == [child_id(run_id)]
+    refute run_id in scopes
+  end
+
+  # The cancel half. A parent stopped by its host while a child is live
+  # would otherwise leave that child `active` forever - nothing holds it,
+  # its parent will never be answered, and no press anywhere reaches it. So
+  # `abandon/1` cascades.
+  #
+  # The two terminal words differ on purpose and the test says so rather
+  # than smoothing it over: the run the host stopped is `failed` with
+  # `host:stopped` (sp ADR-0004 decision 6), and the child is `cancelled`
+  # (sp ADR-0008 decision 5's cascade).
+  #
+  # Cancellation RETAINS, which is the other half of the criterion: the
+  # child's stored position is byte-identical afterwards, so a cancelled
+  # child is still a run a reader can open and read the position of.
+  #
+  # Sabotage: removed the `cascade/1` call from `abandon/1`; this went red -
+  # the child stayed `:active` - then reverted.
+  test "abandoning the parent cascades into its live child", %{run_id: run_id} do
+    {durable, _run} = onboarding!(run_id)
+    stored = record!(child_id(run_id))
+
+    assert stored.status == :active
+    assert :ok = Durable.abandon(durable)
+
+    parent = record!(run_id)
+    child = record!(child_id(run_id))
+
+    assert parent.status == :failed
+    assert parent.failure == "host:stopped"
+    assert child.status == :cancelled
+    assert child.position_blob == stored.position_blob
+  end
+
+  # The third thing a browser capture found, and the one that took the page
+  # down. `:cancelled` is a FOURTH stored status - `statifier_persistence`
+  # 0.4.0 added it and this app now produces one - and `finish/2` had
+  # clauses for the three that existed before, so opening a cancelled run by
+  # URL raised a `FunctionClauseError` instead of rendering.
+  #
+  # A cancelled run is still a run a reader opens, which is the whole
+  # meaning of "cancellation retains": the position is byte-identical and
+  # the marks it implies are still worth looking at.
+  #
+  # Sabotage: deleted the `:cancelled` clause from `finish/2`; this went red
+  # with the FunctionClauseError this test exists to keep out. Reverted.
+  test "a cancelled child is still a run the app can read back", %{run_id: run_id} do
+    {durable, _run} = onboarding!(run_id)
+    :ok = Durable.abandon(durable)
+
+    assert record!(child_id(run_id)).status == :cancelled
+    assert {:ok, {{_durable, run}, _document}} = Durable.resume(child_id(run_id))
+
+    assert run.status == :cancelled
+    assert "Run finished" in Enum.map(Run.entries(run), & &1.label)
   end
 end

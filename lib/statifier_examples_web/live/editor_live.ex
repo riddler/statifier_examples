@@ -401,6 +401,14 @@ defmodule StatifierExamplesWeb.EditorLive do
   # this run (a patch this page itself pushed), the document does not
   # compile so there is no machine to resume onto, or the run is genuinely
   # somewhere in storage and this is the first the process has heard of it.
+  #
+  # The third case resumes by run id alone (`Durable.resume/1`) rather than
+  # with the compile on this page's canvas, and that is what lets the page
+  # open a **durable subchart child**. A child run's stored identity is
+  # keyed on the child compile of its document and the canvas holds the root
+  # compile of the same document, so resuming with this page's own would be
+  # refused on identity - correctly and uselessly. Which recipe a stored run
+  # wants is a fact about the record, and `Durable.resume/1` reads it there.
   @spec restore_run(Phoenix.LiveView.Socket.t(), String.t() | nil) ::
           Phoenix.LiveView.Socket.t()
   defp restore_run(socket, run_id) when is_binary(run_id) do
@@ -412,11 +420,19 @@ defmodule StatifierExamplesWeb.EditorLive do
         socket
 
       true ->
-        adopt(socket, Durable.resume(socket.assigns.compiled, socket.assigns.document, run_id))
+        adopt(socket, resumed(run_id))
     end
   end
 
   defp restore_run(socket, _absent), do: socket
+
+  @spec resumed(String.t()) :: {:ok, Durable.driven()} | {:error, term()}
+  defp resumed(run_id) do
+    case Durable.resume(run_id) do
+      {:ok, {driven, _document}} -> {:ok, driven}
+      {:error, _reason} = error -> error
+    end
+  end
 
   # A refusal is shown rather than swallowed. `{:identity_mismatch, _, _}`
   # is the one a reader will actually meet - it means the document was

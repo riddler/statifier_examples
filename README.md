@@ -266,6 +266,58 @@ that would collect them. `StatifierExamples.Charts.DurableTest` exercises
 the write on that fixture rather than on a document built in the test, so
 the run the demo does is the run the suite covers.
 
+### A chart that embeds another chart, durably
+
+`Signup onboarding` runs the whole wizard as a child chart, through one
+`core.subchart` block naming the wizard's document id. On the durable path
+the child is not something the parent holds: it is **its own persisted
+run**, with its own row in `statifier_runs`, its own position, its own
+status, and a run id that goes in the page URL like any other.
+
+Press **Run** on
+<http://127.0.0.1:8645/editor?doc=signup_onboarding> and the Runs feed says
+so directly:
+
+```
+Child chart started | bdoc_signup_demo as run <parent>/blk_so_wizard/0
+```
+
+That id is not random. It is the parent's, plus the invocation, plus the
+child index, so a child id strictly extends its parent's - which is what
+makes the tree acyclic and the cascade below terminate. Open it and you
+are looking at the wizard as a run of its own:
+
+```
+http://127.0.0.1:8645/editor?doc=signup_wizard&run=<parent>/blk_so_wizard/0
+```
+
+Drive it to the end there. The parent finishes too, without anybody
+pressing anything on the parent's page: when the child reaches a terminal
+status the driver answers the parent's invocation, and the parent takes
+its `on_done` or `on_abandon` slot. Three host pieces make that work and
+each is small:
+
+- **`StatifierExamples.Persistence.list_runs_by_metadata/2`** is what opts
+  this app into durable subcharts at all. The driver refuses to start a
+  child over a store that cannot enumerate one - a child that could never
+  be found is a child that could never be cancelled - and enumerating on
+  SQLite is a containment test in Elixir rather than the `jsonb @>` query
+  Postgres gets. That module's moduledoc says what the scan costs.
+- **`chart_resolver:`** on the driver is how the *child's* driver reaches
+  the *parent's* chart, which it does not hold. `statifier_persistence`
+  cannot supply it - a stored chart is opaque to the package - so this app
+  walks the documents it publishes and matches on the content hash.
+- **`StatifierExamples.Charts.Durable.abandon/1` cascades.** Press **Stop**
+  on a parent with a live child and the child is cancelled with it.
+  Cancellation *retains*: the child's stored position is byte-identical
+  afterwards, so a cancelled child is still a run you can open and read.
+
+None of this is in the document. Whether a `core.subchart` runs in memory
+or as its own persisted run is host wiring - `statifier_blocks` ships two
+handlers for the one invoke type and this app gives both the same
+resolver - which is the thing to say out loud, because it means an author
+never writes a chart for one deployment shape.
+
 ### The abandonment reminder, and why it is a row rather than a timer
 
 The signup wizard nudges a visitor who never verified their email. In the

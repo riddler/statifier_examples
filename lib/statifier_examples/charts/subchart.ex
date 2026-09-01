@@ -72,15 +72,32 @@ defmodule StatifierExamples.Charts.Subchart do
   authoring choice about the example set, and it is the choice that keeps
   `resolve_chart/2`'s missing `{:cycle, _}` arm honest - see above.
 
-  ## Durable runs are out of scope
+  ## Durable runs, and why this module serves both
 
-  `{:start_child, _, _}` is executed by `Statifier.Session` and by nothing
-  else: `StatifierPersistence.Driver` performs an `<invoke>` through this
-  app's `dispatch:` fun, which routes sync handlers only. A durable
-  subchart needs the child to be its own persisted run with the linkage
-  recorded durably, which is campaign-023 ruling R-e's deliberate
-  follow-up. What this app records durably today is the pin - see
-  `identities/1`.
+  `{:start_child, _, _}` used to be executed by `Statifier.Session` and by
+  nothing else, so a durable run reaching a subchart was refused. It is
+  not any more (se-6ag): `StatifierPersistence.Driver` executes the same
+  instruction by creating the child as its **own persisted run**, linked
+  to the parent by run metadata and pinned to the child's content hash
+  (sp ADR-0008).
+
+  Which of the two runs a `core.subchart` is host wiring rather than a
+  fact about the document (sb ADR-0008 decision 1), and the two handlers
+  are two modules serving one invoke type: `StatifierBlocks.Runtime.Subchart`
+  in memory, `StatifierBlocks.Runtime.DurableSubchart` durably. This
+  module is the **host callbacks for both** - `resolve_chart/2` and
+  `palette/0` are shared and unchanged (decision 2), so the same lookup
+  answers a session run and a durable run and there is no second place a
+  document id is resolved. `StatifierExamples.Charts.invoke_handlers/0`
+  registers the in-memory one for a session; the durable one is reached
+  from `StatifierExamples.Charts.Durable`'s dispatch fun, which is where
+  a driver's `<invoke>` goes.
+
+  The pin `identities/1` records is unchanged and is still worth having
+  on the durable path, though the two answer different questions. The pin
+  says which child revision this run was *created* against, at create; the
+  child run's own linkage carries the hash the driver actually started,
+  at dispatch. They agree, and a reader with both can say so.
   """
 
   use StatifierBlocks.Runtime.Subchart
@@ -183,9 +200,20 @@ defmodule StatifierExamples.Charts.Subchart do
     end
   end
 
-  # The child recipe, in one place for the reason `identities/1` gives.
+  @doc """
+  Compiles `document` the way a *child* is compiled: `child_use: true`,
+  against `palette/0`, with the invoke types this app registers.
+
+  The child recipe, in one place for the reason `identities/1` gives - the
+  hash it takes has to be the hash of the bytes the handler actually runs,
+  which is only true while there is one recipe. It is public because there
+  is a second reader now: `StatifierExamples.Charts.Durable`'s
+  `chart_resolver:` walks both compiles of every shipped document to answer
+  a durable subchart's parent, and a private copy of this recipe there
+  would be the second definition this function exists to prevent.
+  """
   @spec child_compile(Document.t()) :: {:ok, Compiled.t()} | {:error, [Compiler.Finding.t()]}
-  defp child_compile(%Document{} = document) do
+  def child_compile(%Document{} = document) do
     Compiler.compile(document, palette(),
       child_use: true,
       known_invoke_types: Charts.invoke_types()

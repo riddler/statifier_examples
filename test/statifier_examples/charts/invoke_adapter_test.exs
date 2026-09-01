@@ -91,12 +91,14 @@ defmodule StatifierExamples.Charts.InvokeAdapterTest do
              {:error, {:unknown_invoke_type, "myapp:nobody"}}
   end
 
-  # The subchart type IS registered and is not a sync call: this routing is
-  # the durable driver's, and a `{:start_child, _, _}` has no executor
-  # there (campaign-023 ruling R-e). Refusing it by its own name rather
-  # than as `:unknown_invoke_type` is what keeps the feed's account of a
-  # durable run true - the type is registered, and a `Statifier.Session`
-  # answers it.
+  # The subchart type IS registered and is not a sync call: no amount of
+  # routing turns `{:start_child, _, _}` into a donedata map. Refusing it
+  # by its own name rather than as `:unknown_invoke_type` is what keeps
+  # this table's account true - the type is registered, and BOTH of this
+  # app's drivers answer it, each somewhere other than here
+  # (`StatifierExamples.Charts.Durable` routes it to
+  # `StatifierBlocks.Runtime.DurableSubchart` before this function is
+  # reached, se-6ag).
   #
   # Sabotage: deleted the subchart clause so the name fell through to the
   # `Enum.find`; this went red, reporting `:unknown_invoke_type` for a type
@@ -105,7 +107,7 @@ defmodule StatifierExamples.Charts.InvokeAdapterTest do
     assert Runtime.Subchart.invoke_type() in Charts.invoke_types()
 
     assert Charts.dispatch("statifier_blocks:subchart", %{}) ==
-             {:error, {:durable_subchart_unsupported, "statifier_blocks:subchart"}}
+             {:error, {:subchart_not_a_sync_call, "statifier_blocks:subchart"}}
   end
 
   # Sabotage: dropped "myapp:signup" from `Signup.Handlers`' `@invoke_types`;
