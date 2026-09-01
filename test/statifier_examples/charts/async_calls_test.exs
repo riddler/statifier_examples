@@ -15,7 +15,7 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run, Timers}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Accounts, User}
   alias StatifierPersistence.Storage
@@ -143,6 +143,28 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
     refute AsyncCalls.async?("myapp:signup", %{"step" => "account"})
     refute AsyncCalls.async?("myapp:provision", %{})
     refute AsyncCalls.async?(nil, %{"step" => "company_details"})
+  end
+
+  # The gap a suite that drains by name cannot see. Every test here reaches
+  # the queue through `queue/0`, so a `config/config.exs` that named it
+  # differently - or did not name it at all - would strand every invocation
+  # in the running app while this file stayed green. The deployment's queue
+  # list and the module's own name are therefore asserted against each
+  # other, exactly as `mix.exs` and `mix.lock` are.
+  #
+  # Sabotage: renamed the queue in `config/config.exs` to
+  # `statifier_invokes` and left the module alone; this went red on the
+  # membership assertion. Reverted from a backup copy.
+  test "the app configures an Oban queue for the invocations this module names" do
+    queues = Application.get_env(:statifier_examples, Oban)[:queues]
+
+    assert Keyword.has_key?(queues, AsyncCalls.queue())
+    assert Keyword.has_key?(queues, Timers.queue())
+
+    config = AsyncCalls.config()
+
+    assert config.invoke_queue == AsyncCalls.queue()
+    assert config.invoke_delivery == AsyncCalls.Delivery
   end
 
   # What the job actually runs. It is the same call
