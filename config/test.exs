@@ -24,6 +24,16 @@ config :statifier_examples, StatifierExamplesWeb.Endpoint,
   secret_key_base: "zvEQjPaLe2NJmjkbJ3nhekZUl0EmrLsuWssesOsvVVUHa+B2paa/MMj1kh6Tdg9T",
   server: false
 
+# Spans are exported synchronously, on the process that ended them, so a
+# test can assert on a span the line after the work that produced it. The
+# batch processor the SDK defaults to would export on its own timer, which
+# turns every assertion here into a sleep.
+#
+# No exporter is named: `StatifierExamples.TraceCollector` sets one per
+# test, pointed at that test's own pid, so two tests running in the same
+# node cannot read each other's spans.
+config :opentelemetry, :processors, [{:otel_simple_processor, %{}}]
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

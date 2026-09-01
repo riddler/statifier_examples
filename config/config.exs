@@ -99,6 +99,18 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# OpenTelemetry. `opentelemetry_statifier` brings only the API, so the SDK's
+# exporter is this app's choice - and the default choice is none. An example
+# app that shipped an OTLP exporter on by default would spend every boot
+# retrying a connection to a collector nobody asked it to run.
+#
+# The bridge itself is attached in `StatifierExamples.Charts.Tracing`, which
+# is where the three setup calls and the `caller_context` stamp are
+# explained. Attaching it with no exporter configured costs a span table and
+# nothing else, and keeps the dev app's behaviour identical to production's
+# in the way that matters: the events fire either way.
+config :opentelemetry, traces_exporter: :none
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

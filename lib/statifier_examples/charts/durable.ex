@@ -146,7 +146,7 @@ defmodule StatifierExamples.Charts.Durable do
   alias StatifierBlocks.Runtime
   alias StatifierBlocks.Runtime.DurableSubchart
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Fixture, Run, RunLock, Subchart, Timers}
+  alias StatifierExamples.Charts.{AsyncCalls, Fixture, Run, RunLock, Subchart, Timers, Tracing}
   alias StatifierPersistence.{Driver, Runs, Storage}
   alias StatifierPersistence.Run.Linkage
 
@@ -300,10 +300,23 @@ defmodule StatifierExamples.Charts.Durable do
 
   @doc """
   Delivers one external event and drives the run to its next rest.
+
+  The event carries this host's `caller_context` stamp (st-ADR-0063): the
+  current trace context in W3C text form, or `nil` when nothing is being
+  traced. The core copies it onto every effect this event's macrostep
+  produces, `statifier_oban` stores it on the job row untouched, and it
+  comes back on the fired event days later - which is what gives a fired
+  timer a link to the trace that armed it instead of leaving it an
+  unlinked root. `StatifierExamples.Charts.Tracing` holds the reasoning
+  and the wire form.
+
+  This is the only place the stamp is applied, and it covers the cold
+  re-entry doors too: `deliver/2` and `complete_invocation/3` both drive
+  the run back through here.
   """
   @spec send_event(t(), Run.t(), String.t()) :: {:ok, driven()} | {:error, term()}
   def send_event(%__MODULE__{} = durable, %Run{} = run, name) when is_binary(name) do
-    event = Event.external(name)
+    event = Event.external(name, caller_context: Tracing.caller_context())
 
     settle(durable, run, Driver.send_event(driver(durable), durable.run_id, event))
   end

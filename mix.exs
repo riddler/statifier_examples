@@ -133,8 +133,16 @@ defmodule StatifierExamples.MixProject do
       # `Runs.cascade_cancel/3`, `list_runs_by_metadata/2` on the storage
       # behaviour) is already in 0.4.0. The pin retires the moment the
       # operator publishes the release carrying sp-2yx.
+      #
+      # The pin moves FORWARD, still interim, for se-opg (re-pin to Hex
+      # owed, se-a5y): sp-i21 landed ADR-0009's storage-phase telemetry
+      # after 1416a7b, and `[:statifier_persistence, :run, :step, :start
+      # | :stop]` is the one paired seam in the family - the span every
+      # macrostep of a durable step nests inside. On 1416a7b the durable
+      # subchart runs correctly and emits nothing at all, so the capstone
+      # would have a run and no trace.
       {:statifier_persistence,
-       github: "riddler/statifier_persistence", ref: "1416a7b98ce70efe0511050d23dd9cc8f12d0d3e"},
+       github: "riddler/statifier_persistence", ref: "0749481762a0b06db6be5f0a6f71f13e658aa259"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -151,7 +159,42 @@ defmodule StatifierExamples.MixProject do
       #
       # Nothing here consumes 0.4.0's additions yet - an invoke handler's
       # `run/2` scope arm, and `StatifierOban.Timer.Delivery.fired_event/2`.
-      {:statifier_oban, "~> 0.4"},
+      #
+      # INTERIM GIT PIN, re-pin to Hex owed (se-opg, campaign-026; the
+      # re-pin is se-a5y's). sob-43q landed ADR-0006's eleven telemetry
+      # events after 0.4.0, and two of them are edges the one-trace-graph
+      # proof asserts: `[:statifier_oban, :timer, :scheduled]`, the span
+      # event that records the arming, and `[..., :timer, :fired]`, the
+      # detached span that links back to the arming trace through
+      # `caller_context`. On 0.4.0 a timer arms and fires and the trace
+      # graph has no edge across the gap.
+      {:statifier_oban,
+       github: "riddler/statifier_oban", ref: "4bf3a7d195086e055bb9bc84fe174ed4a14e5d67"},
+
+      # The OTel bridge for the family, and the app's telemetry consumer.
+      # This app had no dependency on it before se-opg: nothing here
+      # produced a trace, so there was nothing to bridge.
+      #
+      # INTERIM GIT PIN, re-pin to Hex owed (se-opg, campaign-026; the
+      # re-pin is se-a5y's). The two SIBLING setup calls this app needs -
+      # `OpentelemetryStatifier.Persistence.setup/1` and
+      # `OpentelemetryStatifier.Oban.setup/1`, and with them the whole of
+      # ots-ADR-0004's bridge-owned nesting - landed after 0.2.0. On
+      # 0.2.0 only `OpentelemetryStatifier.setup/1` exists, which bridges
+      # the interpreter's family alone: the macrostep spans would arrive
+      # as unrelated roots with no step span to nest inside and no timer
+      # seam at all, which is the proof's whole subject.
+      {:opentelemetry_statifier,
+       github: "riddler/opentelemetry_statifier", ref: "99d7791dcfd11918464b3a1ad3cdd43614379588"},
+
+      # The SDK behind that bridge. `opentelemetry_statifier` depends only
+      # on `opentelemetry_api` on purpose - a bridge that dragged an SDK
+      # into every host would choose the host's exporter for it - so the
+      # host is where the SDK and the exporter are named. This app
+      # configures a processor per environment rather than here; see
+      # `config/config.exs` and `StatifierExamples.Charts.Tracing`.
+      {:opentelemetry_api, "~> 1.5"},
+      {:opentelemetry, "~> 1.5"},
 
       # The authoring layer this app is the reference embedder for.
       # `phoenix_live_view` is optional there and supplied by this app above.
