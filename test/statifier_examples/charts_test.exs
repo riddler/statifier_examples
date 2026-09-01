@@ -103,6 +103,7 @@ defmodule StatifierExamples.ChartsTest do
   test "the fixture list is both domains', card processing first" do
     assert [
              %{key: "card_processing", name: "Card processing"},
+             %{key: "card_processing_sketch", name: "Card processing (sketch)"},
              %{key: "signup_wizard"},
              %{key: "signup_invitations"},
              %{key: "signup_onboarding"}

@@ -790,6 +790,175 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
   end
 
+  describe "the drafts tray" do
+    # What the uptake is FOR: the two block types statifier_blocks added in
+    # sb-uag7 reach this app's editor with no wiring at all - `core: true` on
+    # `Palette.from_modules/2` carries them, the package's stylesheet the app
+    # already imports carries `.sb-slot--tray`, and `"inbox"` is a name the
+    # host's heroicon set already resolves. This row is what says so on the
+    # rendered page rather than in prose: the shelf draws as a tray, the
+    # parked fragment is inside it, and the gap marker draws in the flow.
+    #
+    # Sabotage: retyped `blk_cps_drafts` to `core.sequence` in
+    # `priv/fixtures/card_processing_sketch.json` - a real type, holding the
+    # same child, in the same place - and the tray assertions went red with
+    # an ordinary primary slot where the strip belongs. Reverted from a
+    # backup copy. What the package draws is the package's; what this app
+    # decides is that the fixture asks for it.
+    test "the sketch draws its shelf as a tray with the tail parked in it",
+         %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/editor?#{[doc: "card_processing_sketch"]}")
+
+      assert html =~ "sb-slot--tray"
+
+      tray =
+        view
+        |> element(~s(.sb-slot--tray[data-parent-id="blk_cps_drafts"][data-slot-name="body"]))
+        |> render()
+
+      assert tray =~ ~s(data-slot-style="tray")
+      assert tray =~ ~s(data-empty="false")
+      assert tray =~ ~s(data-block-id="blk_cps_tail")
+      assert tray =~ "Build the receipt"
+
+      assert card(view, "blk_cps_gap", "sb-node__label") =~ "Placeholder"
+    end
+
+    # The publish gate, read off the page: a shelf with anything in it and a
+    # placeholder each raise an author warning on a compile that SUCCEEDS
+    # (sb ADR-0004 D4), so the host's own header - which counts through
+    # `Editor.findings_count/3`, not through the compiler - says the document
+    # is unfinished while either is there.
+    #
+    # Sabotage: emptied the shelf's `body` slot in
+    # `priv/fixtures/card_processing_sketch.json`; the count fell to 1 and
+    # this went red. Reverted from a backup copy.
+    test "a parked fragment and a gap marker each show in the header count",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: "card_processing_sketch"]}")
+
+      %{seam: seam} = counts("card_processing_sketch")
+
+      assert seam == 2
+      assert html =~ "Findings 2"
+      assert html =~ "parked work"
+      assert html =~ "Authorize, then capture"
+    end
+
+    # The beat `docs/demo-script.md` section 13 walks, driven as the browser
+    # drives it: the author already knows the tail, so it is parked first;
+    # the sources are built afterwards; the tail is placed last. Every step
+    # is one of the editor's own events, which is what makes this the beat's
+    # machine-verified half rather than a paraphrase of it - the demo script
+    # is read out loud, and this is read by CI.
+    #
+    # The document ends publishable: the tray is empty, no placeholder is
+    # left, and the header falls to `Findings 0`. That is the whole argument
+    # for the two types - unfinished work is *sayable* in the document, and
+    # saying it is visible to a host deciding whether to publish.
+    #
+    # Sabotage: retyped `blk_cps_drafts` to `core.sequence` in the sketch
+    # fixture, so the tail started in an ordinary slot rather than parked;
+    # `tray_ids/1` found no tray and this went red before the sequence
+    # began. Reverted from a backup copy.
+    test "a fixture is built sink-backwards: park the tail, build the sources, place the tail",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing_sketch"]}")
+
+      assert flow_ids(view) == [
+               "blk_cps_intake",
+               "blk_cps_reset_attempts",
+               "blk_cps_gap",
+               "blk_cps_drafts"
+             ]
+
+      assert tray_ids(view) == ["blk_cps_tail"]
+
+      # The sources, dragged out of the palette onto the gap the placeholder
+      # is standing in. `insert-dragstart` then `insert-drop` is the palette
+      # drag's two round-trips, and the index is the gap the drop landed on.
+      insert(view, "myapp.authorize", 2)
+      insert(view, "myapp.capture", 3)
+
+      # The gap marker has served its purpose: what goes here is now there.
+      view |> element(~s([data-block-id="blk_cps_gap"] .sb-node__remove)) |> render_click()
+
+      # And the tail comes out of the tray into the flow it was always for.
+      canvas(view) |> render_hook("dragstart", %{"block-id" => "blk_cps_tail"})
+
+      canvas(view)
+      |> render_hook("drop", %{
+        "block-id" => "blk_cps_tail",
+        "parent-id" => "blk_cps_root",
+        "slot" => "body",
+        "index" => "4"
+      })
+
+      assert tray_ids(view) == []
+
+      assert [
+               "blk_cps_intake",
+               "blk_cps_reset_attempts",
+               authorize,
+               capture,
+               "blk_cps_tail",
+               "blk_cps_drafts"
+             ] = flow_ids(view)
+
+      assert authorize != capture
+
+      html = view |> element("button[phx-click='compile']") |> render_click()
+
+      assert html =~ "Findings 0"
+      refute html =~ "parked work"
+    end
+  end
+
+  # The editor's drag events are pushed by the client rather than by a
+  # control with a `phx-click` on it, so a test reaches them the way the
+  # package's own suite does: through the canvas, which is where the hook
+  # that pushes them lives.
+  @spec canvas(Phoenix.LiveViewTest.View.t()) :: Phoenix.LiveViewTest.Element.t()
+  defp canvas(view), do: element(view, "#sb-canvas")
+
+  # One palette drag: arm the type, then drop it on a gap in the root's body.
+  @spec insert(Phoenix.LiveViewTest.View.t(), String.t(), non_neg_integer()) :: String.t()
+  defp insert(view, type, index) do
+    canvas(view) |> render_hook("insert-dragstart", %{"type" => type})
+
+    canvas(view)
+    |> render_hook("insert-drop", %{
+      "type" => type,
+      "parent-id" => "blk_cps_root",
+      "slot" => "body",
+      "index" => to_string(index)
+    })
+  end
+
+  @flow_slot ~s(.sb-slot[data-parent-id="blk_cps_root"][data-slot-name="body"])
+  @tray_slot ~s(.sb-slot--tray[data-parent-id="blk_cps_drafts"][data-slot-name="body"])
+
+  # The block ids in the root's `body`, in document order. Read off the
+  # rendered page rather than off the document, because what this file is
+  # asserting about is the page.
+  @spec flow_ids(Phoenix.LiveViewTest.View.t()) :: [String.t()]
+  defp flow_ids(view), do: child_ids(view, @flow_slot)
+
+  @spec tray_ids(Phoenix.LiveViewTest.View.t()) :: [String.t()]
+  defp tray_ids(view), do: child_ids(view, @tray_slot)
+
+  # The ids of a slot's OWN children: a child combinator rather than a
+  # descendant search, so a card nested inside one of them - the receipt
+  # step inside the parked tail, say - is not counted as a sibling of it.
+  @spec child_ids(Phoenix.LiveViewTest.View.t(), String.t()) :: [String.t()]
+  defp child_ids(view, slot_selector) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#{slot_selector} > .sb-node")
+    |> LazyHTML.attribute("data-block-id")
+  end
+
   # Presses Run in the host header, then renders until the run has actually
   # reached the page. The press only starts the session; the effects arrive
   # as ordinary messages afterwards, so the render the click returns is the

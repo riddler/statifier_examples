@@ -2,7 +2,10 @@
 
 A numbered walk through the signup wizard as a *running* chart: the authoring
 view, a durable run, live block marking, the run feed, a `kill -9` the run
-survives, the abandonment nudge, and the account the wizard exists to create.
+survives, the abandonment nudge, and the account the wizard exists to create. The last
+two beats step outside the wizard: one runs a chart that embeds another, and
+one puts the editor back in the author's hands and writes a flow backwards
+from its sink.
 
 Each beat is one thing you do and what you should see when you do it. Every
 line quoted below was read off a real run of this repository at `main` on a
@@ -38,7 +41,7 @@ port is 8645 unless you set `PORT`.
 `revision 11`, id `bdoc_signup_demo` - beside the DOCUMENT and THEME
 selects, a Compile button and `Findings 0`. The canvas opens at Fit width -
 `20 blocks`, `depth 4` - and the
-palette on the left offers 26 block types. Nothing is running yet, so the
+palette on the left offers 28 block types. Nothing is running yet, so the
 header shows a **Run** button and no status beside it.
 
 This is the whole point of the beat: what you are looking at is an editor, not
@@ -359,6 +362,68 @@ deployment writes its configured reminder delay into them before compiling
 It is the host's fact, not the compiler's: `StatifierBlocks.Core.Subchart`
 says so in as many words - pinning a particular child revision at publish
 time is a host provenance concern, carried in run metadata.
+
+## 13. Author a flow backwards, from its sink
+
+This beat needs no run and no second shell. It is about the *authoring*
+half, and about the two block types `statifier_blocks` added for it.
+
+**Do**: switch the DOCUMENT select to `Card processing (sketch)`, or go to
+<http://127.0.0.1:8645/editor?doc=card_processing_sketch>.
+
+**See**: the same payment flow as beat 1's, caught halfway through being
+written - `revision 1`, id `bdoc_cp_sketch`, `8 blocks`, `depth 4`, and
+`Findings 2`. Four cards down the canvas: **Take the payment request**, an
+**Assign** seeding `capture.attempts`, a **Placeholder** carrying
+
+```
+a placeholder marks a step left unwritten here: "Authorize, then capture"
+```
+
+and a **Drafts** card carrying
+
+```
+this document has parked work in it: the drafts shelf holds fragments that
+are not in the flow, and nothing in it is compiled
+```
+
+Under all of it, at the **foot of the canvas**, a strip labelled `DRAFTS`
+holding a `Sequence` with **Build the receipt** and **Send the receipt** in
+it. The strip is a slot like any other - it takes drops, it has gaps - but
+its cards have no connectors into the flow, because they are not in it.
+
+That is the whole idea worth saying out loud: the author knew the *end* of
+this flow before they knew the middle. Rather than writing the receipt steps
+somewhere they would run, or keeping them in a separate file, or not writing
+them at all, they parked them in the document, in the tray, where the next
+person to open it can see them.
+
+**Do**: drag **Authorize card** out of the palette onto the gap above the
+Placeholder, then **Capture funds** onto the gap below it.
+
+**See**: two cards appear in the flow. `Findings` does not move: the sketch
+already declared `amount` and `authorization` in its `datamodel`, so the two
+steps land on roots that exist. Declaring the roots the middle will use
+before the middle exists is the same habit the tray is - it is what authoring
+from the sink backwards looks like in the document.
+
+**Do**: delete the Placeholder with the `x` on its card. Then drag the
+parked `Sequence` out of the `DRAFTS` strip onto the gap under **Capture
+funds**.
+
+**See**: the strip empties to a single dashed gap, the tail joins the flow -
+`9 blocks`, `depth 3` - and the header falls to **`Findings 0`**.
+
+That zero is the beat. Neither warning is an error and the document compiled
+throughout: a shelf with anything in it and a placeholder are things an
+author *says*, on a compile that succeeds. What a host does about them is
+the host's policy, read off `%StatifierBlocks.Compiled{}.warnings` - and the
+obvious policy is the one this beat just walked to: a document with parked
+work or an unwritten step is not ready to publish, and it says so itself.
+
+`StatifierExamplesWeb.EditorLiveTest`'s "a fixture is built sink-backwards"
+drives exactly this sequence through the editor's own events and asserts
+each step of it, so the beat is machine-verified rather than remembered.
 
 ---
 
