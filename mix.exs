@@ -108,7 +108,17 @@ defmodule StatifierExamples.MixProject do
       # re-enters through. On 0.2.0 a call cannot outlive the step that
       # made it, which is the whole of se-d74. The interim git pin this
       # arm carried before the release is retired (se-p22's pattern).
-      {:statifier_persistence, "~> 0.3"},
+      #
+      # The requirement moves to the 0.4 line to keep the reference
+      # embedder on what is published, not because this app consumes
+      # 0.4.0's durable subcharts (ADR-0008) yet - it does not. 0.4.0 is
+      # breaking for a storage adapter that encodes `run_status/0` by an
+      # exhaustive match, since it gains a fourth terminal value
+      # `:cancelled`. `StatifierExamples.Persistence` delegates every
+      # status-bearing callback to the package's own Ecto adapter and
+      # matches no status itself, so it rides the library's encoding and
+      # needs no new clause.
+      {:statifier_persistence, "~> 0.4"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -116,10 +126,16 @@ defmodule StatifierExamples.MixProject do
       # `Process.send_after/3` that dies with the node. Oban itself
       # arrives through this package rather than being named again here.
       #
-      # 0.3.1 is REQUIRED, not merely permitted: 0.3.0's cancellation query
-      # matches the delivering job itself, so the reminder job cancels its
-      # own delivery mid-flight and the live 90s reminder never arrives.
-      {:statifier_oban, "~> 0.3.1"},
+      # The 0.3.1 floor this arm held was REQUIRED, not merely permitted:
+      # 0.3.0's cancellation query matches the delivering job itself, so the
+      # reminder job cancels its own delivery mid-flight and the live 90s
+      # reminder never arrives. The 0.4 line carries that fix and cannot
+      # resolve back to 0.3.0, so the pin-forward keeps the guarantee
+      # without needing the patch-level spelling.
+      #
+      # Nothing here consumes 0.4.0's additions yet - an invoke handler's
+      # `run/2` scope arm, and `StatifierOban.Timer.Delivery.fired_event/2`.
+      {:statifier_oban, "~> 0.4"},
 
       # The authoring layer this app is the reference embedder for.
       # `phoenix_live_view` is optional there and supplied by this app above.
@@ -139,8 +155,9 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is a Hex requirement with 0.12.0 as the floor: the
-  # first release carrying the drafts shelf - `core.drafts` and
+  # The default arm is a Hex requirement on the 0.13 line. 0.12.0 was the
+  # floor it held before, as the first release carrying the drafts shelf -
+  # `core.drafts` and
   # `core.placeholder`, `StatifierBlocks.Shelf`, and the `.sb-slot--tray`
   # strip the editor draws a parked fragment in. On 0.11.0 the
   # `card_processing_sketch` fixture names two types no palette resolves,
@@ -150,13 +167,19 @@ defmodule StatifierExamples.MixProject do
   # `StatifierBlocks.InvokeStep` (se-4dt.1) and `StatifierBlocks.Runtime`'s
   # `Subchart` handler (se-4dt.4). Five interim git pins served this arm
   # across the campaign era (se-p22's pattern); they are retired.
+  #
+  # 0.13.0 changes what the editor shows first: a non-empty drafts shelf
+  # now opens folded, so a document with parked work opens showing its flow
+  # rather than its shelf. The shelf's placement rules, its compile output
+  # and the fold control itself are unchanged, so this app's tray coverage
+  # holds as written.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.12"}
+        {:statifier_blocks, "~> 0.13"}
     end
   end
 
