@@ -5,8 +5,14 @@ defmodule StatifierExamples.MixDepsTest do
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is a Hex requirement on the 0.14 line, and 0.14.0 is
-  # the floor: `StatifierBlocks.Runtime.DurableSubchart` - the handler that
+  # That default arm is a Hex requirement on the 0.15 line as of se-vrq.
+  # 0.15.0 adds the Fixtures and Datamodel drawer tabs, the
+  # `core.resumable_group` deadline advisory, and polish on the drawer's
+  # tab strip and the truth table - all of it the editor's own surface,
+  # reached through the drawer this app already renders, so nothing
+  # host-side moves with it.
+  #
+  # 0.14.0 remains the floor: `StatifierBlocks.Runtime.DurableSubchart` - the handler that
   # answers `core.subchart` by starting the child as its own persisted run
   # - landed after 0.13.0, and se-6ag's durable subchart proof is written
   # against it. The 0.13 line carries only the in-memory
@@ -21,15 +27,15 @@ defmodule StatifierExamples.MixDepsTest do
   # would pass against a tree still holding 0.13.0.
   #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.13.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.14.0 entry against the mutated expectation.
+  # release line (`"0.14.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.15.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.14"} in deps
+    assert {:statifier_blocks, "~> 0.15"} in deps
 
     lock_line =
       "mix.lock"
@@ -38,11 +44,17 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.14.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.15.)
     refute lock_line =~ ":git,"
   end
 
-  # The engine's floor is 2.4.0: the first release carrying
+  # The engine is held on the 2.5 line as of se-vrq, and 2.5.0 is REQUIRED
+  # rather than tidy: `statifier_oban` 0.6.0 states `{:statifier, "~> 2.5"}`
+  # - the first release carrying `%Statifier.Effect.Invoke{}.caller_context`
+  # and `Statifier.Invoke.Answer.done/4` - so the 2.4 line no longer
+  # resolves alongside the durable timers this app arms.
+  #
+  # 2.4.0 was the floor before that: the first release carrying
   # `Statifier.Session`'s `:inherit_invoke_handlers` option, without which a
   # child session holds no handler map and the `signup_onboarding` wizard
   # child parks at its first step (se-8zp). 2.3.0 carries
@@ -53,13 +65,13 @@ defmodule StatifierExamples.MixDepsTest do
   # is what would catch an override quietly returning.
   #
   # Sabotage: pointed the requirement expectation at the real-but-wrong
-  # previous floor `"~> 2.3"` and left `mix.exs` alone; the membership
-  # assertion went red reporting `"~> 2.4"` against the mutated
+  # previous floor `"~> 2.4"` and left `mix.exs` alone; the membership
+  # assertion went red reporting `"~> 2.5"` against the mutated
   # expectation. Reverted from a backup copy.
   test "the statifier dep is the Hex requirement, with no override" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier, "~> 2.4"} in deps
+    assert {:statifier, "~> 2.5"} in deps
 
     lock_line =
       "mix.lock"
@@ -68,7 +80,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier": )))
 
     assert lock_line, "statifier has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier, "2.4.)
+    assert lock_line =~ ~s({:hex, :statifier, "2.5.)
   end
 
   # The durable stepper. 0.3.0 was the floor two release lines back, as
@@ -100,14 +112,21 @@ defmodule StatifierExamples.MixDepsTest do
   # The two interim git pins this arm carried across campaign 026 are
   # retired, and the `refute` below is what says neither came back.
   #
+  # It moves to the 0.6 line as of se-vrq. 0.6.0 emits statifier's own
+  # `[:statifier, :session, ...]` telemetry from a durably-stepped run,
+  # tagged `driver: :persistence`, so the OTel bridge draws the same
+  # macrostep spans and effect events for a durable run as for a
+  # session-hosted one. This app asks for nothing new to get that, and
+  # 0.5.0 remains what the durable subchart and the trace graph need.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.4.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.5.0 entry against the mutated expectation.
+  # release line (`"0.5.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.6.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.5"} in deps
+    assert {:statifier_persistence, "~> 0.6"} in deps
 
     lock_line =
       "mix.lock"
@@ -116,7 +135,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.5.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.6.)
     refute lock_line =~ ":git,"
   end
 
@@ -140,14 +159,22 @@ defmodule StatifierExamples.MixDepsTest do
   # gap. The interim git pin this arm carried for se-opg is retired, and
   # the `refute` below is what says it did not come back.
   #
+  # It moves to the 0.6 line as of se-vrq. 0.6.0 stores an async
+  # invocation's `caller_context` on its Oban job row and hands it back at
+  # delivery, and adds the optional four-argument
+  # `StatifierOban.Invoke.Delivery.deliver/4` and `deliver_failure/4`;
+  # this app's delivery module defines the three-argument doors and is
+  # called exactly as before. That release is also what raises the engine
+  # requirement to `~> 2.5` above.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.4.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.5.0 entry against the mutated expectation.
+  # release line (`"0.5.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.6.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "the statifier_oban dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_oban, "~> 0.5"} in deps
+    assert {:statifier_oban, "~> 0.6"} in deps
 
     lock_line =
       "mix.lock"
@@ -156,14 +183,22 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_oban": )))
 
     assert lock_line, "statifier_oban has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_oban, "0.5.)
+    assert lock_line =~ ~s({:hex, :statifier_oban, "0.6.)
     refute lock_line =~ ":git,"
   end
 
   # The OTel bridge, which this app had no dependency on before se-opg -
   # nothing here produced a trace, so there was nothing to bridge.
   #
-  # Held on the 0.3 line, with 0.3.0 as the floor: the two SIBLING setup
+  # Held on the 0.4 line as of se-vrq. 0.4.0 adds
+  # `OpentelemetryStatifier.Parent.register/2` and `SpanContext.lookup/2`,
+  # neither of which this app uses - it steps through
+  # `statifier_persistence`, whose own step span already declares the
+  # parent, and it has no subscriber resolving an open span by key - and
+  # puts `statifier.driver` on the macrostep span, which is how a backend
+  # tells this app's durable macrosteps from session-hosted ones.
+  #
+  # 0.3.0 remains the floor: the two SIBLING setup
   # calls the capstone needs, `OpentelemetryStatifier.Persistence.setup/1`
   # and `OpentelemetryStatifier.Oban.setup/1`, landed after 0.2.0. On
   # 0.2.0 only the interpreter half exists, which in a durable run bridges
@@ -171,13 +206,13 @@ defmodule StatifierExamples.MixDepsTest do
   # se-opg is retired, and the `refute` below is what says so.
   #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.2.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.3.0 entry against the mutated expectation.
+  # release line (`"0.3.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.4.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "the opentelemetry_statifier dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:opentelemetry_statifier, "~> 0.3"} in deps
+    assert {:opentelemetry_statifier, "~> 0.4"} in deps
 
     lock_line =
       "mix.lock"
@@ -186,7 +221,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "opentelemetry_statifier": )))
 
     assert lock_line, "opentelemetry_statifier has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :opentelemetry_statifier, "0.3.)
+    assert lock_line =~ ~s({:hex, :opentelemetry_statifier, "0.4.)
     refute lock_line =~ ":git,"
   end
 
