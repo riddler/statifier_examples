@@ -279,58 +279,110 @@ and `Findings 0`. The one thing worth pointing at is that zero: the chart's
 first block is a `core.subchart` naming the wizard's document id
 (`bdoc_signup_demo`), and this app registers a handler for
 `statifier_blocks:subchart` - the canonical one `statifier_blocks` ships,
-given a resolver over this app's own fixture list. Before it did, this
-document and `Signup invitations` both opened at `Findings 1`, on
-`no handler registered for invoke type "statifier_blocks:subchart"`.
-`Signup invitations` opens at `Findings 0` now too.
+given a resolver over this app's own fixture list.
 
 **Do**: press **Run**.
 
-**See**: a run that starts, is refused, takes the block's `on_error` path and
-finishes - sixteen rows, of which these five are the beat:
+**See**: the child starts. Of the rows that land, these four are the beat:
 
 ```
-2  | Invoke dispatched | statifier_blocks:subchart on blk_so_wizard
-3  | Call refused      | statifier_blocks:subchart: durable_subchart_unsupported
-4  | Event             | error.communication.invoke.blk_so_wizard
-6  | Invoke dispatched | myapp:notify on Tell the owner the child chart refused
-11 | Outcome           | error on blk_so_wizard
+0 | Run started         | 83aae24cd3331f9d66bef6e983292dba
+1 | Entered             | blk_so_root, blk_so_wizard
+2 | Invoke dispatched   | statifier_blocks:subchart on blk_so_wizard
+3 | Child chart started | bdoc_signup_demo as run 83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0
 ```
 
-That refusal is the honest answer and not a bug: starting a child chart is a
-`{:start_child, _, _}` instruction, which a live `Statifier.Session` executes
-and the durable driver has no executor for. A child as its own persisted run,
-with the parent linkage stored, is the deliberate follow-up (campaign-023
-ruling R-e). What the page shows meanwhile is a chart routing a refused call
-the same way it routes any other one - which is the thing to say out loud,
-because it is what an author gets for free from having declared an `on_error`
-path.
+Row 3 is the whole point. On the durable path a `core.subchart` is not
+something the parent holds in memory: `StatifierExamples.Charts.Durable`
+routes the invoke type to `StatifierBlocks.Runtime.DurableSubchart`, which
+turns the block's `{:start_child, _, _}` instruction into **its own
+persisted run** - its own row, its own position, its own status, its own
+run id.
 
-**What does run the child**: a `Statifier.Session` started with
+That id is not random. It is the parent's, plus the invocation, plus the
+child index, so a child id strictly extends its parent's, which is what
+makes the tree acyclic and the cascade below terminate. And the parent does
+not answer the call itself: it rests on the live child until the child
+reaches a terminal status, and the driver answers the invocation then.
+
+**Do**: open the child as a run of its own. Its id is the one row 3 printed:
+
+```
+http://127.0.0.1:8645/editor?doc=signup_wizard&run=83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0
+```
+
+**See**: the wizard, at `revision 11`, id `bdoc_signup_demo`, `running`, and
+one row in a Runs feed of its own:
+
+```
+0 | Run resumed from storage | 83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0 (active)
+```
+
+Nothing on that page knows it is anybody's child. It is the wizard, resumed
+from storage exactly as section 7 resumed the parent after the `kill -9` -
+and resumed **by run id alone**, because the page's own compile is the root
+recipe while a child's stored identity is keyed on the child recipe, so the
+usual resume-onto-this-canvas path would refuse it. Drive the wizard to the
+end here and the parent finishes too, with nobody pressing anything on the
+parent's page.
+
+**Do**: go back to the parent's page and press **Stop** while the child is
+still live.
+
+**See**: reload the child's URL. It is `cancelled`, and its feed says so:
+
+```
+0 | Run resumed from storage | 83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0 (cancelled)
+1 | Run finished             | cancelled
+```
+
+Stopping a parent has to take its children with it: nothing is holding an
+orphaned child, and its stored timers would go on firing into a run no page
+will ever show. `StatifierExamples.Charts.Durable.abandon/1` walks the run's
+child subtree and cancels it. Cancellation *retains* - the child keeps its
+record and its stored position byte for byte - which is why the page above
+still renders after the stop, and it is what makes the button safe to press.
+
+**What the host had to supply** is three small things, and naming them is
+the point of a reference embedder:
+
+- **`StatifierExamples.Persistence.list_runs_by_metadata/2`** is what opts
+  this app into durable subcharts at all. The driver refuses to start a
+  child over a store that cannot enumerate one, because a child that could
+  never be found is a child that could never be cancelled. SQLite has no
+  `jsonb @>` operator, so this app's version is a containment test in
+  Elixir, with the table scan it costs written down in that module rather
+  than hidden.
+- **`chart_resolver:`** on the driver is how a *child's* driver reaches the
+  *parent's* chart in order to answer it, which it does not hold. A stored
+  chart is opaque to `statifier_persistence`, so the host walks the
+  documents it publishes and matches on the content hash.
+- **`abandon/1`'s cascade**, above.
+
+**The other deployment shape still exists**, on the same document. A live
+`Statifier.Session` started with
 `StatifierExamples.Charts.invoke_handlers/0` **and
-`inherit_invoke_handlers: true`**. There
-`blk_so_wizard` starts a child session whose machine is the wizard, compiled
-as a child - byte for byte the chart the run record pinned at create, which
-is what `StatifierExamples.Charts.SubchartTest` asserts by comparing the
-child's content hash with the pin.
+`inherit_invoke_handlers: true`** runs `blk_so_wizard` as a child *session*
+instead - byte for byte the chart the run record pinned at create, compiled
+as a child, which `StatifierExamples.Charts.SubchartTest` asserts by
+comparing the child's content hash against that pin. It runs to depth 2
+there, driven rather than read: the child dispatches its own `myapp:signup`
+call, assigns the answer, advances into the wizard's email-verification
+group `s_blk_su_verify`, ends on the wizard's own abandonment event, and
+reports an outcome the parent routes through its `on_done` slot before
+finishing. The negative control is
+asserted beside it - with `inherit_invoke_handlers` left at the engine's
+default of `false` the child holds no handler map at all and parks at
+`s_blk_su_account` forever. The option is opt-in upstream on purpose, since
+inheritance would otherwise run a host's handlers inside charts nobody
+registered them for, so a host that embeds charts states it and this app is
+the reference embedder stating it.
 
-**It runs to depth 2, and that is machine-verified**: the child does not
-merely start. It dispatches its own `myapp:signup` call, gets an answer,
-assigns it, advances to `s_blk_su_send_verification`, and on the wizard's
-own abandonment event it ends and reports an outcome the parent routes
-through its `on_done` slot before finishing. `SubchartTest` drives exactly
-that and asserts each step of it, together with the negative control: with
-`inherit_invoke_handlers` left at the engine's default of `false` the child
-holds no handler map at all and parks at `s_blk_su_account` forever, which
-is what this document did before statifier-ex `st-pvpz`. Nothing here is
-taken on a reading of the code; the assertions run the code path.
-
-The option is opt-in upstream on purpose - inheritance would otherwise run
-a host's handlers inside charts nobody registered them for - so a host that
-embeds charts states it, and this app is the reference embedder stating it.
-Inheritance is transitive, so a subchart inside a subchart would run too;
-that the shipped documents are one level deep is now an authoring choice
-about the example set rather than a limit.
+Which of the two a `core.subchart` gets is **host wiring, not authoring**:
+`statifier_blocks` ships two handlers for the one invoke type and this app
+gives both the same resolver, so nothing in the document says which
+deployment shape it is for. That is the thing to say out loud, because it
+means an author never writes a chart for one deployment shape.
 
 ## 12. Read what the run pinned
 
