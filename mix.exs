@@ -96,7 +96,14 @@ defmodule StatifierExamples.MixProject do
       # `statifier_oban` each state a requirement on `statifier` the
       # resolver satisfies at one version. The override existed only to
       # make a git ref win over requirements no git ref can satisfy.
-      {:statifier, "~> 2.4"},
+      #
+      # The requirement moves to the 2.5 line, and 2.5.0 is REQUIRED
+      # rather than tidy: `statifier_oban` 0.6.0 states
+      # `{:statifier, "~> 2.5"}` - the first release carrying
+      # `%Statifier.Effect.Invoke{}.caller_context` and
+      # `Statifier.Invoke.Answer.done/4` - so the 2.4 line no longer
+      # resolves alongside the durable timers this app arms.
+      {:statifier, "~> 2.5"},
 
       # The durable stepper, and `StatifierPersistence.Driver` - the
       # run-to-quiescence loop `StatifierExamples.Charts.Durable` used to
@@ -142,7 +149,16 @@ defmodule StatifierExamples.MixProject do
       # `list_runs_by_metadata/2` on the storage behaviour) was already in
       # 0.4.0. The two interim git pins this arm carried across
       # campaign 026 are retired here (se-p22's pattern).
-      {:statifier_persistence, "~> 0.5"},
+      #
+      # The requirement moves to the 0.6 line to keep the reference
+      # embedder on what is published. 0.6.0 emits statifier's own
+      # `[:statifier, :session, ...]` telemetry from a durably-stepped
+      # run, tagged `driver: :persistence`, so the OTel bridge draws the
+      # same macrostep spans and effect events for a durable run as for a
+      # session-hosted one. This app asks for nothing new to get that -
+      # it is the bridge's doing, not the host's - and 0.5.0 remains what
+      # the durable subchart and the capstone's trace graph actually need.
+      {:statifier_persistence, "~> 0.6"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -169,7 +185,16 @@ defmodule StatifierExamples.MixProject do
       # `caller_context`. On 0.4.0 a timer arms and fires and the trace
       # graph has no edge across the gap. The interim git pin this arm
       # carried for se-opg is retired here.
-      {:statifier_oban, "~> 0.5"},
+      #
+      # The requirement moves to the 0.6 line. 0.6.0 stores an async
+      # invocation's `caller_context` on its Oban job row and hands it
+      # back at delivery, and adds the optional four-argument
+      # `StatifierOban.Invoke.Delivery.deliver/4` and
+      # `deliver_failure/4` a process-less host builds its own answer
+      # event from. This app's delivery module defines the three-argument
+      # doors and is called exactly as before. The release is also what
+      # raises the engine requirement to `~> 2.5` above.
+      {:statifier_oban, "~> 0.6"},
 
       # The OTel bridge for the family, and the app's telemetry consumer.
       # This app had no dependency on it before se-opg: nothing here
@@ -184,7 +209,17 @@ defmodule StatifierExamples.MixProject do
       # as unrelated roots with no step span to nest inside and no timer
       # seam at all, which is the proof's whole subject. The interim git
       # pin this arm was introduced on is retired here.
-      {:opentelemetry_statifier, "~> 0.3"},
+      #
+      # The requirement moves to the 0.4 line. 0.4.0 adds
+      # `OpentelemetryStatifier.Parent.register/2` and
+      # `SpanContext.lookup/2`, neither of which this app uses: it steps
+      # through `statifier_persistence`, whose own step span already
+      # declares the parent the macrostep spans nest inside, and it has
+      # no subscriber resolving an open span by key. What it does get for
+      # free is `statifier.driver` on the macrostep span, which is how a
+      # backend tells this app's durable macrosteps from session-hosted
+      # ones. 0.3.0 remains the floor the capstone needs.
+      {:opentelemetry_statifier, "~> 0.4"},
 
       # The SDK behind that bridge. `opentelemetry_statifier` depends only
       # on `opentelemetry_api` on purpose - a bridge that dragged an SDK
@@ -241,13 +276,23 @@ defmodule StatifierExamples.MixProject do
   # rather than its shelf. The shelf's placement rules, its compile output
   # and the fold control itself are unchanged, so this app's tray coverage
   # holds as written.
+  #
+  # The arm moves to the 0.15 line to keep the reference embedder on what
+  # is published. 0.15.0 adds two more drawer tabs - Fixtures, which
+  # drives every attached fixture row through the compiled chart, and
+  # Datamodel, a read-only grid of the declared paths - plus the
+  # `core.resumable_group` deadline advisory, and polishes the drawer's
+  # tab strip and the truth table. All of that is the editor's own
+  # surface, reached through the drawer this app already renders, so no
+  # host-side registration changes. 0.14.0 remains the floor, as the
+  # release carrying `StatifierBlocks.Runtime.DurableSubchart`.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.14"}
+        {:statifier_blocks, "~> 0.15"}
     end
   end
 
