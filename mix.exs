@@ -119,30 +119,30 @@ defmodule StatifierExamples.MixProject do
       # matches no status itself, so it rides the library's encoding and
       # needs no new clause.
       #
-      # INTERIM GIT PIN, re-pin to Hex owed (se-6ag, campaign-026). This
-      # app now DOES consume ADR-0008's durable subcharts, and the one
-      # piece it needs is not in 0.4.0: sp-2yx widened
+      # The requirement moves again, to the 0.5 line, and 0.5.0 is the
+      # floor rather than a convenience. This app now DOES consume
+      # ADR-0008's durable subcharts, and two pieces they need landed
+      # after 0.4.0. sp-2yx widened
       # `StatifierPersistence.Driver.dispatch_context/0` to carry
-      # `:invoke`, the whole `Statifier.Effect.Invoke` being dispatched.
-      # Without it a dispatch fun sees `type` and `params` only, and the
-      # subchart handler cannot reach `src` - the document id it resolves
-      # the child chart by - so `StatifierBlocks.Runtime.DurableSubchart`
-      # raises rather than guess. Everything else the durable subchart
-      # needs (the dispatch fun's `{:start_child, _, _}` arm, the
-      # `chart_resolver:` option, `parent_link/2`, `answer_parent/3`,
-      # `Runs.cascade_cancel/3`, `list_runs_by_metadata/2` on the storage
-      # behaviour) is already in 0.4.0. The pin retires the moment the
-      # operator publishes the release carrying sp-2yx.
+      # `:invoke`, the whole `Statifier.Effect.Invoke` being dispatched:
+      # without it a dispatch fun sees `type` and `params` only, cannot
+      # reach `src` - the document id it resolves the child chart by -
+      # and `StatifierBlocks.Runtime.DurableSubchart` raises rather than
+      # guess. sp-i21 then landed ADR-0009's storage-phase telemetry, and
+      # `[:statifier_persistence, :run, :step, :start | :stop]` is the
+      # one paired seam in the family - the span every macrostep of a
+      # durable step nests inside, and what the capstone's trace graph is
+      # built out of. On 0.4.0 the durable subchart cannot resolve its
+      # child, and on the interim pin before the telemetry it ran
+      # correctly and emitted nothing at all.
       #
-      # The pin moves FORWARD, still interim, for se-opg (re-pin to Hex
-      # owed, se-a5y): sp-i21 landed ADR-0009's storage-phase telemetry
-      # after 1416a7b, and `[:statifier_persistence, :run, :step, :start
-      # | :stop]` is the one paired seam in the family - the span every
-      # macrostep of a durable step nests inside. On 1416a7b the durable
-      # subchart runs correctly and emits nothing at all, so the capstone
-      # would have a run and no trace.
-      {:statifier_persistence,
-       github: "riddler/statifier_persistence", ref: "0749481762a0b06db6be5f0a6f71f13e658aa259"},
+      # Everything else the durable subchart needs (the dispatch fun's
+      # `{:start_child, _, _}` arm, the `chart_resolver:` option,
+      # `parent_link/2`, `answer_parent/3`, `Runs.cascade_cancel/3`,
+      # `list_runs_by_metadata/2` on the storage behaviour) was already in
+      # 0.4.0. The two interim git pins this arm carried across
+      # campaign 026 are retired here (se-p22's pattern).
+      {:statifier_persistence, "~> 0.5"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -160,32 +160,31 @@ defmodule StatifierExamples.MixProject do
       # Nothing here consumes 0.4.0's additions yet - an invoke handler's
       # `run/2` scope arm, and `StatifierOban.Timer.Delivery.fired_event/2`.
       #
-      # INTERIM GIT PIN, re-pin to Hex owed (se-opg, campaign-026; the
-      # re-pin is se-a5y's). sob-43q landed ADR-0006's eleven telemetry
-      # events after 0.4.0, and two of them are edges the one-trace-graph
-      # proof asserts: `[:statifier_oban, :timer, :scheduled]`, the span
-      # event that records the arming, and `[..., :timer, :fired]`, the
+      # The requirement moves to the 0.5 line, and that floor is REQUIRED
+      # too: sob-43q landed ADR-0006's eleven telemetry events after
+      # 0.4.0, and two of them are edges the one-trace-graph proof
+      # asserts - `[:statifier_oban, :timer, :scheduled]`, the span event
+      # that records the arming, and `[..., :timer, :fired]`, the
       # detached span that links back to the arming trace through
       # `caller_context`. On 0.4.0 a timer arms and fires and the trace
-      # graph has no edge across the gap.
-      {:statifier_oban,
-       github: "riddler/statifier_oban", ref: "4bf3a7d195086e055bb9bc84fe174ed4a14e5d67"},
+      # graph has no edge across the gap. The interim git pin this arm
+      # carried for se-opg is retired here.
+      {:statifier_oban, "~> 0.5"},
 
       # The OTel bridge for the family, and the app's telemetry consumer.
       # This app had no dependency on it before se-opg: nothing here
       # produced a trace, so there was nothing to bridge.
       #
-      # INTERIM GIT PIN, re-pin to Hex owed (se-opg, campaign-026; the
-      # re-pin is se-a5y's). The two SIBLING setup calls this app needs -
+      # 0.3.0 is the floor: the two SIBLING setup calls this app needs -
       # `OpentelemetryStatifier.Persistence.setup/1` and
       # `OpentelemetryStatifier.Oban.setup/1`, and with them the whole of
       # ots-ADR-0004's bridge-owned nesting - landed after 0.2.0. On
       # 0.2.0 only `OpentelemetryStatifier.setup/1` exists, which bridges
       # the interpreter's family alone: the macrostep spans would arrive
       # as unrelated roots with no step span to nest inside and no timer
-      # seam at all, which is the proof's whole subject.
-      {:opentelemetry_statifier,
-       github: "riddler/opentelemetry_statifier", ref: "99d7791dcfd11918464b3a1ad3cdd43614379588"},
+      # seam at all, which is the proof's whole subject. The interim git
+      # pin this arm was introduced on is retired here.
+      {:opentelemetry_statifier, "~> 0.3"},
 
       # The SDK behind that bridge. `opentelemetry_statifier` depends only
       # on `opentelemetry_api` on purpose - a bridge that dragged an SDK
@@ -214,17 +213,16 @@ defmodule StatifierExamples.MixProject do
   # local convenience: the `mix.lock` (and `mix.exs`) changes it produces are
   # never committed, and CI sets no env, so CI resolves the default arm.
   #
-  # The default arm is an INTERIM GIT PIN, re-pin to Hex owed (se-6ag,
-  # campaign-026). `StatifierBlocks.Runtime.DurableSubchart` - the handler
+  # The default arm is a Hex requirement on the 0.14 line, and 0.14.0 is
+  # the floor: `StatifierBlocks.Runtime.DurableSubchart` - the handler
   # that answers `core.subchart` by starting the child as its own persisted
   # `statifier_persistence` run - landed after 0.13.0 and is what this
   # app's durable subchart proof is written against. 0.13.0 carries only
   # the in-memory `StatifierBlocks.Runtime.Subchart`, whose
   # `{:start_child, _, _}` nothing but `Statifier.Session` executes. The
-  # pin retires the moment the operator publishes the release carrying
-  # sb-2i04.
+  # sixth interim git pin this arm carried is retired here.
   #
-  # The Hex requirement this arm held before the pin was the 0.13 line.
+  # The Hex requirement this arm held before that pin was the 0.13 line.
   # 0.12.0 was the floor before that, as the first release carrying the
   # drafts shelf -
   # `core.drafts` and
@@ -249,8 +247,7 @@ defmodule StatifierExamples.MixProject do
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         github: "riddler/statifier_blocks", ref: "05f0a4ab0c9a1adb1c8857d0b5642a8b19cc7e98"}
+        {:statifier_blocks, "~> 0.14"}
     end
   end
 
