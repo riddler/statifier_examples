@@ -479,6 +479,143 @@ each step of it, so the beat is machine-verified rather than remembered.
 
 ---
 
+## 14. Edit a guard through picklists, and watch it stay source text
+
+This beat needs no run either. It is about the *condition* half of authoring,
+and about a chain that starts three packages away.
+
+**Do**: open <http://127.0.0.1:8645/editor?doc=card_processing>, fold the
+palette, and click the **Branch** that sits under **Rate the transaction** -
+`blk_cp_risk_branch`, `2 arms + otherwise`. Read the inspector's CONFIGURATION
+panel.
+
+**See**: `When "high_risk"` is not a text box. It is a row of dropdowns -
+
+```
+risk_rating   >=      70            remove
+fraud.verdict ==      review        remove
+or  add clause
+switch to text   switch to picklists
+```
+
+and `When "low_risk"`, directly below it, *is* a text box, offering only
+`switch to text`.
+
+That difference is the whole design and it is not a bug. `high_risk` holds
+`risk_rating >= 70 OR fraud.verdict == 'review'`: a flat list of comparisons,
+joined by one connective, each against a literal. That is exactly what
+`Predicator.Simple` names as the subset a row of dropdowns can draw.
+`low_risk` holds `risk_rating < 40 AND customer.verified`, and
+`customer.verified` is a bare path rather than a comparison, so the whole
+expression answers `:outside`. Outside the subset is an ordinary answer about
+a perfectly valid expression, not an error: the arm compiles exactly as it
+always did, and the editor simply declines to offer an author a mode that
+cannot draw what they wrote.
+
+**Do**: change clause 1's operator from `>=` to `>`.
+
+**See**: three things move at once. The canvas chip under `WHEN "HIGH_RISK"`
+becomes `risk_rating > 70 OR fraud.verdict == 'review'`; **Undo** lights up,
+because the document changed; and pressing **Compile** leaves the header on
+`Findings 2` - the same two findings the document opened with, and no new
+diagnostic from the edit.
+
+### The point: nothing here invented a second representation
+
+This is the beat worth being slow about, because a structured editor is
+usually where a source language quietly acquires a rival format on disk.
+
+Look at what the field actually is. The condition is **one** named input,
+
+```
+input name="config[arm_high_risk]"  value="risk_rating > 70 OR fraud.verdict == 'review'"
+```
+
+and that is the only element in the control the form serializes. The
+dropdowns beside it carry no `name` at all. Each one is a list whose option
+*values* are entire candidate source strings - picking the `>` option on
+clause 1 is picking the string `risk_rating > 70 OR fraud.verdict == 'review'`
+whole. The hook's job is to put the chosen string into that input, and there
+is nowhere else for a condition to live.
+
+Press **switch to text** on the same arm and the point closes: the field
+becomes a plain input holding `risk_rating > 70 OR fraud.verdict == 'review'` -
+the same characters the canvas chip shows, and the same characters the
+document held before anyone touched a dropdown. The picklists are a way of
+*choosing* source text, not a way of *storing* something else, so a document
+authored entirely through dropdowns and one authored entirely by typing are
+the same document.
+
+### What that proves about the chain
+
+Four packages, each proving the same subset one level further out:
+
+| Layer | Package | What it contributes |
+|---|---|---|
+| the subset | `predicator` | `Predicator.Simple` - which expressions a row of dropdowns can draw, and the round-trip laws that keep `to_source/1` honest |
+| the control | `statifier_ui` | `StatifierUI.Expression` answers *inside* or `:outside`; `Live.ExpressionInput` draws the picklists and `StatifierUIExpressionPicklist` writes the composed string back |
+| the field | `statifier_blocks` | an `:expression` config field renders that control whenever the package is on the host's load path, and falls back to a plain source input when it is not |
+| the document | this app | a real `card_processing` guard, edited through the dropdowns, compiled, and still source text |
+
+Only the last row is this repository's. The other three are what a reference
+embedder exists to consume without special-casing.
+
+### Reproducing this beat before the releases are out
+
+Two things this beat needs are not on Hex yet.
+
+The first is the packages. `Predicator.Simple` is on predicator's main and
+`Live.ExpressionInput`'s picklist mode is on statifier-ui's main, and
+`statifier_blocks` renders the control through a git pin of its own, so seeing
+this beat means pinning all three at the top level. Mix refuses a diverged
+child dependency, so each one needs an `override:`:
+
+```elixir
+{:statifier_blocks,
+ github: "riddler/statifier_blocks",
+ ref: "12254b16d920053d0660c2dadbd59e68b534cafa"},
+{:statifier_ui,
+ github: "riddler/statifier-ui",
+ ref: "3128076a4d593f22187c9c4ea55a2621c2d8e43f",
+ override: true},
+{:predicator,
+ github: "riddler/predicator-ex",
+ ref: "7ff1d0c5e0d2e2cc0865380edd7cb04e8ba10bde",
+ override: true},
+```
+
+Overriding `predicator` back to a Hex requirement instead is not a shortcut:
+it removes `Predicator.Simple`, so `StatifierUI.Expression` answers `:outside`
+for every source and no arm ever draws picklists.
+
+The second is a hook. Picklist mode is drawn on the server but written back on
+the client, and this app's `assets/js/app.js` registers `StatifierBlocks`'s
+hooks only. Without statifier-ui's, the dropdowns render and move and change
+nothing - the field reverts on the next patch, which is a quieter failure than
+a missing measurement hook and worth naming. The registration is one import
+and one spread, resolved through the same esbuild `NODE_PATH` the
+`statifier_blocks` import already uses:
+
+```javascript
+import { StatifierUIHooks } from "statifier_ui/assets/js/index.js"
+// ...
+hooks: {...colocatedHooks, ...StatifierBlocks, ...StatifierUIHooks},
+```
+
+Neither the pins nor the hook registration are committed here: the pins retire
+when predicator 9.2.0, statifier_ui 0.4.0 and statifier_blocks 0.16.0 publish,
+and the hook registration lands with them, since the import cannot resolve
+until `statifier_ui` is a dependency this app actually has.
+
+The beat above was walked on a running server against the real
+`card_processing` document with all three pins and the hook in place, and
+captured for campaign 028 as
+`se-hzt-card-processing-picklists-before.jpg`,
+`se-hzt-card-processing-picklist-edit-applied.jpg` and
+`se-hzt-card-processing-same-field-as-source-text.jpg`.
+
+---
+
 ## Two things a viewer will ask
 
 **"Why not press signup.email_verified? That is what a real visitor does."**
