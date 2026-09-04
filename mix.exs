@@ -234,6 +234,23 @@ defmodule StatifierExamples.MixProject do
       # `phoenix_live_view` is optional there and supplied by this app above.
       statifier_blocks_dep(),
 
+      # The observing/authoring component library, declared DIRECTLY rather
+      # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
+      # `statifier_blocks` (0.16.0), exactly as `phoenix_live_view` is, so it
+      # does not arrive with the editor: an optional dependency is a
+      # requirement the resolver honours only if something else asks for the
+      # package, and here nothing else does. Without this line the editor
+      # renders every `:expression` as the plain source input and the
+      # picklists never appear.
+      #
+      # 0.4.0 is the floor, as the release carrying both halves this app
+      # needs: `StatifierUI.Live.ExpressionInput`'s picklist mode, and the
+      # `StatifierUIExpressionPicklist` hook that writes the composed source
+      # string back into the one named input the config form serializes. The
+      # hook is registered in `assets/js/app.js`; the component without it
+      # renders picklists that operate and change nothing (se-21f).
+      {:statifier_ui, "~> 0.4"},
+
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -286,13 +303,23 @@ defmodule StatifierExamples.MixProject do
   # surface, reached through the drawer this app already renders, so no
   # host-side registration changes. 0.14.0 remains the floor, as the
   # release carrying `StatifierBlocks.Runtime.DurableSubchart`.
+  #
+  # The arm moves to the 0.16 line, and 0.16.0 is REQUIRED rather than
+  # tidy: it is the release that fills the expression seam. A condition's
+  # `:expression` field now renders statifier-ui's expression editor -
+  # picklists of field, operator and value over the source that editor can
+  # round-trip, and the plain source input over the rest - so a guard like
+  # `amount >= 500` is composed rather than typed. That rendering is
+  # conditional on `statifier_ui` being on the load path, which is why the
+  # requirement below exists. On 0.15.0 an `:expression` is a text field
+  # and the picklists this app demonstrates do not exist at all.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.15"}
+        {:statifier_blocks, "~> 0.16"}
     end
   end
 
