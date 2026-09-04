@@ -46,11 +46,32 @@ import topbar from "../vendor/topbar"
 // its own under `assets/`. Filed upstream as `sb-a5u`.
 import StatifierBlocks from "statifier_blocks/assets/js/statifier_blocks.js"
 
+// statifier-ui's own hooks, registered here because the editor above reaches
+// for them. An `:expression` config field renders
+// `StatifierUI.Live.ExpressionInput` whenever `statifier_ui` is on the load
+// path, and in picklist mode that control is drawn on the server but written
+// back on the client: the field, operator and value dropdowns carry no name,
+// and `StatifierUIExpressionPicklist` is what composes the chosen source
+// string into the one named input the config form serializes. Without it the
+// picklists render, can be operated, and change nothing - the config-change
+// event carries the field's OLD value and the control reverts on the next
+// patch. That is quieter than the missing measurement hook above, which draws
+// no connectors at all, and it is why this import is worth a paragraph
+// (se-21f).
+//
+// `StatifierUIHooks` is the package's named export carrying both of its hooks,
+// the picklist one and the completion popup on the text field, which is the
+// registration its `assets/js/index.js` documents. The package is an OPTIONAL
+// dependency of `statifier_blocks`, so it does not arrive with the editor;
+// `mix.exs` declares it directly, and this import resolves through the same
+// esbuild NODE_PATH as the one above.
+import { StatifierUIHooks } from "statifier_ui/assets/js/index.js"
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, ...StatifierBlocks},
+  hooks: {...colocatedHooks, ...StatifierBlocks, ...StatifierUIHooks},
 })
 
 // Show progress bar on live navigation and form submits

@@ -5,12 +5,20 @@ defmodule StatifierExamples.MixDepsTest do
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is a Hex requirement on the 0.15 line as of se-vrq.
-  # 0.15.0 adds the Fixtures and Datamodel drawer tabs, the
+  # That default arm is a Hex requirement on the 0.16 line as of se-21f,
+  # and 0.16.0 is REQUIRED rather than tidy: it is the release in which a
+  # condition's `:expression` field renders statifier-ui's expression
+  # editor - picklists of field, operator and value over the source that
+  # editor can round-trip - instead of a plain text input. That rendering
+  # is conditional on `statifier_ui` being on the load path, which is the
+  # requirement the next test guards. On the 0.15 line the picklists do
+  # not exist at all.
+  #
+  # 0.15.0 added the Fixtures and Datamodel drawer tabs, the
   # `core.resumable_group` deadline advisory, and polish on the drawer's
   # tab strip and the truth table - all of it the editor's own surface,
   # reached through the drawer this app already renders, so nothing
-  # host-side moves with it.
+  # host-side moved with it.
   #
   # 0.14.0 remains the floor: `StatifierBlocks.Runtime.DurableSubchart` - the handler that
   # answers `core.subchart` by starting the child as its own persisted run
@@ -27,15 +35,15 @@ defmodule StatifierExamples.MixDepsTest do
   # would pass against a tree still holding 0.13.0.
   #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.14.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.15.0 entry against the mutated expectation.
+  # release line (`"0.15.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.16.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.15"} in deps
+    assert {:statifier_blocks, "~> 0.16"} in deps
 
     lock_line =
       "mix.lock"
@@ -44,7 +52,42 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.15.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.16.)
+    refute lock_line =~ ":git,"
+  end
+
+  # The component library, which this app declares DIRECTLY even though it
+  # never calls it by name. `statifier_ui` is an OPTIONAL dependency of
+  # `statifier_blocks`, exactly as `phoenix_live_view` is: the resolver
+  # honours an optional requirement only if something else asks for the
+  # package, so it does not arrive with the editor. Without this arm the
+  # editor renders every `:expression` as the plain source input, and the
+  # picklists se-21f exists to show never appear - quietly, since nothing
+  # raises.
+  #
+  # 0.4.0 is the floor, as the release carrying both halves this app
+  # needs: `StatifierUI.Live.ExpressionInput`'s picklist mode, and the
+  # `StatifierUIExpressionPicklist` hook `assets/js/app.js` registers,
+  # which is what composes the chosen source string into the one named
+  # input the config form serializes.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong earlier
+  # release line (`"0.3.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.4.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
+  test "the statifier_ui dep is a direct Hex requirement" do
+    deps = Mix.Project.config()[:deps]
+
+    assert {:statifier_ui, "~> 0.4"} in deps
+
+    lock_line =
+      "mix.lock"
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_ui": )))
+
+    assert lock_line, "statifier_ui has no mix.lock entry"
+    assert lock_line =~ ~s({:hex, :statifier_ui, "0.4.)
     refute lock_line =~ ":git,"
   end
 
