@@ -236,7 +236,7 @@ defmodule StatifierExamples.MixProject do
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
-      # `statifier_blocks` (0.17.0), exactly as `phoenix_live_view` is, so it
+      # `statifier_blocks` (0.18.0), exactly as `phoenix_live_view` is, so it
       # does not arrive with the editor: an optional dependency is a
       # requirement the resolver honours only if something else asks for the
       # package, and here nothing else does. Without this line the editor
@@ -261,7 +261,20 @@ defmodule StatifierExamples.MixProject do
       # showing the previous selection after an edit, which is exactly the
       # surface this app demonstrates. 0.4.0 remains the floor, as the
       # release carrying the picklist mode and its hook.
-      {:statifier_ui, "~> 0.5"},
+      #
+      # The arm moves to the 0.6 line to keep the reference embedder on what
+      # is published. 0.6.0 adds `StatifierUI.Trace.Replay.from_events/4`,
+      # which builds the v1 trace wire format from a persisted event log with
+      # no live session, and gives the wire `error` object a discriminated
+      # reason arm, which is what lets an `error.execution` or
+      # `error.communication` event reach a consumer instead of being dropped
+      # in normalization. It removes
+      # `StatifierUI.Live.ExpressionInput.display_label/1`, whose only work -
+      # lowercasing a word-shaped lexeme for a dropdown - the grammar's own
+      # display phrases had already taken over; this app called it by no name
+      # at all, so the removal reaches nothing here. 0.4.0 remains the floor,
+      # as the release carrying the picklist mode and its hook.
+      {:statifier_ui, "~> 0.6"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
@@ -340,13 +353,27 @@ defmodule StatifierExamples.MixProject do
   # reached through what this app already renders, so no host-side
   # registration changes. 0.16.0 remains the floor, as the release that
   # fills the expression seam.
+  #
+  # The arm moves to the 0.18 line to keep the reference embedder on what is
+  # published. 0.18.0 lets a palette put down more than one block at a time:
+  # a palette may name recipes beside block types, and the core palette ships
+  # one, `deadline`, whose single pick writes the `core.send` /
+  # `core.on_event` pair that spells a clock interrupt - so this app's
+  # palette browser gains an entry it registers nothing for. Alongside it a
+  # palette entry may declare `singleton:`, `core.wait` and `core.send`
+  # rewrite a duration stored in the retired spelling as the block resolves -
+  # so a document saved before the 0.17 duration pivot opens clean - and the
+  # editor toolbar's `:selected?` attribute is renamed `:fittable?`. This app
+  # renders the editor whole and passes that attribute nowhere, and declares
+  # `singleton:` on none of its own block types, so neither reaches it.
+  # 0.16.0 remains the floor, as the release that fills the expression seam.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.17"}
+        {:statifier_blocks, "~> 0.18"}
     end
   end
 
