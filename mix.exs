@@ -158,6 +158,21 @@ defmodule StatifierExamples.MixProject do
       # session-hosted one. This app asks for nothing new to get that -
       # it is the bridge's doing, not the host's - and 0.5.0 remains what
       # the durable subchart and the capstone's trace graph actually need.
+      #
+      # HELD at the 0.6 line while its three siblings move, which is the
+      # one asymmetry in this re-pin. 0.7.0's V03 DDL cannot apply to this
+      # app's SQLite database: `Migrations.V03.up/1` creates a GIN index
+      # over `metadata jsonb_path_ops`, and ecto_sqlite3 raises
+      # ArgumentError on any index carrying `using:`. Staying on V02 is
+      # not an escape either - `outcome_blob` is an unconditional field on
+      # the generated runs schema, so 0.7.0 against a V02 database fails
+      # every query that touches the runs table. Measured both ways on
+      # se-eoj: the migration rolls back on the index, and a V02 database
+      # under 0.7.0 fails 73 of the suite's tests on `no such column:
+      # s0.outcome_blob`. The defect is filed upstream as sp-11w, and the
+      # move waits on 0.7.1 as se-i4v. Writing an app-side V03 substitute
+      # here would hide exactly the API problem the reference embedder
+      # exists to surface.
       {:statifier_persistence, "~> 0.6"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
@@ -194,7 +209,17 @@ defmodule StatifierExamples.MixProject do
       # event from. This app's delivery module defines the three-argument
       # doors and is called exactly as before. The release is also what
       # raises the engine requirement to `~> 2.5` above.
-      {:statifier_oban, "~> 0.6"},
+      #
+      # The requirement moves to the 0.7 line to keep the reference
+      # embedder on what is published. Everything 0.7.0 adds serves a
+      # Tier A fan-out - `StatifierOban.Invoke.FanOut`, the
+      # `StatifierOban.Invoke.ChildStarter` seam named by the new
+      # `:child_starter` option, the `:max_fan_out` cap, and
+      # `cancel_unstarted/3` - and all of it is additive. This app arms
+      # timers and answers asynchronous invocations; it registers no
+      # handler that returns `{:fan_out, items}` and wires no starter, so
+      # nothing here changes until `core.map` is put to work (se-j87).
+      {:statifier_oban, "~> 0.7"},
 
       # The OTel bridge for the family, and the app's telemetry consumer.
       # This app had no dependency on it before se-opg: nothing here
@@ -274,7 +299,22 @@ defmodule StatifierExamples.MixProject do
       # display phrases had already taken over; this app called it by no name
       # at all, so the removal reaches nothing here. 0.4.0 remains the floor,
       # as the release carrying the picklist mode and its hook.
-      {:statifier_ui, "~> 0.6"},
+      #
+      # The arm moves to the 0.7 line to keep the reference embedder on what
+      # is published. The wire vocabulary grows to 25 types with
+      # `trace.conds_evaluated`, a selection round's guard outcomes; the
+      # format version stays 1, and only a consumer that ASSERTS the
+      # vocabulary size rather than reading it has to move.
+      # `session.start`'s `data` rows also stop falling back to the
+      # element's own span for `value_location`, so the key is absent now
+      # when a `<data>` element wrote no value. This app pins no vocabulary
+      # count and reads no `value_location`: it names no `StatifierUI`
+      # module at all, taking the package as the load-path presence that
+      # turns the editor's expression fields into picklists plus the
+      # `StatifierUIHooks` export `assets/js/app.js` registers. So neither
+      # change reaches it. 0.7.0 also raises the `predicator` floor to
+      # `~> 9.4`, which the resolved 9.4.0 already satisfies.
+      {:statifier_ui, "~> 0.7"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
@@ -367,13 +407,31 @@ defmodule StatifierExamples.MixProject do
   # renders the editor whole and passes that attribute nowhere, and declares
   # `singleton:` on none of its own block types, so neither reaches it.
   # 0.16.0 remains the floor, as the release that fills the expression seam.
+  #
+  # The arm moves to the 0.19 line to keep the reference embedder on what is
+  # published. 0.19.0 is about what a chart does with the world outside it:
+  # `core.map` runs another chart once per item of a datamodel list,
+  # `core.await` holds until a named event arrives, `core.on_event` gains a
+  # `capture` map, and the editor learns the datamodel's shape through a new
+  # `{:path, opts}` field type and a `chart_outcomes` assign. All of it is
+  # additive and reached through the editor this app renders whole. Two are
+  # worth naming because this app could have felt them and does not:
+  # `core.map` compiles to one `<invoke>` of the constant type
+  # `statifier_blocks:map`, a DIFFERENT string from
+  # `statifier_blocks:subchart`, so the single-child handler this app
+  # registers is not silently taken for a fan-out handler - the gap is
+  # reported by `StatifierBlocks.Compiler.InvokeTypes` at deploy time, and
+  # no chart here names `core.map` yet (se-j87 is where it will). And
+  # `core.subchart`'s `assign_to` is redeclared `{:path, %{}}` rather than
+  # `:string`, which changes the control the editor draws for it and not
+  # what it accepts, so this app's stored documents are unaffected.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.18"}
+        {:statifier_blocks, "~> 0.19"}
     end
   end
 
