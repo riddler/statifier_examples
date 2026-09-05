@@ -5,8 +5,21 @@ defmodule StatifierExamples.MixDepsTest do
   # checkout, and that swap is never committed: the committed default arm is
   # what CI - which sets no env - resolves.
   #
-  # That default arm is a Hex requirement on the 0.16 line as of se-21f,
-  # and 0.16.0 is REQUIRED rather than tidy: it is the release in which a
+  # That default arm is a Hex requirement on the 0.17 line as of se-awx,
+  # the post-publish re-pin that puts the reference embedder back on what
+  # is published. 0.17.0 makes a stored duration mean one thing: a
+  # `:duration` field reads the duration strings `Predicator.Duration`
+  # parses and refuses every other spelling, so `500ms` and `1.5s` finally
+  # go through, and the intermediate canonical form between them and the
+  # engine is gone along with the two public functions that served it.
+  # This app calls neither, so the removal reaches nothing here. The
+  # editor surfaces that land beside it - an inspector Fixtures tab, a
+  # fixture-derived hint on a condition field, datamodel-derived value
+  # candidates, done-event chips, an `on_select` callback - are all the
+  # editor's own, reached through what this app already renders.
+  #
+  # 0.16.0 remains the floor, and it is REQUIRED rather than tidy: it is
+  # the release in which a
   # condition's `:expression` field renders statifier-ui's expression
   # editor - picklists of field, operator and value over the source that
   # editor can round-trip - instead of a plain text input. That rendering
@@ -35,15 +48,15 @@ defmodule StatifierExamples.MixDepsTest do
   # would pass against a tree still holding 0.13.0.
   #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.15.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.16.0 entry against the mutated expectation.
+  # release line (`"0.16.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.17.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.16"} in deps
+    assert {:statifier_blocks, "~> 0.17"} in deps
 
     lock_line =
       "mix.lock"
@@ -52,7 +65,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.16.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.17.)
     refute lock_line =~ ":git,"
   end
 
@@ -71,14 +84,24 @@ defmodule StatifierExamples.MixDepsTest do
   # which is what composes the chosen source string into the one named
   # input the config form serializes.
   #
-  # Sabotage: pointed the LOCK assertion at the real-but-wrong earlier
-  # release line (`"0.3.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.4.0 entry against the mutated expectation.
+  # The arm moves to the 0.5 line as of se-awx. 0.5.0 reads per-value-kind
+  # operator eligibility from `Predicator.Simple.operators/1` rather than a
+  # table of its own, so a picklist offers what the grammar offers, in the
+  # grammar's order; each entry gains `:lexeme` for the source spelling
+  # while `:label` becomes the display phrase. That is a migration only for
+  # a caller building source text out of `:label`, and this app calls the
+  # module by no name at all. 0.5.0 also fixes a picklist control that kept
+  # displaying the previous selection after an edit, which is the surface
+  # this app exists to demonstrate.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.4.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.5.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "the statifier_ui dep is a direct Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_ui, "~> 0.4"} in deps
+    assert {:statifier_ui, "~> 0.5"} in deps
 
     lock_line =
       "mix.lock"
@@ -87,7 +110,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_ui": )))
 
     assert lock_line, "statifier_ui has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_ui, "0.4.)
+    assert lock_line =~ ~s({:hex, :statifier_ui, "0.5.)
     refute lock_line =~ ":git,"
   end
 
