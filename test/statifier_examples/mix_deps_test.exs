@@ -60,16 +60,31 @@ defmodule StatifierExamples.MixDepsTest do
   # passes that attribute nowhere, and declares `singleton:` on none of its
   # own block types, so neither reaches it.
   #
+  # The arm moves to the 0.19 line as of se-eoj. 0.19.0 is about what a
+  # chart does with the world outside it: `core.map` runs another chart
+  # once per item of a datamodel list, `core.await` holds until a named
+  # event arrives, `core.on_event` gains a `capture` map, and the editor
+  # learns the datamodel's shape through a new `{:path, opts}` field type
+  # and a `chart_outcomes` assign. All of it is additive and reached
+  # through the editor this app renders whole. `core.map` compiles to one
+  # `<invoke>` of the constant type `statifier_blocks:map`, a different
+  # string from `statifier_blocks:subchart`, so the single-child handler
+  # this app registers is not taken for a fan-out handler; no chart here
+  # names `core.map` yet. `core.subchart`'s `assign_to` is redeclared
+  # `{:path, %{}}` rather than `:string`, which changes the control the
+  # editor draws and not what the field accepts, so this app's stored
+  # documents are unaffected.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.17.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.18.0 entry against the mutated expectation.
+  # release line (`"0.18.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.19.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.18"} in deps
+    assert {:statifier_blocks, "~> 0.19"} in deps
 
     lock_line =
       "mix.lock"
@@ -78,7 +93,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.18.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.19.)
     refute lock_line =~ ":git,"
   end
 
@@ -118,14 +133,27 @@ defmodule StatifierExamples.MixDepsTest do
   # display phrases had already taken over. This app calls the module by no
   # name at all, so the removal reaches nothing here.
   #
+  # The arm moves to the 0.7 line as of se-eoj. 0.7.0 grows the wire
+  # vocabulary to 25 types with `trace.conds_evaluated`, a selection
+  # round's guard outcomes, and stops `session.start`'s `data` rows
+  # falling back to the element's own span for `value_location`, so that
+  # key is absent when a `<data>` element wrote no value. The wire format
+  # version stays 1 in both cases, and only a consumer that ASSERTS the
+  # vocabulary size, or reads `value_location`, has to move. This app does
+  # neither: it names no `StatifierUI` module at all, and takes the
+  # package as the load-path presence that turns the editor's expression
+  # fields into picklists plus the `StatifierUIHooks` export
+  # `assets/js/app.js` registers. 0.7.0 also raises the `predicator` floor
+  # to `~> 9.4`, which the resolved 9.4.0 already satisfies.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.5.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.6.0 entry against the mutated expectation.
+  # release line (`"0.6.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.7.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "the statifier_ui dep is a direct Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_ui, "~> 0.6"} in deps
+    assert {:statifier_ui, "~> 0.7"} in deps
 
     lock_line =
       "mix.lock"
@@ -134,7 +162,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_ui": )))
 
     assert lock_line, "statifier_ui has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_ui, "0.6.)
+    assert lock_line =~ ~s({:hex, :statifier_ui, "0.7.)
     refute lock_line =~ ":git,"
   end
 
@@ -209,6 +237,21 @@ defmodule StatifierExamples.MixDepsTest do
   # session-hosted one. This app asks for nothing new to get that, and
   # 0.5.0 remains what the durable subchart and the trace graph need.
   #
+  # It is HELD at the 0.6 line by se-eoj, alone among the four this app
+  # takes from the family, and the hold is a finding rather than an
+  # oversight. 0.7.0's V03 DDL cannot apply to a SQLite database:
+  # `StatifierPersistence.Ecto.Migrations.V03.up/1` creates a GIN index
+  # over `metadata jsonb_path_ops`, and ecto_sqlite3 raises ArgumentError
+  # on any index carrying `using:`, so the migration rolls back. Staying
+  # on V02 is not an escape either - `outcome_blob` is an unconditional
+  # field on the generated runs schema, so 0.7.0 against a V02 database
+  # fails every query that touches the runs table, which se-eoj measured
+  # at 73 of this suite's tests failing on `no such column:
+  # s0.outcome_blob`. Filed upstream as sp-11w; the move waits on 0.7.1
+  # as se-i4v. This assertion is what keeps 0.7.0 out of the tree until
+  # then, and what will go red the moment someone moves the pin without
+  # the migration story.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
   # release line (`"0.5.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.6.0 entry against the mutated expectation.
@@ -257,14 +300,23 @@ defmodule StatifierExamples.MixDepsTest do
   # called exactly as before. That release is also what raises the engine
   # requirement to `~> 2.5` above.
   #
+  # It moves to the 0.7 line as of se-eoj. Everything 0.7.0 adds serves a
+  # Tier A fan-out - `StatifierOban.Invoke.FanOut`, the
+  # `StatifierOban.Invoke.ChildStarter` seam named by the new
+  # `:child_starter` option, the `:max_fan_out` cap and
+  # `cancel_unstarted/3` - and all of it is additive. This app arms timers
+  # and answers asynchronous invocations; it registers no handler that
+  # returns `{:fan_out, items}` and wires no starter, so nothing here
+  # changes until `core.map` is put to work.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.5.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.6.0 entry against the mutated expectation.
+  # release line (`"0.6.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.7.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "the statifier_oban dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_oban, "~> 0.6"} in deps
+    assert {:statifier_oban, "~> 0.7"} in deps
 
     lock_line =
       "mix.lock"
@@ -273,7 +325,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_oban": )))
 
     assert lock_line, "statifier_oban has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_oban, "0.6.)
+    assert lock_line =~ ~s({:hex, :statifier_oban, "0.7.)
     refute lock_line =~ ":git,"
   end
 
