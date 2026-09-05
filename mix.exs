@@ -236,7 +236,7 @@ defmodule StatifierExamples.MixProject do
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
-      # `statifier_blocks` (0.16.0), exactly as `phoenix_live_view` is, so it
+      # `statifier_blocks` (0.17.0), exactly as `phoenix_live_view` is, so it
       # does not arrive with the editor: an optional dependency is a
       # requirement the resolver honours only if something else asks for the
       # package, and here nothing else does. Without this line the editor
@@ -249,7 +249,19 @@ defmodule StatifierExamples.MixProject do
       # string back into the one named input the config form serializes. The
       # hook is registered in `assets/js/app.js`; the component without it
       # renders picklists that operate and change nothing (se-21f).
-      {:statifier_ui, "~> 0.4"},
+      #
+      # The arm moves to the 0.5 line to keep the reference embedder on what
+      # is published. 0.5.0 reads per-value-kind operator eligibility from
+      # `Predicator.Simple.operators/1` rather than a table of its own, so a
+      # picklist offers what the grammar offers, in the grammar's order; the
+      # entries it returns gain `:lexeme` for the source spelling while
+      # `:label` becomes the display phrase, which is a migration only for a
+      # caller that builds source text from `:label`, and this app calls the
+      # module by no name at all. It also fixes a picklist control that kept
+      # showing the previous selection after an edit, which is exactly the
+      # surface this app demonstrates. 0.4.0 remains the floor, as the
+      # release carrying the picklist mode and its hook.
+      {:statifier_ui, "~> 0.5"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
@@ -313,13 +325,28 @@ defmodule StatifierExamples.MixProject do
   # conditional on `statifier_ui` being on the load path, which is why the
   # requirement below exists. On 0.15.0 an `:expression` is a text field
   # and the picklists this app demonstrates do not exist at all.
+  #
+  # The arm moves to the 0.17 line to keep the reference embedder on what is
+  # published. 0.17.0 makes a stored duration mean one thing: a `:duration`
+  # field reads the duration strings `Predicator.Duration` parses and
+  # refuses every other spelling, which is what lets `500ms` and `1.5s`
+  # through, and the intermediate canonical form between them and the engine
+  # is gone along with the two public functions that served it. This app
+  # calls neither, so the removal reaches nothing here. Alongside it the
+  # editor grows an inspector Fixtures tab, a fixture-derived hint beside a
+  # condition field, datamodel-derived value candidates, done-event chips
+  # drawn as the block they name, and an `on_select` callback for a host
+  # panel that follows the canvas - all of it the editor's own surface,
+  # reached through what this app already renders, so no host-side
+  # registration changes. 0.16.0 remains the floor, as the release that
+  # fills the expression seam.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.16"}
+        {:statifier_blocks, "~> 0.17"}
     end
   end
 
