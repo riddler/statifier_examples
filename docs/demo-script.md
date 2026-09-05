@@ -459,6 +459,17 @@ steps land on roots that exist. Declaring the roots the middle will use
 before the middle exists is the same habit the tray is - it is what authoring
 from the sink backwards looks like in the document.
 
+Neither card offers a deadline, and that is deliberate. `myapp.authorize`
+used to declare one as a `timeout` field the compiler then dropped on the
+floor; it does not any more. A deadline here is the recorded **pair** of
+blocks *around* a step rather than a property *on* one: a `core.send`
+carrying the deadline event and a `delay`, placed first in the enclosing
+group's `body`, and a `core.on_event` on that same group's `interrupts` rail
+listening for that event with an `outcome`. The `card_processing` document
+this beat's sketch is a half-written version of authors its fifteen-minute
+authorization deadline exactly that way, and `statifier_blocks` ADR-0010 is
+where the spelling is recorded.
+
 **Do**: delete the Placeholder with the `x` on its card. Then drag the
 parked `Sequence` out of the `DRAFTS` strip onto the gap under **Capture
 funds**.
