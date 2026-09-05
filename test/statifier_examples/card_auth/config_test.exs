@@ -62,15 +62,22 @@ defmodule StatifierExamples.CardAuth.ConfigTest do
   end
 
   describe "myapp.authorize" do
-    # Sabotage: made check_timeout/2 skip a stored value; this went red, then
-    # reverted.
-    test "checks a stored timeout and reads an absent one through the default" do
-      assert Authorize.validate_config(%{"assign_to" => "auth", "timeout" => "1h30m"}) == :ok
-      assert Authorize.validate_config(%{"assign_to" => "auth", "timeout" => "PT30S"}) == :ok
-      assert Authorize.validate_config(%{"assign_to" => "auth"}) == :ok
+    # se-6pn removed the optional `timeout` duration this type used to
+    # declare, render and validate: it took `StatifierBlocks.InvokeStep`'s
+    # default emit, so no compiled artifact ever carried the value. A
+    # deadline in this vocabulary is the recorded pair of blocks around a
+    # step (statifier_blocks ADR-0010), not a property on it, so the field
+    # is gone rather than wired up. This is the flipped version of the test
+    # that used to pin its validation: the palette must not offer the field
+    # again, and nothing may validate a stored one as if it were honoured.
+    #
+    # Sabotage: put the timeout field back on the type's `fields:` list; this
+    # went red, then reverted.
+    test "declares no timeout field, and validates no stored one" do
+      refute Enum.any?(Authorize.config_schema(%{}), &(&1.key == "timeout"))
 
-      assert {:error, [{"timeout", _message}]} =
-               Authorize.validate_config(%{"assign_to" => "auth", "timeout" => "soon"})
+      assert Authorize.validate_config(%{"assign_to" => "auth", "timeout" => "soon"}) == :ok
+      assert Authorize.validate_config(%{"assign_to" => "auth"}) == :ok
     end
 
     # Sabotage: made migrate_config/2 keep the "field" key; this went red, then

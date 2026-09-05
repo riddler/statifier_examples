@@ -2,10 +2,29 @@ defmodule StatifierExamples.CardAuth.Authorize do
   @moduledoc """
   `myapp.authorize`: authorizes the transaction against the card network.
 
-  A leaf step naming the `myapp:authorize` handler, with the decision it
-  writes and an optional call timeout. It runs nothing itself:
+  A leaf step naming the `myapp:authorize` handler and the decision it
+  writes. It runs nothing itself:
   `StatifierExamples.CardAuth.Handlers` is what this app registers to
   answer the call.
+
+  ## Why this type carries no deadline
+
+  It used to declare an optional `timeout` duration, render it in the
+  editor and validate it on save - and then drop it, because this type
+  takes `StatifierBlocks.InvokeStep`'s default emit and never passed the
+  value on. A control that invites an author to set a deadline, and a
+  validator that confirms the value is well formed, while nothing
+  enforces one, is worse than no control at all, and this app is the
+  reference embedder: an inert field teaches the wrong shape.
+
+  The field is gone rather than wired up, because a deadline on a call is
+  not a property of the step in this vocabulary. `statifier_blocks`
+  ADR-0010 records the spelling: a clock interrupt is the **pair** of a
+  `core.send` carrying the deadline event and a `delay`, placed first in
+  the enclosing group's `body` slot, and a `core.on_event` on that same
+  group's `interrupts` rail naming the event with an `outcome`. The
+  card-processing fixture authors its authorization deadline exactly that
+  way, around this step rather than on it.
 
   ## Why this type is at version 2
 
@@ -17,12 +36,10 @@ defmodule StatifierExamples.CardAuth.Authorize do
   and compiles as a v2 one.
   """
 
-  alias StatifierBlocks.Core.Duration
   alias StatifierBlocks.InvokeStep
   alias StatifierExamples.Charts.Step
 
   @assign_to_message "must be a bare lowercase identifier, like authorization"
-  @timeout_message "must be a duration - 30s or 1h30m - or ISO-8601 like PT30S"
 
   use StatifierBlocks.InvokeStep,
     invoke_type: "myapp:authorize",
@@ -35,13 +52,6 @@ defmodule StatifierExamples.CardAuth.Authorize do
         required?: true,
         default: "authorization",
         datamodel_path?: true
-      },
-      %{
-        key: "timeout",
-        type: :duration,
-        label: "Timeout",
-        required?: false,
-        default: "30s"
       }
     ],
     palette: %{
@@ -58,7 +68,7 @@ defmodule StatifierExamples.CardAuth.Authorize do
   def current_version, do: 2
 
   @doc """
-  The base's `invoke_type` check, plus this type's two.
+  The base's `invoke_type` check, plus this type's own.
 
   `assign_to` goes through `check_identifier/4` rather than the base's
   `check_assign_to/2`, which passes a blank: a card decision nobody keeps
@@ -70,29 +80,7 @@ defmodule StatifierExamples.CardAuth.Authorize do
     []
     |> InvokeStep.check_invoke_type(config)
     |> InvokeStep.check_identifier(config, "assign_to", @assign_to_message)
-    |> check_timeout(config)
     |> InvokeStep.verdict()
-  end
-
-  # An absent `timeout` is read through the declared default rather than
-  # refused, which is `core.parallel`'s reading of its own optional
-  # `complete`. A stored `null` is not an absent key: it reaches the check
-  # and is refused, as ADR-0001 decision 6 says it should be.
-  @spec check_timeout([{String.t(), String.t()}], map()) :: [{String.t(), String.t()}]
-  defp check_timeout(findings, config) do
-    case Map.fetch(config, "timeout") do
-      :error -> findings
-      {:ok, timeout} -> check_stored_timeout(findings, timeout)
-    end
-  end
-
-  @spec check_stored_timeout([{String.t(), String.t()}], term()) :: [{String.t(), String.t()}]
-  defp check_stored_timeout(findings, timeout) do
-    if Duration.duration?(timeout) do
-      findings
-    else
-      [{"timeout", @timeout_message} | findings]
-    end
   end
 
   @doc """
