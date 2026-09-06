@@ -170,8 +170,12 @@ jobs:
           if [ -d deps/statifier_ui/.git ]; then
             resolved="git $(git -C deps/statifier_ui rev-parse HEAD)"
           else
-            resolved="hex $(mix deps | sed -n 's/^\* statifier_ui \([^ ]*\) (Hex package).*/\1/p' | head -1)"
+            resolved="hex $(sed -n 's/^ *"statifier_ui": {:hex, :statifier_ui, "\([^"]*\)".*/\1/p' mix.lock)"
           fi
+          case "$resolved" in
+            "git "??* | "hex "?*) ;;
+            *) echo "could not tell what statifier_ui resolved to: '$resolved'" >&2; exit 1 ;;
+          esac
           echo "statifier_ui resolved to: $resolved"
           echo "\`statifier_ui\` resolved to \`$resolved\`" >> "$GITHUB_STEP_SUMMARY"
 
