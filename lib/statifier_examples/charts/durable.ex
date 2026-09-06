@@ -1062,11 +1062,12 @@ defmodule StatifierExamples.Charts.Durable do
   # executes by creating the child as its own persisted run and answering
   # `:pending` (sp ADR-0008 decision 3).
   #
-  # It reads `src` off `dispatch_context.invoke`, which is why this app
-  # carries an interim git pin on `statifier_persistence`: sp-2yx widened
-  # the dispatch context to carry the whole effect, and on 0.4.0 the
-  # handler raises rather than guess. `mix.exs` says the same beside the
-  # pin.
+  # It reads `src` off `dispatch_context.invoke`, which is why this app's
+  # `statifier_persistence` floor is what it is: sp-2yx widened the
+  # dispatch context to carry the whole effect for 0.5.0, and on 0.4.0 the
+  # handler raises rather than guess. The interim git pin that requirement
+  # was reached through is long retired; `mix.exs` says the same beside
+  # the arm.
   #
   # The two answers are the handler's own and neither is built here: a
   # refusal is st-ADR-0068's `failure` keyword list, which the driver

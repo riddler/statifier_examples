@@ -221,18 +221,38 @@ defmodule StatifierExamples.MixProject do
       # adapter off Postgres - `docs/non-postgres-backends.md` there - and
       # what this app has been doing in Elixir all along.
 
-      # PINNED to `statifier_persistence` MAIN, at the commit carrying the
-      # durable per-run input log (its ADR-0010, `sp-80g`). 0.9.0 is not
-      # published yet, and the log is what this app's editor page replays a
-      # stored run from: the two optional adapter callbacks the record adds -
-      # append one input, list a run's inputs in order - are the only door to
-      # the ordered `%Statifier.Event{}` entries `StatifierUI.Trace.Replay`
-      # needs. `se-gty` moves this arm back to `{:statifier_persistence, "~>
-      # 0.9"}` once the operator publishes.
-      {:statifier_persistence,
-       github: "riddler/statifier_persistence",
-       ref: "27a7a15b6ebb8dd2bfd6a1c3b5779c2bbd042feb",
-       override: true},
+      # The requirement moves to the 0.9 line, and this arm is a Hex
+      # requirement again. The interim git pin `se-dh0` took on this
+      # package - the commit carrying ADR-0010's durable per-run input log
+      # (`sp-80g`), while 0.9.0 was unpublished - is retired by `se-gty`,
+      # and the `refute` in `StatifierExamples.MixDepsTest` is what says it
+      # did not come back. The `override: true` that pin needed goes with
+      # it: a Hex requirement satisfies the requirements `statifier_oban`
+      # and `statifier_blocks` state on this package, which is exactly what
+      # a git ref cannot do.
+      #
+      # 0.9.0 is REQUIRED rather than tidy. It carries the input log
+      # itself - `supports_input_log?/1`, `append_input/3` and
+      # `list_inputs/2` on the storage-adapter behaviour, with
+      # `StatifierPersistence.Runs.inputs/2` and
+      # `Storage.input_log_supported?/1` reading it back, and migration V05
+      # as the table they write to. That log is the only door to the
+      # ordered `%Statifier.Event{}` entries `StatifierExamples.Charts.Replay`
+      # hands `StatifierUI.Trace.Replay` for the editor page's Run pane;
+      # `StatifierExamples.Persistence` exports all three callbacks, and
+      # without them the pane has no history to replay.
+      #
+      # Two of the release's other edges reach this app and neither costs
+      # it anything. `[:statifier_persistence, :child, :answered]`'s
+      # `outcome` is now the invocation's rather than the door's, so a
+      # fan-out that failed reports `:failed` where it used to say `:done`;
+      # this app asserts no `outcome` on that event. And `Storage.Ecto`'s
+      # two metadata queries now refuse cleanly with
+      # `{:error, :metadata_unsupported}` off Postgres instead of raising
+      # from the driver - `StatifierExamples.Persistence` issues neither,
+      # answering `supports_metadata?/1` for itself and writing
+      # `list_runs_by_metadata/2` in Elixir, as it has since 0.7.1.
+      {:statifier_persistence, "~> 0.9"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -568,42 +588,57 @@ defmodule StatifierExamples.MixProject do
   # `statifier_ui`
   # becomes an optional dependency at `~> 0.9` with this release, and
   # is declared directly above at that line;
-  # `statifier_datamodel` still arrives TRANSITIVELY, at `~> 0.1`,
-  # which the resolved 0.2.0 satisfies - this app names it nowhere,
-  # through this dependency or through `statifier_ui`'s new one,
-  # because the `types` key its fixtures write is data the compiler
-  # reads for it. 0.2.0 narrows the read check rather than widening
-  # it: a record field a document declares optional no longer covers a
-  # shape field the document marks required. This app's datamodel
-  # documents declare no `types` record that leans on the looser
-  # reading, so the narrowing reaches nothing here.
+  # `statifier_datamodel` still arrives TRANSITIVELY - this app names it
+  # nowhere, through this dependency or through `statifier_ui`'s own one,
+  # because the `types` key its fixtures write is data the compiler reads
+  # for it. The floor this package states on it moves to `~> 0.3` with
+  # 0.22.0, and 0.3.0 resolves: a datamodel entry whose `type` names a
+  # declaration now contributes that declaration's fields as declared
+  # paths beneath its own, a `one_of` on a declaration field is a hint
+  # that never breaks a read, and the required-to-optional row becomes
+  # breaking. This app's datamodel documents declare no such row, and
+  # `StatifierExamples.Charts.TypedEnvironmentTest` is what says so.
   #
-  # The default arm is PINNED to `statifier_blocks` MAIN, the way the
-  # `statifier_ui` clause below describes its own git leg: 0.22.0 is not
-  # published yet and two unreleased commits are load-bearing here. The
-  # first is the Run pane's `compile_options` assign (`sb-hgjk`), because
-  # the editor page has to hand the pane the same three compile options
-  # `StatifierExamples.Charts.Durable.compile/3` passes - `terminate:
-  # true`, the known invoke types and the datamodel - or the pane reads
-  # its marks off a differently compiled chart than the one the run
-  # executed. The pin moves forward to the second (`sb-hxs5`): `core.invoke`
-  # now classes its `error` outcome as a failure like `core.map` and
-  # `core.subchart` do, and an unhandled failure-classed completion is
-  # carried to the document's top-level `<final>`, which is what stamps
-  # the reserved `statifier_persistence:run_status` param on the chunk
-  # chart's error final. That is what let `se-cqr` delete the host-side
-  # translation `StatifierExamples.Charts.Durable` used to do instead.
-  # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout
-  # is unaffected; `se-gty` moves the default arm back to
-  # `{:statifier_blocks, "~> 0.22"}` once the operator publishes.
+  # The default arm moves to the 0.22 line, and it is a Hex requirement
+  # again: the two interim git pins it carried while 0.22.0 was
+  # unpublished - `se-dh0`'s and the forward move `se-cqr` made on it -
+  # are retired by `se-gty`, and the `refute` in
+  # `StatifierExamples.MixDepsTest` is what says neither came back.
+  # `STATIFIER_BLOCKS_PATH` still wins over the requirement, so a local
+  # checkout is unaffected either way.
+  #
+  # Both commits those pins bought are in the release, and both are
+  # REQUIRED here. The first is the Run pane's `compile_options` assign
+  # (`sb-hgjk`), because the editor page has to hand the pane the same
+  # three compile options `StatifierExamples.Charts.Durable.compile/3`
+  # passes - `terminate: true`, the known invoke types and the datamodel -
+  # or the pane reads its marks off a differently compiled chart than the
+  # one the run executed. The second is `sb-hxs5`: `core.invoke` classes
+  # its `error` outcome as a failure like `core.map` and `core.subchart`
+  # do, and an unhandled failure-classed completion is carried to the
+  # document's top-level `<final>`, which is what stamps the reserved
+  # `statifier_persistence:run_status` param on the chunk chart's error
+  # final. That is what let `se-cqr` delete the host-side translation
+  # `StatifierExamples.Charts.Durable` used to do instead.
+  #
+  # 0.22.0 is a minor with notes, and the notes reach this app in one
+  # place only. Compiled bytes move for a document containing a
+  # `core.invoke`, `core.map` or `core.subchart` with an empty failure
+  # slot, for one with a failure-classed outcome left unhandled below its
+  # root under `terminate: true` or `child_use: true`, and for one
+  # containing a host type built on `StatifierBlocks.InvokeStep` - each of
+  # those is a new chart revision. The chunk chart is the third case and
+  # asked for it. Beside the failure seam, `core.on_event` takes an
+  # optional `payload` declaration and `core.map`'s `collect` accepts any
+  # datamodel path rather than only a bare identifier; both are additive,
+  # and this app's documents declare neither.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         github: "riddler/statifier_blocks", ref: "0f9f2cd7d2fb1b840941fafb54949cb958edf975"}
+        {:statifier_blocks, "~> 0.22"}
     end
   end
 
