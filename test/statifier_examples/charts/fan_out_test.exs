@@ -234,4 +234,26 @@ defmodule StatifierExamples.Charts.FanOutTest do
 
     assert Invites.count() == 0
   end
+
+  # A failed child and a cancelled sibling sit at different indices of the
+  # same answer, so the page has to call them different things. It did not
+  # until this bead: nothing in this app produced a `:failed` run before a
+  # fan-out did, and `finish/2` folded `:failed` into `:cancelled`'s word.
+  # A browser capture of the strict document is what found it.
+  #
+  # Sabotage: pointed `finish(run, :failed)` back at `{:halted,
+  # :cancelled}`; this went red on the first assertion. Reverted.
+  test "a failed chunk reads failed, not cancelled", %{run_id: run_id} do
+    start!("signup_bulk_invites_strict", run_id)
+
+    assert %{success: 1} = drain()
+
+    refused = Enum.find(start_jobs(), &(&1.args["index"] == 3))
+    assert :ok = ChildStartWorker.perform(refused)
+
+    assert {:ok, {{_durable, child}, _document}} =
+             Durable.resume("#{run_id}/blk_bi_chunks/3")
+
+    assert child.status == :failed
+  end
 end

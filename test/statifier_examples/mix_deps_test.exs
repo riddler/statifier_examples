@@ -69,8 +69,9 @@ defmodule StatifierExamples.MixDepsTest do
   # through the editor this app renders whole. `core.map` compiles to one
   # `<invoke>` of the constant type `statifier_blocks:map`, a different
   # string from `statifier_blocks:subchart`, so the single-child handler
-  # this app registers is not taken for a fan-out handler; no chart here
-  # names `core.map` yet. `core.subchart`'s `assign_to` is redeclared
+  # this app registers is not taken for a fan-out handler. Three charts
+  # here name `core.map` as of se-j87, and this app registers a fan-out
+  # handler for the other string. `core.subchart`'s `assign_to` is redeclared
   # `{:path, %{}}` rather than `:string`, which changes the control the
   # editor draws and not what the field accepts, so this app's stored
   # documents are unaffected.
@@ -270,8 +271,10 @@ defmodule StatifierExamples.MixDepsTest do
   #
   # The two capabilities a Tier A fan-out needs at open -
   # `supports_run_outcome?/1` and `list_run_states_by_metadata/2` - are
-  # still not exported here, so a fan-out over this store would be refused
-  # rather than half-started. Nothing here fans out yet (se-j87).
+  # exported here as of se-j87, and the guards they satisfy are asserted
+  # in `StatifierExamples.PersistenceTest`. Without them
+  # `Driver.start_child_at/6` refuses a fan-out at open rather than
+  # half-starting one.
   #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
   # release line (`"0.6.`) and left `mix.lock` alone; it went red
