@@ -104,10 +104,15 @@ What the three documents report today:
   document compiles clean, and a finding on it is one an author produced.
   The unavailable-block chrome belongs to `statifier_blocks` and is covered
   there.
-- `signup_invitations` - `Findings 1`, also expected: its `core.subchart`
-  emits the invoke type `statifier_blocks:subchart`, which is the **host's**
-  to register, and this app registers only its own `myapp:*` handlers. The
-  warning is the ordinary unregistered-handler lint, not a broken fixture.
+- `signup_invitations` - `Findings 0`. It read `Findings 1` until 2026-08-31
+  (se-4dt.4), because its `core.subchart` emits the invoke type
+  `statifier_blocks:subchart`, which is the **host's** to register, and this
+  app registered no handler for it: the standing number was the ordinary
+  unregistered-handler lint, not a broken fixture.
+  `StatifierExamples.Charts.Subchart` gives the canonical handler
+  `statifier_blocks` ships the two callbacks a host owes it - a document-id
+  lookup over the fixture list, and the palette a child compiles against - so
+  the type is registered now and the lint is retired.
 
 ## The typed environment, and the two answers it gives
 
