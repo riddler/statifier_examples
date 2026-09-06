@@ -309,7 +309,24 @@ defmodule StatifierExamples.MixProject do
       # list holds and never named the retired reason - but the shape it
       # fans out over is exactly the one the ruling is about, so the move
       # is this app's to take rather than one it merely follows.
-      {:statifier_oban, "~> 0.8"},
+      #
+      # The requirement moves to the 0.9 line. 0.9.0 makes a fan-out
+      # visible in the telemetry stream: three events join
+      # `StatifierOban.Telemetry.events/0` - `:fan_out` when an
+      # invocation's child starts are stored, `:child_started` when the
+      # `ChildStarter` seam creates one, and `:unstarted_cancelled` when
+      # a `first_error` cancel sweeps the starts that had not run. A
+      # fan-out delivers nothing, so no `:delivered` event ever fired for
+      # one and a cancelled sibling was reported nowhere at all; this app
+      # is the reference embedder for that seam, and its
+      # `StatifierExamples.Charts.FanOut` implements
+      # `StatifierOban.Invoke.ChildStarter`, so the events describe work
+      # this app actually does. The release also changes
+      # `StatifierOban.Invoke.FanOut.start/5` to return `{:ok, summary}`
+      # where it returned a bare `:ok`, which reaches nothing here: this
+      # app is called BY that function through the starter behaviour and
+      # never calls it, and the three other return shapes are unchanged.
+      {:statifier_oban, "~> 0.9"},
 
       # The OTel bridge for the family, and the app's telemetry consumer.
       # This app had no dependency on it before se-opg: nothing here
