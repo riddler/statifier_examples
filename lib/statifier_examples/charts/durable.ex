@@ -339,6 +339,17 @@ defmodule StatifierExamples.Charts.Durable do
   `{:refused, reason}` is the package's, unrenamed. `start_child/5`'s
   contract turns it into a retry or a permanent failure, and this does
   not decide which.
+
+  A child whose one call is refused settles itself, and there is no host
+  half to this any more. `core.invoke` classes its `error` outcome as a
+  failure, the compiler stamps the reserved
+  `statifier_persistence:run_status` `<donedata>` param on the top-level
+  `<final>` an unhandled failure-classed completion reaches, and the
+  driver's own automatic path persists the run `:failed` and answers the
+  parent on that step. This module used to read the child's status back
+  and call `Driver.answer_parent/3` with a host-invented reason when it
+  was still `:active`; `se-cqr` deleted that translation, which is
+  `statifier_persistence` ADR-0008's amendment (decision 6).
   """
   @spec start_child_at(
           String.t(),
@@ -365,9 +376,7 @@ defmodule StatifierExamples.Charts.Durable do
       durable = %__MODULE__{run_id: parent_run_id, store: store, machine: machine}
       resolved = %{invoke | content: scxml, params: params}
 
-      driver(durable)
-      |> Driver.start_child_at(parent_run_id, resolved, index, count, opts)
-      |> settled(store, parent_run_id, resolved.invoke_id, index)
+      Driver.start_child_at(driver(durable), parent_run_id, resolved, index, count, opts)
     else
       :error -> {:refused, :unknown_document}
       {:error, reason} -> {:refused, reason}
@@ -380,78 +389,6 @@ defmodule StatifierExamples.Charts.Durable do
   @spec child_ctx(String.t()) :: Statifier.Invoke.Handler.ctx()
   defp child_ctx(run_id) do
     %{session_id: run_id, invoke_types: invoke_types(), invoke_handlers: Charts.invoke_handlers()}
-  end
-
-  # A chunk child that is not terminal when its create-drive returns is a
-  # chunk whose one call was refused, and the host is what says so.
-  #
-  # That is a fact about the chart this app fans out over rather than a
-  # rule about charts: a fan-out child here is one bulk call and nothing
-  # else, so it has nowhere to rest. `statifier_persistence` reaches
-  # `:failed` on its own only through budget exhaustion
-  # (`StatifierPersistence.Runs`' `run_status/2`) - an unhandled
-  # `error.communication` leaves a run `:active` forever, because whether
-  # a chart that cannot continue has *failed* is a host's judgement and
-  # not the interpreter's. `Runs.fail/4` is documented as the only
-  # host-driven terminal transition for exactly this, and
-  # `Driver.answer_parent/3` is the door that makes it count as this
-  # index's answer: it records the outcome, sets the status, and runs the
-  # settlement section, which is what a `first_error` cancel keys on.
-  #
-  # Since `statifier_persistence` 0.8.0 and `statifier_blocks` 0.21.0 that
-  # is no longer the only way to say it, and ADR-0008's amendment
-  # (decision 6) deletes this translation outright: a run whose chart
-  # settles in a top-level `<final>` tagged
-  # `statifier_persistence:run_status` `= "failed"` is persisted `:failed`
-  # on its own step, and the driver's automatic path answers the parent
-  # with no host in the loop. The tag is stamped on the final of any
-  # outcome a block type classes as a failure through
-  # `StatifierBlocks.BlockType.failure_outcomes/1` - and there the
-  # deletion stops: `core.map` and `core.subchart` class their `error`
-  # outcome and nothing else does. `priv/fixtures/signup_invite_chunk.json`
-  # is a `core.sequence` around one `core.invoke`, whose `error` outcome is
-  # classed as nothing, so its refusal reaches no failure-classed final and
-  # this code is still what settles the index. Reported upstream rather
-  # than worked around here.
-  #
-  # A child that IS terminal has already answered through the driver's own
-  # automatic path and is left alone; answering it twice would settle the
-  # same index twice.
-  @spec settled(:ok | {:refused, term()}, Storage.t(), String.t(), String.t(), non_neg_integer()) ::
-          :ok | {:refused, term()}
-  defp settled(:ok, store, parent_run_id, invoke_id, index) do
-    child_run_id = Linkage.child_run_id(parent_run_id, invoke_id, index)
-
-    case Storage.fetch_run(store, child_run_id) do
-      {:ok, %{status: :active}} -> fail_child(store, parent_run_id, child_run_id)
-      {:ok, _terminal} -> :ok
-      {:error, reason} -> {:refused, reason}
-    end
-  end
-
-  defp settled({:refused, _reason} = refusal, _store, _parent, _invoke_id, _index), do: refusal
-
-  # The answer is delivered on a driver built over the PARENT's chart,
-  # which `answer_parent/3` requires and which the automatic path resolves
-  # for itself: the settlement it triggers ends by stepping the parent,
-  # under the parent's own identity guard.
-  @spec fail_child(Storage.t(), String.t(), String.t()) :: :ok | {:refused, term()}
-  defp fail_child(store, parent_run_id, child_run_id) do
-    case machine_state(parent_run_id) do
-      {:ok, %{machine: parent_machine}} ->
-        durable = %__MODULE__{run_id: parent_run_id, store: store, machine: parent_machine}
-
-        Driver.answer_parent(
-          driver(durable),
-          child_run_id,
-          {:failed, reason: "chunk_call_refused"}
-        )
-
-        :ok
-
-      {:error, reason} ->
-        {:refused, reason}
-    end
   end
 
   @doc """
