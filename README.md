@@ -56,7 +56,9 @@ neither variable, so a CI run always resolves `statifier_blocks` from Hex.
 
 2. Switch documents with the header's DOCUMENT select. Edits live in the
    LiveView process, so an edit survives a document switch and does not
-   survive a reload - there is no database in this app yet.
+   survive a reload - the editor writes to no store. The app does have a
+   database: `StatifierExamples.Repo`, on SQLite, carries
+   `statifier_persistence`'s run storage rather than documents.
 
 An unknown `doc=` is not a 404: the page falls back to the first fixture,
 `card_processing`, because a query-string name is a thing somebody typed.
