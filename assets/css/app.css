@@ -399,6 +399,21 @@
   color: var(--sb-fg-muted);
 }
 
+/* A row about a durable CHILD run, marked so a reader can tell work this
+   run did from work it handed to a child that has a feed of its own
+   (se-0ay). The chip carries the child's run id, which is what goes in the
+   page's ?run= to open it. */
+.myapp-runs__source {
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius-sm, 3px);
+  color: var(--sb-fg-muted);
+  font-family: var(--sb-font-mono, monospace);
+  font-size: var(--sb-text-xs);
+  font-weight: var(--sb-weight-regular, 400);
+  margin-left: 0.5ch;
+  padding: 0 0.4ch;
+}
+
 /* --------------------------------------------------------------- themes
  *
  * Three host themes, each a block of `--sb-*` custom properties and nothing

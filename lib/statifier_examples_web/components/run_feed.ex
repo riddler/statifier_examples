@@ -26,6 +26,22 @@ defmodule StatifierExamplesWeb.RunFeed do
   putting them anywhere else would mean a reader watching the feed has to
   look away from it to advance the run.
 
+  ## Why a child's rows are marked
+
+  A durable subchart runs as its own persisted run, with its own feed at
+  its own run id - but the parent narrates the moments it starts one and
+  the moment one is refused, and those rows used to be typographically
+  identical to the parent's own (se-0ay). A reader watching a fan-out
+  could not tell five things this run did from five children it handed
+  work to.
+
+  So a row carrying a `source` renders the child's id beside its label,
+  and the row carries `data-run-source` for the stylesheet and for a test
+  that wants to select on it. The id is the whole label rather than an
+  abbreviation because it is the thing a reader types into the page's
+  `?run=` to open the child as a run of its own, which is the point of a
+  durable subchart.
+
   ## The markup is the host's
 
   The package calls `content` and draws whatever comes back; every class
@@ -109,9 +125,18 @@ defmodule StatifierExamplesWeb.RunFeed do
           </tr>
         </thead>
         <tbody>
-          <tr :for={entry <- Run.entries(@run)} data-run-entry={entry.kind}>
+          <tr
+            :for={entry <- Run.entries(@run)}
+            data-run-entry={entry.kind}
+            data-run-source={entry.source}
+          >
             <td class="myapp-runs__seq">{entry.seq}</td>
-            <td class="myapp-runs__what">{entry.label}</td>
+            <td class="myapp-runs__what">
+              {entry.label}
+              <span :if={entry.source} class="myapp-runs__source" title="a durable child run">
+                child {entry.source}
+              </span>
+            </td>
             <td class="myapp-runs__detail">{entry.detail}</td>
           </tr>
         </tbody>

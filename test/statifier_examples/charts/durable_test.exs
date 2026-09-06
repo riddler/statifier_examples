@@ -598,7 +598,7 @@ defmodule StatifierExamples.Charts.DurableTest do
 
   # The second thing a browser capture found. Opening the child by URL is
   # the whole point of "its own persisted run", and it did not work: the
-  # editor page compiles the document on its canvas with `compile/2`'s root
+  # editor page compiles the document on its canvas with `compile/3`'s root
   # recipe, and the child's stored identity is keyed on the CHILD recipe, so
   # the page's resume was refused on identity - two compiles of the same
   # document, and the guard doing its job for a reader who cannot act on it.

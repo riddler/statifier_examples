@@ -470,7 +470,9 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       for fixture <- Charts.fixtures() do
         {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
 
-        compiles? = match?({:ok, _}, Durable.compile(fixture.document, fixture.declare))
+        compiles? =
+          match?({:ok, _}, Durable.compile(fixture.document, fixture.declare, fixture.datamodel))
+
         document = LazyHTML.from_document(html)
         expected = if compiles?, do: 0, else: 1
 
@@ -1057,6 +1059,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       case Compiler.compile(fixture.document, palette,
              known_invoke_types: Charts.invoke_types(),
              declare: fixture.declare,
+             datamodel: fixture.datamodel,
              terminate: true
            ) do
         {:ok, compiled} -> compiled.warnings
@@ -1065,7 +1068,14 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
     {anchored, _refused} = Finding.from_compiler_all(raw)
 
-    %{raw: raw, seam: Editor.findings_count(fixture.document, palette, findings: anchored)}
+    %{
+      raw: raw,
+      seam:
+        Editor.findings_count(fixture.document, palette,
+          findings: anchored,
+          datamodel: fixture.datamodel
+        )
+    }
   end
 
   @spec card(Phoenix.LiveViewTest.View.t(), String.t(), String.t()) :: String.t()

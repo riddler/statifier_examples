@@ -174,6 +174,7 @@ defmodule StatifierExamplesWeb.EditorLive do
         fit={:width}
         icon={&Icons.icon/1}
         invoke_types={Charts.invoke_types()}
+        datamodel={@fixture.datamodel}
         on_change={@on_change}
         on_drawer_resize={@on_drawer_resize}
         drawer_height={@drawer_height}
@@ -545,7 +546,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   # changes the document, never what the host declares over it.
   #
   # The rest of the recipe - `terminate: true`, the palette, the known
-  # invoke types - is `StatifierExamples.Charts.Durable.compile/2`'s and
+  # invoke types - is `StatifierExamples.Charts.Durable.compile/3`'s and
   # deliberately not spelled here. Those options change the generated
   # bytes, so they change the content hash chart identity is keyed on, and
   # a page holding its own copy of them is a page that can silently
@@ -553,7 +554,12 @@ defmodule StatifierExamplesWeb.EditorLive do
   # timer fires. There is one call; that moduledoc has the reasoning.
   @spec compile(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp compile(socket) do
-    result = Durable.compile(socket.assigns.document, socket.assigns.fixture.declare)
+    result =
+      Durable.compile(
+        socket.assigns.document,
+        socket.assigns.fixture.declare,
+        socket.assigns.fixture.datamodel
+      )
 
     raw = compiler_findings(result)
 
@@ -601,7 +607,10 @@ defmodule StatifierExamplesWeb.EditorLive do
   @spec verdict(Phoenix.LiveView.Socket.t(), [Finding.t()]) :: String.t()
   defp verdict(socket, findings) do
     count =
-      Editor.findings_count(socket.assigns.document, socket.assigns.palette, findings: findings)
+      Editor.findings_count(socket.assigns.document, socket.assigns.palette,
+        findings: findings,
+        datamodel: socket.assigns.fixture.datamodel
+      )
 
     "#{Shell.drawer_title(:findings)} #{count}"
   end
