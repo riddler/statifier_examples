@@ -4,11 +4,13 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   import Phoenix.LiveViewTest
 
   alias StatifierBlocks.Compiler
+  alias StatifierBlocks.Document
   alias StatifierBlocks.Editor
   alias StatifierBlocks.Finding
   alias StatifierBlocks.Shell
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{AsyncCalls, Durable}
+  alias StatifierExamples.DivergentDocument
 
   @themes ["light", "dark", "brand"]
 
@@ -256,6 +258,64 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       assert %{seam: 0} = counts("card_processing")
       assert clean_html =~ "Findings 0"
+    end
+
+    # se-9s2: the property the row above used to carry, given a home where it
+    # can be CONSTRUCTED. The header reading the seam and the header reading
+    # the compiler are two different pages, and they are only distinguishable
+    # on a document where the two numbers differ - which no document this app
+    # ships is, and none should be: a shipped document with a block nothing
+    # resolves is a bug in the fixture, not a fixture. So the gap is built
+    # here instead, by retiring a block type in a copy of the shipped
+    # card-processing document, and it is built by the same mechanism the old
+    # one had - the compiler stops at the resolution stage with one finding,
+    # the view model derives a second for the block it cannot resolve.
+    #
+    # The document reaches the page the way an edit does: `:document_changed`
+    # is the message the editor component sends its host, and the host's
+    # `handle_info/2` clause for it is the only way a document that is not a
+    # fixture's own is ever on this page. Constructing one and mounting it
+    # through a query parameter is not available, and should not be - the
+    # switcher lists what the app ships.
+    #
+    # `refute` on the compiler's number is the half with teeth: a header that
+    # rendered `length(raw)` would still read a plausible non-zero count on
+    # every shipped document, and this is the row that separates them. Both
+    # halves are read off the header ELEMENT rather than off the page,
+    # because the drawer prints the same title and a number of its own a few
+    # hundred bytes later - a page-wide `=~` passes on a header that rendered
+    # nothing at all.
+    #
+    # Sabotage: made verdict/2 answer `length(findings)` - the anchored
+    # compiler findings it is handed - instead of asking the seam; this went
+    # red on "Findings 2" while every other row in this file stayed green.
+    # Reverted from a backup copy.
+    test "the header renders the seam's number where it exceeds the compiler's",
+         %{conn: conn} do
+      document = DivergentDocument.document()
+      fixture = DivergentDocument.fixture()
+
+      %{raw: raw, seam: seam} = counts(document, fixture)
+
+      assert seam > length(raw)
+      assert raw != []
+
+      assert [block] =
+               Enum.filter(
+                 Document.blocks(document),
+                 &(&1.type == DivergentDocument.retired_type())
+               )
+
+      assert block.id == "blk_cp_legacy"
+
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
+
+      send(view.pid, {:document_changed, document})
+
+      verdict = view |> element(".myapp-header__verdict") |> render()
+
+      assert verdict =~ "#{Shell.drawer_title(:findings)} #{seam}"
+      refute verdict =~ "#{Shell.drawer_title(:findings)} #{length(raw)}"
     end
 
     # se-bv9's own criterion, read off the page the capture is taken from:
@@ -1164,10 +1224,23 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   @spec counts(String.t()) :: %{raw: [Compiler.Finding.t()], seam: non_neg_integer()}
   defp counts(key) do
     {:ok, fixture} = Charts.fixture(key)
+
+    counts(fixture.document, fixture)
+  end
+
+  # The document and the environment separately, because the page holds them
+  # separately: an edit replaces the document while the fixture's `declare`
+  # and `datamodel` stay where they were, and a document that is not the
+  # fixture's own is exactly what the divergence row needs measured.
+  @spec counts(Document.t(), Charts.Fixture.t()) :: %{
+          raw: [Compiler.Finding.t()],
+          seam: non_neg_integer()
+        }
+  defp counts(%Document{} = document, fixture) do
     palette = Charts.palette()
 
     raw =
-      case Compiler.compile(fixture.document, palette,
+      case Compiler.compile(document, palette,
              known_invoke_types: Charts.invoke_types(),
              declare: fixture.declare,
              datamodel: fixture.datamodel,
@@ -1182,7 +1255,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     %{
       raw: raw,
       seam:
-        Editor.findings_count(fixture.document, palette,
+        Editor.findings_count(document, palette,
           findings: anchored,
           datamodel: fixture.datamodel
         )
