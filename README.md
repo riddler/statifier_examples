@@ -323,6 +323,85 @@ handlers for the one invoke type and this app gives both the same
 resolver - which is the thing to say out loud, because it means an author
 never writes a chart for one deployment shape.
 
+### A batch that runs a chart per chunk, and the one row that gets its own
+
+`Bulk invitations` imports a batch of workspace invitations. It is two
+blocks: a `core.assign` that seeds ten **chunk descriptors**, and a
+`core.map` - "For every item, run a chart" - that runs the `Invite chunk`
+chart once per descriptor and collects the ten answers into `results`.
+
+The rule the shape follows is worth saying in one sentence, because it is
+the decision every host embedding this engine has to make:
+
+> **The chart orchestrates batches; the data plane processes rows. A row
+> gets its own run only when its processing has to wait or branch on its
+> own state.**
+
+So `chunks` holds ten short strings - `su-c01` through `su-c10` - and never
+an invitee. That is not tidiness. A run's datamodel is serialized on every
+persisted step for the rest of the run, so a fan-out over ten thousand
+invitee ids costs what ids cost, and one over ten thousand invitee records
+charges the parent for those records forever. What a descriptor stands for
+is derived from it, in `StatifierExamples.Signup.Invites`, exactly the way
+the wizard's account address is derived from its run id - and for the same
+reason, since a start job is at-least-once and the derivation is what makes
+the write idempotent.
+
+Each chunk child is one bulk call, `myapp:process_rows`, which writes
+twenty-five rows to `invite_outcomes` - a table this app owns and the
+engine has never heard of - and answers a summary. Two hundred and fifty
+rows are processed by ten runs, not by two hundred and fifty.
+
+**The promoted row.** One invitee's signup waits for a person to verify an
+address, which is chart semantics and not a row's. That invitee is
+promoted: `StatifierExamples.Signup.Promotion` starts an ordinary durable
+run of the signup wizard for it, through the same door the editor's Run
+button uses. It is a run you open by URL, resume after a `kill -9`, and
+drive to the end like any other, and its id is on that invitee's row. It is
+deliberately **not** a durable subchart of the chunk chart: a subchart's
+lifetime is its parent's, and a finished batch import should not take a
+person's half-driven signup with it.
+
+**Both policies.** `Bulk invitations` waits for every chunk. `Bulk
+invitations (stop on first error)` carries the same blocks with `on` set to
+"stop on first error", and one descriptor the data plane refuses - so it
+shows what `first_error` does: the chunk that fails cancels its siblings,
+and the answer is still a dense, index-ordered list, with `"cancelled"`
+sitting at the index of every sibling that never ran.
+
+Cancelling those siblings takes two doors, because they are two different
+things. A sibling that already has a run is cancelled as a run, by
+`statifier_persistence`'s own cascade. A sibling whose **start job** has
+not run yet has no run record at all, so nothing in that package can see
+it - `StatifierExamples.Charts.FanOut.canceller/0` is what reaches it,
+through the driver's `child_canceller:` seam and into
+`statifier_oban`'s job table.
+
+**Four host seams, and that is the whole of it.** The adapter answers
+`supports_run_outcome?/1` and `list_run_states_by_metadata/2`, without
+which a fan-out is refused at open rather than half-started. The
+`StatifierOban.Config` names a `:child_starter`, because the scheduling
+package creates no runs. The driver is built with a `child_canceller:`,
+because the persistence package cannot see an unstarted job. And the
+dispatch fun answers a `core.map` `:pending`, because N creates cannot hold
+the parent's exclusion. Nothing else in this app knows a fan-out is
+happening.
+
+**Two things the shipped vocabulary does not give yet**, said out loud
+because a reader will look for them. A fan-out child answers its **outcome
+name** and nothing else - `child_use: true` compiles a fixed
+`<donedata>` - so the per-chunk summary the bulk handler builds reaches
+this app's own table and the Runs feed rather than the parent's `results`
+list, whose entries carry `%{"outcome" => "done"}`. And a chart has no way
+to say "this run failed": `statifier_persistence` reaches a `:failed`
+status on its own only through budget exhaustion, so a chunk whose one call
+is refused would sit `active` forever. This app translates that - a chunk
+chart is one bulk call and has nowhere to rest, so a chunk child that is
+not terminal when its create-drive returns is a chunk whose call was
+refused - and says so through `StatifierPersistence.Driver.answer_parent/3`,
+which the package makes public for exactly a host in this position. Both
+are reported upstream rather than papered over here.
+
 ### The abandonment reminder, and why it is a row rather than a timer
 
 The signup wizard nudges a visitor who never verified their email. In the
@@ -392,6 +471,7 @@ the gate does and the one recorded deviation from the family's defaults.
 | `StatifierExamples.Signup` | the signup-wizard block types and their invoke handlers |
 | `StatifierExamples.Charts` | shared host plumbing: the palette, the icon seam, the theme tokens, the fixture list |
 | `StatifierExamples.Charts.Durable` | the durable run driver: step, answer the chart's calls, step again |
+| `StatifierExamples.Charts.FanOut` | the fan-out host half: the job that starts one, the seam that creates each child, the door that cancels the unstarted |
 | `StatifierExamples.Charts.RunLock` | the per-run serialization strategy durable steps run inside |
 | `StatifierExamples.Persistence` | the storage adapter and the `statifier_persistence` host declaration |
 

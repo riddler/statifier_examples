@@ -1248,14 +1248,19 @@ defmodule StatifierExamples.Charts.Durable do
   # this app now produces one - `abandon/1` cascades into a live subchart
   # child. A clause for it is not optional: a cancelled run opened by URL
   # reached this function with no matching clause and the page raised, which
-  # is what a browser capture of the cascade found (se-6ag). The two arrive
-  # at the same reading word for a reason - a run somebody stopped and a run
-  # cancelled because its parent was stopped both ended by a decision from
-  # outside the chart - and the stored record keeps them apart for anyone
-  # who needs to know which.
+  # is what a browser capture of the cascade found (se-6ag).
+  #
+  # `:failed` used to arrive at `:cancelled`'s word, because until se-j87
+  # nothing in this app produced a failed run and the two were both "ended
+  # from outside the chart". A fan-out is what made them different: under
+  # `first_error` the child that failed and the siblings cancelled because
+  # of it sit at different indices of the same answer, and a page that
+  # called both "cancelled" would hide exactly the distinction the example
+  # is about. A browser capture of the strict document found it, the way
+  # se-6ag's capture found the missing clause.
   @spec finish(Run.t(), atom()) :: Run.t()
   defp finish(run, :completed), do: Run.absorb(run, {:halted, :done})
-  defp finish(run, :failed), do: Run.absorb(run, {:halted, :cancelled})
+  defp finish(run, :failed), do: Run.absorb(run, {:halted, :failed})
   defp finish(run, :cancelled), do: Run.absorb(run, {:halted, :cancelled})
   defp finish(run, :active), do: run
 

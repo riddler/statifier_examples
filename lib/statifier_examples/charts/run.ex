@@ -93,7 +93,7 @@ defmodule StatifierExamples.Charts.Run do
           seq: non_neg_integer(),
           active: [String.t()],
           invoke: nil | String.t() | {String.t(), String.t()},
-          status: :running | :done | :cancelled | :budget_exhausted
+          status: :running | :done | :failed | :cancelled | :budget_exhausted
         }
 
   # Every key here is a fact the reading cannot be built without, so every
