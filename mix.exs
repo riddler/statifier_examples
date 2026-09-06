@@ -197,7 +197,30 @@ defmodule StatifierExamples.MixProject do
       # for every child's terminal status. The hybrid fan-out
       # `StatifierExamples.Charts.FanOut` drives is exactly the shape that
       # loses a child's result to it.
-      {:statifier_persistence, "~> 0.7"},
+      #
+      # The requirement moves to the 0.8 line. 0.8.0 is what lets a chart
+      # fail its own run: settling in a top-level `<final>` whose
+      # `<donedata>` carries `statifier_persistence:run_status` set to
+      # `"failed"` persists the run as `:failed` with the failure string
+      # `"failed_final"`, so a `:first_error` fan-out cancels the failed
+      # child's siblings with no host in the loop (ADR-0008's amendment,
+      # accepted). The host-side translation this app writes for exactly
+      # that case is deleted by that amendment's decision 6, and cannot be
+      # yet: see `StatifierExamples.Charts.Durable`'s `fail_child/3` for
+      # what is still missing on the block side.
+      #
+      # 0.8.0 also gives `Migrations.down/1` a `from:` ceiling, which the
+      # capped migration in `priv/repo/migrations` now spells beside its
+      # `up(version: 2)` - the rollback gap se-i4v measured on this app's
+      # SQLite database is closed, and `mix ecto.rollback --all` runs
+      # clean. Its V04 rebuilds V03's `metadata` GIN index with `CREATE
+      # INDEX CONCURRENTLY`; that is a Postgres-only step and a no-op on
+      # SQLite, so no migration here takes it. And the package's own
+      # conformance suite now tags its four Postgres-only cases
+      # `@tag :postgres`, which is the documented way to run the Ecto
+      # adapter off Postgres - `docs/non-postgres-backends.md` there - and
+      # what this app has been doing in Elixir all along.
+      {:statifier_persistence, "~> 0.8"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -243,7 +266,18 @@ defmodule StatifierExamples.MixProject do
       # timers and answers asynchronous invocations; it registers no
       # handler that returns `{:fan_out, items}` and wires no starter, so
       # nothing here changes until `core.map` is put to work (se-j87).
-      {:statifier_oban, "~> 0.7"},
+      #
+      # The requirement moves to the 0.8 line. 0.8.0 adds no public
+      # surface and changes what one existing arm does: a fan-out whose
+      # `items` list comes back empty used to fail the invocation and now
+      # completes it, answering immediately with `[]`, and the
+      # `:empty_items` refusal reason is gone (`sb-ADR-0009` decision 8).
+      # Nothing on this app's side has to change for that to take effect -
+      # `StatifierExamples.Charts.FanOut` returns whatever the parent's
+      # list holds and never named the retired reason - but the shape it
+      # fans out over is exactly the one the ruling is about, so the move
+      # is this app's to take rather than one it merely follows.
+      {:statifier_oban, "~> 0.8"},
 
       # The OTel bridge for the family, and the app's telemetry consumer.
       # This app had no dependency on it before se-opg: nothing here
@@ -352,7 +386,23 @@ defmodule StatifierExamples.MixProject do
       # trace wire format is untouched at version 1 and 25 types, so the
       # trace half of this app re-pins nothing. 0.4.0 remains the floor,
       # as the release carrying the picklist mode and its hook.
-      {:statifier_ui, "~> 0.8"},
+      #
+      # The arm moves to the 0.9 line. 0.9.0 is the release that gives
+      # this package a required runtime dependency of its own,
+      # `statifier_datamodel ~> 0.1`, so the expression editor takes a
+      # decoded datamodel `:document` and projects the declared path types
+      # itself instead of needing a host to assemble `:path_types` by
+      # hand. This app assembles neither: `statifier_blocks` projects the
+      # document and hands the map across, exactly as at 0.8.0. Beside
+      # that, `StatifierUI.Live.State.configuration_ids/1` answers the
+      # selected configuration as the chart's own state ids rather than
+      # wire-format indexes, `StatifierUI.Kino.inspect_trace/3` becomes a
+      # stepper over a persisted trace, and the diagram's
+      # active-configuration highlight takes an `:active_style` - all of
+      # it additive, and all of it reached through modules this app names
+      # nowhere. The trace wire format is untouched at version 1 and 25
+      # types, so the trace half of this app re-pins nothing.
+      {:statifier_ui, "~> 0.9"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
@@ -480,13 +530,46 @@ defmodule StatifierExamples.MixProject do
   # spelled exactly `unknown` reads as the permissive `:unknown`, and this
   # app spells no such type. 0.16.0 remains the floor, as the release that
   # fills the expression seam.
+  #
+  # The arm moves to the 0.21 line, the release that makes the editor
+  # a debugger and widens what a block can say. The drawer gains a
+  # Source tab over the compiled SCXML, the canvas takes a seat in a
+  # run pane, `core.branch` declares a third slot for a condition that
+  # cannot be decided, a host can state a rule about a whole document
+  # through `validate_document/1` and the palette's `:validators`
+  # list, `core.map` names what a child sees its item and its position
+  # under, and `core.invoke`'s `assign_to` takes any datamodel path
+  # and declares the path it writes. All of it is additive: a
+  # `core.branch` that leaves `undecided` empty and every type that
+  # classes no outcome as a failure compile to the bytes they compiled
+  # to at 0.20.0, so this app's stored documents are unaffected.
+  #
+  # The half this app was waiting for is the failure seam: a block
+  # type may class one of its outcomes as a failure through the new
+  # `failure_outcomes/1` callback, and the compiler stamps the
+  # reserved `statifier_persistence:run_status` `<donedata>` param on
+  # that outcome's top-level `<final>`. `core.map` and `core.subchart`
+  # class their `error` outcome and every other type classes nothing -
+  # `core.invoke` included - which is why the host-side translation in
+  # `StatifierExamples.Charts.Durable` is still here. `statifier_ui`
+  # becomes an optional dependency at `~> 0.9` with this release, and
+  # is declared directly above at that line;
+  # `statifier_datamodel` still arrives TRANSITIVELY, at `~> 0.1`,
+  # which the resolved 0.2.0 satisfies - this app names it nowhere,
+  # through this dependency or through `statifier_ui`'s new one,
+  # because the `types` key its fixtures write is data the compiler
+  # reads for it. 0.2.0 narrows the read check rather than widening
+  # it: a record field a document declares optional no longer covers a
+  # shape field the document marks required. This app's datamodel
+  # documents declare no `types` record that leans on the looser
+  # reading, so the narrowing reaches nothing here.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.20"}
+        {:statifier_blocks, "~> 0.21"}
     end
   end
 

@@ -97,12 +97,43 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.19.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.20.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # The arm moves to the 0.21 line, and this app asked for one half of it.
+  # 0.21.0 makes the editor a debugger - a Source tab over the compiled
+  # SCXML, the canvas seated in a run pane with statifier-ui's status,
+  # scrubber and event log around it - and widens what a block can say:
+  # `core.branch` declares a third slot for an arm whose condition cannot
+  # be decided, a host states a rule about a whole document through
+  # `validate_document/1` and the palette's `:validators` list, `core.map`
+  # names what a child sees its item and its position under, and
+  # `core.invoke`'s `assign_to` takes any datamodel path and declares the
+  # path it writes. All of it is additive: a `core.branch` that leaves
+  # `undecided` empty, and every type that classes no outcome as a
+  # failure, compile to the bytes they compiled to at 0.20.0, so this
+  # app's stored documents are unaffected.
+  #
+  # The half this app asked for is the failure seam. A block type may
+  # class one of its outcomes as a failure through the new optional
+  # `failure_outcomes/1` callback, and the compiler stamps a reserved
+  # `statifier_persistence:run_status` `<donedata>` param on that
+  # outcome's top-level `<final>` under both compile options - which is
+  # what `statifier_persistence` 0.8.0 reads to mark the run `:failed`.
+  # `core.map` and `core.subchart` class their `error` outcome; every
+  # other type, `core.invoke` included, classes nothing. The chunk chart
+  # this app fans out over is a `core.sequence` around one `core.invoke`,
+  # so it still cannot reach a failure-classed final, and the host-side
+  # translation ADR-0008's decision 6 deletes is still here.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.20.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.21.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.20"} in deps
+    assert {:statifier_blocks, "~> 0.21"} in deps
 
     lock_line =
       "mix.lock"
@@ -111,7 +142,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.20.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.21.)
     refute lock_line =~ ":git,"
   end
 
@@ -127,6 +158,23 @@ defmodule StatifierExamples.MixDepsTest do
   # Sabotage: added `{:statifier_datamodel, "~> 0.1"}` to `mix.exs`'s deps
   # list; the `refute` went red naming the direct arm. Reverted from a
   # backup copy.
+  #
+  # The lock moves to 0.2.0, and the arm stays absent. Two packages now
+  # require it rather than one - `statifier_ui` 0.9.0 takes it directly
+  # too, at the same `~> 0.1`, which the resolved 0.2.0 satisfies - and
+  # that changes nothing about the shape: this app still writes `types`
+  # into a document it hands the editor and still names the reader
+  # nowhere. 0.2.0 narrows the read check rather than widening it: a
+  # record field a document declares optional no longer covers a shape
+  # field the document marks required, so a read that was satisfied now
+  # answers `{:missing, [name]}`. Breaking for a document that leaned on
+  # the looser reading; none of this app's does, and
+  # `StatifierExamples.Charts.TypedEnvironmentTest` is what says so.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.1.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.2.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
   test "statifier_datamodel arrives transitively and is not named directly" do
     deps = Mix.Project.config()[:deps]
 
@@ -140,7 +188,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_datamodel": )))
 
     assert lock_line, "statifier_datamodel has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.1.)
+    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.2.)
     refute lock_line =~ ":git,"
   end
 
@@ -210,10 +258,31 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.7.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.8.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # The arm moves to the 0.9 line, the release that gives this package a
+  # required runtime dependency of its own: `statifier_datamodel ~> 0.1`,
+  # so the expression editor takes a decoded datamodel `:document` and
+  # projects the declared path types itself rather than needing a host to
+  # assemble `:path_types` by hand. This app assembles neither -
+  # `statifier_blocks` projects the document and hands the map across,
+  # exactly as at 0.8.0 - and the test above is what says the new
+  # requirement did not turn into a direct arm here.
+  # `StatifierUI.Live.State.configuration_ids/1` answers the selected
+  # configuration as the chart's own state ids rather than wire-format
+  # indexes, `StatifierUI.Kino.inspect_trace/3` becomes a stepper over a
+  # persisted trace, and the diagram's active-configuration highlight
+  # takes an `:active_style`. All of it is additive, and this app names no
+  # `StatifierUI` module at all. The trace wire format is untouched at
+  # version 1 and 25 types, so the trace half re-pins nothing.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.8.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.9.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
   test "the statifier_ui dep is a direct Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_ui, "~> 0.8"} in deps
+    assert {:statifier_ui, "~> 0.9"} in deps
 
     lock_line =
       "mix.lock"
@@ -222,7 +291,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_ui": )))
 
     assert lock_line, "statifier_ui has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_ui, "0.8.)
+    assert lock_line =~ ~s({:hex, :statifier_ui, "0.9.)
     refute lock_line =~ ":git,"
   end
 
@@ -347,10 +416,36 @@ defmodule StatifierExamples.MixDepsTest do
   # release (`"0.7.1"`) and left `mix.lock` alone; it went red reporting
   # the resolved 0.7.2 entry against the mutated expectation. Reverted from
   # a backup copy.
+  #
+  # The requirement moves to the 0.8 line, and with it the `refute` that
+  # kept 0.7.0 out of the tree goes away: `~> 0.8` cannot resolve back to
+  # 0.7.0 at all, so the guarantee that bought the patch-level guard is
+  # kept by the major-line move, exactly as the `statifier_oban` arm below
+  # records for its own 0.3.1 floor. The lock assertion is what ties the
+  # requirement to the resolved release, as before.
+  #
+  # 0.8.0 is REQUIRED rather than tidy, on two counts. A chart can now
+  # fail its own run: settling in a top-level `<final>` whose `<donedata>`
+  # carries `statifier_persistence:run_status` set to `"failed"` persists
+  # the run as `:failed` with the failure string `"failed_final"`, so a
+  # `:first_error` fan-out cancels the failed child's siblings with no
+  # host-side translation (ADR-0008's amendment, accepted). And
+  # `Migrations.down/1` takes `from:`, the ceiling a capped migration
+  # needs to roll all the way back - which
+  # `priv/repo/migrations/20260830210002_add_statifier_persistence.exs`
+  # now spells beside its `up(version: 2)`, closing the rollback gap
+  # se-i4v measured on this app's SQLite database. V04 rebuilds V03's
+  # `metadata` GIN index concurrently and is a no-op off Postgres, so no
+  # migration here takes it.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release (`"0.7.2"`) and left `mix.lock` alone; it went red reporting
+  # the resolved 0.8.0 entry against the mutated expectation. Reverted
+  # from a backup copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.7"} in deps
+    assert {:statifier_persistence, "~> 0.8"} in deps
 
     lock_line =
       "mix.lock"
@@ -359,8 +454,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.7.2")
-    refute lock_line =~ ~s({:hex, :statifier_persistence, "0.7.0")
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.8.)
     refute lock_line =~ ":git,"
   end
 
@@ -405,10 +499,24 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.6.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.7.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # It moves to the 0.8 line. 0.8.0 adds no public surface and changes
+  # what one existing arm does: a fan-out whose `items` list comes back
+  # empty used to fail the invocation and now completes it, answering
+  # immediately with `[]`, and the `:empty_items` refusal reason is gone
+  # (`sb-ADR-0009` decision 8). Nothing on this app's side has to change
+  # for that to take effect - `StatifierExamples.Charts.FanOut` never
+  # named the retired reason - but the fan-out shape the ruling is about
+  # is the one this app drives, so the move is this app's to take.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.7.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.8.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
   test "the statifier_oban dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_oban, "~> 0.7"} in deps
+    assert {:statifier_oban, "~> 0.8"} in deps
 
     lock_line =
       "mix.lock"
@@ -417,7 +525,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_oban": )))
 
     assert lock_line, "statifier_oban has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_oban, "0.7.)
+    assert lock_line =~ ~s({:hex, :statifier_oban, "0.8.)
     refute lock_line =~ ":git,"
   end
 
