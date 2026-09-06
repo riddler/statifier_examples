@@ -13,7 +13,7 @@ defmodule StatifierExamples.CardAuth do
   models no real payment processor: every value that appears in a fixture
   or a seed here is fictional.
 
-  ## Ten types, one shape
+  ## Eleven types, one shape
 
   Every type is a leaf step that **names** a `myapp:*` invoke type and
   compiles to a call the host answers - `StatifierBlocks.InvokeStep`, over
@@ -28,11 +28,18 @@ defmodule StatifierExamples.CardAuth do
   `myapp.notify` is **not** here. It belongs to neither domain and lives
   under `StatifierExamples.Charts.Messaging`.
 
-  ## One type is missing on purpose
+  ## Every type the documents name is registered here
 
-  The fixture names `myapp.legacy_check` at depth 7 and this module does
-  not register it. That is ADR-0005 decision 12's case - the block whose
-  type does not resolve - and registering it would delete the test.
+  Through campaign 032 `myapp.legacy_check` was left out on purpose, so
+  that ADR-0005 decision 12's case - the block whose type does not
+  resolve - was exercised at depth 7 of `card_processing`. It is
+  registered as of 2026-09-06 (se-bv9): the compiler reports findings
+  from the first failing stage only, so an unresolvable type in the
+  shipped document masked every later stage of it in the editor, and the
+  domain's type refusals could be asserted in the suite but never seen.
+  The unavailable-block chrome is `statifier_blocks`' and is covered
+  there. `StatifierExamples.CardAuth.LegacyCheck` carries the longer
+  version.
   """
 
   alias StatifierExamples.CardAuth.{
@@ -40,6 +47,7 @@ defmodule StatifierExamples.CardAuth do
     BalanceCheck,
     Capture,
     Intake,
+    LegacyCheck,
     ManualFlag,
     Park,
     Receipt,
@@ -63,6 +71,7 @@ defmodule StatifierExamples.CardAuth do
     "myapp.balance_check" => BalanceCheck,
     "myapp.capture" => Capture,
     "myapp.intake" => Intake,
+    "myapp.legacy_check" => LegacyCheck,
     "myapp.manual_flag" => ManualFlag,
     "myapp.park" => Park,
     "myapp.receipt" => Receipt,

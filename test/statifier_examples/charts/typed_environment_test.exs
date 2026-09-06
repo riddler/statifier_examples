@@ -15,10 +15,9 @@ defmodule StatifierExamples.Charts.TypedEnvironmentTest do
 
   use ExUnit.Case, async: true
 
-  alias StatifierBlocks.{Assignability, Compiler, Document, Edit, Environment, Palette}
+  alias StatifierBlocks.{Assignability, Compiler, Document, Edit, Environment}
   alias StatifierDatamodel.Declarations
   alias StatifierExamples.Charts
-  alias StatifierExamples.Test.LegacyCheck
 
   @subject "cards.current_txn"
 
@@ -88,7 +87,7 @@ defmodule StatifierExamples.Charts.TypedEnvironmentTest do
       datamodel: datamodel
     } do
       env =
-        Environment.at(stand_in_palette(), document, {"blk_cp_root", "body", 1}, %{
+        Environment.at(Charts.palette(), document, {"blk_cp_root", "body", 1}, %{
           datamodel: datamodel
         })
 
@@ -120,7 +119,7 @@ defmodule StatifierExamples.Charts.TypedEnvironmentTest do
       document: document,
       datamodel: datamodel
     } do
-      assert Assignability.validate(stand_in_palette(), document, %{datamodel: datamodel}) == :ok
+      assert Assignability.validate(Charts.palette(), document, %{datamodel: datamodel}) == :ok
     end
   end
 
@@ -143,7 +142,7 @@ defmodule StatifierExamples.Charts.TypedEnvironmentTest do
       refused = point_receipt_at(document, @subject)
 
       assert {:error, findings} =
-               Assignability.validate(stand_in_palette(), refused, %{datamodel: datamodel})
+               Assignability.validate(Charts.palette(), refused, %{datamodel: datamodel})
 
       assert [{:type_mismatch, "blk_cp_receipt", _source, held, expected, path}] = findings
       assert held == "cards.credit_txn"
@@ -166,7 +165,7 @@ defmodule StatifierExamples.Charts.TypedEnvironmentTest do
       refused = point_receipt_at(document, @subject)
 
       assert {:error, findings} =
-               Compiler.compile(refused, stand_in_palette(),
+               Compiler.compile(refused, Charts.palette(),
                  known_invoke_types: Charts.invoke_types(),
                  declare: [],
                  datamodel: datamodel,
@@ -241,16 +240,6 @@ defmodule StatifierExamples.Charts.TypedEnvironmentTest do
       )
 
     refused
-  end
-
-  # `myapp.legacy_check` is left unregistered in the shipped palette on
-  # purpose, so it needs the suite's stand-in for anything past the
-  # resolution stage to run at all.
-  @spec stand_in_palette() :: Palette.t()
-  defp stand_in_palette do
-    palette = Charts.palette()
-
-    %{palette | types: Map.put(palette.types, "myapp.legacy_check", LegacyCheck)}
   end
 
   @spec config(Document.t(), String.t()) :: map()

@@ -528,8 +528,8 @@ cannot draw what they wrote.
 **See**: three things move at once. The canvas chip under `WHEN "HIGH_RISK"`
 becomes `risk_rating > 70 OR fraud.verdict == 'review'`; **Undo** lights up,
 because the document changed; and pressing **Compile** leaves the header on
-`Findings 2` - the same two findings the document opened with, and no new
-diagnostic from the edit.
+`Findings 0` - where the document opened, and no new diagnostic from the
+edit.
 
 ### The point: nothing here invented a second representation
 

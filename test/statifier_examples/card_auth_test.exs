@@ -8,6 +8,7 @@ defmodule StatifierExamples.CardAuthTest do
     "myapp.balance_check" => CardAuth.BalanceCheck,
     "myapp.capture" => CardAuth.Capture,
     "myapp.intake" => CardAuth.Intake,
+    "myapp.legacy_check" => CardAuth.LegacyCheck,
     "myapp.manual_flag" => CardAuth.ManualFlag,
     "myapp.park" => CardAuth.Park,
     "myapp.receipt" => CardAuth.Receipt,
@@ -18,14 +19,21 @@ defmodule StatifierExamples.CardAuthTest do
 
   # Sabotage: dropped "myapp.receipt" from @block_types; this went red, then
   # reverted.
-  test "the ten card-processing types register under their myapp names" do
+  test "the eleven card-processing types register under their myapp names" do
     assert CardAuth.block_types() == @types
   end
 
-  # Sabotage: added "myapp.legacy_check" to @block_types; this went red, then
-  # reverted.
-  test "myapp.legacy_check stays unregistered" do
-    refute Map.has_key?(CardAuth.block_types(), "myapp.legacy_check")
+  # The property se-bv9 turned around: every type the domain's documents name
+  # resolves in the palette this app ships. `myapp.legacy_check` was left out
+  # on purpose until 2026-09-06, which made the shipped `card_processing`
+  # document fail at the resolution stage and, because the compiler reports
+  # findings from the first failing stage only, hid every later stage of it
+  # from the editor.
+  #
+  # Sabotage: dropped "myapp.legacy_check" from CardAuth's @block_types; this
+  # went red, then reverted from a backup copy.
+  test "the type the card document names at depth 7 resolves" do
+    assert Map.fetch!(CardAuth.block_types(), "myapp.legacy_check") == CardAuth.LegacyCheck
   end
 
   # Sabotage: made every type file under the "Messaging" group; this went red,

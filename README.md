@@ -44,7 +44,7 @@ neither variable, so a CI run always resolves `statifier_blocks` from Hex.
 
    | `doc=` | What the document shows |
    |---|---|
-   | `card_processing` | intake and a validation branch, then a three-lane authorization group - fraud review, balance check, 3-D Secure - with a `core.send` arming a deadline and two guarded interrupt rules listening on the group's rail; then an outcome branch with capture-retry, a resumable manual-review arm and a receipt tail. It also carries the one deliberately unregistered block type |
+   | `card_processing` | intake and a validation branch, then a three-lane authorization group - fraud review, balance check, 3-D Secure - with a `core.send` arming a deadline and two guarded interrupt rules listening on the group's rail; then an outcome branch with capture-retry, a resumable manual-review arm and a receipt tail. Every block type it names is registered, so it compiles clean and a finding on it is one an author produced |
    | `signup_wizard` | account collection, a verification group with resume and abandon interrupts, then the A/B branch on the chosen plan - business, personal, or a nudge - and provisioning |
    | `signup_invitations` | a `core.foreach` over the invitees, each running the wizard above as a `core.subchart` child chart with an `on_error` subtree |
 
@@ -90,14 +90,20 @@ attr - see step 1 of "Copying the reference header".
 What the three documents report today:
 
 - `signup_wizard` - `Findings 0`.
-- `card_processing` - `Findings 2`, and both are intended.
-  `myapp.legacy_check` at depth 7 is deliberately left out of the palette, so
-  the editor's unavailable-block chrome and the compiler's
-  `unknown_block_type` finding are both exercised on a document you can open.
-  The compiler reports one finding for it; the view model derives a second on
-  the same block from the same unresolved type, and the drawer lists both. It
-  is the document that made the two numbers' gap visible, which is why the
-  header now reads the package's.
+- `card_processing` - `Findings 0`. It read `Findings 2` until 2026-09-06
+  (se-bv9), because `myapp.legacy_check` at depth 7 was deliberately left out
+  of the palette: the compiler reported one `unknown_block_type` finding for
+  it, the view model derived a second on the same block from the same
+  unresolved type, and the gap between those two numbers is what made the
+  header read the package's rather than count for itself. What that cost was
+  the rest of the document. The compiler reports findings from the FIRST
+  FAILING STAGE only, so an unresolvable type at depth 7 hid every later
+  stage of this document from the editor - including the type refusal the
+  card-processing domain is authored to demonstrate, which could be asserted
+  in the suite but never seen on the page. The type is registered now, the
+  document compiles clean, and a finding on it is one an author produced.
+  The unavailable-block chrome belongs to `statifier_blocks` and is covered
+  there.
 - `signup_invitations` - `Findings 1`, also expected: its `core.subchart`
   emits the invoke type `statifier_blocks:subchart`, which is the **host's**
   to register, and this app registers only its own `myapp:*` handlers. The
@@ -593,9 +599,12 @@ because the shipped vocabulary is not the spike's proposed one:
   that type; until `statifier_blocks` ships it, the guard is authored and
   inert, and dropping it would quietly lose what the document says.
 
-`myapp.legacy_check` is deliberately left unregistered, at depth 7, so the
-editor's unavailable-block chrome and the compiler's unknown-type finding are
-both exercised.
+`myapp.legacy_check` at depth 7 was deliberately left unregistered until
+2026-09-06, to exercise the editor's unavailable-block chrome and the
+compiler's unknown-type finding. It is registered now (se-bv9): an
+unresolvable type in the shipped document masked every stage after
+resolution, and the reference embedder is worth more compiling clean than it
+is demonstrating a package's chrome.
 
 Every fixture, seed and example value in this repository is fictional.
 

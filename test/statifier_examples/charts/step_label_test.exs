@@ -8,9 +8,7 @@ defmodule StatifierExamples.Charts.StepLabelTest do
   use ExUnit.Case, async: true
 
   alias StatifierBlocks.Compiler
-  alias StatifierBlocks.Palette
   alias StatifierExamples.Charts
-  alias StatifierExamples.Test.LegacyCheck
 
   @label_field %{
     key: "label",
@@ -97,7 +95,7 @@ defmodule StatifierExamples.Charts.StepLabelTest do
       end)
 
     assert counts == %{
-             "card_processing" => {17, 0},
+             "card_processing" => {18, 0},
              "card_processing_sketch" => {3, 0},
              "signup_bulk_invites" => {2, 0},
              "signup_bulk_invites_strict" => {2, 0},
@@ -110,17 +108,10 @@ defmodule StatifierExamples.Charts.StepLabelTest do
 
   @spec findings(StatifierBlocks.Document.t()) :: [String.t()]
   defp findings(document) do
-    case Compiler.compile(document, stand_in_palette(), known_invoke_types: Charts.invoke_types()) do
+    case Compiler.compile(document, Charts.palette(), known_invoke_types: Charts.invoke_types()) do
       {:ok, compiled} -> Enum.map(compiled.warnings, & &1.message)
       {:error, findings} -> Enum.map(findings, & &1.message)
     end
-  end
-
-  @spec stand_in_palette() :: Palette.t()
-  defp stand_in_palette do
-    palette = Charts.palette()
-
-    %{palette | types: Map.put(palette.types, "myapp.legacy_check", LegacyCheck)}
   end
 
   defp labelled?(block), do: is_binary(Map.get(block.config, "label"))

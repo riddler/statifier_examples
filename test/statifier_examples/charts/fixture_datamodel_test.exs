@@ -20,11 +20,8 @@ defmodule StatifierExamples.Charts.FixtureDatamodelTest do
 
   use ExUnit.Case, async: true
 
-  alias StatifierBlocks.Compiler
-  alias StatifierBlocks.Palette
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.Durable
-  alias StatifierExamples.Test.LegacyCheck
 
   # The one root an expression may load without any `<data>` declaring it:
   # the engine puts the current event there itself.
@@ -128,33 +125,14 @@ defmodule StatifierExamples.Charts.FixtureDatamodelTest do
     Enum.map(fixture.document.datamodel, & &1.id)
   end
 
-  # `card_processing` leaves `myapp.legacy_check` unregistered on purpose,
-  # so it needs the suite's stand-in to reach a compiled chart at all;
-  # everything else goes through the app's one compile recipe.
+  # Every fixture through the app's one compile recipe. `card_processing`
+  # needed a stand-in palette here until se-bv9 registered the type it named
+  # at depth 7; there is one path now.
   @spec compile!(map()) :: String.t()
-  defp compile!(%{key: "card_processing"} = fixture) do
-    {:ok, compiled} =
-      Compiler.compile(fixture.document, stand_in_palette(),
-        known_invoke_types: Charts.invoke_types(),
-        declare: fixture.declare,
-        datamodel: fixture.datamodel,
-        terminate: true
-      )
-
-    compiled.scxml
-  end
-
   defp compile!(fixture) do
     {:ok, compiled} = Durable.compile(fixture.document, fixture.declare, fixture.datamodel)
 
     compiled.scxml
-  end
-
-  @spec stand_in_palette() :: Palette.t()
-  defp stand_in_palette do
-    palette = Charts.palette()
-
-    %{palette | types: Map.put(palette.types, "myapp.legacy_check", LegacyCheck)}
   end
 
   @spec data_ids(String.t()) :: [String.t()]

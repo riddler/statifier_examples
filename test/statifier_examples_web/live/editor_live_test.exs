@@ -226,26 +226,77 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # added for exactly this, and it is read here with the SAME assigns the
     # component is passed, which is the whole condition on the two agreeing.
     #
-    # The `seam > length(raw)` assertion is the criterion's "more than one
-    # source", asserted as a relation rather than as two literals: the point
-    # is that the header follows the seam and not the compiler, and a fixture
-    # edit that changes either number by one should not have to edit this file
-    # to keep saying so.
+    # 2026-09-06 (se-bv9): this row used to assert `seam > length(raw)` on
+    # `card_processing`, and that relation is no longer producible from a
+    # document this app ships. The gap came from the unregistered
+    # `myapp.legacy_check` - one compiler finding, two view-model ones - and
+    # registering it is what made the shipped document's later stages
+    # reachable in the editor at all. Every fixture now reports the same
+    # number from both sources, so what is left to assert is the one that
+    # still has teeth: the header renders the seam's number, read with the
+    # SAME assigns the component is passed, at a value that is not zero and
+    # at zero.
     #
-    # Sabotage: put the pre-018 header back - verdict/2 answering
-    # `length(findings)` instead of asking the seam; this went red with
-    # "Findings 1" where "Findings 2" belongs, then reverted.
+    # Sabotage: made verdict/2 answer a constant `0` instead of asking the
+    # seam; the sketch row went red on "Findings 2". Reverted from a backup
+    # copy.
     test "the header verdict is the package's findings number", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+      {:ok, view, html} = live(conn, ~p"/editor?#{[doc: "card_processing_sketch"]}")
 
-      %{raw: raw, seam: seam} = counts("card_processing")
+      %{raw: raw, seam: seam} = counts("card_processing_sketch")
 
-      assert seam > length(raw)
+      assert seam == length(raw)
+      assert seam > 0
       assert html =~ "Findings #{seam}"
-      refute html =~ "#{length(raw)} finding"
 
       assert view |> element("button[phx-click='compile']") |> render_click() =~
                "Findings #{seam}"
+
+      {:ok, _clean, clean_html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      assert %{seam: 0} = counts("card_processing")
+      assert clean_html =~ "Findings 0"
+    end
+
+    # se-bv9's own criterion, read off the page the capture is taken from:
+    # the type refusal the card-processing domain is authored to demonstrate
+    # is one edit away on the SHIPPED document, and the editor shows it.
+    # Until the type at depth 7 was registered, this document failed at the
+    # resolution stage, the compiler reported that stage only, and the
+    # refusal below could be asserted in the suite but never seen here.
+    #
+    # The edit is `myapp.receipt`'s `settlement` field pointed at the subject
+    # path, which is where the intake block left a transaction: two declared
+    # records that are not the same record, and neither widens into the
+    # other.
+    #
+    # Sabotage: dropped "myapp.legacy_check" from CardAuth's @block_types;
+    # the header read "Findings 1" for the unresolved type before the edit
+    # and the refusal never appeared, so this went red. Reverted from a
+    # backup copy.
+    test "a refused read on the shipped card document lands in the pane",
+         %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      assert html =~ "Findings 0"
+
+      view
+      |> element(~s([data-block-id="blk_cp_receipt"] .sb-node__label))
+      |> render_click()
+
+      view
+      |> element(~s(form#sb-form-blk_cp_receipt))
+      |> render_change(%{
+        "block-id" => "blk_cp_receipt",
+        "config" => %{"settlement" => "cards.current_txn"}
+      })
+
+      html = view |> element("button[phx-click='compile']") |> render_click()
+
+      assert html =~ "Findings 1"
+      assert html =~ "Settlement"
+      assert html =~ "Credit card transaction"
+      assert html =~ "cards.current_txn"
     end
 
     # The wording, at the value where the host's old vocabulary and the
