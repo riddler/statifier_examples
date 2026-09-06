@@ -89,6 +89,9 @@ defmodule StatifierExamples.Persistence do
 
   @behaviour StatifierPersistence.Storage.Adapter
 
+  # The per-run input-log cap this app declares at `init/1`; see there.
+  @input_log_cap 2_000
+
   import Ecto.Query, only: [from: 2]
 
   alias StatifierPersistence.Run.Linkage
@@ -101,10 +104,33 @@ defmodule StatifierExamples.Persistence do
 
   @doc """
   Resolves the adapter handle, naming this module as the persistence host
-  so a caller opening the store never has to repeat it.
+  so a caller opening the store never has to repeat it, and declaring the
+  per-run input-log cap.
+
+  The cap is a retention decision rather than a tuning knob: an entry
+  holds the verbatim `%Statifier.Event{}` a step was driven with, so a log
+  is document payload at rest - a signup's email address, a capture's card
+  number - and `statifier_persistence`'s ADR-0010 decision 6 puts the
+  bound on the host for that reason. `:infinity` is deliberately not what
+  this app declares: an unbounded log on a demo database is a file that
+  grows for as long as anyone leaves the app running. It is
+  `Keyword.put_new/3`, so a caller opening the store for a one-off read
+  can still say otherwise.
+
+  What the cap buys is the editor page's Run pane, which replays a stored
+  run out of this log (`StatifierExamples.Charts.Replay`). A run that
+  outgrows it keeps stepping - the log closes itself with a marker and
+  the run is unaffected, which is the record's decision 6 - and the page
+  refuses to draw a truncated log as a whole run rather than showing a
+  partial one as complete.
   """
   @impl StatifierPersistence.Storage.Adapter
-  def init(opts), do: EctoAdapter.init(Keyword.put(opts, :persistence, __MODULE__))
+  def init(opts) do
+    opts
+    |> Keyword.put(:persistence, __MODULE__)
+    |> Keyword.put_new(:input_log_cap, @input_log_cap)
+    |> EctoAdapter.init()
+  end
 
   @impl StatifierPersistence.Storage.Adapter
   defdelegate save_chart(opts, chart_record), to: EctoAdapter
@@ -129,6 +155,42 @@ defmodule StatifierExamples.Persistence do
 
   @impl StatifierPersistence.Storage.Adapter
   defdelegate isolate(opts), to: EctoAdapter
+
+  @doc """
+  Declares the per-run input log (the optional
+  `c:StatifierPersistence.Storage.Adapter.supports_input_log?/1`), and the
+  two callbacks behind it.
+
+  All three are delegated rather than written here, which is the opposite
+  of what `supports_metadata?/1` and the two callbacks below it had to do.
+  The reason is the whole of ADR-0010 decision 9: the input log's table is
+  four ordinary columns and one unique index, its append is an insert
+  taking `seq` from the run's current maximum under the exclusion the
+  caller already holds, and its read is an ordered select. There is no
+  `jsonb` predicate in it, no advisory lock, and no index type beyond a
+  unique one - so the shipped Ecto adapter's implementation is correct on
+  SQLite unchanged, and V05 in `priv/repo/migrations` creates the same
+  table on either backend.
+
+  Exporting `supports_input_log?/1` is what opts this app in. An adapter
+  that does not export it stores no inputs and sees no behaviour change -
+  no run-lifecycle call refuses on the log, deliberately (decision 1) - so
+  this is the one capability in this module whose absence would cost a
+  feature rather than break a run. What it costs to have is one insert per
+  step, and what it buys is the only reading of a durable run this app has
+  ever been able to show whole: see `StatifierExamples.Charts.Replay`.
+
+  Turning it on is a data-retention decision and not a debugging switch;
+  `init/1` above declares the cap and says why.
+  """
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate supports_input_log?(opts), to: EctoAdapter
+
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate append_input(opts, run_id, input_record), to: EctoAdapter
+
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate list_inputs(opts, run_id), to: EctoAdapter
 
   @doc """
   Declares metadata support (the optional

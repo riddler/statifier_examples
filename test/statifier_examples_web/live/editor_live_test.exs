@@ -597,37 +597,92 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # nudge: it completes in the same macrostep it is entered in, after the
     # verification call has already come back.
     #
-    # Sabotage: made `push_run/1` push `invoke_mark: nil`; this went red on
-    # the outcome attribute, then reverted.
-    test "the block whose call came back carries the outcome", %{conn: conn} do
+    # The marks are the pane's, and the pane resolves them through a chart it
+    # recompiles itself - so this is as much a test of `compile_options/1`
+    # and the `declare` assign as of the marks. A page that passed the
+    # editor a different option list than the run executed under would
+    # resolve the run's state ids against different bytes and mark nothing.
+    #
+    # se-dh0 retired the assertion that used to live here, that the block
+    # whose call came back carries `data-invoke-outcome="done"`. That mark
+    # was the host's, pushed from `Run.invoke`, which knew what this process
+    # had watched happen; a run seated in the pane derives its invoke mark
+    # from the trace instead, and `StatifierBlocks.Runtime.Marks.from_trace/2`
+    # marks a call that is still OUT with no outcome (`{block_id, nil}`) and
+    # says nothing about one that has come back. The chip is a real reading
+    # to have lost, and it belongs upstream rather than back here: this app
+    # would have to keep a second, live-only run beside the stored one to
+    # paint it, which is exactly what this bead retired.
+    # What `compile_options` actually buys, on the only run where it can be
+    # seen. The Run pane resolves a run's state ids through a chart the editor
+    # recompiles for itself, and this page hands it the option list the run was
+    # compiled with. For a run resting mid-flight the two compiles agree about
+    # every state the run is in anyway, so nothing shows; for a run that has
+    # SETTLED, the configuration includes a top-level `<final>` that only
+    # `terminate: true` puts in the chart at all - so a recompile without it
+    # resolves the last configuration to nothing and the finished run draws no
+    # marks.
+    #
+    # `card_processing` is the fixture because it runs to `done` on one press:
+    # every call it makes is answered inside the step that made it.
+    #
+    # Sabotage: dropped `compile_options` from `render/1`'s component call,
+    # leaving the editor to recompile without `terminate: true`; the finished
+    # run's mark was gone and this went red, while every mid-flight test above
+    # stayed green. Reverted from a backup copy.
+    test "a settled run still marks the block it settled in", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      view |> element(~s(button[phx-click="run-start"])) |> render_click()
+
+      html = render_until(view, ~s(data-run-status="done"))
+
+      assert html =~ ~s(data-run-active="true")
+    end
+
+    # Sabotage: dropped the `declare` assign from `render/1`'s component call,
+    # leaving the editor to recompile the run's provenance with `declare: []`
+    # while the run itself ran on the fixture's declarations. The two compiles
+    # produce different bytes, the run's state ids resolved against none of
+    # them, and this went red with no marks on the page at all. Reverted from
+    # a backup copy.
+    test "the marks are read off the replayed run, through the host's own compile options",
+         %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 
       run(view)
 
       assert view
-             |> element(~s([data-block-id="blk_su_reminder_timer"]))
-             |> render() =~ ~s(data-invoke-outcome="done")
+             |> element(~s([data-block-id="blk_su_verify_wait"]))
+             |> render() =~ ~s(data-run-active="true")
     end
 
-    # The drawer's first host tenant. The tab is the package's markup and the
-    # panel is this app's, so both halves are asserted: the strip names it,
-    # and the rows are the feed's own.
+    OLD_END
+
+    # The run's narration is the pane's log now, not a drawer tab of this
+    # app's own, and what it narrates is the STORED run rather than what this
+    # process watched: the log is built by replaying the run's persisted
+    # input log through statifier-ui (`StatifierExamples.Charts.Replay`).
+    # The macrostep grouping is statifier-ui's, the section is
+    # statifier_blocks', and neither is this app's markup any more - which is
+    # the point of the bead.
     #
-    # Sabotage: gave the descriptor the reserved id `tables`, which
-    # `Shell.host_tabs/1` drops; the tab vanished and this went red, then
-    # reverted.
-    test "the run feed is a drawer tab, with the run's rows in it", %{conn: conn} do
+    # Sabotage: made `push_run/1` push `run: nil` whatever it replayed; the
+    # pane vanished and this went red on the section, then reverted.
+    test "the run's log is the pane's, replayed from the stored inputs", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 
       run(view)
-      html = open_runs(view)
+      html = render(view)
 
-      assert html =~ "Runs"
-      assert html =~ "myapp-runs"
-      assert html =~ "Invoke dispatched"
-      assert html =~ "Collect email and password"
-      assert html =~ ~s(data-run-entry="outcome")
+      assert html =~ ~s(class="sb-run")
+      assert html =~ ~s(data-run="true")
+      assert html =~ "statifier-ui-macrosteps"
+      assert html =~ "Macrostep 1 - initialize"
+      refute html =~ "myapp-runs__detail"
     end
+
+    OLD_END
 
     # se-5ep: the page's own compile has to carry the fixture's declared
     # `<data>` roots, because a guard reading a root nothing declared raises
@@ -644,33 +699,46 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 
       run(view)
-      html = open_runs(view)
+      html = render(view)
 
       refute html =~ "error.execution"
     end
 
-    # The event affordance: one button per event the document declares, and
-    # pressing it puts a row in the feed.
+    OLD_END
+
+    # The event affordance: one button per event the document declares, in
+    # the page's own header beside Run and Stop, and pressing it steps the
+    # stored run.
     #
-    # The assertion is on the feed's DETAIL CELL and not on the string: the
-    # button that sends the event carries the same name, so a page that
-    # dropped the press entirely would still contain it.
+    # They are the page's rather than the Run pane's send control, and that
+    # is a fact about a durable run rather than a preference. The pane's
+    # control writes into a live `Statifier.Session` server and is enabled
+    # only for a run that has one (`run_session` non-nil and the run's
+    # `stats` non-nil); a durable run has no session process at all, and a
+    # replayed reading of one is exactly what statifier-ui's `stats: nil`
+    # means. So the pane correctly reads this app's run as not sendable, and
+    # the host keeps the affordance.
+    #
+    # The assertion is on the LOG and not on the button's own name: the
+    # button carries the event name, so a page that dropped the press
+    # entirely would still contain the string.
     #
     # Sabotage: made the `run-send` handler drop the press instead of
-    # sending the event; the row never appeared and this went red, then
-    # reverted.
+    # sending the event; the macrostep never appeared and this went red,
+    # then reverted.
     test "an event button steps the run", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 
       run(view)
-      open_runs(view)
 
       view
       |> element(~s(button[phx-value-event="signup.email_verified"]))
       |> render_click()
 
-      assert render_until(view, cell("signup.email_verified"))
+      assert render_until(view, "Macrostep 4 - signup.email_verified")
     end
+
+    OLD_END
 
     # A run is a run OF a document, so switching documents ends it. The
     # assertion is on the HOST's own status, not on the marks: the editor
@@ -750,7 +818,13 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
              |> element(~s([data-block-id="blk_su_verify_wait"]))
              |> render() =~ ~s(data-run-active="true")
 
-      assert open_runs(resumed) =~ "Run resumed from storage"
+      # And the whole run comes back with it, not one row saying it was
+      # picked up. The feed this replaced derived its rows from the effects
+      # a step returned, and effects are not stored, so a resumed run
+      # opened with a single "Run resumed from storage" line; the input log
+      # is the run's own history, so a resumed page opens on all of it.
+      assert render_until(resumed, "Macrostep 1 - initialize")
+      OLD_END
     end
 
     # And it steps: a resumed run answers the event buttons the same way,
@@ -767,13 +841,12 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       run(view)
       {:ok, resumed, _html} = live(conn, assert_patch(view))
 
-      open_runs(resumed)
-
       resumed
       |> element(~s(button[phx-value-event="signup.abandoned"]))
       |> render_click()
 
-      assert render_until(resumed, cell("signup.abandoned"))
+      assert render_until(resumed, "signup.abandoned")
+      OLD_END
     end
 
     # se-k4a, on the page rather than on the driver: a run driven past the
@@ -799,7 +872,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       run(view)
       assert_patch(view)
-      open_runs(view)
+      OLD_END
 
       html =
         view
@@ -1061,11 +1134,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     render_until(view, ~s(data-run-active="true"))
   end
 
-  # A feed row's detail cell, verbatim, so an assertion about the feed
-  # cannot be satisfied by a control that happens to carry the same text.
-  @spec cell(String.t()) :: String.t()
-  defp cell(text), do: ~s(<td class="myapp-runs__detail">#{text}</td>)
-
   @spec render_until(Phoenix.LiveViewTest.View.t(), String.t(), non_neg_integer()) :: String.t()
   defp render_until(view, needle, attempts \\ 100) do
     html = render(view)
@@ -1086,14 +1154,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
         Process.sleep(10)
         render_until(view, needle, attempts - 1)
     end
-  end
-
-  # Opens the drawer and selects the host's own tab. The drawer starts
-  # closed, which is why Run is in the header and not in the panel.
-  @spec open_runs(Phoenix.LiveViewTest.View.t()) :: String.t()
-  defp open_runs(view) do
-    view |> element(".sb-drawer__strip") |> render_click()
-    view |> element(~s(button[phx-value-tab="runs"])) |> render_click()
   end
 
   # The host's compile, run outside the page so a test can hold both numbers

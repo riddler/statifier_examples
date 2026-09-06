@@ -128,12 +128,33 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.20.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.21.0 entry against the mutated expectation.
   # Reverted from a backup copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
+  @statifier_blocks_ref "7c33c6cabdb51e9131bfd0ac0659d52cb2927399"
+
+  # se-dh0: the default arm is a GIT PIN for as long as 0.22.0 is
+  # unpublished, so what this asserts is the pin rather than a Hex
+  # requirement. It is not a weakening of the check: a pin is exact where a
+  # Hex requirement is a range, and `mix.lock` recording the same commit is
+  # what proves the tree is on the code the pin names rather than on
+  # whatever `main` has become since.
+  #
+  # `se-gty` puts the Hex arm and this test's Hex spelling back together,
+  # after the operator publishes; the ledger entry
+  # `se-dh0-statifier_blocks-sb-hgjk` is what carries the pin until then.
+  # What the pin buys is `sb-hgjk`'s `compile_options` assign, without
+  # which the editor recompiles the run's provenance with neither this
+  # app's `terminate: true` nor its known invoke types and the Run pane
+  # marks the wrong blocks - or none.
+  #
+  # Sabotage: pointed the LOCK assertion at a real-but-wrong commit of
+  # `statifier_blocks` main and left `mix.lock` alone; it went red
+  # reporting the pinned ref against the mutated expectation. Reverted
+  # from a backup copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.21"} in deps
+    assert {:statifier_blocks, [github: "riddler/statifier_blocks", ref: @statifier_blocks_ref]} in deps
 
     lock_line =
       "mix.lock"
@@ -142,8 +163,9 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.21.)
-    refute lock_line =~ ":git,"
+    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
+    assert lock_line =~ @statifier_blocks_ref
+    refute lock_line =~ ":hex,"
   end
 
   # The path/type index the editor package reads a datamodel document
@@ -442,10 +464,37 @@ defmodule StatifierExamples.MixDepsTest do
   # release (`"0.7.2"`) and left `mix.lock` alone; it went red reporting
   # the resolved 0.8.0 entry against the mutated expectation. Reverted
   # from a backup copy.
-  test "the statifier_persistence dep is the Hex requirement" do
+  @statifier_persistence_ref "27a7a15b6ebb8dd2bfd6a1c3b5779c2bbd042feb"
+
+  # se-dh0: a GIT PIN, for the reason and on the terms the
+  # `statifier_blocks` pin above states - `se-gty` restores the Hex arm
+  # after 0.9.0 is published, and the ledger entry
+  # `se-dh0-statifier_persistence-sp-80g` carries it until then.
+  #
+  # `override: true` is part of the arm rather than decoration:
+  # `statifier_oban` and `statifier_blocks` both state their own
+  # requirement on `statifier_persistence`, and a git pin does not satisfy
+  # a Hex requirement, so without it the resolution is refused outright.
+  #
+  # What the pin buys is the durable per-run input log of its ADR-0010 -
+  # the two optional adapter callbacks `StatifierExamples.Persistence` now
+  # exports, and so the only history a stored run has ever had. Without
+  # them `StatifierExamples.Charts.Replay` has nothing to replay and the
+  # editor page's Run pane is empty.
+  #
+  # Sabotage: pointed the LOCK assertion at a real-but-wrong commit of
+  # `statifier_persistence` main and left `mix.lock` alone; it went red
+  # reporting the pinned ref against the mutated expectation. Reverted
+  # from a backup copy.
+  test "the statifier_persistence dep is the git pin" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.8"} in deps
+    assert {:statifier_persistence,
+            [
+              github: "riddler/statifier_persistence",
+              ref: @statifier_persistence_ref,
+              override: true
+            ]} in deps
 
     lock_line =
       "mix.lock"
@@ -454,8 +503,9 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.8.)
-    refute lock_line =~ ":git,"
+    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_persistence.git")
+    assert lock_line =~ @statifier_persistence_ref
+    refute lock_line =~ ":hex,"
   end
 
   # The durable-timer package. An earlier
