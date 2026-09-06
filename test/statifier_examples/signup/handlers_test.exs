@@ -27,7 +27,7 @@ defmodule StatifierExamples.Signup.HandlersTest do
   # Sabotage: dropped "myapp:provision" from @invoke_types; this went red,
   # then reverted.
   test "invoke_types/0 answers every name the block types name, sorted" do
-    assert Handlers.invoke_types() == ["myapp:provision", "myapp:signup"]
+    assert Handlers.invoke_types() == ["myapp:process_rows", "myapp:provision", "myapp:signup"]
   end
 
   # Sabotage: made handle/2 log the invoke type without the step; this went

@@ -64,7 +64,10 @@ defmodule StatifierExamples.Signup do
   @documents [
     {"signup_wizard", "signup_wizard.json", []},
     {"signup_invitations", "signup_invitations.json", []},
-    {"signup_onboarding", "signup_onboarding.json", []}
+    {"signup_onboarding", "signup_onboarding.json", []},
+    {"signup_bulk_invites", "signup_bulk_invites.json", []},
+    {"signup_bulk_invites_strict", "signup_bulk_invites_strict.json", []},
+    {"signup_invite_chunk", "signup_invite_chunk.json", []}
   ]
 
   # The `core.send` whose delay is host configuration rather than a fact

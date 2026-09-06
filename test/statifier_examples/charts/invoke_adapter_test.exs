@@ -33,7 +33,7 @@ defmodule StatifierExamples.Charts.InvokeAdapterTest do
 
   alias StatifierBlocks.Runtime
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Subchart, SyncAdapter}
+  alias StatifierExamples.Charts.{FanOut, Subchart, SyncAdapter}
 
   # Sabotage: made `invoke_handlers/0` answer the sync adapter's map alone,
   # dropping the subchart merge; this went red on the key-set assertion,
@@ -50,9 +50,14 @@ defmodule StatifierExamples.Charts.InvokeAdapterTest do
 
     assert handlers |> Map.keys() |> Enum.sort() == Charts.invoke_types()
 
-    {subchart, sync} = Map.split(handlers, [Runtime.Subchart.invoke_type()])
+    {runtime, sync} =
+      Map.split(handlers, [Runtime.Subchart.invoke_type(), FanOut.invoke_type()])
 
-    assert subchart == %{"statifier_blocks:subchart" => Subchart}
+    assert runtime == %{
+             "statifier_blocks:subchart" => Subchart,
+             "statifier_blocks:map" => FanOut
+           }
+
     assert Enum.all?(Map.values(sync), &(&1 == SyncAdapter))
   end
 
