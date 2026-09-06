@@ -84,3 +84,61 @@ jobs:
           test "${#cmd[@]}" -gt 0 || { echo "gate.full is empty" >&2; exit 1; }
           echo "gate command (.claude/wurk.json gate.full): ${cmd[*]}"
           "${cmd[@]}"
+
+  # Deliberately a job of its own rather than a step on the gate. The gate
+  # never bundles - statifier-ui's ADR-0009 decides that, and the reason it
+  # gives is that a package's own gate cannot see whether its assets/js
+  # survives a bundler. Something has to look, and an example host that
+  # already imports the package's hooks is the natural place: this job is
+  # that look, named separately on the checks list so a broken bundle reads
+  # as a bundle failure rather than as a gate failure.
+  assets:
+    name: Assets bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the toolchain out of mise.toml
+        id: toolchain
+        run: |
+          set -euo pipefail
+          erlang="$(sed -n 's/^erlang *= *"\(.*\)".*$/\1/p' mise.toml | head -1)"
+          elixir="$(sed -n 's/^elixir *= *"\(.*\)".*$/\1/p' mise.toml | head -1)"
+          test -n "$erlang" || { echo "no erlang version in mise.toml" >&2; exit 1; }
+          test -n "$elixir" || { echo "no elixir version in mise.toml" >&2; exit 1; }
+          echo "erlang=$erlang" >> "$GITHUB_OUTPUT"
+          echo "elixir=$elixir" >> "$GITHUB_OUTPUT"
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ steps.toolchain.outputs.erlang }}
+          elixir-version: ${{ steps.toolchain.outputs.elixir }}
+
+      # A cache key of its own, not the gate's. The two jobs run in parallel
+      # and actions/cache refuses to overwrite an existing key, so sharing one
+      # would mean whichever job finished first decided what _build the other
+      # restored next run - and the gate's _build is where the Dialyzer PLT
+      # lives. This tree carries the esbuild binary instead (esbuild.install
+      # puts it under _build), which is what makes the install below a no-op
+      # on a warm run.
+      - name: Cache deps, build and the esbuild binary
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: assets-mix-${{ runner.os }}-otp${{ steps.toolchain.outputs.erlang }}-ex${{ steps.toolchain.outputs.elixir }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            assets-mix-${{ runner.os }}-otp${{ steps.toolchain.outputs.erlang }}-ex${{ steps.toolchain.outputs.elixir }}-
+
+      - name: Fetch dependencies
+        run: mix deps.get
+
+      # esbuild resolves the bare specifiers in assets/js/app.js through
+      # NODE_PATH, which config/config.exs points at deps/ - so this bundles
+      # the dependencies' real assets/js, and a bad import or a syntax error
+      # in one of them exits non-zero here.
+      - name: Bundle the JavaScript
+        run: mix assets.bundle

@@ -530,6 +530,15 @@ mix quality                  # full gate: + dialyzer, deps audit, coverage floor
 Full `mix quality` must be green before any commit. `.quality.exs` records what
 the gate does and the one recorded deviation from the family's defaults.
 
+One check runs beside the gate and is not part of it. `mix assets.bundle` runs
+esbuild over `assets/js/app.js`, which resolves `statifier_blocks` and
+`statifier_ui` out of `deps/` through esbuild's `NODE_PATH`, so a dependency
+whose `assets/js` no longer bundles fails here. CI runs it as the **Assets
+bundle** job on every pull request. It lives here rather than in those
+packages because their own gates never bundle - statifier-ui's ADR-0009
+decides that, and names an example host as where the bundle should actually be
+built. Run it locally the same way; it needs no server and no npm install.
+
 ## Layout
 
 | Module | What it holds |
