@@ -504,6 +504,20 @@ defmodule StatifierExamples.MixProject do
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind statifier_examples", "esbuild statifier_examples"],
+      # The JavaScript half of assets.build, self-contained enough for CI to
+      # run as one command. It is esbuild only on purpose: what CI is here to
+      # catch is a dependency's assets/js that no longer bundles - a syntax
+      # error or a bad import in statifier_ui or statifier_blocks - and the
+      # Tailwind pass cannot fail for that reason. Skipping it also skips
+      # downloading a second standalone binary and building the CSS, which is
+      # what keeps this check cheap enough to run on every pull request.
+      # `compile` stays: the bundle resolves colocated hooks out of
+      # Mix.Project.build_path(), which exists only once the app has compiled.
+      "assets.bundle": [
+        "esbuild.install --if-missing",
+        "compile",
+        "esbuild statifier_examples"
+      ],
       "assets.deploy": [
         "tailwind statifier_examples --minify",
         "esbuild statifier_examples --minify",
