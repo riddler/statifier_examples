@@ -677,3 +677,68 @@ of blocking here.
 - Similar implementation: `lib/statifier_examples/charts/async_calls.ex:120-290`
   (the asynchronous-invocation shape this follows) and
   `lib/statifier_examples/charts/subchart.ex:100-215` (the child recipe)
+
+## Deferred Manual Verification
+
+Written by the `/wurk:verify --unattended` pass on 2026-09-05. The phases
+were driven directly rather than through `/wurk:implement --loop`, so no
+loop wrote this section; it is filled here so a later interactive walk has
+the same resume aids it would otherwise have. An agent never ticks a human
+gate: items below carry a `**Machine-checked (unattended, ...)**` marker
+with its evidence, or are left for the operator with the reason.
+
+- [ ] **Phase 1 - nothing in the durable-subchart walkthrough behaves
+      differently.**
+      **Machine-checked (unattended, 2026-09-05):** the 32 tests in
+      `durable_test.exs` and `subchart_test.exs` pass unchanged on the
+      committed HEAD, and the three capability guards
+      (`child_listing_supported?/1`, `run_outcome_supported?/1`,
+      `run_states_supported?/1`) all answer `true` for a store opened on
+      `StatifierExamples.Persistence`.
+
+- [ ] **Phase 2 - the table's columns read as the host's own data, with
+      nothing the chart owns duplicated into them.**
+      **Machine-checked (unattended, 2026-09-05):** `invite_outcomes`
+      carries `chunk_id`, `email`, `status`, `run_id`, `promoted_run_id`
+      and timestamps. No column holds a chart position, a datamodel value,
+      an outcome name or an invocation id; `run_id` and `promoted_run_id`
+      are references to runs, not copies of their state. Whether the
+      columns *read* as the host's own is a wording judgement left to the
+      operator.
+
+- [ ] **Phase 3 - the document reads as an author would write it: one map
+      block over a short list of descriptors, and no row data anywhere in
+      it.**
+      **Machine-checked (unattended, 2026-09-05):** both parent documents
+      are one `core.assign` plus one `core.map`; each seeds exactly ten
+      descriptors, none of which contains an `@`, and the whole seed value
+      is whitespace-free source text as `core.assign` requires. The
+      aesthetic judgement is left to the operator.
+
+- [ ] **Phase 3 - the Runs feed narrates the fan-out legibly.**
+      **Machine-checked (unattended, 2026-09-05):** the feed carries a
+      `Fan-out started` row reading
+      `statifier_blocks:map: children to follow, answer to follow`,
+      captured live at
+      `.claude/fleet/journal/031-artifacts/captures/se-j87-fan-out-started.png`.
+      Legibility is a human call and is left to the operator.
+
+- [ ] **Phase 4 - the two policies differ in the document and nowhere
+      else: no host code branches on which one is running.**
+      **Machine-checked (unattended, 2026-09-05):** `first_error` appears
+      in `lib/` in three places and all three are prose comments. No host
+      function reads or matches the policy; it rides `opts` from the
+      scheduling package into `Driver.start_child_at/6` untouched.
+
+- [ ] **Phase 5 - the boundary paragraph is this repo's own words, not a
+      quotation of a private document.**
+      Left to the operator. The terminology scan is clean over the whole
+      outbound content and its constructed positive control fired, which
+      rules out the leak class but not the paraphrase question, and that
+      one needs the person who holds the private document.
+
+- [ ] **Phase 5 - the captures show what the prose claims.**
+      Left to the operator: five captures are in place and each was taken
+      from a live run of the code on this branch, but whether a picture
+      shows what a paragraph claims is exactly the judgement an agent
+      should not make for itself.
