@@ -40,13 +40,19 @@ neither variable, so a CI run always resolves `statifier_blocks` from Hex.
 ## Opening a document in the editor
 
 1. Click a document on the home page, or go to `/editor?doc=<key>` directly.
-   The three keys, in the order the switcher offers them:
+   The eight keys, in the order the switcher offers them - which is
+   `StatifierExamples.Charts.fixtures/0`'s order, card processing first:
 
    | `doc=` | What the document shows |
    |---|---|
    | `card_processing` | intake and a validation branch, then a three-lane authorization group - fraud review, balance check, 3-D Secure - with a `core.send` arming a deadline and two guarded interrupt rules listening on the group's rail; then an outcome branch with capture-retry, a resumable manual-review arm and a receipt tail. Every block type it names is registered, so it compiles clean and a finding on it is one an author produced |
+   | `card_processing_sketch` | the same payment flow caught halfway through being authored sink-backwards: the tail the author already knows parked in a `core.drafts` tray, and the middle nobody has decided yet standing as a `core.placeholder`. Both are author warnings, so this is the one shipped document that does not read `Findings 0` |
    | `signup_wizard` | account collection, a verification group with resume and abandon interrupts, then the A/B branch on the chosen plan - business, personal, or a nudge - and provisioning |
    | `signup_invitations` | a `core.foreach` over the invitees, each running the wizard above as a `core.subchart` child chart with an `on_error` subtree |
+   | `signup_onboarding` | the smallest document here, and the one reading it exists for: a single `core.subchart` running the wizard, with `on_done`, `on_abandon` and `on_error` each routing to a `myapp.notify`. The child really runs, because a root session started with `inherit_invoke_handlers: true` hands its handler map down |
+   | `signup_bulk_invites` | the fan-out shape: a `core.assign` seeding ten chunk descriptors, then a `core.map` running `signup_invite_chunk` once per descriptor with `collect: "results"` and `on: "all"`, then a confirmation step. Ids are what fan out, never invitee rows - the list is serialized on every persisted step |
+   | `signup_bulk_invites_strict` | the same document with two characters changed: one descriptor is a deliberate bad id, and the `core.map` runs `on: "first_error"`. It is the pair that makes the two failure policies readable side by side |
+   | `signup_invite_chunk` | the child the two bulk documents fan out over: one `core.invoke` of `myapp:process_rows` for the chunk a descriptor stands for, answering a summary. It is offered in the switcher because a child chart is a document like any other |
 
 2. Switch documents with the header's DOCUMENT select. Edits live in the
    LiveView process, so an edit survives a document switch and does not
@@ -87,7 +93,8 @@ for zero: a document with nothing wrong reads `Findings 0`.
 The page also opens at Fit width, because the host passes the package's `fit`
 attr - see step 1 of "Copying the reference header".
 
-What the three documents report today:
+What the eight documents report today - seven `Findings 0`, and one that is
+supposed to have something to say:
 
 - `signup_wizard` - `Findings 0`.
 - `card_processing` - `Findings 0`. It read `Findings 2` until 2026-09-06
@@ -113,6 +120,18 @@ What the three documents report today:
   `statifier_blocks` ships the two callbacks a host owes it - a document-id
   lookup over the fixture list, and the palette a child compiles against - so
   the type is registered now and the lint is retired.
+- `card_processing_sketch` - `Findings 2`, and that is the document working.
+  Both are `:warning`/`fault: :author` findings from the `:emit` stage: a
+  `placeholder_block` on `blk_cps_gap`, and a `draft_blocks_present` on
+  `blk_cps_drafts`. A sketch is a document somebody is still writing, and
+  neither an unwritten step nor a parked fragment survives publication, so a
+  sketch reading `Findings 0` would be the bug.
+- `signup_onboarding` - `Findings 0`.
+- `signup_bulk_invites` - `Findings 0`.
+- `signup_bulk_invites_strict` - `Findings 0`. Its deliberate bad chunk id is
+  a **runtime** fact, not a compile-time one: `first_error` is what a run does
+  with the failure, and the compiler has nothing to say about a string.
+- `signup_invite_chunk` - `Findings 0`.
 
 ## The typed environment, and the two answers it gives
 
