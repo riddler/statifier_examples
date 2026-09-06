@@ -10,6 +10,11 @@ defmodule StatifierExamples.PersistenceTest do
   is the part the suite does not cover and this adapter can still get
   wrong on its own: the refusals, and the multi-match ordering a cascade
   actually depends on.
+
+  From se-j87 it also covers the two callbacks a Tier A fan-out needs at
+  open - `supports_run_outcome?/1` and `list_run_states_by_metadata/2` -
+  for the same reason: the projection is built here rather than delegated,
+  so its shape is this adapter's own to get wrong.
   """
 
   # Not async: writes to the repo.
@@ -123,5 +128,88 @@ defmodule StatifierExamples.PersistenceTest do
     assert_raise ArgumentError, fn -> Persistence.list_runs_by_metadata(opts, %{}) end
     assert_raise ArgumentError, fn -> Persistence.list_runs_by_metadata(opts, %{key: "atom"}) end
     assert_raise ArgumentError, fn -> Persistence.list_runs_by_metadata(opts, "not a map") end
+  end
+
+  # `StatifierPersistence.Driver.start_child_at/6` asks the store three
+  # questions before it creates anything, and refuses the whole fan-out if
+  # any of them answers no. Asserted through `Storage`'s own wrappers
+  # rather than by calling this module's callbacks directly, because the
+  # wrappers are what the driver actually consults - each reads both the
+  # export and `supports_metadata?/1`, so a callback exported without the
+  # metadata declaration beside it would still refuse.
+  #
+  # Sabotage: made `supports_run_outcome?/1` answer `false`; this went red
+  # on the second assertion. Reverted.
+  test "the three capability guards a fan-out is opened against all hold" do
+    {:ok, store} = Storage.new(Persistence, [])
+
+    assert Storage.child_listing_supported?(store)
+    assert Storage.run_outcome_supported?(store)
+    assert Storage.run_states_supported?(store)
+  end
+
+  # The projection's whole point is that it answers "have all N settled,
+  # and at which indices" without moving a blob per child, so what it
+  # answers is three values and not a record. The index comes off the
+  # linkage the package wrote, and the status comes off the stored string
+  # as the atom the projection's type names.
+  #
+  # Sabotage: made `child_index/1` read `"index"` instead of
+  # `"child_index"`; this went red with every index `nil`. Reverted.
+  test "list_run_states_by_metadata projects run_id, status and child_index", %{opts: opts} do
+    for index <- 0..2 do
+      insert!(
+        opts,
+        "run-f/call/#{index}",
+        Linkage.to_metadata(Linkage.new("run-f", "call", index, "h", 3, :first_error))
+      )
+    end
+
+    assert {:ok, states} =
+             Persistence.list_run_states_by_metadata(opts, Linkage.parent_match("run-f"))
+
+    assert Enum.sort_by(states, & &1.child_index) == [
+             %{run_id: "run-f/call/0", status: :active, child_index: 0},
+             %{run_id: "run-f/call/1", status: :active, child_index: 1},
+             %{run_id: "run-f/call/2", status: :active, child_index: 2}
+           ]
+  end
+
+  # A matched run carrying no linkage answers `child_index: nil` rather
+  # than raising or being dropped - the callback's own type says so, and a
+  # match written wide enough to catch a parent is how it happens.
+  #
+  # Sabotage: made `child_index/1` raise on a metadata map with no
+  # reserved key; this went red. Reverted.
+  test "list_run_states_by_metadata answers nil for a run with no linkage", %{opts: opts} do
+    insert!(opts, "run-g", %{"fixture" => "signup_bulk_invites"})
+
+    assert {:ok, [state]} =
+             Persistence.list_run_states_by_metadata(opts, %{
+               "fixture" => "signup_bulk_invites"
+             })
+
+    assert state == %{run_id: "run-g", status: :active, child_index: nil}
+  end
+
+  # The same refusal `list_runs_by_metadata/2` makes, for a worse reason:
+  # a settlement that read every run in the table as its own children
+  # would answer a parent on behalf of runs that are nobody's child.
+  #
+  # Sabotage: dropped the `validate_match!/1` call from
+  # `list_run_states_by_metadata/2`; this went red on the first
+  # assertion. Reverted.
+  test "list_run_states_by_metadata refuses an empty or badly keyed match", %{opts: opts} do
+    insert!(opts, "run-h/call/0", Linkage.to_metadata(Linkage.new("run-h", "call", 0, "h")))
+
+    assert_raise ArgumentError, fn -> Persistence.list_run_states_by_metadata(opts, %{}) end
+
+    assert_raise ArgumentError, fn ->
+      Persistence.list_run_states_by_metadata(opts, %{key: "atom"})
+    end
+
+    assert_raise ArgumentError, fn ->
+      Persistence.list_run_states_by_metadata(opts, "not a map")
+    end
   end
 end
