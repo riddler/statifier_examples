@@ -1,10 +1,9 @@
 defmodule StatifierExamples.Charts.InvokeRegistryTest do
   use ExUnit.Case, async: true
 
-  alias StatifierBlocks.{Compiler, Palette}
+  alias StatifierBlocks.Compiler
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.Subchart
-  alias StatifierExamples.Test.LegacyCheck
 
   # The two-registry seam, asserted over the whole shipped fixture set
   # rather than one document: a block type NAMES an invoke type and a
@@ -87,7 +86,7 @@ defmodule StatifierExamples.Charts.InvokeRegistryTest do
   @spec warnings(map(), [String.t()]) :: [{String.t(), String.t() | nil}]
   defp warnings(fixture, known) do
     assert {:ok, compiled} =
-             Compiler.compile(fixture.document, palette(),
+             Compiler.compile(fixture.document, Charts.palette(),
                known_invoke_types: known,
                datamodel: fixture.datamodel
              ),
@@ -95,17 +94,5 @@ defmodule StatifierExamples.Charts.InvokeRegistryTest do
 
     for %{reason: {:no_registered_invoke_handler, type}} = finding <- compiled.warnings,
         do: {type, finding.block_id}
-  end
-
-  # `card_processing` leaves `myapp.legacy_check` unregistered on purpose, and
-  # the compiler reports errors from the first failing stage only - so with
-  # the shipped palette the unresolved block masks the invoke-type lint
-  # entirely. The stand-in is what lets the lint be seen at all; it is the
-  # same one `CardProcessingFixtureTest` uses, and it emits no invoke.
-  @spec palette() :: Palette.t()
-  defp palette do
-    palette = Charts.palette()
-
-    %{palette | types: Map.put(palette.types, "myapp.legacy_check", LegacyCheck)}
   end
 end

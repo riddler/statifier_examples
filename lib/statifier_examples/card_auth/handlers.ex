@@ -27,6 +27,7 @@ defmodule StatifierExamples.CardAuth.Handlers do
     "myapp:balance_check",
     "myapp:capture",
     "myapp:intake",
+    "myapp:legacy_check",
     "myapp:manual_flag",
     "myapp:park",
     "myapp:receipt",
@@ -66,6 +67,10 @@ defmodule StatifierExamples.CardAuth.Handlers do
 
   def handle("myapp:capture", params, _context), do: completed("myapp:capture", params)
   def handle("myapp:intake", params, _context), do: completed("myapp:intake", params)
+
+  def handle("myapp:legacy_check", params, _context),
+    do: completed("myapp:legacy_check", params)
+
   def handle("myapp:manual_flag", params, _context), do: completed("myapp:manual_flag", params)
   def handle("myapp:park", params, _context), do: completed("myapp:park", params)
   def handle("myapp:receipt", params, _context), do: completed("myapp:receipt", params)

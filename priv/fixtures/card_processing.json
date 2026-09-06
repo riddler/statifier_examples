@@ -4,7 +4,7 @@
   "revision": 43,
   "metadata": {
     "name": "Card processing",
-    "description": "Intake, validation, a three-lane authorization group with interrupts, an outcome branch with capture retry and manual review, and a receipt tail. The authorize and capture calls carry on_error subtrees, so the slot idiom and the retry-predicate idiom can be read side by side. Ported from the statifier_blocks spike: the proposed core.timeout block became the shipped pair that models a clock interrupt - a core.send arming card.authz_timed_out at the head of the authorization group's body, and a core.on_event on its interrupt rail listening for that event. One block type is deliberately unregistered, myapp.legacy_check, so the unavailable-block chrome is exercised at depth 7.",
+    "description": "Intake, validation, a three-lane authorization group with interrupts, an outcome branch with capture retry and manual review, and a receipt tail. The authorize and capture calls carry on_error subtrees, so the slot idiom and the retry-predicate idiom can be read side by side. Ported from the statifier_blocks spike: the proposed core.timeout block became the shipped pair that models a clock interrupt - a core.send arming card.authz_timed_out at the head of the authorization group's body, and a core.on_event on its interrupt rail listening for that event. Every block type it names is registered, so the whole document compiles and a finding in it is one an author produced.",
     "domain": "card-processing"
   },
   "datamodel": [
@@ -173,14 +173,10 @@
                                       {
                                         "type": "myapp.legacy_check",
                                         "id": "blk_cp_legacy",
-                                        "type_version": 3,
+                                        "type_version": 1,
                                         "config": {
-                                          "ruleset": "velocity-v2",
-                                          "window": "24h",
-                                          "thresholds": {
-                                            "count": 5,
-                                            "amount_cents": 250000
-                                          }
+                                          "invoke_type": "myapp:legacy_check",
+                                          "label": "Run the legacy velocity check"
                                         }
                                       }
                                     ],

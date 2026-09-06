@@ -22,6 +22,7 @@ defmodule StatifierExamples.CardAuth.HandlersTest do
     "myapp:balance_check",
     "myapp:capture",
     "myapp:intake",
+    "myapp:legacy_check",
     "myapp:manual_flag",
     "myapp:park",
     "myapp:receipt",

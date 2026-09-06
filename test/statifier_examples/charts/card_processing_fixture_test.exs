@@ -2,9 +2,7 @@ defmodule StatifierExamples.Charts.CardProcessingFixtureTest do
   use ExUnit.Case, async: true
 
   alias StatifierBlocks.Compiler
-  alias StatifierBlocks.Palette
   alias StatifierExamples.Charts
-  alias StatifierExamples.Test.LegacyCheck
 
   setup do
     {:ok, fixture} = Charts.fixture("card_processing")
@@ -12,28 +10,22 @@ defmodule StatifierExamples.Charts.CardProcessingFixtureTest do
     %{document: fixture.document, datamodel: fixture.datamodel}
   end
 
-  # Sabotage: registered myapp.legacy_check in CardAuth.block_types(); this
-  # went red, then reverted.
-  test "the fixture compiles with one finding, the deliberate unresolved type",
-       %{document: document} do
-    assert {:error, [finding]} = Compiler.compile(document, Charts.palette(), [])
-
-    assert finding.severity == :error
-    assert finding.block_id == "blk_cp_legacy"
-    assert finding.reason == {:unknown_block_type, "myapp.legacy_check"}
-  end
-
-  # The compiler reports errors from the first failing stage only, so the
-  # unresolved block above masks every stage after resolution. This is the
-  # masked half: with a stand-in registered for that one type, the rest of the
-  # document has to be clean on its own.
+  # The whole document against the palette the app actually ships, in one
+  # pass. Until se-bv9 this took two: `myapp.legacy_check` was deliberately
+  # unregistered, the compiler reports findings from the first failing stage
+  # only, and so every stage after resolution could only be reached through a
+  # stand-in palette the suite kept for the purpose. The shipped palette
+  # resolves every type the document names now, so the shipped bytes are
+  # clean under the shipped registry - which is the condition on a finding in
+  # this document being one an author produced.
   #
-  # Sabotage: put "myapp:not_a_handler" in blk_cp_intake's invoke_type; the
-  # warning assertion went red, then reverted.
-  test "with the one type stood in for, the rest of the document is clean",
+  # Sabotage: dropped "myapp.legacy_check" from CardAuth.block_types(); the
+  # compile came back {:error, [unknown_block_type]} and this went red.
+  # Reverted from a backup copy.
+  test "the shipped document compiles clean against the shipped palette",
        %{document: document, datamodel: datamodel} do
     assert {:ok, compiled} =
-             Compiler.compile(document, stand_in_palette(),
+             Compiler.compile(document, Charts.palette(),
                known_invoke_types: Charts.invoke_types(),
                datamodel: datamodel
              )
@@ -66,13 +58,6 @@ defmodule StatifierExamples.Charts.CardProcessingFixtureTest do
     assert %{"params" => params} = config(document, "blk_cp_authorize")
 
     assert params == "amount=amount_cents\ncurrency=currency\ncustomer=customer.id"
-  end
-
-  @spec stand_in_palette() :: Palette.t()
-  defp stand_in_palette do
-    palette = Charts.palette()
-
-    %{palette | types: Map.put(palette.types, "myapp.legacy_check", LegacyCheck)}
   end
 
   defp block_types(document), do: document.root |> blocks() |> Enum.map(& &1.type) |> Enum.uniq()
