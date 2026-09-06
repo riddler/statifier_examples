@@ -586,10 +586,30 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.7.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.8.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # It moves to the 0.9 line. 0.9.0 makes a fan-out visible in the
+  # telemetry stream: `StatifierOban.Telemetry.events/0` gains
+  # `[:statifier_oban, :invoke, :fan_out]`, `[..., :invoke,
+  # :child_started]` and `[..., :invoke, :unstarted_cancelled]`, going
+  # from eleven names to fourteen. A fan-out delivers nothing, so no
+  # `:delivered` event fired for one and a cancelled sibling was reported
+  # nowhere at all. Those events describe work this app actually does:
+  # `StatifierExamples.Charts.FanOut` implements
+  # `StatifierOban.Invoke.ChildStarter`, so `:child_started` fires once
+  # per child it creates. The release also changes
+  # `StatifierOban.Invoke.FanOut.start/5` to return `{:ok, summary}`
+  # where it returned a bare `:ok`; this app is called BY that function
+  # through the starter behaviour and never calls it, so nothing here
+  # moves with it.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.8.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.9.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
   test "the statifier_oban dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_oban, "~> 0.8"} in deps
+    assert {:statifier_oban, "~> 0.9"} in deps
 
     lock_line =
       "mix.lock"
@@ -598,7 +618,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_oban": )))
 
     assert lock_line, "statifier_oban has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_oban, "0.8.)
+    assert lock_line =~ ~s({:hex, :statifier_oban, "0.9.)
     refute lock_line =~ ":git,"
   end
 

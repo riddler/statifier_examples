@@ -123,12 +123,23 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     end
 
     # Edge two: the timer fire. The delivery seam runs in an Oban job with
-    # nothing of this bridge open around it, so it is a detached root -
-    # and the edge back to the run is `statifier.session_id`, onto which
-    # the bridge aliases `statifier_oban`'s `scope`.
+    # nothing of this bridge open around it, so the FIRE is a detached
+    # root - and the edge back to the run is `statifier.session_id`, onto
+    # which the bridge aliases `statifier_oban`'s `scope`.
     #
-    # The fired timer is matched to its own arming event by `send_id`,
-    # which is the pair a reader follows: one `timer.scheduled` root and
+    # The ARMING is not a root, as of `opentelemetry_statifier` 0.4.1: a
+    # scheduling point whose `scope` is a host's durable run id lands as a
+    # span event on the step span open in the emitting process, rather
+    # than rooting a trace of its own. This app arms every one of these
+    # inside `StatifierExamples.Charts.Durable`'s step, so all three land
+    # on `statifier_persistence.run.step`. The 0.4.0 behaviour - one bare
+    # `timer.scheduled` root per arming, joined to the run by nothing but
+    # the aliased scope - is what that release calls the defect, and the
+    # arc reads better without it: the arming is now on the very span a
+    # reader is already holding.
+    #
+    # The fired timer is still matched to its own arming by `send_id`,
+    # which is the pair a reader follows: one `timer.scheduled` event and
     # one `timer.fired` root, same scope, same send.
     #
     # Sabotage: matched the fired spans against the PARENT's run id
@@ -140,9 +151,13 @@ defmodule StatifierExamples.Charts.OneTraceTest do
       child_id: child_id
     } do
       fired = named(spans, "statifier_oban.timer.fired")
-      armed = for s <- named(spans, "statifier_oban.timer.scheduled"), do: send_id(s)
+
+      armed =
+        for {_span, attributes} <- events(spans, "statifier_oban.timer.scheduled"),
+            do: attributes["statifier_oban.send_id"]
 
       assert fired != []
+      assert armed != []
 
       for span <- fired do
         assert span.attributes["statifier.session_id"] == child_id
@@ -179,26 +194,61 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # because the design refuses one trace. A reader navigates; they do
     # not filter by trace id.
     #
+    # The arming stage is asserted separately below, because as of
+    # `opentelemetry_statifier` 0.4.1 it is a span event rather than a
+    # span: there is no `timer.scheduled` span id for the graph to reach,
+    # and reaching the span that CARRIES the event is the stronger claim
+    # anyway.
+    #
     # Sabotage: dropped `statifier.session_id` from
     # `TraceCollector`'s `@correlation` list; this went red on the
-    # `statifier_oban` roots, which carry no other id this graph knows -
-    # the bridge aliases `scope` onto that one key and nothing else joins
-    # a fired timer to the run it belongs to. Reverted.
+    # `statifier_oban.timer.fired` roots, which carry no other id this
+    # graph knows - the bridge aliases `scope` onto that one key and
+    # nothing else joins a fired timer to the run it belongs to. Reverted.
     test "every stage is reachable from the parent's first step", %{
       spans: spans,
       run_id: run_id
     } do
-      first = step_for!(spans, run_id)
-      reachable = TraceCollector.reachable(spans, &(&1.span_id == first.span_id))
+      reachable = reachable_from_first_step(spans, run_id)
 
       for name <- [
             "statifier_persistence.run.step",
             "statifier_persistence.child.answered",
-            "statifier_oban.timer.fired",
-            "statifier_oban.timer.scheduled"
+            "statifier_oban.timer.fired"
           ] do
         assert Enum.any?(named(spans, name), &MapSet.member?(reachable, &1.span_id)),
                "no #{name} span is reachable from the parent's first step"
+      end
+    end
+
+    # The arming stage, which 0.4.1 moved off its own root and onto the
+    # step span that emitted it. The claim is unchanged in substance - a
+    # reader starting from the parent's first step can see where each
+    # timer was armed - and stronger in form: the arming is no longer
+    # joined to the run by a correlation id the collector has to match,
+    # it is carried by a span the graph already reaches.
+    #
+    # Sabotage: asserted the events against a run id no arming used (the
+    # PARENT's, which arms none of these - they are all the wizard
+    # child's); this went red with an empty list, the se-6ag finding
+    # restated once more. Reverted.
+    test "the timer-arming stage is reachable and names the child", %{
+      spans: spans,
+      run_id: run_id,
+      child_id: child_id
+    } do
+      reachable = reachable_from_first_step(spans, run_id)
+      armed = events(spans, "statifier_oban.timer.scheduled")
+
+      assert armed != []
+
+      for {span, attributes} <- armed do
+        assert span.name == "statifier_persistence.run.step"
+        assert attributes["statifier.session_id"] == child_id
+
+        assert MapSet.member?(reachable, span.span_id),
+               "the span carrying a timer.scheduled event is not reachable " <>
+                 "from the parent's first step"
       end
     end
   end
@@ -302,6 +352,22 @@ defmodule StatifierExamples.Charts.OneTraceTest do
   defp named(spans, name), do: Enum.filter(spans, &(&1.name == name))
 
   defp send_id(span), do: span.attributes["statifier_oban.send_id"]
+
+  # Every span event of a given name, paired with the span carrying it.
+  # A point in the contract lands as an event rather than a span, so the
+  # carrier is half the fact: the event says what happened, the span says
+  # where in the graph a reader finds it.
+  defp events(spans, name) do
+    for span <- spans, {event_name, attributes} <- span.events, event_name == name do
+      {span, attributes}
+    end
+  end
+
+  defp reachable_from_first_step(spans, run_id) do
+    first = step_for!(spans, run_id)
+
+    TraceCollector.reachable(spans, &(&1.span_id == first.span_id))
+  end
 
   # The first step span for a run, which is the one a reader starts from.
   defp step_for!(spans, run_id) do
