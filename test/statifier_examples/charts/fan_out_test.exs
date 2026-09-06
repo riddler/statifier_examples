@@ -15,7 +15,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Durable, FanOut}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, FanOut, Subchart}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.Invites
   alias StatifierOban.Invoke.ChildStartWorker
@@ -255,5 +255,67 @@ defmodule StatifierExamples.Charts.FanOutTest do
              Durable.resume("#{run_id}/blk_bi_chunks/3")
 
     assert child.status == :failed
+  end
+
+  # The chunk chart settles its own index now. `core.invoke` classes its
+  # `error` outcome as a failure (`sb-hxs5`), the compiler carries an
+  # unhandled failure-classed completion out to the document's top-level
+  # `<final>`, and the reserved `statifier_persistence:run_status` param
+  # on that final is what the storage layer reads to persist the run
+  # `:failed`. Compiled through `Subchart.child_compile/1` rather than
+  # `Durable.compile/3` because that is the recipe a fan-out child is
+  # actually built with (`start_child_at/6`).
+  #
+  # Asserted as the whole `<final>` rather than by the param name alone:
+  # the name, the value and the order the two params compile in are the
+  # contract `statifier_persistence` reads, and a compiler that started
+  # emitting a differently spelled param would still contain the word.
+  #
+  # Sabotage: flipped `Subchart.child_compile/1`'s `child_use:` to
+  # `false`; this went red with no `s_blk_ic_root__child_failed` final in
+  # the emitted bytes at all. Reverted from a backup copy. (Dropping
+  # `known_invoke_types:` instead does NOT move these bytes - it was
+  # tried first and stayed green.)
+  test "the chunk chart's error final carries the reserved run_status param" do
+    {:ok, fixture} = Charts.fixture("signup_invite_chunk")
+
+    {:ok, compiled} = Subchart.child_compile(fixture.document)
+
+    assert compiled.scxml =~
+             ~s(<final id="s_blk_ic_root__child_failed"><donedata>) <>
+               ~s(<param expr="'error'" name="outcome"/>) <>
+               ~s(<param expr="'failed'" name="statifier_persistence:run_status"/>) <>
+               ~s(</donedata></final>)
+  end
+
+  # The other half of the same deletion, read off the answer the parent
+  # actually records. `StatifierExamples.Charts.Durable` used to notice a
+  # chunk child still `:active` when its create-drive returned and call
+  # `Driver.answer_parent/3` itself, with a reason of the host's own
+  # invention; `se-cqr` deleted that, which is `statifier_persistence`
+  # ADR-0008's amendment (decision 6). What lands at the failed index is
+  # now the engine's own word for how the child ended, and the two are
+  # distinguishable - which is what makes this a test rather than a
+  # restatement of the one above.
+  #
+  # Sabotage: pointed the assertion at the retired host reason; it went
+  # red reporting `failed_final`. Reverted from a backup copy.
+  test "the failed index names the engine's reason, not a host-invented one",
+       %{run_id: run_id} do
+    start!("signup_bulk_invites_strict", run_id)
+
+    assert %{success: 1} = drain()
+
+    refused = Enum.find(start_jobs(), &(&1.args["index"] == 3))
+    assert :ok = ChildStartWorker.perform(refused)
+
+    failed = Enum.at(Map.fetch!(datamodel(run_id), "results"), 3)
+
+    assert %{"status" => "failed", "failure" => %{"reason" => "failed_final"}} = failed
+
+    source = File.read!("lib/statifier_examples/charts/durable.ex")
+
+    refute source =~ "fail_child"
+    refute source =~ "chunk_call_refused"
   end
 end

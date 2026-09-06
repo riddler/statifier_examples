@@ -118,17 +118,28 @@ defmodule StatifierExamples.MixDepsTest do
   # `statifier_persistence:run_status` `<donedata>` param on that
   # outcome's top-level `<final>` under both compile options - which is
   # what `statifier_persistence` 0.8.0 reads to mark the run `:failed`.
-  # `core.map` and `core.subchart` class their `error` outcome; every
-  # other type, `core.invoke` included, classes nothing. The chunk chart
-  # this app fans out over is a `core.sequence` around one `core.invoke`,
-  # so it still cannot reach a failure-classed final, and the host-side
-  # translation ADR-0008's decision 6 deletes is still here.
+  # At 0.21.0 `core.map` and `core.subchart` classed their `error`
+  # outcome; every other type, `core.invoke` included, classed nothing.
+  # The chunk chart this app fans out over is a `core.sequence` around
+  # one `core.invoke`, so it could not reach a failure-classed final,
+  # and the host-side translation ADR-0008's decision 6 deletes stayed.
+  #
+  # The pin moves forward to the commit that ends that (`sb-hxs5`):
+  # `core.invoke` classes its `error` outcome like the other two do, and
+  # an unhandled failure-classed completion is carried to the document's
+  # top-level `<final>`. The chunk chart's error final now carries the
+  # reserved param, `statifier_persistence` marks the child run
+  # `:failed` on its own step, and `se-cqr` deleted
+  # `StatifierExamples.Charts.Durable`'s translation. That is what this
+  # pin buys on top of `sb-hgjk`'s `compile_options` assign; the ledger
+  # entry `se-cqr-statifier_blocks-sb-hxs5` carries it until 0.22.0 is
+  # published.
   #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.20.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.21.0 entry against the mutated expectation.
-  # Reverted from a backup copy.
-  @statifier_blocks_ref "7c33c6cabdb51e9131bfd0ac0659d52cb2927399"
+  # pin (`7c33c6c...`) and left `mix.lock` alone; it went red reporting
+  # the recorded commit against the mutated expectation. Reverted from a
+  # backup copy.
+  @statifier_blocks_ref "0f9f2cd7d2fb1b840941fafb54949cb958edf975"
 
   # se-dh0: the default arm is a GIT PIN for as long as 0.22.0 is
   # unpublished, so what this asserts is the pin rather than a Hex
@@ -197,6 +208,19 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.1.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.2.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # The lock moves to 0.3.0, and it moves because the pin above moved:
+  # `statifier_blocks` main states `{:statifier_datamodel, "~> 0.3"}`, so
+  # resolving the new pin resolves the new index. The arm is still absent
+  # and this app still names the reader nowhere. 0.3.0 makes a `one_of`
+  # on a declaration field a hint that never breaks a read, lets a scope
+  # entry's type name a declaration, and turns the required-to-optional
+  # row breaking; this app's documents declare no such row.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.2.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.3.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
   test "statifier_datamodel arrives transitively and is not named directly" do
     deps = Mix.Project.config()[:deps]
 
@@ -210,7 +234,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_datamodel": )))
 
     assert lock_line, "statifier_datamodel has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.2.)
+    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.3.)
     refute lock_line =~ ":git,"
   end
 

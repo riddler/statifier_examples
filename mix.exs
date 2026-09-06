@@ -560,10 +560,12 @@ defmodule StatifierExamples.MixProject do
   # type may class one of its outcomes as a failure through the new
   # `failure_outcomes/1` callback, and the compiler stamps the
   # reserved `statifier_persistence:run_status` `<donedata>` param on
-  # that outcome's top-level `<final>`. `core.map` and `core.subchart`
-  # class their `error` outcome and every other type classes nothing -
-  # `core.invoke` included - which is why the host-side translation in
-  # `StatifierExamples.Charts.Durable` is still here. `statifier_ui`
+  # that outcome's top-level `<final>`. At 0.21.0 `core.map` and
+  # `core.subchart` classed their `error` outcome and every other type
+  # classed nothing - `core.invoke` included - which is what kept the
+  # host-side translation in `StatifierExamples.Charts.Durable` alive
+  # through that release; the paragraph below is where it ends.
+  # `statifier_ui`
   # becomes an optional dependency at `~> 0.9` with this release, and
   # is declared directly above at that line;
   # `statifier_datamodel` still arrives TRANSITIVELY, at `~> 0.1`,
@@ -576,16 +578,24 @@ defmodule StatifierExamples.MixProject do
   # documents declare no `types` record that leans on the looser
   # reading, so the narrowing reaches nothing here.
   #
-  # The default arm is PINNED to `statifier_blocks` MAIN, at the commit
-  # carrying the Run pane's `compile_options` assign (`sb-hgjk`), the way
-  # the `statifier_ui` clause below describes its own git leg: 0.22.0 is
-  # not published yet, and the editor page has to hand the pane the same
-  # three compile options `StatifierExamples.Charts.Durable.compile/3`
-  # passes - `terminate: true`, the known invoke types and the datamodel -
-  # or the pane reads its marks off a differently compiled chart than the
-  # one the run executed. `STATIFIER_BLOCKS_PATH` still wins over the pin,
-  # so a local checkout is unaffected; `se-gty` moves the default arm back
-  # to `{:statifier_blocks, "~> 0.22"}` once the operator publishes.
+  # The default arm is PINNED to `statifier_blocks` MAIN, the way the
+  # `statifier_ui` clause below describes its own git leg: 0.22.0 is not
+  # published yet and two unreleased commits are load-bearing here. The
+  # first is the Run pane's `compile_options` assign (`sb-hgjk`), because
+  # the editor page has to hand the pane the same three compile options
+  # `StatifierExamples.Charts.Durable.compile/3` passes - `terminate:
+  # true`, the known invoke types and the datamodel - or the pane reads
+  # its marks off a differently compiled chart than the one the run
+  # executed. The pin moves forward to the second (`sb-hxs5`): `core.invoke`
+  # now classes its `error` outcome as a failure like `core.map` and
+  # `core.subchart` do, and an unhandled failure-classed completion is
+  # carried to the document's top-level `<final>`, which is what stamps
+  # the reserved `statifier_persistence:run_status` param on the chunk
+  # chart's error final. That is what let `se-cqr` delete the host-side
+  # translation `StatifierExamples.Charts.Durable` used to do instead.
+  # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout
+  # is unaffected; `se-gty` moves the default arm back to
+  # `{:statifier_blocks, "~> 0.22"}` once the operator publishes.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
@@ -593,7 +603,7 @@ defmodule StatifierExamples.MixProject do
 
       _ ->
         {:statifier_blocks,
-         github: "riddler/statifier_blocks", ref: "7c33c6cabdb51e9131bfd0ac0659d52cb2927399"}
+         github: "riddler/statifier_blocks", ref: "0f9f2cd7d2fb1b840941fafb54949cb958edf975"}
     end
   end
 
