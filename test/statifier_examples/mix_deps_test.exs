@@ -139,33 +139,32 @@ defmodule StatifierExamples.MixDepsTest do
   # pin (`7c33c6c...`) and left `mix.lock` alone; it went red reporting
   # the recorded commit against the mutated expectation. Reverted from a
   # backup copy.
-  @statifier_blocks_ref "0f9f2cd7d2fb1b840941fafb54949cb958edf975"
-
-  # se-dh0: the default arm is a GIT PIN for as long as 0.22.0 is
-  # unpublished, so what this asserts is the pin rather than a Hex
-  # requirement. It is not a weakening of the check: a pin is exact where a
-  # Hex requirement is a range, and `mix.lock` recording the same commit is
-  # what proves the tree is on the code the pin names rather than on
-  # whatever `main` has become since.
+  # The arm moves to the 0.22 line, and back to a Hex requirement: 0.22.0
+  # is published and carries both commits the pins bought, so `se-gty`
+  # retires them and the `refute` below is what says neither came back.
+  # The requirement is what this asserts again; a range is looser than a
+  # pin, and the lock assertion is what ties it to the release that
+  # actually resolved.
   #
-  # `se-gty` puts the Hex arm and this test's Hex spelling back together,
-  # after the operator publishes; the ledger entry
-  # `se-dh0-statifier_blocks-sb-hgjk` is what carries the pin until then.
-  # What the pin buys is `sb-hgjk`'s `compile_options` assign, without
-  # which the editor recompiles the run's provenance with neither this
-  # app's `terminate: true` nor its known invoke types and the Run pane
-  # marks the wrong blocks - or none.
+  # This app asked for both halves. `sb-hgjk`'s `compile_options` assign
+  # is above; `sb-hxs5` is the failure seam reaching `core.invoke`, which
+  # is what `se-cqr` deleted the host-side translation on. What comes
+  # beside them is additive here: `core.on_event` takes an optional
+  # `payload` declaration, `core.map`'s `collect` accepts any datamodel
+  # path rather than only a bare identifier, and this app's documents
+  # declare neither. The `statifier_datamodel` floor moves to `~> 0.3`
+  # with the release, which is what the test above now records.
   #
-  # Sabotage: pointed the LOCK assertion at a real-but-wrong commit of
-  # `statifier_blocks` main and left `mix.lock` alone; it went red
-  # reporting the pinned ref against the mutated expectation. Reverted
-  # from a backup copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.21.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.22.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, [github: "riddler/statifier_blocks", ref: @statifier_blocks_ref]} in deps
+    assert {:statifier_blocks, "~> 0.22"} in deps
 
     lock_line =
       "mix.lock"
@@ -174,9 +173,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
-    assert lock_line =~ @statifier_blocks_ref
-    refute lock_line =~ ":hex,"
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.22.)
+    refute lock_line =~ ":git,"
   end
 
   # The path/type index the editor package reads a datamodel document
@@ -488,37 +486,39 @@ defmodule StatifierExamples.MixDepsTest do
   # release (`"0.7.2"`) and left `mix.lock` alone; it went red reporting
   # the resolved 0.8.0 entry against the mutated expectation. Reverted
   # from a backup copy.
-  @statifier_persistence_ref "27a7a15b6ebb8dd2bfd6a1c3b5779c2bbd042feb"
-
-  # se-dh0: a GIT PIN, for the reason and on the terms the
-  # `statifier_blocks` pin above states - `se-gty` restores the Hex arm
-  # after 0.9.0 is published, and the ledger entry
-  # `se-dh0-statifier_persistence-sp-80g` carries it until then.
+  # The requirement moves to the 0.9 line, and back to a bare Hex
+  # two-tuple: 0.9.0 is published and carries what the interim git pin
+  # `se-dh0` took bought, so `se-gty` retires the pin and the `refute`
+  # below is what says it did not come back. `override: true` goes with
+  # it, and asserting the bare two-tuple is what would catch it quietly
+  # returning - the pin needed it only because `statifier_oban` and
+  # `statifier_blocks` state their own Hex requirements on this package
+  # and no git ref satisfies one.
   #
-  # `override: true` is part of the arm rather than decoration:
-  # `statifier_oban` and `statifier_blocks` both state their own
-  # requirement on `statifier_persistence`, and a git pin does not satisfy
-  # a Hex requirement, so without it the resolution is refused outright.
+  # 0.9.0 is REQUIRED rather than tidy. It carries ADR-0010's durable
+  # per-run input log: the three optional storage-adapter callbacks
+  # `StatifierExamples.Persistence` exports, `Runs.inputs/2` and
+  # `Storage.input_log_supported?/1` to read it back, and migration V05
+  # as the table. That log is the only history a stored run has ever had,
+  # and without it `StatifierExamples.Charts.Replay` has nothing to
+  # replay and the editor page's Run pane is empty.
   #
-  # What the pin buys is the durable per-run input log of its ADR-0010 -
-  # the two optional adapter callbacks `StatifierExamples.Persistence` now
-  # exports, and so the only history a stored run has ever had. Without
-  # them `StatifierExamples.Charts.Replay` has nothing to replay and the
-  # editor page's Run pane is empty.
+  # Two other edges of the release reach here and cost nothing.
+  # `[:statifier_persistence, :child, :answered]`'s `outcome` is now the
+  # invocation's rather than the door's, and this app asserts no
+  # `outcome` on that event; and `Storage.Ecto`'s two metadata queries
+  # refuse with `{:error, :metadata_unsupported}` off Postgres instead of
+  # raising, where this app issues neither and answers
+  # `supports_metadata?/1` for itself.
   #
-  # Sabotage: pointed the LOCK assertion at a real-but-wrong commit of
-  # `statifier_persistence` main and left `mix.lock` alone; it went red
-  # reporting the pinned ref against the mutated expectation. Reverted
-  # from a backup copy.
-  test "the statifier_persistence dep is the git pin" do
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.8.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.9.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
+  test "the statifier_persistence dep is the Hex requirement, with no override" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence,
-            [
-              github: "riddler/statifier_persistence",
-              ref: @statifier_persistence_ref,
-              override: true
-            ]} in deps
+    assert {:statifier_persistence, "~> 0.9"} in deps
 
     lock_line =
       "mix.lock"
@@ -527,9 +527,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_persistence.git")
-    assert lock_line =~ @statifier_persistence_ref
-    refute lock_line =~ ":hex,"
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.9.)
+    refute lock_line =~ ":git,"
   end
 
   # The durable-timer package. An earlier
