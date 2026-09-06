@@ -76,16 +76,33 @@ defmodule StatifierExamples.MixDepsTest do
   # editor draws and not what the field accepts, so this app's stored
   # documents are unaffected.
   #
+  # The arm moves to the 0.20 line as of se-goj, and this is the first move
+  # this app asked for rather than followed. 0.20.0 makes the datamodel
+  # document's declarations something the whole package reads:
+  # `StatifierBlocks.Environment` carries the path-to-type map at any
+  # position, a field naming a datamodel path may declare what it reads or
+  # writes there, and an unsatisfied read is a validation error naming the
+  # block, the field and the path. `statifier_datamodel` arrives
+  # transitively with it, at `~> 0.1`, and is asserted below as a
+  # transitive Hex entry rather than as a direct requirement: this app
+  # names the package nowhere, because the `types` key its fixtures write
+  # is data the compiler reads through the editor package's own
+  # dependency. Two breaking edges came with the release and neither
+  # reaches here - `StatifierBlocks.Predicates.Datamodel` is gone and this
+  # app called it by no name, and a type expression spelled exactly
+  # `unknown` reads as the permissive `:unknown` and this app spells no
+  # such type.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.18.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.19.0 entry against the mutated expectation.
+  # release line (`"0.19.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.20.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.19"} in deps
+    assert {:statifier_blocks, "~> 0.20"} in deps
 
     lock_line =
       "mix.lock"
@@ -94,7 +111,36 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.19.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.20.)
+    refute lock_line =~ ":git,"
+  end
+
+  # The path/type index the editor package reads a datamodel document
+  # through, and the one dependency in this tree this app deliberately does
+  # NOT name. It arrives because `statifier_blocks` 0.20.0 requires it, and
+  # that is the whole shape of the seam: a host writes `types` into the
+  # datamodel document it already hands the editor, and the package that
+  # owns the read check is the one that depends on the package that owns
+  # the document. A direct arm here would be this app claiming a
+  # relationship it does not have.
+  #
+  # Sabotage: added `{:statifier_datamodel, "~> 0.1"}` to `mix.exs`'s deps
+  # list; the `refute` went red naming the direct arm. Reverted from a
+  # backup copy.
+  test "statifier_datamodel arrives transitively and is not named directly" do
+    deps = Mix.Project.config()[:deps]
+
+    refute Enum.any?(deps, &match?({:statifier_datamodel, _requirement}, &1))
+    refute Enum.any?(deps, &match?({:statifier_datamodel, _requirement, _opts}, &1))
+
+    lock_line =
+      "mix.lock"
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_datamodel": )))
+
+    assert lock_line, "statifier_datamodel has no mix.lock entry"
+    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.1.)
     refute lock_line =~ ":git,"
   end
 
@@ -147,14 +193,27 @@ defmodule StatifierExamples.MixDepsTest do
   # `assets/js/app.js` registers. 0.7.0 also raises the `predicator` floor
   # to `~> 9.4`, which the resolved 9.4.0 already satisfies.
   #
+  # The arm moves to the 0.8 line as of se-goj, and here this app has a
+  # reason of its own for the first time. 0.8.0 gives the expression
+  # editor's clause builder a `path_types` assign, so a clause's operator
+  # list and value control come from the kind a host declares for the path
+  # rather than from whatever literal the source happens to carry. This app
+  # still names no `StatifierUI` module - `statifier_blocks` projects the
+  # datamodel document and hands the map across - but the surface that
+  # appears when it does is this package's, and
+  # `priv/fixtures/card-processing.datamodel.json` is what fills it: the
+  # risk branch's lone `risk_rating >= 70` opens on an integer-declared
+  # path and offers the numeric operators. The trace wire format is
+  # untouched at version 1 and 25 types, so the trace half re-pins nothing.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.6.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.7.0 entry against the mutated expectation.
+  # release line (`"0.7.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.8.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "the statifier_ui dep is a direct Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_ui, "~> 0.7"} in deps
+    assert {:statifier_ui, "~> 0.8"} in deps
 
     lock_line =
       "mix.lock"
@@ -163,7 +222,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_ui": )))
 
     assert lock_line, "statifier_ui has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_ui, "0.7.)
+    assert lock_line =~ ~s({:hex, :statifier_ui, "0.8.)
     refute lock_line =~ ":git,"
   end
 
@@ -276,10 +335,18 @@ defmodule StatifierExamples.MixDepsTest do
   # `Driver.start_child_at/6` refuses a fan-out at open rather than
   # half-starting one.
   #
+  # The lock moves to 0.7.2 as of se-goj, under the same requirement.
+  # 0.7.2 fixes the fan-out this app runs: a settlement used to read a
+  # sibling's status as terminal while that sibling's answer was still in
+  # flight and assembled a completed child with a `nil` donedata, and it
+  # now waits for every child's recorded answer rather than only for every
+  # child's terminal status. The `refute` below still keeps 0.7.0 out; what
+  # says 0.7.2 is in is the lock assertion.
+  #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.6.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.7.1 entry against the mutated expectation.
-  # Reverted from a backup copy.
+  # release (`"0.7.1"`) and left `mix.lock` alone; it went red reporting
+  # the resolved 0.7.2 entry against the mutated expectation. Reverted from
+  # a backup copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
@@ -292,7 +359,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.7.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.7.2")
     refute lock_line =~ ~s({:hex, :statifier_persistence, "0.7.0")
     refute lock_line =~ ":git,"
   end

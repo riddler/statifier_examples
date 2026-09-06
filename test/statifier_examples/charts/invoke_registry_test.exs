@@ -87,7 +87,10 @@ defmodule StatifierExamples.Charts.InvokeRegistryTest do
   @spec warnings(map(), [String.t()]) :: [{String.t(), String.t() | nil}]
   defp warnings(fixture, known) do
     assert {:ok, compiled} =
-             Compiler.compile(fixture.document, palette(), known_invoke_types: known),
+             Compiler.compile(fixture.document, palette(),
+               known_invoke_types: known,
+               datamodel: fixture.datamodel
+             ),
            "#{fixture.key} does not compile"
 
     for %{reason: {:no_registered_invoke_handler, type}} = finding <- compiled.warnings,

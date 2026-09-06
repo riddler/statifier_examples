@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "scopes": [
+    {
+      "scope": "global",
+      "label": "Deployment",
+      "entries": [
+        {
+          "name": "limits",
+          "path": "limits",
+          "type": "object",
+          "label": "Operational limits",
+          "note": "What this deployment will carry, rather than anything about one payment.",
+          "fields": [
+            {
+              "name": "manual_review_backlog",
+              "path": "limits.manual_review_backlog",
+              "type": "integer",
+              "label": "Manual review backlog"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "local",
+      "label": "This payment",
+      "entries": [
+        {
+          "name": "current_txn",
+          "path": "cards.current_txn",
+          "type": "object",
+          "label": "Current transaction",
+          "note": "The document's subject: the one path every step of this flow is about. myapp.intake seeds it."
+        },
+        {
+          "name": "settlement",
+          "path": "cards.settlement",
+          "type": "object",
+          "label": "Settlement",
+          "note": "Where a settled amount would be written. Nothing in this flow writes it yet, which is why the receipt step's read of it is unknown rather than refused."
+        },
+        {
+          "name": "amount",
+          "path": "amount",
+          "type": "integer",
+          "label": "Amount (sketch)",
+          "note": "The sketch document authors its flow sink-backwards and declares this root before the step that reads it exists."
+        },
+        {
+          "name": "authorization",
+          "path": "authorization",
+          "type": "object",
+          "label": "Authorization (sketch)",
+          "note": "Where myapp.authorize writes its decision when its assign_to is left at the declared default."
+        },
+        {
+          "name": "capture",
+          "path": "capture",
+          "type": "object",
+          "label": "Capture (sketch)",
+          "fields": [
+            {
+              "name": "attempts",
+              "path": "capture.attempts",
+              "type": "integer",
+              "label": "Capture attempts (sketch)"
+            }
+          ]
+        },
+        {
+          "name": "amount_cents",
+          "path": "amount_cents",
+          "type": "integer",
+          "label": "Amount",
+          "example": "4250"
+        },
+        {
+          "name": "currency",
+          "path": "currency",
+          "type": "string",
+          "label": "Currency",
+          "one_of": ["USD", "EUR", "GBP"]
+        },
+        {
+          "name": "customer",
+          "path": "customer",
+          "type": "object",
+          "label": "Customer",
+          "fields": [
+            {"name": "id", "path": "customer.id", "type": "string", "label": "Customer id"},
+            {
+              "name": "verified",
+              "path": "customer.verified",
+              "type": "boolean",
+              "label": "Customer verified"
+            }
+          ]
+        },
+        {
+          "name": "card",
+          "path": "card",
+          "type": "object",
+          "label": "Card presented",
+          "fields": [
+            {"name": "active", "path": "card.active", "type": "boolean", "label": "Card active"}
+          ]
+        },
+        {
+          "name": "validation",
+          "path": "validation",
+          "type": "object",
+          "label": "Intake validation",
+          "fields": [
+            {
+              "name": "passed",
+              "path": "validation.passed",
+              "type": "boolean",
+              "label": "Validation passed"
+            }
+          ]
+        },
+        {
+          "name": "risk_rating",
+          "path": "risk_rating",
+          "type": "integer",
+          "label": "Risk rating",
+          "note": "0-100. Declared integer, which is what makes a condition on it offer the numeric operators.",
+          "example": "70"
+        },
+        {
+          "name": "fraud",
+          "path": "fraud",
+          "type": "object",
+          "label": "Fraud review",
+          "fields": [
+            {
+              "name": "verdict",
+              "path": "fraud.verdict",
+              "type": "string",
+              "label": "Fraud verdict",
+              "one_of": ["clear", "review", "decline"]
+            },
+            {
+              "name": "cleared",
+              "path": "fraud.cleared",
+              "type": "boolean",
+              "label": "Fraud cleared"
+            }
+          ]
+        },
+        {
+          "name": "three_ds",
+          "path": "three_ds",
+          "type": "object",
+          "label": "Cardholder challenge",
+          "fields": [
+            {
+              "name": "completed",
+              "path": "three_ds.completed",
+              "type": "boolean",
+              "label": "Challenge completed"
+            }
+          ]
+        },
+        {
+          "name": "auth",
+          "path": "auth",
+          "type": "object",
+          "label": "Authorization",
+          "fields": [
+            {"name": "approved", "path": "auth.approved", "type": "boolean", "label": "Approved"},
+            {"name": "captured", "path": "auth.captured", "type": "boolean", "label": "Captured"},
+            {"name": "code", "path": "auth.code", "type": "string", "label": "Authorization code"}
+          ]
+        },
+        {
+          "name": "balance",
+          "path": "balance",
+          "type": "object",
+          "label": "Balance check",
+          "fields": [
+            {
+              "name": "available_cents",
+              "path": "balance.available_cents",
+              "type": "integer",
+              "label": "Available balance"
+            }
+          ]
+        },
+        {
+          "name": "capture_attempts",
+          "path": "capture_attempts",
+          "type": "integer",
+          "label": "Capture attempts"
+        },
+        {
+          "name": "review",
+          "path": "review",
+          "type": "object",
+          "label": "Manual review",
+          "fields": [
+            {"name": "parked", "path": "review.parked", "type": "boolean", "label": "Parked"}
+          ]
+        }
+      ]
+    },
+    {"scope": "event", "label": "Event", "entries": []}
+  ],
+  "types": [
+    {
+      "name": "cards.credit_txn",
+      "kind": "record",
+      "label": "Credit card transaction",
+      "note": "What myapp.intake normalizes an incoming request into, and what the subject path holds for the rest of the flow.",
+      "fields": [
+        {"name": "amount_cents", "type": "integer", "label": "Amount", "required?": true},
+        {"name": "currency", "type": "string", "label": "Currency", "required?": true},
+        {"name": "authorized_at", "type": "datetime", "label": "Authorized at"},
+        {"name": "expires_on", "type": "date", "label": "Expires on"}
+      ]
+    },
+    {
+      "name": "cards.settlement",
+      "kind": "record",
+      "label": "Settlement",
+      "note": "A settled amount. Nothing in this flow produces one, so a step that reads a settlement where the subject sits is refused rather than admitted.",
+      "fields": [
+        {"name": "amount_cents", "type": "integer", "label": "Amount", "required?": true},
+        {"name": "currency", "type": "string", "label": "Currency", "required?": true},
+        {"name": "settled_on", "type": "date", "label": "Settled on", "required?": true}
+      ]
+    },
+    {
+      "name": "Settleable",
+      "kind": "shape",
+      "label": "Settleable",
+      "note": "What a capture needs and no more: an amount and a currency. A credit card transaction covers it, which is why the capture step's read is satisfied without anything declaring the two types related.",
+      "fields": [
+        {"name": "amount_cents", "type": "integer", "label": "Amount", "required?": true},
+        {"name": "currency", "type": "string", "label": "Currency", "required?": true}
+      ]
+    }
+  ]
+}

@@ -75,12 +75,23 @@ defmodule StatifierExamples.Charts.Run do
   @typedoc """
   One row of the feed. `kind` is what the row is about and is what the
   stylesheet tints; `label` and `detail` are the two columns a reader sees.
+
+  `source` is the fourth thing a row can carry and the only optional one:
+  the durable **child run** the row is about, or `nil` for a row about
+  this run's own progress. Every row in a parent's feed is written by the
+  parent - a child run has a feed of its own, at its own run id - but the
+  rows that narrate a child are about work happening somewhere else, and
+  a feed that drew them the same as the parent's own is a feed saying
+  that a fan-out's five children were five things this run did (se-0ay).
+  It carries the child's run id, or the child chart's document id where
+  the child never got a run id because it was refused.
   """
   @type entry :: %{
           seq: non_neg_integer(),
           kind: entry_kind(),
           label: String.t(),
-          detail: String.t() | nil
+          detail: String.t() | nil,
+          source: String.t() | nil
         }
 
   @type t :: %__MODULE__{
@@ -159,9 +170,15 @@ defmodule StatifierExamples.Charts.Run do
   performed actually did. Those come through here, and they are marked as
   their own kinds so the stylesheet can tell them apart from the chart's
   own narration.
+
+  `source` names the durable child run the row is about, and defaults to
+  `nil` - the parent's own work. It is a separate argument rather than
+  something parsed back out of `detail` because a label a reader can see
+  should not depend on a sentence's punctuation surviving an edit.
   """
-  @spec note(t(), entry_kind(), String.t(), String.t() | nil) :: t()
-  def note(%__MODULE__{} = run, kind, label, detail), do: append(run, kind, label, detail)
+  @spec note(t(), entry_kind(), String.t(), String.t() | nil, String.t() | nil) :: t()
+  def note(%__MODULE__{} = run, kind, label, detail, source \\ nil),
+    do: append(run, kind, label, detail, source)
 
   @doc """
   Folds one thing that happened into the run. Pure.
@@ -307,9 +324,9 @@ defmodule StatifierExamples.Charts.Run do
     end
   end
 
-  @spec append(t(), entry_kind(), String.t(), String.t() | nil) :: t()
-  defp append(run, kind, label, detail) do
-    entry = %{seq: run.seq, kind: kind, label: label, detail: detail}
+  @spec append(t(), entry_kind(), String.t(), String.t() | nil, String.t() | nil) :: t()
+  defp append(run, kind, label, detail, source \\ nil) do
+    entry = %{seq: run.seq, kind: kind, label: label, detail: detail, source: source}
 
     %{run | entries: [entry | run.entries], seq: run.seq + 1}
   end

@@ -77,7 +77,22 @@ defmodule StatifierExamples.CardAuth.Capture do
   What this step needs rather than what it produces: the base's
   `:produces` declaration has no room for a `consumes`, so the callback is
   written out here.
+
+  `consumes` is sugar for a **read at the document's subject path**
+  (`statifier_blocks` ADR-0011 decision 6), which
+  `StatifierExamples.CardAuth.Intake` names. What a capture needs there is
+  an amount and a currency and nothing else, so what it asks for is the
+  `Settleable` shape rather than a record: the datamodel document declares
+  `cards.credit_txn` with both of those required, so a transaction
+  **covers** the shape and the read is satisfied - without anything
+  anywhere declaring the two types related, and without this type knowing
+  that a credit card transaction is what it will be handed.
+
+  That is the whole point of asking for a shape. The spelling before this
+  was `myapp.authorization`, an opaque name nothing declared, which could
+  only ever be compared by identity: it refused a transaction and admitted
+  nothing else, so it was a check that only ever said no.
   """
   @impl StatifierBlocks.BlockType
-  def io(_config), do: %{kinds: [:step], consumes: "myapp.authorization"}
+  def io(_config), do: %{kinds: [:step], consumes: "Settleable"}
 end

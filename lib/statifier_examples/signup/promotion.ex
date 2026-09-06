@@ -74,7 +74,8 @@ defmodule StatifierExamples.Signup.Promotion do
     run_id = Invites.promoted_run_id(chunk_id)
 
     with {:ok, fixture} <- Charts.fixture(@wizard),
-         {:ok, compiled} <- Durable.compile(fixture.document, fixture.declare) do
+         {:ok, compiled} <-
+           Durable.compile(fixture.document, fixture.declare, fixture.datamodel) do
       started(Durable.start(compiled, fixture.document, run_id, @wizard), run_id, email)
     else
       :error -> {:error, :chart_unknown}

@@ -103,6 +103,55 @@ What the three documents report today:
   to register, and this app registers only its own `myapp:*` handlers. The
   warning is the ordinary unregistered-handler lint, not a broken fixture.
 
+## The typed environment, and the two answers it gives
+
+The card-processing domain declares what its paths hold, so the editor and
+the compiler can refuse a document that contradicts itself. The declarations
+live in `priv/fixtures/card-processing.datamodel.json` - a
+`statifier_datamodel` document, keyed on the **domain** rather than on one
+chart, so `card_processing` and `card_processing_sketch` share one
+vocabulary. It carries three scopes of declared paths and a fourth key,
+`types`, naming two records and a shape: `cards.credit_txn`, what the flow is
+about; `cards.settlement`, what a settled amount would be; and `Settleable`,
+the amount-and-currency pair a capture needs and no more.
+
+Nothing flows between adjacent blocks. Every value is written to a path by
+name and read from one by name, so the question at any position is what the
+document has written on the way there. `myapp.intake` is the entry block, and
+its palette entry names the subject - `cards.current_txn` - so its `produces`
+leaves a `cards.credit_txn` at that path for everything after it.
+
+From there the two answers this example exists to show:
+
+- **Satisfied.** `myapp.capture` reads `Settleable` at the subject. A credit
+  card transaction is not a `Settleable` and nothing declares the two
+  related - the read passes on **coverage**, because the record carries every
+  field the shape requires. That is why a step asks for a shape rather than
+  for a record: it says what it needs and stays out of the business of what
+  it will be handed.
+- **Refused.** `myapp.receipt` reads a `cards.settlement` at the path its
+  `Settlement read from` field names. Pointed where the document points it,
+  nothing has written a settlement, and an undeclared path is unknown rather
+  than wrong - no finding. Point the same field at `cards.current_txn` and it
+  is refused, naming the path: *this block reads "Settlement" at
+  cards.current_txn, where "blk_cp_intake" left "Credit card transaction"*.
+  Two declared records do not widen into one another, and the message reads
+  the labels the datamodel document declares rather than the nominal names.
+
+One field value is the whole distance between them, so both verdicts are
+reachable from the editor without touching any code. The drawer's Datamodel
+tab is the third surface: select a block and it lists the paths the
+environment holds *at that position*, and beneath them the declared records
+and shapes with their required marks - which is where an author reads what a
+shape wanted when a read of theirs is refused.
+
+The declarations reach the condition editor too. A path declared `integer`
+projects to the expression language's number kind, so a clause on it offers
+the numeric operators rather than whichever set its current source happens to
+imply. The risk branch's high-risk arm is a lone `risk_rating >= 70` on
+purpose: a compound condition has nothing for the structured picklist to open
+on, and a single comparison on a declared path opens straight into it.
+
 ## Copying the reference header
 
 ADR-0005's shell arrangement, ruling 8A, splits the editing surface from the
@@ -279,8 +328,15 @@ Press **Run** on
 so directly:
 
 ```
-Child chart started | bdoc_signup_demo as run <parent>/blk_so_wizard/0
+Child chart started  child <parent>/blk_so_wizard/0 | bdoc_signup_demo as run <parent>/blk_so_wizard/0
 ```
+
+The chip after the label is what says the row is about a **child** rather
+than about this run's own progress (se-0ay). A parent narrates only the
+moments it hands work over and the moments a hand-over is refused - the
+child's own steps are in the child's own feed - and a fan-out that started
+five children would otherwise read as five things the parent did. The chip
+carries the child's run id, which is exactly what goes in the `?run=` below.
 
 That id is not random. It is the parent's, plus the invocation, plus the
 child index, so a child id strictly extends its parent's - which is what

@@ -34,6 +34,21 @@ defmodule StatifierExamples.CardAuth.Authorize do
   resolution time, in memory, and is never written back to the stored
   document (ADR-0002 decision 8) - a v1 block keeps its v1 bytes on disk
   and compiles as a v2 one.
+
+  ## Why this type declares no `produces`
+
+  It used to declare `produces: "myapp.authorization"`. Under
+  `statifier_blocks` ADR-0011 a `produces` is sugar for a write at the
+  document's **subject path**, and this step does not replace the subject
+  with an authorization - it leaves the transaction where it was and
+  writes its decision to the path `assign_to` names. The field is what
+  says so: it carries `datamodel_path?: true`, which is a write of
+  `:unknown` at whatever path the author typed there.
+
+  Keeping the old declaration would have been a claim that every step
+  after an authorize is looking at an authorization rather than at a
+  card, and the read check would then have refused the capture step that
+  follows one.
   """
 
   alias StatifierBlocks.InvokeStep
@@ -43,7 +58,6 @@ defmodule StatifierExamples.CardAuth.Authorize do
 
   use StatifierBlocks.InvokeStep,
     invoke_type: "myapp:authorize",
-    produces: "myapp.authorization",
     fields: [
       %{
         key: "assign_to",

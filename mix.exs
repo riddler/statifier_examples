@@ -188,6 +188,15 @@ defmodule StatifierExamples.MixProject do
       # `StatifierExamples.Persistence` answers that callback for itself
       # now, on the same grounds it already wrote `list_runs_by_metadata/2`
       # in Elixir on.
+      #
+      # The LOCK moves to 0.7.2 under that same `~> 0.7` requirement.
+      # 0.7.2 fixes the fan-out this app runs: a settlement used to read a
+      # sibling's status as terminal while that sibling's answer was still
+      # in flight, and assembled a completed child with a `nil` donedata;
+      # it now waits for every child's recorded answer rather than only
+      # for every child's terminal status. The hybrid fan-out
+      # `StatifierExamples.Charts.FanOut` drives is exactly the shape that
+      # loses a child's result to it.
       {:statifier_persistence, "~> 0.7"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
@@ -329,7 +338,21 @@ defmodule StatifierExamples.MixProject do
       # `StatifierUIHooks` export `assets/js/app.js` registers. So neither
       # change reaches it. 0.7.0 also raises the `predicator` floor to
       # `~> 9.4`, which the resolved 9.4.0 already satisfies.
-      {:statifier_ui, "~> 0.7"},
+      #
+      # The arm moves to the 0.8 line, and here the reference embedder
+      # finally has a reason of its own rather than a tidiness one. 0.8.0
+      # gives the expression editor's clause builder a `path_types`
+      # assign: a clause's operator list and value control come from the
+      # kind a host declares for the path rather than from whatever
+      # literal the source happens to carry. This app still names no
+      # `StatifierUI` module - `statifier_blocks` 0.20.0 is what projects
+      # the datamodel document's declarations and hands the map across -
+      # but the surface that appears when it does is this package's, and
+      # the card-processing document's `types` key is what fills it. The
+      # trace wire format is untouched at version 1 and 25 types, so the
+      # trace half of this app re-pins nothing. 0.4.0 remains the floor,
+      # as the release carrying the picklist mode and its hook.
+      {:statifier_ui, "~> 0.8"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
@@ -440,13 +463,30 @@ defmodule StatifierExamples.MixProject do
   # `core.subchart`'s `assign_to` is redeclared `{:path, %{}}` rather than
   # `:string`, which changes the control the editor draws for it and not
   # what it accepts, so this app's stored documents are unaffected.
+  #
+  # The arm moves to the 0.20 line, and this is a release this app was
+  # waiting for rather than one it follows. 0.20.0 makes the datamodel
+  # document's declarations something the whole package reads:
+  # `StatifierBlocks.Environment` carries the path-to-type map at any
+  # position in a document, a field naming a datamodel path may declare
+  # what it reads or writes there, and an unsatisfied read is a validation
+  # error naming the block, the field and the path. The path/type index
+  # itself is `statifier_datamodel`'s, which arrives TRANSITIVELY at
+  # `~> 0.1`: this app names it nowhere and depends on it not at all,
+  # because the `types` key its fixture writes is data the compiler reads
+  # through the editor package's own dependency. Two breaking edges come
+  # with it and neither reaches here - `StatifierBlocks.Predicates.Datamodel`
+  # is gone, and this app called it by no name; and a type expression
+  # spelled exactly `unknown` reads as the permissive `:unknown`, and this
+  # app spells no such type. 0.16.0 remains the floor, as the release that
+  # fills the expression seam.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.19"}
+        {:statifier_blocks, "~> 0.20"}
     end
   end
 

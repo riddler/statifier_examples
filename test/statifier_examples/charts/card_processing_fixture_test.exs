@@ -9,7 +9,7 @@ defmodule StatifierExamples.Charts.CardProcessingFixtureTest do
   setup do
     {:ok, fixture} = Charts.fixture("card_processing")
 
-    %{document: fixture.document}
+    %{document: fixture.document, datamodel: fixture.datamodel}
   end
 
   # Sabotage: registered myapp.legacy_check in CardAuth.block_types(); this
@@ -31,10 +31,11 @@ defmodule StatifierExamples.Charts.CardProcessingFixtureTest do
   # Sabotage: put "myapp:not_a_handler" in blk_cp_intake's invoke_type; the
   # warning assertion went red, then reverted.
   test "with the one type stood in for, the rest of the document is clean",
-       %{document: document} do
+       %{document: document, datamodel: datamodel} do
     assert {:ok, compiled} =
              Compiler.compile(document, stand_in_palette(),
-               known_invoke_types: Charts.invoke_types()
+               known_invoke_types: Charts.invoke_types(),
+               datamodel: datamodel
              )
 
     assert compiled.warnings == []

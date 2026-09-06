@@ -137,6 +137,7 @@ defmodule StatifierExamples.Charts.FixtureDatamodelTest do
       Compiler.compile(fixture.document, stand_in_palette(),
         known_invoke_types: Charts.invoke_types(),
         declare: fixture.declare,
+        datamodel: fixture.datamodel,
         terminate: true
       )
 
@@ -144,7 +145,7 @@ defmodule StatifierExamples.Charts.FixtureDatamodelTest do
   end
 
   defp compile!(fixture) do
-    {:ok, compiled} = Durable.compile(fixture.document, fixture.declare)
+    {:ok, compiled} = Durable.compile(fixture.document, fixture.declare, fixture.datamodel)
 
     compiled.scxml
   end

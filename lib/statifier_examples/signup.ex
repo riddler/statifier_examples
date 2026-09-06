@@ -38,14 +38,18 @@ defmodule StatifierExamples.Signup do
   spelling of it that could drift. `declare` is the `<data>` roots this
   *deployment* adds at compile time, over and above the ones the document
   declares for itself: see `StatifierExamples.Charts.Fixture`, which
-  carries the reasoning and the same key.
+  carries the reasoning and the same key. `datamodel` is that module's
+  sixth key, the `statifier_datamodel` document a chart declares its paths
+  and types in; no wizard document declares one yet, so it is `nil` here
+  and the editor's advisories stay off exactly as they were.
   """
   @type fixture :: %{
           key: String.t(),
           name: String.t(),
           path: Path.t(),
           document: Document.t(),
-          declare: [Fixture.declaration()]
+          declare: [Fixture.declaration()],
+          datamodel: map() | nil
         }
 
   # `{key, file, host-declared roots}`. Listed rather than globbed: which
@@ -128,7 +132,8 @@ defmodule StatifierExamples.Signup do
       name: Map.get(document.metadata, "name", key),
       path: path,
       document: document,
-      declare: declare
+      declare: declare,
+      datamodel: Fixture.datamodel(document)
     }
   end
 

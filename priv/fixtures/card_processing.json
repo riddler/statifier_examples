@@ -149,7 +149,7 @@
                                     "arms": [
                                       {
                                         "slot": "arm_high_risk",
-                                        "cond": "risk_rating >= 70 OR fraud.verdict == 'review'"
+                                        "cond": "risk_rating >= 70"
                                       },
                                       {
                                         "slot": "arm_low_risk",
@@ -567,6 +567,7 @@
                 "type_version": 1,
                 "config": {
                   "invoke_type": "myapp:receipt",
+                  "settlement": "cards.settlement",
                   "label": "Build the receipt"
                 }
               },
