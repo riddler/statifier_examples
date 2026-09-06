@@ -402,7 +402,7 @@ defmodule StatifierExamples.MixProject do
       # it additive, and all of it reached through modules this app names
       # nowhere. The trace wire format is untouched at version 1 and 25
       # types, so the trace half of this app re-pins nothing.
-      {:statifier_ui, "~> 0.9"},
+      statifier_ui_dep(),
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
@@ -570,6 +570,28 @@ defmodule StatifierExamples.MixProject do
 
       _ ->
         {:statifier_blocks, "~> 0.21"}
+    end
+  end
+
+  # The authoring/observing package, and the one dependency whose
+  # `assets/js` this app's bundle check exists to look at. Setting
+  # `STATIFIER_UI_REF` to a git ref takes it from the statifier-ui
+  # repository at that ref instead of from Hex, which is what the CI
+  # bundle job's second matrix leg does: the Hex leg bundles the last
+  # published release, the git leg bundles that repository's `main`, so
+  # a bundler break lands on a statifier-ui merge rather than on its
+  # next release. The override is the environment's alone - nothing is
+  # pinned here, and `mix.lock` is committed at the Hex resolution - and
+  # `override: true` is what lets it win over `statifier_blocks`'
+  # optional `~> 0.9` requirement on the same package.
+  defp statifier_ui_dep do
+    case System.get_env("STATIFIER_UI_REF") do
+      ref when is_binary(ref) and ref != "" ->
+        {:statifier_ui,
+         git: "https://github.com/riddler/statifier-ui.git", ref: ref, override: true}
+
+      _ ->
+        {:statifier_ui, "~> 0.9"}
     end
   end
 

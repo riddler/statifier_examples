@@ -92,10 +92,34 @@ jobs:
   # already imports the package's hooks is the natural place: this job is
   # that look, named separately on the checks list so a broken bundle reads
   # as a bundle failure rather than as a gate failure.
+  #
+  # Two legs, because the check the job performs is only as current as the
+  # statifier-ui it bundles. The Hex leg bundles the last published release,
+  # which is what this app actually depends on and what has to stay green.
+  # The git leg bundles the statifier-ui repository's `main`, so a bundler
+  # break in an unreleased commit shows up on the merge that introduced it
+  # rather than on the release that ships it - the weakening statifier-ui's
+  # own ADR-0009 records. The git leg is `continue-on-error`: it reports,
+  # and it never holds a pull request here for a change made over there.
   assets:
-    name: Assets bundle
+    name: Assets bundle (${{ matrix.leg }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: ${{ matrix.continue_on_error }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: hex
+            statifier_ui_ref: ""
+            continue_on_error: false
+          - leg: statifier-ui-main
+            statifier_ui_ref: main
+            continue_on_error: true
+
+    env:
+      STATIFIER_UI_REF: ${{ matrix.statifier_ui_ref }}
 
     steps:
       - uses: actions/checkout@v4
@@ -129,12 +153,27 @@ jobs:
           path: |
             deps
             _build
-          key: assets-mix-${{ runner.os }}-otp${{ steps.toolchain.outputs.erlang }}-ex${{ steps.toolchain.outputs.elixir }}-${{ hashFiles('mix.lock') }}
+          key: assets-mix-${{ matrix.leg }}-${{ runner.os }}-otp${{ steps.toolchain.outputs.erlang }}-ex${{ steps.toolchain.outputs.elixir }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            assets-mix-${{ runner.os }}-otp${{ steps.toolchain.outputs.erlang }}-ex${{ steps.toolchain.outputs.elixir }}-
+            assets-mix-${{ matrix.leg }}-${{ runner.os }}-otp${{ steps.toolchain.outputs.erlang }}-ex${{ steps.toolchain.outputs.elixir }}-
 
       - name: Fetch dependencies
         run: mix deps.get
+
+      # What the leg actually bundled, in the run summary rather than in a
+      # log a reader has to go looking for. On the Hex leg this is the
+      # published version; on the git leg it is the commit `main` pointed at
+      # when the job ran, which is the whole point of that leg existing.
+      - name: Report the statifier_ui this leg resolved
+        run: |
+          set -euo pipefail
+          if [ -d deps/statifier_ui/.git ]; then
+            resolved="git $(git -C deps/statifier_ui rev-parse HEAD)"
+          else
+            resolved="hex $(mix deps | sed -n 's/^\* statifier_ui \([^ ]*\) (Hex package).*/\1/p' | head -1)"
+          fi
+          echo "statifier_ui resolved to: $resolved"
+          echo "\`statifier_ui\` resolved to \`$resolved\`" >> "$GITHUB_STEP_SUMMARY"
 
       # esbuild resolves the bare specifiers in assets/js/app.js through
       # NODE_PATH, which config/config.exs points at deps/ - so this bundles

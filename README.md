@@ -569,6 +569,20 @@ packages because their own gates never bundle - statifier-ui's ADR-0009
 decides that, and names an example host as where the bundle should actually be
 built. Run it locally the same way; it needs no server and no npm install.
 
+The job runs two legs. **`hex`** bundles the `statifier_ui` this app actually
+depends on, the last published release, and it is a required check.
+**`statifier-ui-main`** bundles the statifier-ui repository's `main` instead,
+by setting `STATIFIER_UI_REF` so `mix.exs` takes the package from git; that
+leg is `continue-on-error`, and each leg prints the version or commit it
+resolved. The second leg exists because the first one only ever sees released
+code, so a bundler break sat unnoticed until the release that shipped it -
+ADR-0009's own Note records that weakening. Nothing is pinned for it:
+`mix.lock` stays at the Hex resolution, and the override lives in the CI job
+alone. To reproduce that leg locally, run `mix deps.get` and `mix assets.bundle` with
+`STATIFIER_UI_REF=main` set for both; it rewrites `mix.lock` in the working
+tree, so `git checkout mix.lock && mix deps.get` afterwards to come back to
+Hex.
+
 ## Layout
 
 | Module | What it holds |
