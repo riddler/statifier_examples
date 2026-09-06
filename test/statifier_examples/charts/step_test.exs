@@ -78,16 +78,30 @@ defmodule StatifierExamples.Charts.StepTest do
     refute compiled.scxml =~ "<assign"
   end
 
-  # An `assign_to` that is not a bare identifier is a finding on the
-  # author's own key, not an attribute the engine cannot read. `myapp.provision`
-  # is the block here because it declares no `assign_to` of its own, so the
-  # refusal can only be coming from the shared emission path.
+  # An `assign_to` the shared emission path cannot make an `<assign>`
+  # location out of is a finding on the author's own key, not an attribute
+  # the engine cannot read. `myapp.provision` is the block here because it
+  # declares no `assign_to` of its own, so the refusal can only be coming
+  # from the shared path.
   #
-  # Sabotage: made assign/1 fall through to the identifier branch for
-  # any binary; this went red - the document compiled - then reverted.
-  test "an assign_to that is not an identifier is refused at the author's key" do
+  # What that path accepts widened with `statifier_blocks` 0.21.0: an
+  # `assign_to` is now any datamodel path, dotted or not - the rule
+  # `core.assign` and `core.subchart` already applied to the same
+  # `<assign>` element - where it was a bare lowercase identifier before.
+  # So `signup.plan` is authored rather than refused, and what is still
+  # refused is a value no path can be spelled as at all. Both halves are
+  # asserted, because the widening is only visible if the accepted half is
+  # named.
+  #
+  # Sabotage: made the whitespace case read `"signup.plan"` too; the
+  # refusal half went red - the document compiled - then reverted.
+  test "an assign_to that is not a datamodel path is refused at the author's key" do
+    assert {:ok, compiled} = compile(document(%{}, %{"assign_to" => "signup.plan"}))
+
+    assert compiled.scxml =~ ~s(location="signup.plan")
+
     assert {:error, findings} =
-             compile(document(%{}, %{"assign_to" => "signup.plan"}))
+             compile(document(%{}, %{"assign_to" => "signup plan"}))
 
     assert Enum.any?(findings, fn finding ->
              finding.block_id == "blk_sd_provision" and finding.config_key == "assign_to" and

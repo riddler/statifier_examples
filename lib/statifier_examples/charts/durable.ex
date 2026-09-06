@@ -398,6 +398,22 @@ defmodule StatifierExamples.Charts.Durable do
   # index's answer: it records the outcome, sets the status, and runs the
   # settlement section, which is what a `first_error` cancel keys on.
   #
+  # Since `statifier_persistence` 0.8.0 and `statifier_blocks` 0.21.0 that
+  # is no longer the only way to say it, and ADR-0008's amendment
+  # (decision 6) deletes this translation outright: a run whose chart
+  # settles in a top-level `<final>` tagged
+  # `statifier_persistence:run_status` `= "failed"` is persisted `:failed`
+  # on its own step, and the driver's automatic path answers the parent
+  # with no host in the loop. The tag is stamped on the final of any
+  # outcome a block type classes as a failure through
+  # `StatifierBlocks.BlockType.failure_outcomes/1` - and there the
+  # deletion stops: `core.map` and `core.subchart` class their `error`
+  # outcome and nothing else does. `priv/fixtures/signup_invite_chunk.json`
+  # is a `core.sequence` around one `core.invoke`, whose `error` outcome is
+  # classed as nothing, so its refusal reaches no failure-classed final and
+  # this code is still what settles the index. Reported upstream rather
+  # than worked around here.
+  #
   # A child that IS terminal has already answered through the driver's own
   # automatic path and is left alone; answering it twice would settle the
   # same index twice.

@@ -45,20 +45,31 @@ defmodule StatifierExamples.Signup.SignupStepTest do
   end
 
   # An optional key: a step that keeps nothing leaves it empty, and a step
-  # that keeps something has to name a root the chart can read.
+  # that keeps something has to name a path the chart can write.
   #
-  # Sabotage: made Step.check_assign_to/2 return its findings untouched;
-  # the last assertion went red, then reverted.
-  test "validate_config/1 passes a blank assign_to and refuses one that is not an identifier" do
+  # `statifier_blocks` 0.21.0 widened what that means. `InvokeStep`'s
+  # `assign_to` takes any datamodel path, dotted or not - the rule
+  # `core.assign` and `core.subchart` already applied to the same
+  # `<assign>` element - so `signup.plan` passes where it was refused
+  # before, and what is still refused is a value that is no path at all.
+  # The message moved with the rule, from naming an identifier to naming a
+  # datamodel path, and is asserted on the word that actually distinguishes
+  # the two.
+  #
+  # Sabotage: dropped the `InvokeStep.check_assign_to/2` step from
+  # `validate_config/1` in signup_step.ex; the refusal assertions went red,
+  # then reverted from a backup copy.
+  test "validate_config/1 passes any datamodel path for assign_to and refuses what is not one" do
     assert :ok == SignupStep.validate_config(config())
     assert :ok == SignupStep.validate_config(config(%{"assign_to" => ""}))
     assert :ok == SignupStep.validate_config(config(%{"assign_to" => "signup"}))
+    assert :ok == SignupStep.validate_config(config(%{"assign_to" => "signup.plan"}))
 
     assert {:error, findings} =
-             SignupStep.validate_config(config(%{"assign_to" => "signup.plan"}))
+             SignupStep.validate_config(config(%{"assign_to" => "signup plan"}))
 
     assert {"assign_to", message} = List.keyfind(findings, "assign_to", 0)
-    assert message =~ "identifier"
+    assert message =~ "datamodel path"
   end
 
   # Sabotage: made check_step/2 accept any binary; this went red, then

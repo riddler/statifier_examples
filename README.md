@@ -459,15 +459,26 @@ because a reader will look for them. A fan-out child answers its **outcome
 name** and nothing else - `child_use: true` compiles a fixed
 `<donedata>` - so the per-chunk summary the bulk handler builds reaches
 this app's own table and the Runs feed rather than the parent's `results`
-list, whose entries carry `%{"outcome" => "done"}`. And a chart has no way
-to say "this run failed": `statifier_persistence` reaches a `:failed`
-status on its own only through budget exhaustion, so a chunk whose one call
-is refused would sit `active` forever. This app translates that - a chunk
-chart is one bulk call and has nowhere to rest, so a chunk child that is
-not terminal when its create-drive returns is a chunk whose call was
-refused - and says so through `StatifierPersistence.Driver.answer_parent/3`,
-which the package makes public for exactly a host in this position. Both
-are reported upstream rather than papered over here.
+list, whose entries carry `%{"outcome" => "done"}`. And a chart still has
+no way to say "this run failed" *from the blocks this chunk is built out
+of*. Half of that gap closed on 2026-09-06: `statifier_persistence` 0.8.0
+fails a run whose chart settles in a top-level `<final>` tagged
+`statifier_persistence:run_status` `= "failed"`, and `statifier_blocks`
+0.21.0 stamps that tag on the final of any outcome a block type classes as
+a failure through its new `failure_outcomes/1` callback. But only
+`core.map` and `core.subchart` class one, and the chunk chart is a
+`core.sequence` around a single `core.invoke`, whose `error` outcome is
+classed as nothing - so its refusal reaches no failure-classed final and
+the run would still sit `active` forever.
+
+So this app still translates that - a chunk chart is one bulk call and has
+nowhere to rest, so a chunk child that is not terminal when its
+create-drive returns is a chunk whose call was refused - and says so
+through `StatifierPersistence.Driver.answer_parent/3`, which the package
+makes public for exactly a host in this position. That translation is what
+`statifier_persistence` ADR-0008's amendment, decision 6, deletes, and the
+deletion waits on a way for this chart to reach a failure-classed final.
+Both are reported upstream rather than papered over here.
 
 ### The abandonment reminder, and why it is a row rather than a timer
 

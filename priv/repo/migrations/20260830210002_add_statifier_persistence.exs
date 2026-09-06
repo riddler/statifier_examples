@@ -23,23 +23,25 @@ defmodule StatifierExamples.Repo.Migrations.AddStatifierPersistence do
   `StatifierExamples.Persistence` writes that query in Elixir instead
   (see its moduledoc).
 
-  `down/1` is NOT capped to match, because it cannot be:
-  `StatifierPersistence.Ecto.Migrations.down/1` takes a `version:` floor
-  and no ceiling, and always starts from the newest version the package
-  knows. So this one rolls back V03, V02 and V01, while the V03 migration
-  beside it rolls back V03 on its own - and Ecto rolls migrations back
-  newest first, so `mix ecto.rollback --all` reaches V03's `down` twice
-  and the second one fails: `no such column: "outcome_blob"`. Measured on
-  se-i4v, on this app's SQLite database.
+  `down/1` IS capped to match, with the ceiling the package grew for
+  exactly this shape. Until `statifier_persistence` 0.8.0
+  `StatifierPersistence.Ecto.Migrations.down/1` took a `version:` floor
+  and no ceiling, and always started from the newest version the package
+  knew: this migration rolled back V03, V02 and V01, the V03 migration
+  beside it rolled back V03 on its own, and because Ecto rolls migrations
+  back newest first, `mix ecto.rollback --all` reached V03's `down` twice
+  and the second one failed with `no such column: "outcome_blob"`.
+  Measured on se-i4v, on this app's SQLite database, and reported upstream
+  as the gap the reference embedder exists to surface rather than hidden
+  behind two hand-written `ALTER`s here.
 
-  That is left standing rather than worked around. Hand-writing the two
-  `ALTER`s here would hide an upstream gap the reference embedder exists
-  to surface: `up/1` grew `from:` so a host could take a later version in
-  a later migration, and `down/1` has no ceiling to undo one. Filed
-  against `statifier_persistence`. Nothing in this app's own flows reaches
-  it - `mix ecto.reset` drops and re-creates rather than rolling back -
-  and rolling back only the V03 migration (`mix ecto.rollback --step 1`)
-  is correct.
+  0.8.0 is the fix (sp-8qq): `down/1` takes `from:`, the version it starts
+  rolling back from, so a migration capped with `up(version: 2)` caps its
+  rollback with `down(from: 2)`. The two options are a pair, and this
+  migration now spells both. The ceiling matters more at 0.8.0 than it did
+  at 0.7.2, because the package's newest version is now V04 - the
+  concurrent rebuild of V03's `metadata` GIN index, a Postgres-only step
+  and a no-op on this app's SQLite database, which no migration here takes.
   """
 
   use Ecto.Migration
@@ -47,5 +49,6 @@ defmodule StatifierExamples.Repo.Migrations.AddStatifierPersistence do
   def up,
     do: StatifierPersistence.Ecto.Migrations.up(for: StatifierExamples.Persistence, version: 2)
 
-  def down, do: StatifierPersistence.Ecto.Migrations.down(for: StatifierExamples.Persistence)
+  def down,
+    do: StatifierPersistence.Ecto.Migrations.down(for: StatifierExamples.Persistence, from: 2)
 end
