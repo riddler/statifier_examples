@@ -19,6 +19,17 @@ defmodule StatifierExamples.Repo.Migrations.AddStatifierPersistenceOutcomeBlob d
   added for. The reverse order is safe - V03 under 0.6.x is a column
   nobody writes.
 
+  CEILINGED at `version: 3` on 2026-09-06 (se-dh0), and the ceiling is a
+  correction rather than a tidy. `from: 3` alone means "V03 and everything
+  the package has added since", so the moment `statifier_persistence` grew
+  a V04 and a V05 this migration began applying three versions on a fresh
+  clone while an already-migrated database - which took exactly V03 the day
+  this file was written - took none of them. That is the drift the
+  paragraph above says a later version avoids by arriving in a migration of
+  its own, and the ceiling is what makes the sentence true of this file
+  too. `up(version: 3)` pairs with `down(from: 3)`, the same pairing the
+  V01+V02 migration spells one file up.
+
   On this app's SQLite database the GIN index is skipped: `GIN` and
   `jsonb_path_ops` are Postgres spellings, so `V03.up/1` creates the index
   only on `Ecto.Adapters.Postgres`. The column is created on every adapter.
@@ -32,8 +43,18 @@ defmodule StatifierExamples.Repo.Migrations.AddStatifierPersistenceOutcomeBlob d
   use Ecto.Migration
 
   def up,
-    do: StatifierPersistence.Ecto.Migrations.up(for: StatifierExamples.Persistence, from: 3)
+    do:
+      StatifierPersistence.Ecto.Migrations.up(
+        for: StatifierExamples.Persistence,
+        from: 3,
+        version: 3
+      )
 
   def down,
-    do: StatifierPersistence.Ecto.Migrations.down(for: StatifierExamples.Persistence, version: 3)
+    do:
+      StatifierPersistence.Ecto.Migrations.down(
+        for: StatifierExamples.Persistence,
+        from: 3,
+        version: 3
+      )
 end

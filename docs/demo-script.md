@@ -1,7 +1,7 @@
 # The executing signup: a demo script
 
 A numbered walk through the signup wizard as a *running* chart: the authoring
-view, a durable run, live block marking, the run feed, a `kill -9` the run
+view, a durable run, live block marking, the Run pane over the stored run, a `kill -9` the run
 survives, the abandonment nudge, and the account the wizard exists to create. The last
 two beats step outside the wizard: one runs a chart that embeds another, and
 one puts the editor back in the author's hands and writes a flow backwards
@@ -47,20 +47,24 @@ yet, so the header shows a **Run** button and no status beside it.
 This is the whole point of the beat: what you are looking at is an editor, not
 a viewer. The run you are about to start runs *this* document.
 
-## 2. Open the drawer and pick the Runs tab
+## 2. Read the header's run controls
 
-**Do**: click the drawer strip along the bottom, then the **Runs** tab.
+**Do**: look along the top of the page, to the right of `Compile`.
 
-**See**: three tabs - `Truth tables (0)`, `Findings (0)`, `Runs (0)`. The Runs
-panel says `no run` and, in place of a table, one sentence: *Nothing is
-running. Run, in the header, starts a durable run on this document -
-stored, so it outlives this page.*
-The three event buttons - `signup.abandoned`, `signup.email_verified`,
-`signup.reminder_due` - are present but disabled.
+**See**: `Run`, and then three event buttons - `signup.abandoned`,
+`signup.email_verified`, `signup.reminder_due` - present but disabled. There
+is no run yet, and the canvas is sitting on the page rather than inside a run
+pane.
 
 The buttons are the document's own: they are the `event` of every
 `core.on_event` block in it, sorted. A document with different interrupts
 offers different buttons, and no code here knows their names.
+
+They are in the header rather than in the Run pane deliberately. The pane
+`statifier_blocks` gives a host has a send control of its own, and it writes
+into a live `Statifier.Session` process; a durable run does not have one, so
+the pane reads a run of this app's as not sendable and says so. Sending to a
+stored run is the host's own door, and this is it.
 
 ## 3. Press Run
 
@@ -73,36 +77,65 @@ offers different buttons, and no code here knows their names.
   hex string is the run id, and it is the only thing you need to come back to
   this run later.
 - The header status beside Run reads `running`, and Run becomes **Stop**.
-- The canvas marks four blocks active - the 24-hour wait
-  (`blk_su_verify_wait`) and the three interrupt rules watching it
-  (`blk_su_reminder_due`, `blk_su_verified`, `blk_su_abandoned`) - and the
-  reminder's `core.send` carries a `done` outcome mark.
+- The canvas marks seven blocks active - the 24-hour wait
+  (`blk_su_verify_wait`), the three interrupt rules watching it
+  (`blk_su_reminder_due`, `blk_su_verified`, `blk_su_abandoned`), and the
+  three groups they are nested in (`blk_su_root`, `blk_su_verify`,
+  `blk_su_reminder_window`).
+
+  Seven and not four, since se-dh0. The marks are read off the run's own
+  configuration now rather than derived by this app, and a configuration
+  holds the compound states above an atomic one as well as the atomic one
+  itself - so a group whose child is active is marked too, which is what an
+  author reading the canvas would say is happening anyway.
 
 The chart has walked from the top to the place where it can only wait for the
 outside world, and it did that in the time it took the button to come back up.
 
-## 4. Read the feed
+## 4. Read the run
 
-**Do**: look at the Runs tab, which now says `Runs (16)`.
+**Do**: look at the pane the canvas is now sitting inside.
 
-**See**: sixteen rows, numbered, three columns - `#`, `WHAT`, `DETAIL`. The
-ones worth reading out:
+**See**: the canvas has been seated in a **Run pane**. Above it, a status
+reading `(no session) persisted` and a scrubber - `First Prev Next Live`,
+`Showing the live tip.` Below it, an event log grouped by macrostep:
 
 ```
-0  | Run started       | 868edf9bf6eb15ac3e3e58427b57a105
-2  | Invoke dispatched | myapp:signup on Collect email and password
-3  | Performed         | myapp:signup -> email_verified=false, plan=business, seats=5
-7  | Invoke dispatched | myapp:signup on Send the verification email
-12 | Delayed send      | signup.reminder_due in 90000 ms
-14 | Entered           | blk_su_verify_wait
-15 | Delayed send      | statifier_blocks.wait.blk_su_verify_wait in 86400000 ms
+Event log: sess_06g7f1khtjx5fpv268jmc2dk8w
+  Macrostep 1 - initialize
+  Macrostep 2 - done.invoke.s_blk_su_account__running.inv_1
+  Macrostep 3 - done.invoke.s_blk_su_send_verification__running.inv_2
 ```
 
-Two calls out to the host, then two delays: the abandonment nudge at 90
-seconds, and the verification wait at 24 hours. The nudge is 90 seconds
-because `config :statifier_examples, :signup_reminder_delay` says so in dev -
-the fixture itself ships the production framing, `2d`, and the host applies
-the configured duration as the document loads.
+Open any macrostep and it expands into its rounds: which transition was
+selected, which states were exited and entered, what each round executed,
+and the configuration the macrostep came to rest on.
+
+Three things this pane is, that the hand-rolled feed it replaced was not.
+
+**It is the stored run, not this page's memory.** The rows are produced by
+replaying the run's persisted input log - `statifier_persistence`'s
+ADR-0010, read by `StatifierExamples.Charts.Replay` - through statifier-ui,
+which turns it into exactly the message stream a live session emits. Reload
+the page and the whole run comes back, which section 7 is about.
+
+**It scrubs.** Press `Prev` and the marks on the canvas move to where the
+chart was at the previous macrostep; the note above says which point is
+being shown and whether the configuration drawn is that macrostep's own.
+Press `Live` to come back to the tip.
+
+**It says what it cannot do.** Beside the send control:
+`A persisted run has nothing to send to.` The pane's own send control writes
+into a live `Statifier.Session` process, and a durable run has none - so the
+event buttons for this run are the host's, in the page header beside Run and
+Stop.
+
+What the log shows for the run so far is two calls out to the host, then two
+delays: the abandonment nudge at 90 seconds and the verification wait at 24
+hours. The nudge is 90 seconds because
+`config :statifier_examples, :signup_reminder_delay` says so in dev - the
+fixture itself ships the production framing, `2d`, and the host applies the
+configured duration as the document loads.
 
 ## 5. Confirm the run is durable rather than merely running
 
@@ -126,6 +159,20 @@ two job rows, both `scheduled`:
 Both delays are rows in the same file the run is in. There is no process
 holding this chart, and no timer in anybody's mailbox.
 
+**Do**, while you are in there, ask what the run was driven by:
+
+```sh
+sqlite3 priv/repo/statifier_examples_dev.db \
+  "select seq, door from statifier_inputs order by seq;"
+```
+
+**See**: one row per event that reached the interpreter, dense from zero, each
+naming the door it came in at - the invocation answers the create's own drive
+fed back, then a `step` for every event sent since. That table is
+`statifier_persistence`'s per-run input log (its ADR-0010), it is what section
+4's pane was replaying, and it is the reason section 7's resumed page comes
+back with the whole run rather than a line saying it was resumed.
+
 ## 6. Kill the server the hard way
 
 **Do**: no shutdown hook, no flush:
@@ -147,41 +194,36 @@ to lose.
 
 **See**: the run comes back on the configuration it was left in.
 
-- The same four blocks are marked active on the canvas.
+- The same seven blocks are marked active on the canvas.
 - The header says `running`.
-- The Runs tab says `Runs (1)`, and the one row is
-  `Run resumed from storage | 868edf9bf6eb15ac3e3e58427b57a105 (active)`.
+- The Run pane's log is the whole run again - `Macrostep 1 - initialize`
+  down to the macrostep the chart came to rest on - not a single line saying
+  it was picked up.
 
-One row and not sixteen, and the difference is worth saying out loud: the
-**marks** come from the stored position, so they are exact. The **feed** is
-derived from the effects each step returned, and effects are not stored, so a
-resumed run opens with the fact that it was resumed rather than a replay of
-its own history.
+That last point is the one worth stopping on, because it is the beat this
+script used to have to apologise for. The **marks** always came from the
+stored position and were always exact. The **narration** did not: it was
+derived from the effects each step returned, effects were not stored, and a
+resumed run opened with the fact that it had been resumed and nothing else.
+Now the run's inputs are stored too, so what comes back after the `kill -9`
+is the run, not a note about it.
 
 ## 8. Nudge the visitor who never verified
 
-**Do**: press **signup.reminder_due** in the Runs panel.
+**Do**: press **signup.reminder_due** in the page header.
 
 The script presses the button rather than waiting the 90-second window out,
 so the beat is repeatable and the demo stays under five minutes. The event it
 sends is the same one the stored job carries.
 
-**See**: the feed jumps to `Runs (22)` and the run **stops in the middle of a
-call**. The shape, in order:
+**See**: the log gains a macrostep named for the event - `signup.reminder_due`
+- and then the ones its cascade raised, and the run **stops in the middle of a
+call**. Open the last macrostep and read its rounds: the reminder is
+delivered, the abandon interrupt takes the group, the notify call goes out and
+comes back, the onboarding group is entered, and the company-details call is
+dispatched with no answer after it.
 
-```
-1  | Event             | signup.reminder_due
-2  | Entered           | blk_su_reminder_due
-3  | Event             | statifier_blocks.interrupt.abandon
-8  | Invoke dispatched | myapp:notify on Remind them to finish signing up
-9  | Performed         | myapp:notify
-15 | Entered           | blk_su_onboarding, blk_su_onboarding_deadline,
-   |                   | blk_su_onboarding_abandoned
-20 | Invoke dispatched | myapp:signup on Collect the company details
-21 | Call started      | myapp:signup: running as a job, answer to follow
-```
-
-That last row is the beat worth stopping on. Every other call in this app is
+That last one is the beat worth stopping on. Every other call in this app is
 answered inside the step that made it; the company-details step is not.
 Collecting a company's details is a human step that takes hours, so the host
 starts it as an Oban job and tells the chart nothing yet. The drive reaches
@@ -189,23 +231,16 @@ quiescence and the run **persists with the invocation still live** - no
 process is holding it, and the header reads `running` rather than `done`. Kill
 the server here and the call is still outstanding when it comes back.
 
-**See**, a moment later, without touching anything: the feed is replaced by a
-second, shorter reading of `Runs (17)`, and the run finishes.
-
-```
-0  | Run resumed from storage | 868edf9bf6eb15ac3e3e58427b57a105 (active)
-1  | Entered           | Collect the company details
-6  | Invoke dispatched | myapp:provision on Create the workspace
-7  | Performed         | myapp:provision -> account=signup-868edf...@example.com, provisioned=created
-16 | Run finished      | done
-```
+**See**, a moment later, without touching anything: the log grows by the
+macrosteps the answer drove, ending in the workspace being created, and the
+header goes to `done`.
 
 That is the job answering, on a process that has never seen this run: it
 rebuilt the chart, the position and the run out of SQLite, fed the answer back
 through the durable driver's completion door, and the page redrew because the
-answer was broadcast. Two readings and not one, for the same reason a resumed
-run opens with one row: the feed is derived from the effects a drive returned,
-and this was two drives.
+answer was broadcast. One reading and not two, which is the other half of what
+the input log bought: the narration is the run's, so a second drive by a
+different process extends it rather than replacing it.
 
 Narrate the whole thing honestly, because it is what the chart says: the nudge
 fires, the reminder window ends, the visitor is notified, the signup pauses on
@@ -311,12 +346,11 @@ reaches a terminal status, and the driver answers the invocation then.
 http://127.0.0.1:8645/editor?doc=signup_wizard&run=83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0
 ```
 
-**See**: the wizard, at `revision 11`, id `bdoc_signup_demo`, `running`, and
-one row in a Runs feed of its own:
-
-```
-0 | Run resumed from storage | 83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0 (active)
-```
+**See**: the wizard, at `revision 11`, id `bdoc_signup_demo`, `running`, and a
+Run pane of its own with the child's own run in it - its own log, replayed
+from its own input log. One log per run is `statifier_persistence`'s ADR-0010
+decision 7, and this page is what it looks like: the child's steps are here,
+and on the parent's page there is only the answer the child sent back.
 
 Nothing on that page knows it is anybody's child. It is the wizard, resumed
 from storage exactly as section 7 resumed the parent after the `kill -9` -
@@ -329,12 +363,7 @@ parent's page.
 **Do**: go back to the parent's page and press **Stop** while the child is
 still live.
 
-**See**: reload the child's URL. It is `cancelled`, and its feed says so:
-
-```
-0 | Run resumed from storage | 83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0 (cancelled)
-1 | Run finished             | cancelled
-```
+**See**: reload the child's URL. The header says `cancelled`.
 
 Stopping a parent has to take its children with it: nothing is holding an
 orphaned child, and its stored timers would go on firing into a run no page

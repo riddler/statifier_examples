@@ -311,13 +311,34 @@ when you press it, through to the account the wizard creates.
 
 ### What survives and what does not
 
-Durable: the chart's position after every step, the run's status, and the
-account `myapp:provision` writes.
+Durable: the chart's position after every step, the run's status, the
+account `myapp:provision` writes, and - since se-dh0 - the run's **inputs**.
 
-Not durable: the **feed**. Its rows are derived from the effects each step
-returns, and effects are not stored, so a resumed run opens with one row
-rather than a replay of the run so far. The marks are not affected - those
-come from the stored position.
+The inputs are the newest of those and the one that changed what this page
+shows. `statifier_persistence`'s ADR-0010 adds an optional per-run input
+log to the storage adapter: every event that reaches the interpreter is
+appended, verbatim, inside the same exclusion the step runs in, stamped
+with the door it entered by and a dense ordinal.
+`StatifierExamples.Persistence` exports the three callbacks that opt in,
+V05 in `priv/repo/migrations` creates the table, and
+`StatifierExamples.Charts.Replay` maps the log back into the recording
+statifier-ui replays.
+
+So a resumed run no longer opens with one row saying it was picked up. The
+whole run comes back: the editor page replays the stored inputs into the
+same wire-format message stream a live session produces and seats it in
+`statifier_blocks`' Run pane, which is where the marks, the scrubber and
+the event log now come from. Scrubbing back moves the marks, because the
+marks are read off the run rather than off whatever this process watched.
+
+Two things that costs, said out loud. The log stores document payload - an
+event's `data` is the host's own values - so turning it on is a
+data-retention decision and not a debugging switch; the cap
+`StatifierExamples.Persistence.init/1` declares is this app's answer for a
+demo database. And the pane's own send control stays disabled for a run of
+this app's: it writes into a live `Statifier.Session` server, and a durable
+run has no process at all. The event buttons are in the page header
+instead, beside Run and Stop.
 
 ### The one call that writes
 
@@ -332,9 +353,8 @@ come from the stored position.
   executing an effect and persisting the step re-drives the same event and
   gets the same call again, and the stepper never dedupes. The `users`
   table has a unique index on `email` and the write is an upsert against
-  it, so a second delivery finds the row and the feed's `Performed` row
-  says `provisioned=existing` instead of `created`. No dedup table, no
-  guessing.
+  it, so a second delivery finds the row rather than raising. No dedup
+  table, no guessing.
 
 The shipped fixture reaches that block. Its plan branch guards on
 `signup.plan` and `signup.seats`, and both halves of making that work are
@@ -354,19 +374,20 @@ run**, with its own row in `statifier_runs`, its own position, its own
 status, and a run id that goes in the page URL like any other.
 
 Press **Run** on
-<http://127.0.0.1:8645/editor?doc=signup_onboarding> and the Runs feed says
-so directly:
+<http://127.0.0.1:8645/editor?doc=signup_onboarding> and the parent's Run
+pane narrates the hand-over: the subchart block's invocation goes out, and
+when the child finishes, the answer comes back as an ordinary
+`done.invoke.blk_so_wizard` macrostep in the parent's log.
 
-```
-Child chart started  child <parent>/blk_so_wizard/0 | bdoc_signup_demo as run <parent>/blk_so_wizard/0
-```
-
-The chip after the label is what says the row is about a **child** rather
-than about this run's own progress (se-0ay). A parent narrates only the
-moments it hands work over and the moments a hand-over is refused - the
-child's own steps are in the child's own feed - and a fan-out that started
-five children would otherwise read as five things the parent did. The chip
-carries the child's run id, which is exactly what goes in the `?run=` below.
+That the parent narrates its child at all is a property of the input log
+rather than of anything this app writes. ADR-0010 decision 7 keeps one log
+per run - a child is an ordinary run with a log of its own, and nothing
+merges the two - but the child's **answer** reaches the parent through
+`Driver.answer_parent/3`, which re-enters the parent through its own
+invocation door. So the answer is one of the parent's own inputs, and the
+parent's pane shows it without joining anything. What the parent's log does
+not hold is the child's own steps, and it should not: those are the child's
+run, and reading them means opening the child's run id in the page.
 
 That id is not random. It is the parent's, plus the invocation, plus the
 child index, so a child id strictly extends its parent's - which is what
@@ -477,7 +498,7 @@ happening.
 because a reader will look for them. A fan-out child answers its **outcome
 name** and nothing else - `child_use: true` compiles a fixed
 `<donedata>` - so the per-chunk summary the bulk handler builds reaches
-this app's own table and the Runs feed rather than the parent's `results`
+this app's own table rather than the parent's `results`
 list, whose entries carry `%{"outcome" => "done"}`. And a chart still has
 no way to say "this run failed" *from the blocks this chunk is built out
 of*. Half of that gap closed on 2026-09-06: `statifier_persistence` 0.8.0
@@ -532,7 +553,7 @@ Three things follow, and each is worth seeing:
   because a wait compiles to a delayed send too.
 - **A page that is open redraws.** The drive announces itself on the run's
   topic and the editor page adopts the reading, so the nudge appears in
-  the Runs feed while you are watching rather than on the next reload.
+  the Run pane's log while you are watching rather than on the next reload.
 
 The delay itself is **host configuration**, not a fact about the chart:
 

@@ -220,7 +220,19 @@ defmodule StatifierExamples.MixProject do
       # `@tag :postgres`, which is the documented way to run the Ecto
       # adapter off Postgres - `docs/non-postgres-backends.md` there - and
       # what this app has been doing in Elixir all along.
-      {:statifier_persistence, "~> 0.8"},
+
+      # PINNED to `statifier_persistence` MAIN, at the commit carrying the
+      # durable per-run input log (its ADR-0010, `sp-80g`). 0.9.0 is not
+      # published yet, and the log is what this app's editor page replays a
+      # stored run from: the two optional adapter callbacks the record adds -
+      # append one input, list a run's inputs in order - are the only door to
+      # the ordered `%Statifier.Event{}` entries `StatifierUI.Trace.Replay`
+      # needs. `se-gty` moves this arm back to `{:statifier_persistence, "~>
+      # 0.9"}` once the operator publishes.
+      {:statifier_persistence,
+       github: "riddler/statifier_persistence",
+       ref: "27a7a15b6ebb8dd2bfd6a1c3b5779c2bbd042feb",
+       override: true},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -563,13 +575,25 @@ defmodule StatifierExamples.MixProject do
   # shape field the document marks required. This app's datamodel
   # documents declare no `types` record that leans on the looser
   # reading, so the narrowing reaches nothing here.
+  #
+  # The default arm is PINNED to `statifier_blocks` MAIN, at the commit
+  # carrying the Run pane's `compile_options` assign (`sb-hgjk`), the way
+  # the `statifier_ui` clause below describes its own git leg: 0.22.0 is
+  # not published yet, and the editor page has to hand the pane the same
+  # three compile options `StatifierExamples.Charts.Durable.compile/3`
+  # passes - `terminate: true`, the known invoke types and the datamodel -
+  # or the pane reads its marks off a differently compiled chart than the
+  # one the run executed. `STATIFIER_BLOCKS_PATH` still wins over the pin,
+  # so a local checkout is unaffected; `se-gty` moves the default arm back
+  # to `{:statifier_blocks, "~> 0.22"}` once the operator publishes.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.21"}
+        {:statifier_blocks,
+         github: "riddler/statifier_blocks", ref: "7c33c6cabdb51e9131bfd0ac0659d52cb2927399"}
     end
   end
 

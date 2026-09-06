@@ -57,9 +57,9 @@ defmodule StatifierExamplesWeb.EditorLive do
   alias StatifierBlocks.Shell
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.Durable
+  alias StatifierExamples.Charts.Replay
   alias StatifierExamples.Charts.Run
   alias StatifierExamplesWeb.Icons
-  alias StatifierExamplesWeb.RunFeed
 
   @default_theme :light
 
@@ -175,6 +175,8 @@ defmodule StatifierExamplesWeb.EditorLive do
         icon={&Icons.icon/1}
         invoke_types={Charts.invoke_types()}
         datamodel={@fixture.datamodel}
+        declare={@fixture.declare}
+        compile_options={compile_options(@fixture)}
         on_change={@on_change}
         on_drawer_resize={@on_drawer_resize}
         drawer_height={@drawer_height}
@@ -232,6 +234,17 @@ defmodule StatifierExamplesWeb.EditorLive do
               phx-click="run-stop"
             >
               Stop
+            </button>
+
+            <button
+              :for={event <- Run.event_names(@document)}
+              class="myapp-header__button myapp-header__button--event"
+              type="button"
+              disabled={is_nil(@run) or @run.status != :running}
+              phx-click="run-send"
+              phx-value-event={event}
+            >
+              {event}
             </button>
 
             <span :if={@run} class="myapp-header__verdict" data-run-status={@run.status}>
@@ -471,55 +484,82 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   # ------------------------------------------------------------- the seams
 
-  # The three assigns the editor takes from a host that is executing the
-  # open document, each read off the same run and each empty when there is
-  # none, pushed with `send_update/3`.
+  # The one assign the editor takes from a host that is executing the open
+  # document: the run itself, as the `StatifierUI.Live.State` the package's
+  # Run pane reads, pushed with `send_update/3`.
   #
-  # Pushed and not passed in the component call, and the difference is not
-  # stylistic. Both spellings reach the component's `update/3` and both write
-  # the assigns; what only the push does is redraw the drawer's panel. The
-  # host tab's `content` is a closure the package calls while rendering the
-  # panel, and on an ordinary parent re-render that subtree is not re-entered
-  # even though the descriptor list it came from changed - the feed stops at
-  # whatever row it held when the tab was opened. Pushing is also what the
-  # package's own moduledoc shows for a host reacting to a run event it
-  # received out of band, which is exactly what a subscriber message is.
+  # This used to be three assigns and a drawer tab, and what replaced them
+  # is one reading rather than a smaller version of the same idea. The page
+  # painted `active_marks` and `invoke_mark` from its own in-memory
+  # `StatifierExamples.Charts.Run`, which knew only what the current
+  # process had watched happen; and it rendered its own event feed into a
+  # host drawer tab, which a resumed run opened with a single row saying it
+  # had been resumed, because effects are not stored. Seating the run
+  # itself moves both readings onto the stored log: the pane derives the
+  # marks from the run's own selected macrostep against the provenance the
+  # editor recompiles (which is what `compile_options` in `render/1` is
+  # for), so scrubbing back moves them, and the log is the run's whole
+  # history rather than this process's share of it.
+  #
+  # Pushed and not passed in the component call, because that is the door
+  # the package documents for a host reacting to a run event it received
+  # out of band - which is exactly what a subscriber message is - and
+  # because `run` is held as editor state behind a `Map.has_key?/2` guard,
+  # so a parent re-render that does not name the key leaves it alone.
+  #
+  # A run that cannot be read back is not a blank pane: `run_error` carries
+  # the refusal to the header, beside the one a refused resume writes,
+  # because a page showing no run for a run that exists is the one reading
+  # this seam must not produce.
   @spec push_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp push_run(socket) do
-    run = socket.assigns.run
+    case replayed(socket) do
+      {:ok, state} ->
+        send_update(Editor, id: "editor", run: state)
+        socket
 
-    send_update(Editor,
-      id: "editor",
-      active_marks: if(run, do: run.active, else: []),
-      invoke_mark: run && run.invoke,
-      drawer_tabs: drawer_tabs(run, socket.assigns.document)
-    )
+      :none ->
+        send_update(Editor, id: "editor", run: nil)
+        socket
 
-    socket
+      {:error, reason} ->
+        send_update(Editor, id: "editor", run: nil)
+        assign(socket, :run_error, inspect(reason))
+    end
   end
 
-  # One descriptor, whose `content` closes over the run this render is
-  # showing. A fresh closure each render is what makes the feed live: the
-  # package holds the descriptors as component state and redraws the panel
-  # when they change, and a closure over a host assign is only ever read
-  # through one it was handed.
-  @spec drawer_tabs(Run.t() | nil, Document.t()) :: [map()]
-  defp drawer_tabs(run, document) do
-    entries = if run, do: Run.entries(run), else: []
-    events = Run.event_names(document)
+  # The stored run, read back through the input log. `:none` when the page
+  # is showing no run at all, or no compiled chart to read one over - both
+  # of which are ordinary states and neither of which is an error.
+  @spec replayed(Phoenix.LiveView.Socket.t()) ::
+          {:ok, StatifierUI.Live.State.t()} | :none | {:error, term()}
+  defp replayed(%{assigns: %{durable: nil}}), do: :none
+  defp replayed(%{assigns: %{compiled: nil}}), do: :none
 
+  defp replayed(socket) do
+    Replay.state(run_id(socket), socket.assigns.compiled)
+  end
+
+  # The rest of the option list this page compiles with, for the editor's
+  # own provenance recompile - the one the Run pane resolves a run's state
+  # ids through. It is assembled here from the same three values
+  # `StatifierExamples.Charts.Durable.compile/3` passes rather than read
+  # back off `@compiled`: the pane's marks are in the right places only
+  # while the chart the editor recompiles is byte-for-byte the one the run
+  # executed, and `terminate: true` in particular is what puts the
+  # top-level finals in it that a completed run's last configuration sits
+  # on.
+  #
+  # `:declare` is not in the list even though the run compiles with it: the
+  # package takes that key from the `declare` assign whatever this list
+  # says, which is why the assign is passed beside it in `render/1` and why
+  # the two cannot disagree.
+  @spec compile_options(map()) :: keyword()
+  defp compile_options(fixture) do
     [
-      %{
-        id: "runs",
-        title: "Runs",
-        count: length(entries),
-        # `assign/2` and not `Map.merge/2`: the package calls `content` with
-        # `%{id:, count:}`, so the run reaches the panel through this
-        # closure rather than through the assigns, and a merge would leave
-        # change tracking believing nothing inside the panel moved. See
-        # `StatifierExamplesWeb.RunFeed`'s moduledoc.
-        content: fn assigns -> RunFeed.panel(assign(assigns, run: run, events: events)) end
-      }
+      terminate: true,
+      known_invoke_types: Charts.invoke_types(),
+      datamodel: fixture.datamodel
     ]
   end
 
