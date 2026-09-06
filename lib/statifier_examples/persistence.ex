@@ -75,6 +75,16 @@ defmodule StatifierExamples.Persistence do
   `list_runs_by_metadata/2` is still not what makes metadata *work* here:
   the `metadata` column round-trips through the schema in full either way,
   which is what the storage contract's metadata cases assert.
+
+  From `statifier_persistence` 0.7.1 the capability DECLARATION goes with
+  the callback, for the same reason. The Ecto adapter's
+  `supports_metadata?/1` answers `false` off Postgres - its own metadata
+  queries are `jsonb` containment SQL - and
+  `StatifierPersistence.Storage.child_listing_supported?/1` reads that
+  declaration as well as the export, so delegating it here would refuse
+  every durable subchart at open with `:child_listing_unsupported`. This
+  adapter answers `true` for itself instead: it issues none of that SQL,
+  because the query above is the Elixir one.
   """
 
   @behaviour StatifierPersistence.Storage.Adapter
@@ -119,8 +129,37 @@ defmodule StatifierExamples.Persistence do
   @impl StatifierPersistence.Storage.Adapter
   defdelegate isolate(opts), to: EctoAdapter
 
+  @doc """
+  Declares metadata support (the optional
+  `c:StatifierPersistence.Storage.Adapter.supports_metadata?/1`), which
+  this adapter answers for itself rather than delegating.
+
+  The Ecto adapter's own answer is `false` off Postgres, and that is
+  right for it: what ADR-0006 decision 3's capability covers is the
+  `metadata` column *and* the match query over it, and the Ecto adapter's
+  query is `jsonb` containment SQL a SQLite backend does not parse
+  (sp-11w). Delegating here would inherit that `false` and, through
+  `StatifierPersistence.Storage.child_listing_supported?/1`, refuse every
+  durable subchart this app starts - which is the refusal-at-open arm
+  working exactly as designed, on an adapter that does not have the
+  problem.
+
+  This adapter does not have it because it does not issue that SQL: it
+  reads the `run_id`/`metadata` pairs and applies the containment test in
+  Elixir, which is the whole of `list_runs_by_metadata/2` below and the
+  reason that callback is written here rather than delegated. The column
+  itself round-trips on SQLite as JSON text. So both halves of the
+  capability hold, and this answers `true` on the same grounds the
+  callback below exists on.
+
+  The other two 0.7.0 capabilities are a different question and are not
+  claimed here: `supports_run_outcome?/1` and
+  `list_run_states_by_metadata/2` are what a Tier A fan-out needs at open,
+  this adapter exports neither, and nothing here fans out yet.
+  """
   @impl StatifierPersistence.Storage.Adapter
-  defdelegate supports_metadata?(opts), to: EctoAdapter
+  @spec supports_metadata?(Adapter.opts()) :: boolean()
+  def supports_metadata?(_opts), do: true
 
   @doc """
   Every stored run whose `metadata` contains `match` (the optional

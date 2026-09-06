@@ -302,7 +302,12 @@ each is small:
   child over a store that cannot enumerate one - a child that could never
   be found is a child that could never be cancelled - and enumerating on
   SQLite is a containment test in Elixir rather than the `jsonb @>` query
-  Postgres gets. That module's moduledoc says what the scan costs.
+  Postgres gets. That module's moduledoc says what the scan costs. From
+  `statifier_persistence` 0.7.1 the opt-in is that callback **and**
+  `supports_metadata?/1` answering `true`: the shipped Ecto adapter says
+  `false` off Postgres, because the metadata queries it ships are
+  `jsonb` SQL a SQLite backend cannot parse, and this app answers for
+  itself rather than inheriting that.
 - **`chart_resolver:`** on the driver is how the *child's* driver reaches
   the *parent's* chart, which it does not hold. `statifier_persistence`
   cannot supply it - a stored chart is opaque to the package - so this app
