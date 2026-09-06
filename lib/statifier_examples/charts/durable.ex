@@ -146,7 +146,18 @@ defmodule StatifierExamples.Charts.Durable do
   alias StatifierBlocks.Runtime
   alias StatifierBlocks.Runtime.DurableSubchart
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Fixture, Run, RunLock, Subchart, Timers, Tracing}
+
+  alias StatifierExamples.Charts.{
+    AsyncCalls,
+    FanOut,
+    Fixture,
+    Run,
+    RunLock,
+    Subchart,
+    Timers,
+    Tracing
+  }
+
   alias StatifierPersistence.{Driver, Runs, Storage}
   alias StatifierPersistence.Run.Linkage
 
@@ -292,6 +303,164 @@ defmodule StatifierExamples.Charts.Durable do
          {:ok, {compiled, document}} <- chart_for(record),
          {:ok, driven} <- resume(compiled, document, run_id) do
       {:ok, {driven, document}}
+    else
+      :error -> {:error, :chart_unknown}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @doc """
+  Creates child `index` of `count` for a fan-out invocation of
+  `parent_run_id`, seeded with `params`.
+
+  The host half of `StatifierOban.Invoke.ChildStarter`, one layer down:
+  `StatifierExamples.Charts.FanOut` decides *which* descriptor index
+  `index` stands for, and this resolves the chart, builds the resolved
+  effect and hands it to `StatifierPersistence.Driver.start_child_at/6`.
+  The split is where the knowledge is - the descriptor list is the
+  fan-out's, the driver is this module's.
+
+  The resolved effect is built the way
+  `StatifierBlocks.Runtime.DurableSubchart.dispatch/4` builds one: the
+  child document this app publishes for the payload's `src`, compiled
+  with `StatifierExamples.Charts.Subchart.child_compile/1` - the one
+  child recipe - and stamped onto `content`, because the package resolves
+  a child's chart off the effect and never off the driver's own machine.
+  `params` replaces the invocation's own, which for a `core.map` are the
+  block's four literals and are no use to a child; what a child gets is
+  its own descriptor, name-matched against the child document's declared
+  roots by the engine's own seeding (spec 6.4.3).
+
+  `{:refused, reason}` is the package's, unrenamed. `start_child/5`'s
+  contract turns it into a retry or a permanent failure, and this does
+  not decide which.
+  """
+  @spec start_child_at(
+          String.t(),
+          Statifier.Effect.Invoke.t(),
+          map(),
+          non_neg_integer(),
+          pos_integer(),
+          keyword()
+        ) ::
+          :ok | {:refused, term()}
+  def start_child_at(
+        parent_run_id,
+        %Statifier.Effect.Invoke{} = invoke,
+        params,
+        index,
+        count,
+        opts
+      )
+      when is_binary(parent_run_id) and is_map(params) do
+    with {:ok, document} <- Subchart.resolve_chart(invoke.src, child_ctx(parent_run_id)),
+         {:ok, %Compiled{scxml: scxml}} <- Subchart.child_compile(document),
+         {:ok, machine} <- Statifier.compile(scxml),
+         {:ok, store} <- store() do
+      durable = %__MODULE__{run_id: parent_run_id, store: store, machine: machine}
+      resolved = %{invoke | content: scxml, params: params}
+
+      driver(durable)
+      |> Driver.start_child_at(parent_run_id, resolved, index, count, opts)
+      |> settled(store, parent_run_id, resolved.invoke_id, index)
+    else
+      :error -> {:refused, :unknown_document}
+      {:error, reason} -> {:refused, reason}
+    end
+  end
+
+  # The ctx `StatifierBlocks.Runtime.Subchart`'s resolver callback is
+  # typed against. This app's resolver reads only the document id, but the
+  # shape is the engine's and a bare map is not it.
+  @spec child_ctx(String.t()) :: Statifier.Invoke.Handler.ctx()
+  defp child_ctx(run_id) do
+    %{session_id: run_id, invoke_types: invoke_types(), invoke_handlers: Charts.invoke_handlers()}
+  end
+
+  # A chunk child that is not terminal when its create-drive returns is a
+  # chunk whose one call was refused, and the host is what says so.
+  #
+  # That is a fact about the chart this app fans out over rather than a
+  # rule about charts: a fan-out child here is one bulk call and nothing
+  # else, so it has nowhere to rest. `statifier_persistence` reaches
+  # `:failed` on its own only through budget exhaustion
+  # (`StatifierPersistence.Runs`' `run_status/2`) - an unhandled
+  # `error.communication` leaves a run `:active` forever, because whether
+  # a chart that cannot continue has *failed* is a host's judgement and
+  # not the interpreter's. `Runs.fail/4` is documented as the only
+  # host-driven terminal transition for exactly this, and
+  # `Driver.answer_parent/3` is the door that makes it count as this
+  # index's answer: it records the outcome, sets the status, and runs the
+  # settlement section, which is what a `first_error` cancel keys on.
+  #
+  # A child that IS terminal has already answered through the driver's own
+  # automatic path and is left alone; answering it twice would settle the
+  # same index twice.
+  @spec settled(:ok | {:refused, term()}, Storage.t(), String.t(), String.t(), non_neg_integer()) ::
+          :ok | {:refused, term()}
+  defp settled(:ok, store, parent_run_id, invoke_id, index) do
+    child_run_id = Linkage.child_run_id(parent_run_id, invoke_id, index)
+
+    case Storage.fetch_run(store, child_run_id) do
+      {:ok, %{status: :active}} -> fail_child(store, parent_run_id, child_run_id)
+      {:ok, _terminal} -> :ok
+      {:error, reason} -> {:refused, reason}
+    end
+  end
+
+  defp settled({:refused, _reason} = refusal, _store, _parent, _invoke_id, _index), do: refusal
+
+  # The answer is delivered on a driver built over the PARENT's chart,
+  # which `answer_parent/3` requires and which the automatic path resolves
+  # for itself: the settlement it triggers ends by stepping the parent,
+  # under the parent's own identity guard.
+  @spec fail_child(Storage.t(), String.t(), String.t()) :: :ok | {:refused, term()}
+  defp fail_child(store, parent_run_id, child_run_id) do
+    case machine_state(parent_run_id) do
+      {:ok, %{machine: parent_machine}} ->
+        durable = %__MODULE__{run_id: parent_run_id, store: store, machine: parent_machine}
+
+        Driver.answer_parent(
+          driver(durable),
+          child_run_id,
+          {:failed, reason: "chunk_call_refused"}
+        )
+
+        :ok
+
+      {:error, reason} ->
+        {:refused, reason}
+    end
+  end
+
+  @doc """
+  The `Statifier.MachineState` a stored run is resting on, chart and all.
+
+  `resume/1`'s reading without the reading: the same four steps - the run
+  record, the chart recipe the record names, `Statifier.compile/1` on the
+  emitted bytes, and the position loaded against the machine those bytes
+  produce - answering the state itself rather than a `Run` a page can
+  paint.
+
+  It is public because a fan-out needs it and nothing else can supply it.
+  `core.map` carries its `items` into the invocation as a **path**
+  (sb ADR-0009 decision 3), the `<param>` is a quoted literal, and by the
+  time the fan-out job runs there is no session and no live datamodel -
+  only the effect and the run id it was scoped to. So the handler
+  evaluates the path against the parent's own persisted datamodel, and
+  this is the door to it. `StatifierExamples.Charts.FanOut` is the caller.
+
+  `{:error, :chart_unknown}` for a run of a chart this app no longer
+  ships, and the storage layer's own errors otherwise - the same answers
+  `resume/1` gives, because it is the same walk.
+  """
+  @spec machine_state(String.t()) :: {:ok, Statifier.MachineState.t()} | {:error, term()}
+  def machine_state(run_id) when is_binary(run_id) do
+    with {:ok, store} <- store(),
+         {:ok, record} <- Storage.fetch_run(store, run_id),
+         {:ok, {%Compiled{scxml: scxml}, _document}} <- chart_for(record),
+         {:ok, machine} <- Statifier.compile(scxml) do
+      Storage.load_run_position(store, run_id, machine)
     else
       :error -> {:error, :chart_unknown}
       {:error, _reason} = error -> error
@@ -693,7 +862,8 @@ defmodule StatifierExamples.Charts.Durable do
       effects: executor(durable.run_id),
       invoke_types: invoke_types(),
       serialization: serialization(),
-      chart_resolver: &resolve_chart/1
+      chart_resolver: &resolve_chart/1,
+      child_canceller: FanOut.canceller()
     )
   end
 
@@ -838,6 +1008,7 @@ defmodule StatifierExamples.Charts.Durable do
     fn effect, context ->
       :ok = Timers.consume(context.run_id, effect)
       :ok = AsyncCalls.consume(context.run_id, effect)
+      :ok = FanOut.consume(context.run_id, effect)
 
       send(reader, {:durable_buffered, run_id, {:effect, effect}})
 
@@ -886,6 +1057,9 @@ defmodule StatifierExamples.Charts.Durable do
       cond do
         type == Runtime.Subchart.invoke_type() ->
           start_child(reader, run_id, type, params, dispatch_context)
+
+        FanOut.fan_out?(type) ->
+          fan_out(reader, run_id, type)
 
         AsyncCalls.async?(type, params(params)) ->
           pending(reader, run_id, type)
@@ -958,6 +1132,21 @@ defmodule StatifierExamples.Charts.Durable do
   # the invocation live. What eventually answers it is
   # `StatifierExamples.Charts.AsyncCalls.Delivery`, through
   # `complete_invocation/3` below.
+  # The fan-out arm, and it is the asynchronous arm one layer up. The job
+  # was stored by the executor a moment ago, exactly as an asynchronous
+  # call's was, so there is nothing to do here but decline to answer: the
+  # parent reaches quiescence with the invocation live and creates no
+  # children inside its own step, which is the whole point - N creates
+  # cannot hold the parent's exclusion (sp ADR-0008). What eventually
+  # answers it is the settlement of the last child, once, on behalf of all
+  # N, through `StatifierPersistence.Driver`'s own door.
+  @spec fan_out(pid(), String.t(), String.t() | nil) :: :pending
+  defp fan_out(reader, run_id, type) do
+    note(reader, run_id, "Fan-out started", "#{type}: children to follow, answer to follow")
+
+    :pending
+  end
+
   @spec pending(pid(), String.t(), String.t() | nil) :: :pending
   defp pending(reader, run_id, type) do
     note(reader, run_id, "Call started", "#{type}: running as a job, answer to follow")
@@ -996,7 +1185,13 @@ defmodule StatifierExamples.Charts.Durable do
   # se-4dt.4 widened it - `statifier_blocks:subchart` is registered and is
   # not a sync call - and this is where that showed up, exactly as the
   # paragraph above predicted.
-  @spec reason({:unknown_invoke_type | :subchart_not_a_sync_call, String.t()}) :: String.t()
+  @spec reason(
+          {:unknown_invoke_type
+           | :subchart_not_a_sync_call
+           | :fan_out_not_a_sync_call
+           | :unknown_chunk, String.t()}
+          | {:chunk_refused, term()}
+        ) :: String.t()
   defp reason({:unknown_invoke_type, type}), do: "unknown_invoke_type:#{type}"
   # The subchart refusal names no type: unlike `:unknown_invoke_type`, where
   # the type IS what went wrong, this refusal is about one constant type
@@ -1006,6 +1201,20 @@ defmodule StatifierExamples.Charts.Durable do
   # stays because the spec it satisfies is the routing table's, not this
   # driver's.
   defp reason({:subchart_not_a_sync_call, _type}), do: "subchart_not_a_sync_call"
+
+  # The fan-out refusal is the subchart one's twin and is unreachable from
+  # here for the same reason: the dispatch fun answers a `core.map`
+  # `:pending` before `Charts.dispatch/3` is asked. It satisfies the
+  # routing table's spec, not this driver's.
+  defp reason({:fan_out_not_a_sync_call, _type}), do: "fan_out_not_a_sync_call"
+
+  # The data plane's own two refusals, and the reason they surface here
+  # rather than being inspected somewhere: a chunk descriptor nothing
+  # ships is a fact about the document the chart should be able to route
+  # on, and a chunk whose rows could not be written is a fact about the
+  # host. The strict fan-out fixture reaches the first, on purpose.
+  defp reason({:unknown_chunk, chunk_id}), do: "unknown_chunk:#{chunk_id}"
+  defp reason({:chunk_refused, _detail}), do: "chunk_refused"
 
   @spec note(pid(), String.t(), String.t(), String.t()) :: :ok
   defp note(reader, run_id, label, detail) do

@@ -49,9 +49,10 @@ defmodule StatifierExamples.Signup.Handlers do
   require Logger
 
   alias StatifierExamples.Charts
-  alias StatifierExamples.Signup.Accounts
+  alias StatifierExamples.Signup.{Accounts, Invites, Promotion}
 
   @invoke_types [
+    "myapp:process_rows",
     "myapp:provision",
     "myapp:signup"
   ]
@@ -79,10 +80,22 @@ defmodule StatifierExamples.Signup.Handlers do
   `step` the block emitted as a literal `<param>`, so the handler learns
   which form to put up without reading the datamodel. `myapp:provision`
   creates the workspace the finished signup gets.
+
+  `myapp:process_rows` is the data plane. It is handed one chunk
+  DESCRIPTOR, processes every invitee that descriptor stands for in one
+  bulk write, promotes the one whose signup has to wait on a person, and
+  answers a **summary** - the chunk, the row count, and the promoted run.
+  The rows themselves are never in the answer, because the answer is
+  assembled into the parent's datamodel and stays there for the rest of
+  the parent's life.
   """
   @impl Statifier.Invoke.SyncHandler
   @spec handle(String.t(), map(), Charts.call_context()) ::
-          {:ok, map()} | {:error, {:unknown_invoke_type, String.t()}}
+          {:ok, map()}
+          | {:error,
+             {:unknown_invoke_type, String.t()}
+             | {:unknown_chunk, String.t()}
+             | {:chunk_refused, term()}}
   def handle("myapp:signup", params, _context) do
     step = Map.get(params, "step")
 
@@ -112,8 +125,42 @@ defmodule StatifierExamples.Signup.Handlers do
     {:ok, %{"provisioned" => "skipped"}}
   end
 
+  def handle("myapp:process_rows", %{"chunk" => chunk_id}, %{run_id: run_id})
+      when is_binary(chunk_id) and is_binary(run_id) do
+    with {:ok, promotion} <- Promotion.promote(chunk_id),
+         {:ok, rows} <- Invites.record(chunk_id, run_id, promoted_run_id(promotion)) do
+      Logger.info("myapp:process_rows processed #{rows} rows of #{chunk_id}")
+
+      {:ok,
+       %{
+         "chunk" => chunk_id,
+         "rows" => rows,
+         "promoted" => promoted_run_id(promotion)
+       }}
+    else
+      :error -> {:error, {:unknown_chunk, chunk_id}}
+      {:error, reason} -> {:error, {:chunk_refused, reason}}
+    end
+  end
+
+  # No run to key the writes on, the same case `myapp:provision` has
+  # below it, and refused rather than skipped: a bulk call is the whole
+  # of what a chunk child exists to do, so answering "processed nothing"
+  # would report a chunk as done when its rows are not written.
+  def handle("myapp:process_rows", _params, _context),
+    do: {:error, {:chunk_refused, :no_run}}
+
   def handle(invoke_type, _params, _context),
     do: {:error, {:unknown_invoke_type, invoke_type}}
+
+  # The run a promoted invitee was given, whether this delivery started it
+  # or found the one an earlier delivery of the same chunk started - the
+  # row records the run either way, because the row is about the invitee
+  # and not about which delivery got there first.
+  @spec promoted_run_id(Promotion.outcome()) :: String.t() | nil
+  defp promoted_run_id({:started, run_id}), do: run_id
+  defp promoted_run_id({:existing, run_id}), do: run_id
+  defp promoted_run_id(:none), do: nil
 
   # What each step of the wizard comes back with.
   #

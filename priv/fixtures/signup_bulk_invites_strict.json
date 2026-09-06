@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_su_bulk_invites_strict_demo",
+  "revision": 1,
+  "metadata": {
+    "name": "Bulk invitations (stop on first error)",
+    "description": "Import a batch of workspace invitations: split the upload into chunk descriptors, run a chart per chunk, and confirm the batch once every chunk has answered.",
+    "domain": "signup"
+  },
+  "datamodel": [
+    {
+      "id": "chunks",
+      "description": "The chunk descriptors this import fans out over. Ids, never invitee rows: this list is serialized on every persisted step for the rest of the run."
+    },
+    {
+      "id": "results",
+      "description": "Where the assembled per-chunk answers land, one entry per descriptor, in descriptor order."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_bi_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.assign",
+          "id": "blk_bi_seed",
+          "type_version": 1,
+          "config": {
+            "path": "chunks",
+            "value": "['su-c01','su-c02','su-c03','su-cXX','su-c05','su-c06','su-c07','su-c08','su-c09','su-c10']"
+          }
+        },
+        {
+          "type": "core.map",
+          "id": "blk_bi_chunks",
+          "type_version": 1,
+          "config": {
+            "items": "chunks",
+            "chart": "bdoc_su_invite_chunk",
+            "collect": "results",
+            "on": "first_error"
+          },
+          "slots": {
+            "on_done": [
+              {
+                "type": "myapp.signup_step",
+                "id": "blk_bi_confirm",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:signup",
+                  "step": "confirm",
+                  "label": "Confirm the batch is imported"
+                }
+              }
+            ],
+            "on_error": [
+              {
+                "type": "myapp.notify",
+                "id": "blk_bi_notify_owner",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "label": "Tell the owner the import was refused",
+                  "template": "import_refused"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

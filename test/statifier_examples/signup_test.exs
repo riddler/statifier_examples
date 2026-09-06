@@ -23,12 +23,18 @@ defmodule StatifierExamples.SignupTest do
 
   # Sabotage: swapped the first two entries in @documents; this went red,
   # then reverted.
-  test "fixtures/0 lists the three documents, keyed and named from the documents themselves" do
-    assert [wizard, invitations, onboarding] = Signup.fixtures()
+  test "fixtures/0 lists the domain's documents, keyed and named from the documents themselves" do
+    assert [wizard, invitations, onboarding, bulk, strict, chunk] = Signup.fixtures()
 
     assert %{key: "signup_wizard", name: "Signup wizard"} = wizard
     assert %{key: "signup_invitations", name: "Signup invitations"} = invitations
     assert %{key: "signup_onboarding", name: "Signup onboarding"} = onboarding
+    assert %{key: "signup_bulk_invites", name: "Bulk invitations"} = bulk
+
+    assert %{key: "signup_bulk_invites_strict", name: "Bulk invitations (stop on first error)"} =
+             strict
+
+    assert %{key: "signup_invite_chunk", name: "Invite chunk"} = chunk
   end
 
   # Sabotage: pointed load/1 at a file that does not exist; this went red,
@@ -90,12 +96,13 @@ defmodule StatifierExamples.SignupTest do
   # `datamodel` key; this went red here and took the two provisioning
   # tests in `DurableTest` with it. Reverted.
   test "the wizard's own bytes declare the root its plan branch guards on" do
-    [wizard, invitations, onboarding] = Signup.fixtures()
+    [wizard, invitations, onboarding | fan_out] = Signup.fixtures()
 
     assert Enum.map(wizard.document.datamodel, & &1.id) == ["signup"]
     assert wizard.declare == []
     assert invitations.declare == []
     assert onboarding.declare == []
+    assert Enum.all?(fan_out, &(&1.declare == []))
   end
 
   # se-dyo: where `signup` comes from, in the wizard's own bytes. The

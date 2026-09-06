@@ -38,7 +38,7 @@ defmodule StatifierExamples.Charts do
   alias StatifierBlocks.Palette
   alias StatifierBlocks.Runtime
   alias StatifierExamples.{CardAuth, Signup}
-  alias StatifierExamples.Charts.{Fixture, Icons, Messaging, Subchart, SyncAdapter}
+  alias StatifierExamples.Charts.{FanOut, Fixture, Icons, Messaging, Subchart, SyncAdapter}
 
   @themes [:light, :dark, :brand]
 
@@ -141,7 +141,12 @@ defmodule StatifierExamples.Charts do
   one set.
   """
   @spec invoke_types() :: [String.t()]
-  def invoke_types, do: Enum.sort([Runtime.Subchart.invoke_type() | SyncAdapter.invoke_types()])
+  def invoke_types do
+    Enum.sort([
+      Runtime.Subchart.invoke_type(),
+      FanOut.invoke_type() | SyncAdapter.invoke_types()
+    ])
+  end
 
   @doc """
   The `%{invoke type => module}` map a `Statifier.Session` is started with
@@ -155,7 +160,9 @@ defmodule StatifierExamples.Charts do
   """
   @spec invoke_handlers() :: %{String.t() => module()}
   def invoke_handlers do
-    Map.merge(SyncAdapter.invoke_handlers(), Runtime.Subchart.handlers(Subchart))
+    SyncAdapter.invoke_handlers()
+    |> Map.merge(Runtime.Subchart.handlers(Subchart))
+    |> Map.put(FanOut.invoke_type(), FanOut)
   end
 
   @doc """
@@ -225,15 +232,25 @@ defmodule StatifierExamples.Charts do
   """
   @spec dispatch(String.t(), map(), call_context()) ::
           {:ok, map()}
-          | {:error, {:unknown_invoke_type, String.t()} | {:subchart_not_a_sync_call, String.t()}}
+          | {:error,
+             {:unknown_invoke_type, String.t()}
+             | {:subchart_not_a_sync_call, String.t()}
+             | {:fan_out_not_a_sync_call, String.t()}
+             | {:unknown_chunk, String.t()}
+             | {:chunk_refused, term()}}
   def dispatch(type, params, context \\ %{}) when is_binary(type) and is_map(params) do
-    if type == Runtime.Subchart.invoke_type() do
-      {:error, {:subchart_not_a_sync_call, type}}
-    else
-      case Enum.find(sync_handlers(), &(type in &1.invoke_types())) do
-        nil -> {:error, {:unknown_invoke_type, type}}
-        module -> module.handle(type, params, context)
-      end
+    cond do
+      type == Runtime.Subchart.invoke_type() ->
+        {:error, {:subchart_not_a_sync_call, type}}
+
+      FanOut.fan_out?(type) ->
+        {:error, {:fan_out_not_a_sync_call, type}}
+
+      true ->
+        case Enum.find(sync_handlers(), &(type in &1.invoke_types())) do
+          nil -> {:error, {:unknown_invoke_type, type}}
+          module -> module.handle(type, params, context)
+        end
     end
   end
 

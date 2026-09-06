@@ -106,7 +106,10 @@ defmodule StatifierExamples.ChartsTest do
              %{key: "card_processing_sketch", name: "Card processing (sketch)"},
              %{key: "signup_wizard"},
              %{key: "signup_invitations"},
-             %{key: "signup_onboarding"}
+             %{key: "signup_onboarding"},
+             %{key: "signup_bulk_invites"},
+             %{key: "signup_bulk_invites_strict"},
+             %{key: "signup_invite_chunk"}
            ] = Charts.fixtures()
   end
 
@@ -126,12 +129,14 @@ defmodule StatifierExamples.ChartsTest do
              "myapp:manual_flag",
              "myapp:notify",
              "myapp:park",
+             "myapp:process_rows",
              "myapp:provision",
              "myapp:receipt",
              "myapp:resolve_review",
              "myapp:risk_rating",
              "myapp:signup",
              "myapp:three_ds",
+             "statifier_blocks:map",
              "statifier_blocks:subchart"
            ]
   end

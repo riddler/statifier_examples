@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_su_invite_chunk",
+  "revision": 1,
+  "metadata": {
+    "name": "Invite chunk",
+    "description": "One chunk of a bulk invitation import: a single bulk call that processes every invitee the chunk descriptor stands for and answers a summary.",
+    "domain": "signup"
+  },
+  "datamodel": [
+    {
+      "id": "chunk",
+      "description": "The chunk descriptor this run was started for. Seeded from the fan-out's own params, never carried in the parent's list as row data."
+    },
+    {
+      "id": "outcome",
+      "description": "The bulk call's summary: how many rows it processed, and the run started for the one invitee that needed a chart of its own."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_ic_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.invoke",
+          "id": "blk_ic_process",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:process_rows",
+            "assign_to": "outcome",
+            "params": "chunk=chunk"
+          }
+        }
+      ]
+    }
+  }
+}
