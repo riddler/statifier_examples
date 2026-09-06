@@ -111,13 +111,22 @@ an app.
   `StatifierPersistence.Driver`'s `dispatch_context` is only
   `%{run_id, content_hash, invoke_id, invoke}` (`driver.ex:205-210`). The
   path is therefore evaluated **inside the fan-out job**, from the parent
-  run's persisted position:
-  `Storage.fetch_run/2` -> `Durable.chart_for/1` -> `Storage.load_run_position/3`
+  run's persisted position. The chain is four steps and not three -
+  `Storage.fetch_run/2` for the record, `Durable`'s private `chart_for/1`
+  (`durable.ex:651`) for the recipe, **`Statifier.compile/1` on the
+  emitted SCXML** for the `Machine.t()`, and only then
+  `Storage.load_run_position/3`
   (`deps/statifier_persistence/lib/statifier_persistence/storage.ex:561-575`)
-  -> `machine_state.datamodel`.
+  for the `MachineState` whose `datamodel` field is the answer. Every
+  existing caller inserts that compile step (`durable.ex:220`, `:250`),
+  and `chart_for/1` is private, so `Durable` gains one public function -
+  `machine_state/1` - wrapping the whole chain, rather than `FanOut`
+  reaching into a sibling's privates or re-deriving the recipe. That
+  function is new surface this bead forces and is reported under
+  Provenance.
 - A child's datamodel is seeded by name-matching:
   `Statifier.Session.Invocations.seed_datamodel/2`
-  (`deps/statifier/lib/statifier/session/invocations.ex:227-245`) keeps only
+  (`deps/statifier/lib/statifier/session/invocations.ex:292-319`) keeps only
   the `params` keys that name a top-level `<data>` id in the child document.
   The chunk document must therefore declare `chunk`, and the starter must
   hand `params: %{"chunk" => descriptor}`.
@@ -426,12 +435,21 @@ what the strict document's `su-cXX` reaches.
   `Handler.perform_start/3` and passes `{:cancel_invoke, _}` to
   `Handler.perform_cancel/3`, exactly as `AsyncCalls.consume/2` does.
 
-Evaluating the path reads the parent's own persisted position:
-`Storage.fetch_run/2` for the record, `Durable.chart_for/1` for the recipe,
-`Storage.load_run_position/3` for the `MachineState`, then a walk of the
-dotted path over the string-keyed `datamodel` map. A path naming nothing is
-`{:error, {:items_undefined, path}}`, which fails the invocation on its
-ordinary error route rather than fanning out over a non-list.
+Evaluating the path reads the parent's own persisted position through the
+new public `Durable.machine_state/1`, which is the four-step chain the Key
+Discoveries name - record, recipe, `Statifier.compile/1`, position - and then
+walks the dotted path over the string-keyed `datamodel` map. A path naming
+nothing is `{:error, {:items_undefined, path}}`, which fails the invocation
+on its ordinary error route rather than fanning out over a non-list.
+
+Two facts this wiring rests on, stated so they read as decisions rather than
+accidents. `canceller/0`'s wrapper **ignores** the `unstarted_indices`
+argument the driver hands it: `FanOut.cancel_unstarted/3` cancels by
+`{scope, invoke_id}` across every index and generation
+(`fan_out.ex:265-273`), so the list is information the driver has and this
+door does not need. And `FanOut.config/0` reuses `AsyncCalls.queue/0`
+because `config/config.exs` defines exactly one invoke queue; giving a
+fan-out its own queue is a deployment change and not this bead's.
 
 #### 5. Wiring
 **Files**: `lib/statifier_examples/charts/durable.ex`,
@@ -515,15 +533,22 @@ order rather than draining blind:
 1. `Durable.start/4` the `signup_bulk_invites_strict` document.
 2. Drain once - the fan-out job enqueues ten start jobs, all `available`.
 3. Execute **only** the start job whose `args["index"]` is the refused
-   descriptor's index, through `Oban.Testing.perform_job/3` on the stored
-   row's args and meta.
+   descriptor's index, by loading its stored `%Oban.Job{}` row and calling
+   `StatifierOban.Invoke.ChildStartWorker.perform/1` on it. That does not
+   transition the executed row through Oban's own state machine - a real
+   queue run would leave it `completed` and therefore outside
+   `cancel_unstarted/3`'s match - so the assertions below name the **nine
+   sibling indices** explicitly rather than counting cancelled rows, and
+   the test says in a comment that the executed row's own state is an
+   artifact of driving the worker directly.
 4. That child fails; settlement reads `policy: :first_error`, cascades over
    the started children (none) and calls the host's canceller for the nine
    unstarted indices.
-5. Assert the nine start jobs are `cancelled` in the jobs table; assert a
-   second `Oban.drain_queue/1` runs nothing; assert `results` is a dense
-   ten-entry list whose refused index reads `"failed"` and whose other nine
-   read `"cancelled"`; assert `invite_outcomes` holds no rows for the nine.
+5. Assert the start job of each of the nine sibling indices is `cancelled`
+   in the jobs table, matched by `args["index"]`; assert a second
+   `Oban.drain_queue/1` runs nothing; assert `results` is a dense ten-entry
+   list whose refused index reads `"failed"` and whose other nine read
+   `"cancelled"`; assert `invite_outcomes` holds no rows for the nine.
 
 Carries its `# Sabotage:` line - removing `child_canceller:` from the driver
 leaves the nine start jobs `available` and the assertion red.
@@ -532,7 +557,8 @@ leaves the nine start jobs `available` and the assertion red.
 
 #### Automated Verification:
 - [ ] Full quality gate passes
-- [ ] The `first_error` test asserts nine start jobs in state `cancelled`
+- [ ] The `first_error` test asserts the nine sibling indices' start jobs
+      are each in state `cancelled`, matched by `args["index"]`
 - [ ] The assembled list is dense and index-ordered with one `"failed"` and
       nine `"cancelled"`
 - [ ] No `invite_outcomes` rows exist for the cancelled indices
