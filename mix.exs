@@ -159,21 +159,36 @@ defmodule StatifierExamples.MixProject do
       # it is the bridge's doing, not the host's - and 0.5.0 remains what
       # the durable subchart and the capstone's trace graph actually need.
       #
-      # HELD at the 0.6 line while its three siblings move, which is the
-      # one asymmetry in this re-pin. 0.7.0's V03 DDL cannot apply to this
-      # app's SQLite database: `Migrations.V03.up/1` creates a GIN index
-      # over `metadata jsonb_path_ops`, and ecto_sqlite3 raises
-      # ArgumentError on any index carrying `using:`. Staying on V02 is
-      # not an escape either - `outcome_blob` is an unconditional field on
-      # the generated runs schema, so 0.7.0 against a V02 database fails
-      # every query that touches the runs table. Measured both ways on
-      # se-eoj: the migration rolls back on the index, and a V02 database
-      # under 0.7.0 fails 73 of the suite's tests on `no such column:
-      # s0.outcome_blob`. The defect is filed upstream as sp-11w, and the
-      # move waits on 0.7.1 as se-i4v. Writing an app-side V03 substitute
-      # here would hide exactly the API problem the reference embedder
-      # exists to surface.
-      {:statifier_persistence, "~> 0.6"},
+      # The requirement moves to the 0.7 line, and getting there took two
+      # releases. 0.7.0's V03 DDL could not apply to this app's SQLite
+      # database: `Migrations.V03.up/1` created a GIN index over
+      # `metadata jsonb_path_ops` unconditionally, ecto_sqlite3 raises
+      # ArgumentError on any index carrying `using:`, and the whole
+      # migration rolled back - while staying on V02 was no escape, since
+      # `outcome_blob` is an unconditional field on the generated runs
+      # schema from 0.7.0 on. se-eoj measured both ends and held this arm
+      # alone at 0.6 while its three siblings moved; the defect went
+      # upstream as sp-11w. 0.7.1 is the fix - the index is created only on
+      # `Ecto.Adapters.Postgres`, the column on every adapter.
+      #
+      # The requirement below is `~> 0.7` and NOT `~> 0.7.1`, which means it
+      # permits 0.7.0 - the one release on this line this app cannot migrate.
+      # What keeps 0.7.0 out is `mix.lock`, and the guard test asserts that
+      # directly rather than trusting the requirement to do it.
+      #
+      # Taking V03 is two migrations rather than one, and the pair is in
+      # `priv/repo/migrations`: the migration that has already run on every
+      # database this app has is capped at `version: 2`, and V03 arrives in
+      # its own `from: 3` migration, so a fresh clone and an upgraded
+      # database take the same steps in the same order.
+      #
+      # 0.7.1 also makes the Ecto adapter declare `supports_metadata?/1`
+      # false off Postgres, which is a refusal at open for a durable
+      # subchart rather than a raise from inside one.
+      # `StatifierExamples.Persistence` answers that callback for itself
+      # now, on the same grounds it already wrote `list_runs_by_metadata/2`
+      # in Elixir on.
+      {:statifier_persistence, "~> 0.7"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so

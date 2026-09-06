@@ -237,29 +237,50 @@ defmodule StatifierExamples.MixDepsTest do
   # session-hosted one. This app asks for nothing new to get that, and
   # 0.5.0 remains what the durable subchart and the trace graph need.
   #
-  # It is HELD at the 0.6 line by se-eoj, alone among the four this app
-  # takes from the family, and the hold is a finding rather than an
-  # oversight. 0.7.0's V03 DDL cannot apply to a SQLite database:
-  # `StatifierPersistence.Ecto.Migrations.V03.up/1` creates a GIN index
-  # over `metadata jsonb_path_ops`, and ecto_sqlite3 raises ArgumentError
-  # on any index carrying `using:`, so the migration rolls back. Staying
-  # on V02 is not an escape either - `outcome_blob` is an unconditional
-  # field on the generated runs schema, so 0.7.0 against a V02 database
-  # fails every query that touches the runs table, which se-eoj measured
-  # at 73 of this suite's tests failing on `no such column:
-  # s0.outcome_blob`. Filed upstream as sp-11w; the move waits on 0.7.1
-  # as se-i4v. This assertion is what keeps 0.7.0 out of the tree until
-  # then, and what will go red the moment someone moves the pin without
-  # the migration story.
+  # It moves to the 0.7 line as of se-i4v, after a hold se-eoj took on
+  # this arm alone. 0.7.0's V03 DDL could not apply to this app's SQLite
+  # database at all: `Migrations.V03.up/1` created a GIN index over
+  # `metadata jsonb_path_ops` unconditionally, ecto_sqlite3 raises
+  # ArgumentError on any index carrying `using:`, and the whole migration
+  # rolled back taking the `outcome_blob` column with it - while staying
+  # on V02 was no escape either, since `outcome_blob` is an unconditional
+  # field on the generated runs schema and se-eoj measured 73 of this
+  # suite's tests failing on `no such column: s0.outcome_blob`. 0.7.1 is
+  # the fix (sp-11w): the index is created only on
+  # `Ecto.Adapters.Postgres`, the column on every adapter.
+  #
+  # The requirement is `~> 0.7`, which PERMITS 0.7.0 - a requirement is
+  # not the guard here, and saying otherwise would be the mistake the
+  # statifier_oban arm above records for its own 0.3.1 floor, where the
+  # patch-level spelling was the guard until a major-line move made it
+  # unnecessary. Here the move is within the line, so the lock is what
+  # says which release resolved, and the `refute` below is what keeps
+  # 0.7.0 out of the tree.
+  #
+  # What comes with 0.7.1 is a refusal rather than a raise, and it is not
+  # free. Off Postgres the Ecto adapter now declares
+  # `supports_metadata?/1` false, because the two metadata queries it
+  # ships are `jsonb` containment SQL. `StatifierExamples.Persistence`
+  # delegated that callback, so taking 0.7.1 unchanged would have refused
+  # every durable subchart this app starts, at open, with
+  # `:child_listing_unsupported`. It now answers `true` for itself, on the
+  # same grounds it already wrote `list_runs_by_metadata/2` in Elixir on:
+  # this adapter issues none of that SQL. The durable subchart cases in
+  # `durable_test.exs` are what hold that.
+  #
+  # The two capabilities a Tier A fan-out needs at open -
+  # `supports_run_outcome?/1` and `list_run_states_by_metadata/2` - are
+  # still not exported here, so a fan-out over this store would be refused
+  # rather than half-started. Nothing here fans out yet (se-j87).
   #
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.5.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.6.0 entry against the mutated expectation.
+  # release line (`"0.6.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.7.1 entry against the mutated expectation.
   # Reverted from a backup copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.6"} in deps
+    assert {:statifier_persistence, "~> 0.7"} in deps
 
     lock_line =
       "mix.lock"
@@ -268,7 +289,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.6.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.7.)
+    refute lock_line =~ ~s({:hex, :statifier_persistence, "0.7.0")
     refute lock_line =~ ":git,"
   end
 
