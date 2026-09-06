@@ -91,6 +91,7 @@ defmodule StatifierExamples.Persistence do
 
   import Ecto.Query, only: [from: 2]
 
+  alias StatifierPersistence.Run.Linkage
   alias StatifierPersistence.Storage.Adapter
   alias StatifierPersistence.Storage.Ecto, as: EctoAdapter
 
@@ -152,10 +153,15 @@ defmodule StatifierExamples.Persistence do
   capability hold, and this answers `true` on the same grounds the
   callback below exists on.
 
-  The other two 0.7.0 capabilities are a different question and are not
-  claimed here: `supports_run_outcome?/1` and
+  The other two 0.7.0 capabilities are the same question one layer up, and
+  as of se-j87 they are claimed here too: `supports_run_outcome?/1` and
   `list_run_states_by_metadata/2` are what a Tier A fan-out needs at open,
-  this adapter exports neither, and nothing here fans out yet.
+  and `StatifierPersistence.Driver.start_child_at/6` refuses a fan-out
+  outright without both rather than half-starting one. They are answered
+  below on exactly these grounds - the outcome payload is a blob column
+  this schema already carries from V03, and the status projection is the
+  same Elixir containment walk, selecting three values instead of
+  materialising a record per child.
   """
   @impl StatifierPersistence.Storage.Adapter
   @spec supports_metadata?(Adapter.opts()) :: boolean()
@@ -221,6 +227,100 @@ defmodule StatifierExamples.Persistence do
       end
     end)
   end
+
+  @doc """
+  Whether this adapter can store a child's terminal outcome (the optional
+  `c:StatifierPersistence.Storage.Adapter.supports_run_outcome?/1`).
+
+  `true`, and the declaration costs nothing new: `outcome_blob` is an
+  ordinary column on the runs schema from V03, written through the same
+  delegated `update_run/2` every other run field goes through, and read
+  back by the package. The shipped Ecto adapter answers `false` off
+  Postgres for the reason `supports_metadata?/1` above answers `false`
+  there - the queries beside it are `jsonb` SQL - and this adapter
+  answers for itself for the reason it answers that one: it issues none
+  of that SQL.
+
+  Without it `StatifierPersistence.Driver.start_child_at/6` refuses every
+  fan-out at open with `:run_outcome_unsupported`, which is the refusal
+  working: a child whose answer could never be stored is a child whose
+  invocation could never be settled.
+  """
+  @impl StatifierPersistence.Storage.Adapter
+  @spec supports_run_outcome?(Adapter.opts()) :: boolean()
+  def supports_run_outcome?(_opts), do: true
+
+  @doc """
+  The indexed status projection of every stored run whose `metadata`
+  contains `match` (the optional
+  `c:StatifierPersistence.Storage.Adapter.list_run_states_by_metadata/2`).
+
+  This is `list_runs_by_metadata/2`'s question asked cheaply. A fan-out's
+  settlement runs on every child's completion and asks only "have all N
+  settled, and at which indices" - so the package gives it a callback that
+  answers `run_id`, `status` and `child_index` rather than N identity and
+  position blobs. On Postgres that is three columns under an indexed
+  `jsonb` containment predicate; here it is the same Elixir containment
+  walk `list_runs_by_metadata/2` does, selecting the three values instead
+  of handing each match back through `fetch_run/2`.
+
+  The scan cost is the same table scan that callback's moduledoc states,
+  and the saving is real anyway: the whole point of the projection is that
+  it does not move a blob per child, and this app's answer does not
+  either.
+
+  `child_index` is `nil` for a matched run carrying no linkage, which is
+  what the callback's type says and what a match written wide enough to
+  catch a parent would produce. `status` is the stored string read back as
+  the atom the projection's type names, one clause per status the storage
+  contract defines and no fall-through: a status this app does not know is
+  a storage contract that grew, and it should fail here rather than be
+  reported as something else.
+
+  The refusal is `list_runs_by_metadata/2`'s, for its reason: an empty
+  match, or one with a non-string key, would select every run in the
+  table, and a settlement that read every run in the table as its own
+  children is the one mistake this callback can make.
+  """
+  @impl StatifierPersistence.Storage.Adapter
+  @spec list_run_states_by_metadata(Adapter.opts(), Adapter.metadata()) ::
+          {:ok, [Adapter.run_state()]} | {:error, Adapter.error()}
+  def list_run_states_by_metadata(_opts, match) do
+    validate_match!(match)
+
+    states =
+      StatifierExamples.Repo.all(
+        from(r in __MODULE__.Run, select: {r.run_id, r.status, r.metadata})
+      )
+      |> Enum.filter(fn {_run_id, _status, metadata} -> contains?(metadata || %{}, match) end)
+      |> Enum.map(fn {run_id, status, metadata} ->
+        %{run_id: run_id, status: status(status), child_index: child_index(metadata)}
+      end)
+
+    {:ok, states}
+  end
+
+  # The four statuses `StatifierPersistence.Storage.Adapter` defines, read
+  # off the string column the schema stores them in. No fall-through: see
+  # the callback's doc.
+  @spec status(String.t()) :: Adapter.run_status()
+  defp status("active"), do: :active
+  defp status("completed"), do: :completed
+  defp status("failed"), do: :failed
+  defp status("cancelled"), do: :cancelled
+
+  # The child's own index, out of the linkage the package writes under its
+  # reserved metadata key. `nil` for a run carrying no linkage at all -
+  # a root run, or a parent caught by a match written wide enough to
+  # include it - which is the case the callback's type names.
+  @spec child_index(map() | nil) :: non_neg_integer() | nil
+  defp child_index(metadata) when is_map(metadata) do
+    metadata
+    |> Map.get(Linkage.reserved_key(), %{})
+    |> Map.get("child_index")
+  end
+
+  defp child_index(_absent), do: nil
 
   @spec validate_match!(term()) :: :ok
   defp validate_match!(match) when is_map(match) and map_size(match) > 0 do
