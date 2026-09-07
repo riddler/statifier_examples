@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_su_guarded_step",
+  "revision": 1,
+  "metadata": {
+    "name": "Guarded step",
+    "description": "One myapp.guarded_step block: the call the wizard ends on, and the notification on its error path, as one thing an author fills in rather than two they have to remember to pair.",
+    "domain": "signup"
+  },
+  "datamodel": [
+    {
+      "id": "signup",
+      "description": "The wizard's own root. The guarded call records what it answered at signup.step_outcome."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_gs_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.guarded_step",
+          "id": "blk_gs_step",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:provision",
+            "failure_template": "provision_failed"
+          }
+        }
+      ]
+    }
+  }
+}

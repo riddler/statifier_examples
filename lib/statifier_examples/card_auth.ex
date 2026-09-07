@@ -13,7 +13,7 @@ defmodule StatifierExamples.CardAuth do
   models no real payment processor: every value that appears in a fixture
   or a seed here is fictional.
 
-  ## Eleven types, one shape
+  ## Eleven leaf types, one shape - and one composite
 
   Every type is a leaf step that **names** a `myapp:*` invoke type and
   compiles to a call the host answers - `StatifierBlocks.InvokeStep`, over
@@ -27,6 +27,17 @@ defmodule StatifierExamples.CardAuth do
 
   `myapp.notify` is **not** here. It belongs to neither domain and lives
   under `StatifierExamples.Charts.Messaging`.
+
+  ## The twelfth type is a composite
+
+  `myapp.authorize_with_deadline` is declared the other way -
+  `use StatifierBlocks.Composite`, params plus a pure subtree - and it stands
+  for the three-lane authorization arrangement `card_processing.json` spells
+  out by hand. `StatifierExamples.CardAuth.AuthorizeWithDeadline` carries the
+  reasoning, and `card_processing_composite` is the document that reads it.
+  The hand-written arrangement stays exactly as it was: two documents over
+  one arrangement is the comparison, and rewriting the first would destroy
+  it.
 
   ## Every type the documents name is registered here
 
@@ -44,6 +55,7 @@ defmodule StatifierExamples.CardAuth do
 
   alias StatifierExamples.CardAuth.{
     Authorize,
+    AuthorizeWithDeadline,
     BalanceCheck,
     Capture,
     Intake,
@@ -63,11 +75,13 @@ defmodule StatifierExamples.CardAuth do
   # not silently become an example.
   @documents [
     {"card_processing", "card_processing.json"},
-    {"card_processing_sketch", "card_processing_sketch.json"}
+    {"card_processing_sketch", "card_processing_sketch.json"},
+    {"card_processing_composite", "card_processing_composite.json"}
   ]
 
   @block_types %{
     "myapp.authorize" => Authorize,
+    "myapp.authorize_with_deadline" => AuthorizeWithDeadline,
     "myapp.balance_check" => BalanceCheck,
     "myapp.capture" => Capture,
     "myapp.intake" => Intake,

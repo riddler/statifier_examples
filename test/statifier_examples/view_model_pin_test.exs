@@ -97,13 +97,15 @@ defmodule StatifierExamples.ViewModelPinTest do
   # total intact. The bead's sabotage criterion is that case.
   @outlines %{
     "card_processing" => {47, %{step: 24, arm: 15, rail: 8}},
+    "card_processing_composite" => {2, %{step: 2}},
     "card_processing_sketch" => {8, %{step: 7, tray: 1}},
     "signup_wizard" => {20, %{step: 12, arm: 4, rail: 4}},
     "signup_invitations" => {11, %{step: 9, rail: 2}},
     "signup_onboarding" => {5, %{step: 2, arm: 2, rail: 1}},
     "signup_bulk_invites" => {5, %{step: 4, rail: 1}},
     "signup_bulk_invites_strict" => {5, %{step: 4, rail: 1}},
-    "signup_invite_chunk" => {2, %{step: 2}}
+    "signup_invite_chunk" => {2, %{step: 2}},
+    "signup_guarded_step" => {2, %{step: 2}}
   }
 
   # The two fixtures whose prose is pinned as well as counted, as
@@ -187,9 +189,15 @@ defmodule StatifierExamples.ViewModelPinTest do
       end
     end
 
-    # The fixture list itself is pinned: a ninth fixture added without a row
+    # The fixture list itself is pinned: a further fixture added without a row
     # count here would otherwise be walked by nothing.
-    test "the eight fixtures are the eight fixtures" do
+    #
+    # Sabotage: dropped the `signup_guarded_step` entry from `@outlines`, the
+    # shape a tenth fixture arriving unannounced would have; this went red
+    # here and took the row-count case above with it, which is the pairing
+    # that makes an unwalked fixture impossible rather than merely unlikely.
+    # Reverted from a copy.
+    test "the ten fixtures are the ten fixtures" do
       assert Charts.fixtures() |> Enum.map(& &1.key) |> Enum.sort() ==
                @outlines |> Map.keys() |> Enum.sort()
     end

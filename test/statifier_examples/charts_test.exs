@@ -25,8 +25,10 @@ defmodule StatifierExamples.ChartsTest do
 
     assert host == [
              "myapp.authorize",
+             "myapp.authorize_with_deadline",
              "myapp.balance_check",
              "myapp.capture",
+             "myapp.guarded_step",
              "myapp.intake",
              "myapp.legacy_check",
              "myapp.manual_flag",
@@ -105,12 +107,14 @@ defmodule StatifierExamples.ChartsTest do
     assert [
              %{key: "card_processing", name: "Card processing"},
              %{key: "card_processing_sketch", name: "Card processing (sketch)"},
+             %{key: "card_processing_composite", name: "Card processing (composite)"},
              %{key: "signup_wizard"},
              %{key: "signup_invitations"},
              %{key: "signup_onboarding"},
              %{key: "signup_bulk_invites"},
              %{key: "signup_bulk_invites_strict"},
-             %{key: "signup_invite_chunk"}
+             %{key: "signup_invite_chunk"},
+             %{key: "signup_guarded_step"}
            ] = Charts.fixtures()
   end
 

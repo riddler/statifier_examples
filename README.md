@@ -47,11 +47,13 @@ neither variable, so a CI run always resolves `statifier_blocks` from Hex.
    |---|---|
    | `card_processing` | intake and a validation branch, then a three-lane authorization group - fraud review, balance check, 3-D Secure - with a `core.send` arming a deadline and two guarded interrupt rules listening on the group's rail; then an outcome branch with capture-retry, a resumable manual-review arm and a receipt tail. Every block type it names is registered, so it compiles clean and a finding on it is one an author produced |
    | `card_processing_sketch` | the same payment flow caught halfway through being authored sink-backwards: the tail the author already knows parked in a `core.drafts` tray, and the middle nobody has decided yet standing as a `core.placeholder`. Both are author warnings, so this is the one shipped document that does not read `Findings 0` |
+   | `card_processing_composite` | the same three-lane authorization arrangement as one block. `myapp.authorize_with_deadline` is a **composite** - params plus a pure subtree - and it stands for exactly what `card_processing` spells out by hand: the group, the `core.send` arming the deadline, the `core.parallel` of three lanes, and the `core.on_event` on the rail. The two documents compile to the same bytes, which is the whole reading: what an author fills in is eight fields, and what the engine runs is the arrangement |
    | `signup_wizard` | account collection, a verification group with resume and abandon interrupts, then the A/B branch on the chosen plan - business, personal, or a nudge - and provisioning |
    | `signup_invitations` | a `core.foreach` over the invitees, each running the wizard above as a `core.subchart` child chart with an `on_error` subtree |
    | `signup_onboarding` | the smallest document here, and the one reading it exists for: a single `core.subchart` running the wizard, with `on_done`, `on_abandon` and `on_error` each routing to a `myapp.notify`. The child really runs, because a root session started with `inherit_invoke_handlers: true` hands its handler map down |
    | `signup_bulk_invites` | the fan-out shape: a `core.assign` seeding ten chunk descriptors, then a `core.map` running `signup_invite_chunk` once per descriptor with `collect: "results"` and `on: "all"`, then a confirmation step. Ids are what fan out, never invitee rows - the list is serialized on every persisted step |
    | `signup_bulk_invites_strict` | the same document with two characters changed: one descriptor is a deliberate bad id, and the `core.map` runs `on: "first_error"`. It is the pair that makes the two failure policies readable side by side |
+   | `signup_guarded_step` | one `myapp.guarded_step` block: a call, and a `myapp.notify` on its error path. The second composite, and the pairing an author forgets - which is the argument for having composites at all |
    | `signup_invite_chunk` | the child the two bulk documents fan out over: one `core.invoke` of `myapp:process_rows` for the chunk a descriptor stands for, answering a summary. It is offered in the switcher because a child chart is a document like any other |
 
 2. Switch documents with the header's DOCUMENT select. Edits live in
@@ -207,6 +209,8 @@ supposed to have something to say:
   `blk_cps_drafts`. A sketch is a document somebody is still writing, and
   neither an unwritten step nor a parked fragment survives publication, so a
   sketch reading `Findings 0` would be the bug.
+- `card_processing_composite` - `Findings 0`.
+- `signup_guarded_step` - `Findings 0`.
 - `signup_onboarding` - `Findings 0`.
 - `signup_bulk_invites` - `Findings 0`.
 - `signup_bulk_invites_strict` - `Findings 0`. Its deliberate bad chunk id is

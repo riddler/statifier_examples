@@ -26,9 +26,16 @@ defmodule StatifierExamples.Charts.StepLabelTest do
   # `core.invoke` declares a label is `statifier_blocks`' decision and its
   # file to change; this app registering a shadow declaration for someone
   # else's type is the local workaround CLAUDE.md forbids.
+  # A COMPOSITE is not in reach either, and for the same reason the `core.*`
+  # half is not: its config schema IS its declared params (sb ADR-0002
+  # decision 5's amendment), so a `label` field on one would be a param an
+  # author fills in rather than the card title this test is about. What
+  # titles a composite's card is its `sentence/1`, which
+  # `StatifierExamples.CompositesTest` pins.
   @host_types Charts.palette().types
               |> Enum.filter(fn {type, _module} -> String.starts_with?(type, "myapp.") end)
               |> Enum.map(fn {_type, module} -> module end)
+              |> Enum.reject(&StatifierBlocks.Composite.composite?/1)
               |> Enum.uniq()
 
   # Sabotage: dropped label_field/0 from the step config_schema/2; this
@@ -96,10 +103,12 @@ defmodule StatifierExamples.Charts.StepLabelTest do
 
     assert counts == %{
              "card_processing" => {18, 0},
+             "card_processing_composite" => {0, 0},
              "card_processing_sketch" => {3, 0},
              "signup_bulk_invites" => {2, 0},
              "signup_bulk_invites_strict" => {2, 0},
              "signup_invitations" => {1, 0},
+             "signup_guarded_step" => {0, 0},
              "signup_invite_chunk" => {0, 0},
              "signup_onboarding" => {3, 0},
              "signup_wizard" => {7, 0}
