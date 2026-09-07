@@ -252,7 +252,24 @@ defmodule StatifierExamples.MixProject do
       # from the driver - `StatifierExamples.Persistence` issues neither,
       # answering `supports_metadata?/1` for itself and writing
       # `list_runs_by_metadata/2` in Elixir, as it has since 0.7.1.
-      {:statifier_persistence, "~> 0.9"},
+      #
+      # The floor moves to `~> 0.10` for the outside-fail seam. A durable
+      # subchart child failed from OUTSIDE the interpreter used to leave
+      # its parent's `<invoke>` pending forever; `Runs.fail/4` now takes a
+      # `driver:` option and answers the parent itself, with
+      # `Driver.resolve_and_answer_parent/3` as the public form of that
+      # answer for a caller holding no drive of the child. The option is
+      # OPT-IN and this app does not take it: its one `Runs.fail/4` call
+      # is `Charts.Durable.abandon/1`, which stops a run the host owns and
+      # then cascade-cancels that run's children rather than answering a
+      # parent of its own. Passing `driver:` there would change which word
+      # a stopped run's parent sees, which is a decision of its own and
+      # not this re-pin's. The release's other addition,
+      # `Ecto.Migrations.expected_version/0`, is for a host whose schema is
+      # hand-written DDL; this app's migrations delegate to
+      # `Ecto.Migrations.up/1` and `down/1`, so the version it is on is the
+      # one the package wrote.
+      {:statifier_persistence, "~> 0.10"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -351,7 +368,20 @@ defmodule StatifierExamples.MixProject do
       # free is `statifier.driver` on the macrostep span, which is how a
       # backend tells this app's durable macrosteps from session-hosted
       # ones. 0.3.0 remains the floor the capstone needs.
-      {:opentelemetry_statifier, "~> 0.4"},
+      #
+      # The requirement moves to the 0.5 line, and this one this app does
+      # use. 0.5.0's `OpentelemetryStatifier.Oban` bridges the three
+      # fan-out events 0.9.0 added above: `invoke.fan_out` and
+      # `invoke.child_started` become roots LINKED to the trace that
+      # planned the invocation, so a chunk child's spans are reachable
+      # from the dispatch that planned them by a link edge rather than
+      # only by a shared `statifier.session_id`, and
+      # `invoke.unstarted_cancelled` lands as a span event on whatever
+      # span is open where the sweep ran. This app is the embedder those
+      # events describe, so the bridge is what puts its fan-out in the
+      # trace at all. The `statifier_oban` requirement 0.5.0 states is
+      # test-only and reaches nothing here.
+      {:opentelemetry_statifier, "~> 0.5"},
 
       # The SDK behind that bridge. `opentelemetry_statifier` depends only
       # on `opentelemetry_api` on purpose - a bridge that dragged an SDK
@@ -451,6 +481,24 @@ defmodule StatifierExamples.MixProject do
       # it additive, and all of it reached through modules this app names
       # nowhere. The trace wire format is untouched at version 1 and 25
       # types, so the trace half of this app re-pins nothing.
+      #
+      # The arm moves to the 0.10 line, and it is a 0.9.1 the app passes
+      # through on the way: that patch escapes the `:` in a transition
+      # label, so a chart whose event descriptors carry a prefixed name
+      # renders through any Mermaid client. 0.10.0 reads the inline shape
+      # arm `statifier_datamodel` 0.4.0 added - a `:path_types` entry may
+      # be `{:shape, members}` - which moves this package's floor for that
+      # dependency to `~> 0.4` and is the same arm `statifier_blocks`
+      # 0.23.0 grew above. It also documents
+      # `StatifierUI.Trace.Normalizer.types/0` as the trace vocabulary's
+      # public handle, and offers every value of a `{:one_of, _}` path
+      # mixing integers and floats. One change is visible in output rather
+      # than in surface: `StatifierUI.EventLog.Markdown.render/2` marks the
+      # selected macrostep `- selected` where it said
+      # `- shown in the diagram`, matching the LiveView renderer, so a
+      # golden here that carried the old string carries the new one. The
+      # trace wire format is untouched at version 1, so the trace half of
+      # this app re-pins nothing.
       statifier_ui_dep(),
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
@@ -650,15 +698,15 @@ defmodule StatifierExamples.MixProject do
   # datamodel path rather than only a bare identifier; both are additive,
   # and this app's documents declare neither.
   #
-  # `se-obu`: the default arm is a GIT PIN again, for as long as 0.23.0 is
-  # unpublished. It names a merged `main` commit rather than a branch, so
-  # it is exact where a Hex requirement is a range, and `mix.lock` records
-  # the same commit. `STATIFIER_BLOCKS_PATH` still wins over it, so a local
-  # checkout is unaffected either way, and `se-yag` puts the Hex arm back
-  # at `~> 0.23` once the operator publishes.
+  # The default arm moves to the 0.23 line, and it is a Hex requirement
+  # again: the interim git pin `se-obu` took while 0.23.0 was unpublished
+  # is retired by `se-yag`, and the `refute` in
+  # `StatifierExamples.MixDepsTest` is what says it did not come back.
+  # `STATIFIER_BLOCKS_PATH` still wins over the requirement, so a local
+  # checkout is unaffected either way.
   #
-  # The pin buys the two behaviours this app's editor suite is here to
-  # hold, and neither is reachable from 0.22.0:
+  # That pin bought the two behaviours this app's editor suite is here to
+  # hold, neither of them reachable from 0.22.0, and 0.23.0 carries both:
   #
   #   * `sb-1c7g` builds the insert probe from `palette_entry/0`'s
   #     `default_config` rather than from `config_schema/1`'s `default:`
@@ -673,22 +721,39 @@ defmodule StatifierExamples.MixProject do
   #     error on one block no longer hides another block's assignability
   #     finding.
   #
-  # Beside them the pinned commit carries `sb-w08l` (`config_key` on the
+  # Beside them the release carries `sb-w08l` (`config_key` on the
   # `type_mismatch` finding, which is what names the field a refused read
   # was declared on), `sb-8mki` (a `{:path, opts}` field declared with no
   # `default:` is refused at declaration) and `sb-ym2w` (the armed palette
   # is filtered by what will land). None of those three changes anything
   # this app declares: every path field it ships states a `default:`, and
   # the palette filter is the same predicate the drop already used.
+  #
+  # 0.23.0 is a minor with notes, and what came beside the pinned pair is
+  # additive here. `BlockType`'s field-type set gains `{:type_expr, opts}`
+  # and `core.map`'s `collect_type` and `core.on_event`'s `payload` are
+  # the first two fields to take it; this app declares no block type and
+  # spells neither field. The typed environment now SEEDS the declared
+  # path types the datamodel document carries, so a read at a declared
+  # path meets the declared type rather than an advisory - the one note
+  # that could refuse a document this app stores, and
+  # `StatifierExamples.Charts.TypedEnvironmentTest` is what says none of
+  # its documents leans on the looser reading. Compiled bytes move only
+  # for a `child_use: true` compile whose ROOT block type declares a
+  # `donedata_type/1`; no type this app compiles under declares one. The
+  # other note - a host compiling with `terminate:`, `child_use:`,
+  # `known_invoke_types:` or `datamodel:` must hand the editor its own
+  # `compile_options` - is already how the editor page is wired, since
+  # `sb-hgjk`. The `statifier_datamodel` floor moves to `~> 0.4` with the
+  # release, and 0.4.0 resolves; this app still names that package
+  # nowhere.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "583691a6536a7c31a7b825574bf68d2eb4e6ac22"}
+        {:statifier_blocks, "~> 0.23"}
     end
   end
 
@@ -710,7 +775,7 @@ defmodule StatifierExamples.MixProject do
          git: "https://github.com/riddler/statifier-ui.git", ref: ref, override: true}
 
       _ ->
-        {:statifier_ui, "~> 0.9"}
+        {:statifier_ui, "~> 0.10"}
     end
   end
 

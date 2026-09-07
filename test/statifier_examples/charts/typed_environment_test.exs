@@ -125,12 +125,11 @@ defmodule StatifierExamples.Charts.TypedEnvironmentTest do
 
   describe "the refused read" do
     # `myapp.receipt` reads a `cards.settlement` at the path its
-    # `settlement` field names. Pointed where the document points it,
-    # nothing has written a settlement, the environment holds nothing at
-    # the path, and an undeclared path is unknown rather than wrong.
-    # Pointed at the subject, the environment holds a transaction, and two
-    # declared records that are not the same record do not widen into one
-    # another.
+    # `settlement` field names. Pointed where the document points it, the
+    # document declares that path AS the `cards.settlement` record, so the
+    # read meets exactly what it expects and is satisfied. Pointed at the
+    # subject, the environment holds a transaction, and two declared
+    # records that are not the same record do not widen into one another.
     #
     # Sabotage: renamed the datamodel file off the domain key, so no
     # declarations were in hand; with nothing declared the refusal did not

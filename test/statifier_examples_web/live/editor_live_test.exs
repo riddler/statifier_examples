@@ -491,21 +491,44 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     #
     # Both halves are read off the same document one edit apart, which is
     # what makes the second half evidence. Before the edit the receipt reads
-    # `cards.settlement`, where nothing in the flow writes, and an
-    # undeclared path is unknown rather than wrong: every gap takes it and no
-    # slot has a data-flow reason to give. After it the read is at the
-    # subject, where `myapp.intake` left a `cards.credit_txn`, and every gap
-    # the intake's write reaches is greyed and NAMES it.
+    # `cards.settlement`, which the document declares AS the
+    # `cards.settlement` record at that path, so the read meets exactly the
+    # record it expects: every gap takes it and no slot has a data-flow
+    # reason to give. After it the read is at the subject, where the
+    # document declares an `object` and `myapp.intake` writes a
+    # `cards.credit_txn`, and every gap is greyed and NAMES the intake.
     #
-    # The root's own body still accepts, and that is the half with teeth: it
-    # has a gap AHEAD of the intake, and a slot verdict is existential over
-    # its positions, so a blanket refusal and a refusal that follows the
-    # write are only distinguishable there.
+    # [2026-09-07, `se-yag` under RQ-SF036-0a and the `statifier_blocks`
+    # ADR-0011 Note of the same date] The root's own body is greyed too,
+    # and this row now says so. Seeding a declared path type is
+    # ROOT-FORWARD: it enters at the document root and reaches every gap
+    # downstream of it, the gap AHEAD of the intake included, so that gap
+    # is not empty and the read there is not unknown. A bare `object` is
+    # NOMINAL and covers a `cards.settlement` read no better than a
+    # `cards.credit_txn` does, so the root body refuses for the same
+    # reason the tail does. The existential distinction this row used to
+    # draw at the root body is therefore not observable at a DECLARED
+    # path any more; what it still holds is that the verdict follows the
+    # author's config edit under his hands, and that every refusal names
+    # the block that could fix it.
     #
-    # Sabotage: changed `StatifierExamples.CardAuth.Receipt`'s `settlement`
-    # field to expect "cards.credit_txn" - the record the subject actually
-    # holds - and the after-the-edit half went red with every gap accepting;
-    # the before half stayed green. Reverted from a backup copy.
+    # Sabotage, both halves, 2026-09-07:
+    #
+    #   * changed `StatifierExamples.CardAuth.Receipt`'s `settlement` field
+    #     to expect "cards.credit_txn" - the record the subject actually
+    #     holds - and the BEFORE half went red, every slot refusing
+    #     `not_assignable` where it had no reason to give: a declared path
+    #     answers a wrong `expects` immediately rather than leaving it
+    #     unknown;
+    #   * dropped the `cards.current_txn` entry from
+    #     `priv/fixtures/card-processing.datamodel.json` and the AFTER half
+    #     went red at the root body, which came back "ok". That is the
+    #     mutation that says root-forward SEEDING is what greys the gap
+    #     ahead of the intake: with nothing declared at the subject the gap
+    #     is genuinely empty and takes the card, exactly as it did before
+    #     `statifier_blocks` 0.23.0.
+    #
+    # Both reverted from backup copies.
     test "a read declared on a config field greys the gaps its write refuses",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
@@ -530,7 +553,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert Enum.uniq(Map.values(reasons)) == ["fixable_by:blk_cp_intake"]
       assert reasons[{"blk_cp_tail", "body"}] == "fixable_by:blk_cp_intake"
       assert slots[{"blk_cp_tail", "body"}].drop == "no"
-      assert slots[{"blk_cp_root", "body"}].drop == "ok"
+      assert slots[{"blk_cp_root", "body"}].drop == "no"
     end
   end
 

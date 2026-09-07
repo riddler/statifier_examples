@@ -163,8 +163,9 @@ From there the two answers this example exists to show:
   it will be handed.
 - **Refused.** `myapp.receipt` reads a `cards.settlement` at the path its
   `Settlement read from` field names. Pointed where the document points it,
-  nothing has written a settlement, and an undeclared path is unknown rather
-  than wrong - no finding. Point the same field at `cards.current_txn` and it
+  the document declares that path as the `cards.settlement` record, so the
+  read meets exactly what it expects - no finding. Point the same field at
+  `cards.current_txn` and it
   is refused, naming the path: *this block reads "Settlement" at
   cards.current_txn, where "blk_cp_intake" left "Credit card transaction"*.
   Two declared records do not widen into one another, and the message reads

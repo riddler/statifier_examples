@@ -608,7 +608,7 @@ not carry when it was first walked; both retired when the packages published,
 and `mix setup` is now the whole recipe.
 
 The packages come from Hex at the floors `mix.exs` states -
-`{:statifier_blocks, "~> 0.22"}` and `{:statifier_ui, "~> 0.9"}`, with
+`{:statifier_blocks, "~> 0.23"}` and `{:statifier_ui, "~> 0.10"}`, with
 `predicator` arriving under them - and no `override:` remains anywhere in the
 dependency list. The hook registration is committed, in `assets/js/app.js`:
 `StatifierUIHooks` is imported beside `StatifierBlocks` and spread into the

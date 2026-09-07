@@ -147,21 +147,13 @@ defmodule StatifierExamples.MixDepsTest do
   # documents declare neither - and the `statifier_datamodel` floor moved
   # to `~> 0.3` with the release, which is what the test above records.
   #
-  @statifier_blocks_ref "583691a6536a7c31a7b825574bf68d2eb4e6ac22"
-
-  # se-obu: the default arm is a GIT PIN again for as long as 0.23.0 is
-  # unpublished, so what this asserts is the pin rather than a Hex
-  # requirement. It is not a weakening of the check: a pin is exact where a
-  # Hex requirement is a range, and `mix.lock` recording the same commit is
-  # what proves the tree is on the code the pin names rather than on
-  # whatever `main` has become since.
+  # The arm moves to the 0.23 line, and back to a Hex requirement: 0.23.0
+  # is published and carries the pair `se-obu` pinned for, so `se-yag`
+  # retires that pin and the `refute` below is what says it did not come
+  # back. The ledger entry `se-obu-statifier_blocks-sb-1c7g+sb-c9b6` is
+  # what carried it until here.
   #
-  # `se-yag` puts the Hex arm and this test's Hex spelling back together at
-  # `~> 0.23`, after the operator publishes; the ledger entry
-  # `se-obu-statifier_blocks-sb-1c7g+sb-c9b6` is what carries the pin until
-  # then.
-  #
-  # What the pin buys is the pair `StatifierExamplesWeb.EditorLiveTest`
+  # What the pin bought is the pair `StatifierExamplesWeb.EditorLiveTest`
   # asserts. `sb-c9b6` is the half nothing else could reach: the compiler
   # runs Config and Structure as a pair rather than in sequence, so a
   # config error on one card no longer hides an unsatisfied read on
@@ -171,20 +163,29 @@ defmodule StatifierExamples.MixDepsTest do
   # defaults, so a drop-time refusal is asked with the config an author is
   # about to write rather than with an empty path.
   #
-  # Sabotage: pointed the LOCK assertion at a real-but-wrong commit of
-  # `statifier_blocks` main and left `mix.lock` alone; it went red
-  # reporting the pinned ref against the mutated expectation. Reverted
-  # from a backup copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
+  # What comes beside them in the release is additive here: a
+  # `{:type_expr, opts}` field type that `core.map`'s `collect_type` and
+  # `core.on_event`'s `payload` are the first to take (this app spells
+  # neither), a typed child summary emitted only for a `child_use: true`
+  # compile whose ROOT type declares a `donedata_type/1` (none this app
+  # compiles under does), and `Palette.manifest/1`. The one note that
+  # could reach a stored document is the typed environment SEEDING the
+  # declared path types the datamodel document carries, and
+  # `StatifierExamples.Charts.TypedEnvironmentTest` is what says none of
+  # this app's documents leans on the looser reading. The
+  # `statifier_datamodel` floor moves to `~> 0.4` with the release, which
+  # is what the test below now records.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.22.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.23.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks,
-            [
-              git: "https://github.com/riddler/statifier_blocks.git",
-              ref: @statifier_blocks_ref
-            ]} in deps
+    assert {:statifier_blocks, "~> 0.23"} in deps
 
     lock_line =
       "mix.lock"
@@ -193,9 +194,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
-    assert lock_line =~ @statifier_blocks_ref
-    refute lock_line =~ ":hex,"
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.23.)
+    refute lock_line =~ ":git,"
   end
 
   # The path/type index the editor package reads a datamodel document
@@ -240,6 +240,23 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.2.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.3.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # The lock moves to 0.4.0, and it moves for two reasons where it used to
+  # move for one: `statifier_blocks` 0.23.0 states `{:statifier_datamodel,
+  # "~> 0.4"}` AND `statifier_ui` 0.10.0 states the same, both for the
+  # inline shape arm 0.4.0 added to a type expression. The arm here is
+  # still absent and this app still names the reader nowhere. 0.4.0 is
+  # additive against a document: a type expression may be an inline
+  # unnamed `{:shape, members}` instead of a name pointing at a
+  # declaration, identity for that arm is member-set-wise, and
+  # `Compatibility.breaks/2` documents a break's first element as the
+  # kind. No document spelling changes, so this app's documents read
+  # exactly as they did.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.3.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.4.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
   test "statifier_datamodel arrives transitively and is not named directly" do
     deps = Mix.Project.config()[:deps]
 
@@ -253,7 +270,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_datamodel": )))
 
     assert lock_line, "statifier_datamodel has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.3.)
+    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.4.)
     refute lock_line =~ ":git,"
   end
 
@@ -347,7 +364,7 @@ defmodule StatifierExamples.MixDepsTest do
   test "the statifier_ui dep is a direct Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_ui, "~> 0.9"} in deps
+    assert {:statifier_ui, "~> 0.10"} in deps
 
     lock_line =
       "mix.lock"
@@ -356,7 +373,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_ui": )))
 
     assert lock_line, "statifier_ui has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_ui, "0.9.)
+    assert lock_line =~ ~s({:hex, :statifier_ui, "0.10.)
     refute lock_line =~ ":git,"
   end
 
@@ -539,7 +556,7 @@ defmodule StatifierExamples.MixDepsTest do
   test "the statifier_persistence dep is the Hex requirement, with no override" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.9"} in deps
+    assert {:statifier_persistence, "~> 0.10"} in deps
 
     lock_line =
       "mix.lock"
@@ -548,7 +565,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.9.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.10.)
     refute lock_line =~ ":git,"
   end
 
@@ -668,7 +685,7 @@ defmodule StatifierExamples.MixDepsTest do
   test "the opentelemetry_statifier dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:opentelemetry_statifier, "~> 0.4"} in deps
+    assert {:opentelemetry_statifier, "~> 0.5"} in deps
 
     lock_line =
       "mix.lock"
@@ -677,7 +694,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "opentelemetry_statifier": )))
 
     assert lock_line, "opentelemetry_statifier has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :opentelemetry_statifier, "0.4.)
+    assert lock_line =~ ~s({:hex, :opentelemetry_statifier, "0.5.)
     refute lock_line =~ ":git,"
   end
 

@@ -36,9 +36,9 @@
         {
           "name": "settlement",
           "path": "cards.settlement",
-          "type": "object",
+          "type": "cards.settlement",
           "label": "Settlement",
-          "note": "Where a settled amount would be written. Nothing in this flow writes it yet, which is why the receipt step's read of it is unknown rather than refused."
+          "note": "Where a settled amount would be written, declared AS the cards.settlement record so the receipt step's read of it meets exactly what it expects. Nothing in this flow writes one, which is why repointing that read at the subject is what produces the refusal."
         },
         {
           "name": "amount",
