@@ -608,7 +608,7 @@ not carry when it was first walked; both retired when the packages published,
 and `mix setup` is now the whole recipe.
 
 The packages come from Hex at the floors `mix.exs` states -
-`{:statifier_blocks, "~> 0.24"}` and `{:statifier_ui, "~> 0.10"}`, with
+`{:statifier_blocks, "~> 0.26"}` and `{:statifier_ui, "~> 0.10"}`, with
 `predicator` arriving under them - and no `override:` remains anywhere in the
 dependency list. The git pin `se-1cl` held while the Plan view's three seams
 were unpublished retired with 0.24.0, which carries all three. The hook

@@ -76,10 +76,14 @@ document, which is what the store above is for.
 
 Re-measured 2026-09-07 (`se-6jn`), on the `statifier_blocks` commit
 `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd` (`eb64d4c`), which is where
-`mix.exs` is pinned. The measurement before it was taken on `3a210a9`, an
-ancestor of `v0.25.0` (`7186b24`) and so of this commit; every cite below
-is by module, function and clause rather than by line in the package, and
-every one of them resolves on both. What moved between the two is the
+`mix.exs` was pinned when the measurement was taken. The pin advanced once
+more after it - to `e61890a`, for `se-1q8`'s pass-through slots - and
+`se-c9l` has since retired it for the Hex requirement `~> 0.26`; `eb64d4c`
+is an ancestor of `v0.26.0` (`f9b62c5`), so the release carries the tree
+the measurement was taken on. The measurement before it was taken on
+`3a210a9`, an ancestor of `v0.25.0` (`7186b24`) and so of this commit;
+every cite below is by module, function and clause rather than by line in
+the package, and every one of them resolves on both. What moved between the two is the
 subject of this pass: `sb-8fa8` keeps a refused
 `Edit.Session.change_config/3`'s per-field findings in the session's
 `draft_findings` and routes them with `ViewModel.overlay_findings/2`,
