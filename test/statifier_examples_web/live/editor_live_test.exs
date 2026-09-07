@@ -11,6 +11,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{AsyncCalls, Durable}
   alias StatifierExamples.DivergentDocument
+  alias StatifierExamples.TwoStageDocument
 
   @themes ["light", "dark", "brand"]
 
@@ -377,6 +378,82 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert view |> element("button[phx-click='compile']") |> render_click() =~ "Findings 0"
     end
 
+    # se-obu, the second of the two seams the first production embedder
+    # found in a day. A config error on one card used to HIDE an
+    # unsatisfied read on another: Config and Structure ran in sequence, so
+    # a document with both defects reported the first stage only, and an
+    # author fixed one field, recompiled, and met the next refusal. The
+    # package now runs the pair - a block Config refused is skipped by id
+    # and the walk continues past it - and the refusal carries the union.
+    #
+    # This app is the reference embedder, so the property is asserted here
+    # on a document made of the types it registers, through the page an
+    # author reads it on rather than through the compiler alone. Both are
+    # read: the compiler's own refusal says the union is what came back,
+    # and the findings drawer says both rows reach the author, each
+    # anchored on the field it is about - `config.retries` on the capture
+    # and `config.settlement` on the receipt, which is the `config_key` the
+    # `type_mismatch` finding now carries.
+    #
+    # Neither defect can be produced through the config form: a config the
+    # form refuses is parked as a draft rather than committed, so the
+    # compiler never sees it. `StatifierExamples.TwoStageDocument` is where
+    # the construction and its guard live, and it reaches the page the way
+    # `DivergentDocument` does - `:document_changed`, the message the
+    # editor component sends its host.
+    #
+    # Sabotage: made `StatifierExamples.CardAuth.Capture`'s `check_retries`
+    # accept any stored value; the config half went red on the drawer row
+    # and on the compiler's `:config` finding, while the receipt half
+    # stayed green. Reverted from a backup copy.
+    test "a config error on one block does not hide a refused read on another",
+         %{conn: conn} do
+      fixture = TwoStageDocument.fixture()
+      document = TwoStageDocument.document()
+
+      assert {:error, findings} =
+               Compiler.compile(document, Charts.palette(),
+                 terminate: true,
+                 datamodel: fixture.datamodel
+               )
+
+      assert [
+               %Compiler.Finding{
+                 stage: :config,
+                 block_id: config_block,
+                 config_key: "retries",
+                 code: :invalid_config
+               },
+               %Compiler.Finding{
+                 stage: :structure,
+                 block_id: read_block,
+                 config_key: "settlement",
+                 code: :type_mismatch,
+                 reason:
+                   {:type_mismatch, _, "blk_cp_intake", _held, _expected, "cards.current_txn"}
+               }
+             ] = findings
+
+      assert config_block == TwoStageDocument.config_block()
+      assert read_block == TwoStageDocument.read_block()
+
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
+
+      send(view.pid, {:document_changed, document})
+
+      view |> element("button[phx-click='compile']") |> render_click()
+      view |> element(".sb-drawer__strip") |> render_click()
+      view |> element("#sb-drawer-tab-findings") |> render_click()
+
+      rows = findings_rows(view)
+
+      assert %{source: "config", anchor: "config.retries"} =
+               Enum.find(rows, &(&1.block_id == config_block))
+
+      assert %{source: "assignability", anchor: "config.settlement"} =
+               Enum.find(rows, &(&1.block_id == read_block))
+    end
+
     # The title is the package's own constant rather than a string this app
     # spells for itself, and this is what says so: the same function the
     # drawer titles its strip and its tab with. A package that renamed the tab
@@ -392,6 +469,68 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
 
       assert html =~ "#{Shell.drawer_title(:findings)} #{counts("card_processing").seam}"
+    end
+  end
+
+  describe "the drop a declared read refuses" do
+    # se-obu, the first of the two seams the first production embedder found
+    # in a day. `myapp.receipt` is this app's one type whose read is declared
+    # on a CONFIG FIELD rather than on `io/1`: its `settlement` is a
+    # `{:path, %{expects: "cards.settlement"}}`, so what it reads and where
+    # is a function of what the author configured, and the answer changes
+    # under the author's hands.
+    #
+    # ADR-0011 promises that read is checked at the DROP as well as at the
+    # compile - a gap the write cannot satisfy is greyed before the card
+    # lands in it, rather than accepting the card and reporting a finding
+    # afterwards - and this is the row that says the promise reaches a host's
+    # own type. It is asserted through a drag of the configured block rather
+    # than through a palette insert, because a palette insert probes the
+    # type's DECLARED config and this app declares no type whose declared
+    # config is refused anywhere: see the note below.
+    #
+    # Both halves are read off the same document one edit apart, which is
+    # what makes the second half evidence. Before the edit the receipt reads
+    # `cards.settlement`, where nothing in the flow writes, and an
+    # undeclared path is unknown rather than wrong: every gap takes it and no
+    # slot has a data-flow reason to give. After it the read is at the
+    # subject, where `myapp.intake` left a `cards.credit_txn`, and every gap
+    # the intake's write reaches is greyed and NAMES it.
+    #
+    # The root's own body still accepts, and that is the half with teeth: it
+    # has a gap AHEAD of the intake, and a slot verdict is existential over
+    # its positions, so a blanket refusal and a refusal that follows the
+    # write are only distinguishable there.
+    #
+    # Sabotage: changed `StatifierExamples.CardAuth.Receipt`'s `settlement`
+    # field to expect "cards.credit_txn" - the record the subject actually
+    # holds - and the after-the-edit half went red with every gap accepting;
+    # the before half stayed green. Reverted from a backup copy.
+    test "a read declared on a config field greys the gaps its write refuses",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      assert view |> drag_slots("blk_cp_receipt") |> refusal_reasons() == %{}
+
+      view
+      |> element(~s([data-block-id="blk_cp_receipt"] .sb-node__label))
+      |> render_click()
+
+      view
+      |> element(~s(form#sb-form-blk_cp_receipt))
+      |> render_change(%{
+        "block-id" => "blk_cp_receipt",
+        "config" => %{"settlement" => "cards.current_txn"}
+      })
+
+      slots = drag_slots(view, "blk_cp_receipt")
+      reasons = refusal_reasons(slots)
+
+      assert reasons != %{}
+      assert Enum.uniq(Map.values(reasons)) == ["fixable_by:blk_cp_intake"]
+      assert reasons[{"blk_cp_tail", "body"}] == "fixable_by:blk_cp_intake"
+      assert slots[{"blk_cp_tail", "body"}].drop == "no"
+      assert slots[{"blk_cp_root", "body"}].drop == "ok"
     end
   end
 
@@ -1155,6 +1294,68 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       "index" => to_string(index)
     })
   end
+
+  # Starts a drag of a block that is IN the document and reads every slot's
+  # verdict off the page it re-renders. A block drag rather than a palette
+  # insert is what asks the question about the block's own config: the
+  # insert probe is built from the type's declared defaults and its palette
+  # entry's `default_config`, so a type whose declared config names no path
+  # the document refuses is accepted everywhere no matter what an author
+  # later types into it.
+  #
+  # The key is the slot's address - its parent and its name - because that
+  # is what `Edit.Targets` answers about and what the reason is anchored to.
+  @spec drag_slots(Phoenix.LiveViewTest.View.t(), String.t()) ::
+          %{{String.t(), String.t()} => %{drop: String.t() | nil, reason: String.t() | nil}}
+  defp drag_slots(view, block_id) do
+    canvas(view)
+    |> render_hook("dragstart", %{"block-id" => block_id})
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(".sb-slot")
+    |> Enum.map(fn slot ->
+      {
+        {attribute(slot, "data-parent-id"), attribute(slot, "data-slot-name")},
+        %{drop: attribute(slot, "data-drop"), reason: attribute(slot, "data-drop-reason")}
+      }
+    end)
+    |> Map.new()
+  end
+
+  # The slots that refused with a DATA-FLOW reason to give, and the reason.
+  # A slot that refused for an arrangement reason - an interrupt rail that
+  # takes only listeners, an error slot that takes only a handler - carries
+  # no reason at all, and leaving those out is what keeps the assertions
+  # about the read rather than about the shape of the document.
+  @spec refusal_reasons(%{{String.t(), String.t()} => map()}) ::
+          %{{String.t(), String.t()} => String.t()}
+  defp refusal_reasons(slots) do
+    for {address, %{drop: "no", reason: reason}} <- slots, reason != nil, into: %{} do
+      {address, reason}
+    end
+  end
+
+  # The findings drawer's rows, as the three things each one says about
+  # itself: which block it is anchored on, which field of that block, and
+  # which source derived it.
+  @spec findings_rows(Phoenix.LiveViewTest.View.t()) ::
+          [%{block_id: String.t() | nil, anchor: String.t() | nil, source: String.t() | nil}]
+  defp findings_rows(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(".sb-findings__list .sb-finding")
+    |> Enum.map(fn row ->
+      %{
+        block_id:
+          row |> LazyHTML.query(".sb-findings__reveal") |> attribute("phx-value-block-id"),
+        anchor: row |> LazyHTML.query(".sb-findings__anchor") |> LazyHTML.text() |> String.trim(),
+        source: row |> LazyHTML.query(".sb-findings__source") |> LazyHTML.text() |> String.trim()
+      }
+    end)
+  end
+
+  @spec attribute(LazyHTML.t(), String.t()) :: String.t() | nil
+  defp attribute(node, name), do: node |> LazyHTML.attribute(name) |> List.first()
 
   @flow_slot ~s(.sb-slot[data-parent-id="blk_cps_root"][data-slot-name="body"])
   @tray_slot ~s(.sb-slot--tray[data-parent-id="blk_cps_drafts"][data-slot-name="body"])
