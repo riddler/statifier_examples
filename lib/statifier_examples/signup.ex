@@ -7,12 +7,19 @@ defmodule StatifierExamples.Signup do
   and it carries the A/B testing example. It models no real product: every
   address is `@example.com` and every name and amount is made up.
 
-  Three block types, and the third is declared the other way.
+  Four block types, and the last two are declared the other way.
   `myapp.guarded_step` is a **composite** - `use StatifierBlocks.Composite`,
   params plus a pure subtree - standing for a `core.invoke` with a
   `myapp.notify` on its `on_error` path, which is the pairing an author
   forgets. `StatifierExamples.Signup.GuardedStep` carries the reasoning and
   `signup_guarded_step` is the document that reads it.
+
+  `myapp.guarded_section` is the same guarded call with somewhere to put
+  what comes next: a composite with a **pass-through slot**, so the author
+  fills an interior on its own card and the expansion carries those blocks
+  into the `core.group` the subtree writes for them, ids unchanged.
+  `StatifierExamples.Signup.GuardedSection` carries the reasoning and
+  `signup_guarded_section` is the document that reads it.
 
   The other two are a call to a host handler with an outcome:
   `myapp.signup_step` collects one step of the wizard and `myapp.provision`
@@ -35,7 +42,7 @@ defmodule StatifierExamples.Signup do
 
   alias StatifierBlocks.{Block, Decode, Document, Edit}
   alias StatifierExamples.Charts.Fixture
-  alias StatifierExamples.Signup.{GuardedStep, Provision, SignupStep}
+  alias StatifierExamples.Signup.{GuardedSection, GuardedStep, Provision, SignupStep}
 
   @typedoc """
   One example document, as `StatifierExamples.Charts.fixtures/0` lists it.
@@ -79,7 +86,8 @@ defmodule StatifierExamples.Signup do
     {"signup_bulk_invites", "signup_bulk_invites.json", []},
     {"signup_bulk_invites_strict", "signup_bulk_invites_strict.json", []},
     {"signup_invite_chunk", "signup_invite_chunk.json", []},
-    {"signup_guarded_step", "signup_guarded_step.json", []}
+    {"signup_guarded_step", "signup_guarded_step.json", []},
+    {"signup_guarded_section", "signup_guarded_section.json", []}
   ]
 
   # The `core.send` whose delay is host configuration rather than a fact
@@ -99,7 +107,8 @@ defmodule StatifierExamples.Signup do
     do: %{
       "myapp.signup_step" => SignupStep,
       "myapp.provision" => Provision,
-      "myapp.guarded_step" => GuardedStep
+      "myapp.guarded_step" => GuardedStep,
+      "myapp.guarded_section" => GuardedSection
     }
 
   @doc """

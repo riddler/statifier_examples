@@ -1355,6 +1355,78 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert Document.to_json(stored(key, fixture)) == before_json
       assert undo_disabled?(view)
     end
+
+    # ADR-0002's P7, from the host's side: Expand writes the same tree
+    # `expand/2` answers, pass-through children included, in the mapped inner
+    # slot, with their ids unchanged. What that buys an author is the thing
+    # this case asserts - a block that was reachable only through the
+    # composite's card before the gesture is a block of the document
+    # afterwards, at the same id, and one press of Undo puts the bytes back.
+    #
+    # The child's id is what makes it worth a second case beside the one
+    # above. A gesture that moved the author's block but re-minted it would
+    # pass every count and still lose every reference to it a host had
+    # written down.
+    #
+    # Sabotage: in `deps/statifier_blocks`, made `splice/3` mint the spliced
+    # children the way it mints the subtree's own members
+    # (`MIX_ENV=test mix deps.compile statifier_blocks --force` before and
+    # after); the child came back under a minted id, this went red on
+    # `blk_gx_confirm` being absent from the document, and exactly three cases
+    # in `StatifierExamples.CompositesTest` went with it - the splice, the
+    # chart's state ids and the child's finding. Reverted from a copy and
+    # recompiled.
+    test "Expand carries the author's own children, at their own ids", %{conn: conn} do
+      key = "signup_guarded_section"
+      {:ok, fixture} = Charts.fixture(key)
+      before_json = Document.to_json(fixture.document)
+
+      flow = ~s(.sb-slot[data-parent-id="blk_gx_root"][data-slot-name="body"])
+
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: key]}")
+
+      # One card in the root's flow. The composite declares a pass-through
+      # slot, so the author's block is inside the card's own interior rather
+      # than beside it.
+      assert child_ids(view, flow) == ["blk_gx_section"]
+      assert outline_ids(fixture.document) == ["blk_gx_root", "blk_gx_section", "blk_gx_confirm"]
+      assert undo_disabled?(view)
+
+      view
+      |> element(~s([data-block-id="blk_gx_section"] .sb-node__expand))
+      |> render_click()
+
+      ids = key |> stored(fixture) |> outline_ids()
+
+      # The composite is gone, the members it stood for are there under the
+      # minted ids, and the author's own block is there under the id the
+      # author gave it.
+      refute "blk_gx_section" in ids
+      assert child_ids(view, flow) == ["blk_gx_section_call", "blk_gx_section_then"]
+
+      assert "blk_gx_section_call" in ids
+      assert "blk_gx_section_notify" in ids
+      assert "blk_gx_section_then" in ids
+      assert "blk_gx_confirm" in ids
+      refute "blk_gx_section_confirm" in ids
+
+      # And it is in the group the declaration maps the slot to, rather than
+      # loose in the flow.
+      assert child_ids(
+               view,
+               ~s(.sb-slot[data-parent-id="blk_gx_section_then"][data-slot-name="body"])
+             ) ==
+               ["blk_gx_confirm"]
+
+      # ONE entry for the whole replacement, and the bytes come back exactly.
+      refute undo_disabled?(view)
+
+      view |> element(~s(button[phx-click="undo"])) |> render_click()
+
+      assert child_ids(view, flow) == ["blk_gx_section"]
+      assert Document.to_json(stored(key, fixture)) == before_json
+      assert undo_disabled?(view)
+    end
   end
 
   describe "saving an expansion as a step" do

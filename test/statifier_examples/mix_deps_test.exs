@@ -243,7 +243,7 @@ defmodule StatifierExamples.MixDepsTest do
   # Reverted from a copy.
   #
   # `se-gx4`: the arm is a GIT PIN again, at
-  # `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd`, so what this asserts is
+  # `e61890ab5af7f250e64ec10c5ac6d6bf09663bac`, so what this asserts is
   # the pin rather than a Hex requirement. It is not a weakening of the
   # check: a pin is exact where a Hex requirement is a range, and `mix.lock`
   # recording the same commit is what proves the tree is on the code the pin
@@ -256,20 +256,27 @@ defmodule StatifierExamples.MixDepsTest do
   # the editor's "Save as a step" gesture with its `on_collapse` callback.
   # Neither is reachable from 0.25.0.
   #
-  # `se-6jn` advanced the pin to the commit named above. What that buys is
-  # what `StatifierExamplesWeb.PlanLiveTest` asserts on the other side of
-  # the two deletions it made: `sb-8fa8`'s `Edit.Session` `draft_findings`
-  # field and `ViewModel.overlay_findings/2`, which together replaced the
-  # page's own `route_findings/3` and `draft_findings/3`; and `sb-6xkf`'s
+  # `se-6jn` advanced the pin from `7fa35a2` to
+  # `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd`. What that bought is what
+  # `StatifierExamplesWeb.PlanLiveTest` asserts on the other side of the two
+  # deletions it made: `sb-8fa8`'s `Edit.Session` `draft_findings` field and
+  # `ViewModel.overlay_findings/2`, which together replaced the page's own
+  # `route_findings/3` and `draft_findings/3`; and `sb-6xkf`'s
   # `ViewModel.transparent?/2`, `effective_parent/3`, `end_of_list_target/3`
   # and `core_containers/0`, which the page's reader-agreement case reads.
   # None of the six is reachable from `7fa35a2`.
   #
+  # `se-1q8` advanced it again, to the commit named above, for `sb-q183`:
+  # **pass-through slots**, which is what `StatifierExamples.Signup.GuardedSection`
+  # and the cases in `StatifierExamples.CompositesTest` are written over. The
+  # case below names the three functions that arrived with it, because a pin
+  # whose reason is not written down is a pin nobody can retire.
+  #
   # `se-c9l` puts the Hex arm and this test's Hex spelling back together
-  # after the operator publishes 0.26.0; `se-1q8` and `se-6jn` advance the
-  # pin before that. The ledger entry `se-gx4-statifier_blocks-sb-uzly` is
-  # what carries it.
-  @statifier_blocks_ref "eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd"
+  # after the operator publishes 0.26.0. The ledger entry
+  # `se-gx4-statifier_blocks-sb-uzly` is what carries the pin across all
+  # three advances.
+  @statifier_blocks_ref "e61890ab5af7f250e64ec10c5ac6d6bf09663bac"
 
   # Sabotage: pointed the attribute above at a real-but-wrong commit of
   # `statifier_blocks` main and left `mix.lock` alone; this went red
@@ -298,6 +305,32 @@ defmodule StatifierExamples.MixDepsTest do
     assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
     assert lock_line =~ @statifier_blocks_ref
     refute lock_line =~ ":hex,"
+  end
+
+  # The other half of a pin, and the half a SHA alone cannot state: what the
+  # tree is on the pin FOR. `se-1q8` advanced it for `sb-q183`'s pass-through
+  # slots, and these are the three functions that arrived with them - the
+  # mapping resolved to the minted id, the shared refusal both composite kinds
+  # answer, and the data kind's own `slots/2`. None is reachable from 0.25.0,
+  # so a re-pin to a published release that did not carry them would go red
+  # here rather than in the six cases that read them.
+  #
+  # `function_exported?/3` needs the module loaded, which under a release
+  # build it is not - hence the `ensure_loaded` around each.
+  #
+  # Sabotage: pointed the arity of `pass_through` at 3; this went red naming
+  # it, and nothing else in the file moved. Reverted from a copy.
+  test "the pinned statifier_blocks carries the pass-through seam the pin is for" do
+    for {module, function, arity} <- [
+          {StatifierBlocks.Composite, :pass_through, 2},
+          {StatifierBlocks.Composite, :mapping_errors, 2},
+          {StatifierBlocks.Composite.Data, :slots, 2}
+        ] do
+      assert Code.ensure_loaded?(module)
+
+      assert function_exported?(module, function, arity),
+             "#{inspect(module)}.#{function}/#{arity} is not in the pinned tree"
+    end
   end
 
   # The path/type index the editor package reads a datamodel document

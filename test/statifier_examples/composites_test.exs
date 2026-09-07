@@ -1,6 +1,6 @@
 defmodule StatifierExamples.CompositesTest do
   @moduledoc """
-  The two reference composites this app registers, and the obligation that
+  The three reference composites this app registers, and the obligation that
   makes a composite safe to put in front of an author.
 
   A composite is a block type derived from **params** plus a **pure subtree**
@@ -8,9 +8,16 @@ defmodule StatifierExamples.CompositesTest do
   campaign SF037 states the obligation as prose: the compiled chart of a
   document holding a composite is byte-identical to the chart of the same
   document after that composite has been expanded in place. The package
-  proves it for its own worked examples; this file proves it for the two
+  proves it for its own worked examples; this file proves it for the three
   composites a host declared, over the palette that host actually hands the
   editor, once per composite.
+
+  The third, `StatifierExamples.Signup.GuardedSection`, declares a
+  **pass-through slot**, and the last three `describe` blocks are what that
+  buys: the author's children are spliced into the mapped inner slot with
+  their ids unchanged, the walk descends at that inner position, a finding on
+  a child the author placed is the child's own, and the same declaration held
+  as data expands block for block to the module twin's.
 
   The expanded document is built from `StatifierBlocks.Composite.expand/2` -
   the one expansion function - rather than transcribed, which is what makes
@@ -21,10 +28,22 @@ defmodule StatifierExamples.CompositesTest do
 
   use ExUnit.Case, async: true
 
-  alias StatifierBlocks.{Block, BlockType, Compiler, Composite, Document, Palette}
+  alias StatifierBlocks.{
+    Assignability,
+    Block,
+    BlockType,
+    Compiler,
+    Composite,
+    Document,
+    Environment,
+    Palette
+  }
+
+  alias StatifierBlocks.Compiler.Finding
+  alias StatifierBlocks.Composite.Data
   alias StatifierExamples.CardAuth.AuthorizeWithDeadline
   alias StatifierExamples.Charts
-  alias StatifierExamples.Signup.GuardedStep
+  alias StatifierExamples.Signup.{GuardedSection, GuardedStep}
 
   # `{fixture key, the composite block in it, its module, its sentence}`.
   #
@@ -35,10 +54,18 @@ defmodule StatifierExamples.CompositesTest do
   @composites [
     {"card_processing_composite", "blk_cpx_authz", AuthorizeWithDeadline,
      "Authorize within 1h, else abandon"},
-    {"signup_guarded_step", "blk_gs_step", GuardedStep, "Run myapp:provision, notify on failure"}
+    {"signup_guarded_step", "blk_gs_step", GuardedStep, "Run myapp:provision, notify on failure"},
+    {"signup_guarded_section", "blk_gx_section", GuardedSection,
+     "Run myapp:provision, notify on failure, then continue"}
   ]
 
-  describe "the two composites are registered" do
+  # The pass-through composite's own fixture, and the one child the author
+  # put in its `body` slot. Named once here because six cases below read it.
+  @section_key "signup_guarded_section"
+  @section_id "blk_gx_section"
+  @section_child "blk_gx_confirm"
+
+  describe "the three composites are registered" do
     # Sabotage: renamed the key `"myapp.guarded_step"` in
     # `Signup.block_types/0`, so the type the fixture names resolves to
     # nothing; this went red here and took three more cases with it - the
@@ -52,25 +79,31 @@ defmodule StatifierExamples.CompositesTest do
       end
     end
 
-    # `RQ-SF037-3`: a composite in this campaign exposes no slot of its own,
-    # so what an author edits is the params and nothing else. Pass-through
-    # slots are a later campaign's question.
+    # `RQ-SF037-3` answered a campaign ago that a composite exposes no slot of
+    # its own; `RQ-SF038-5` gives it one, for the composite that declares it
+    # and for no other. Both halves are asserted, per module, because what is
+    # worth being told about is a slot appearing on a composite that declared
+    # none.
     #
-    # Sabotage: added a second `def slots/1` to `GuardedStep`, answering
-    # `core.invoke`'s `on_error` slot. It did NOT go red, and the compiler
-    # said why - "this clause for slots/1 cannot match because a previous
-    # clause at line 39 always matches": `slots/1` is derived by
-    # `use StatifierBlocks.Composite` and is one of the callbacks the macro
+    # `slots/1` is derived by `use StatifierBlocks.Composite` from the
+    # declaration's `:slots` and is one of the callbacks the macro
     # deliberately does not make overridable, so no declaration in this repo
-    # can answer anything else. Reverted from a copy. What this case is
-    # therefore watching is the PACKAGE keeping `RQ-SF037-3`, and the
-    # mutation that reddens it lives there; the value here is that a
-    # pass-through slot arriving in a later release lands as a failure in the
-    # host that assumed there was none.
-    test "neither exposes a slot of its own" do
-      for {_key, _id, module, _sentence} <- @composites do
-        assert module.slots(%{}) == []
-      end
+    # can answer anything else - which is why the arity and the label below
+    # are read as facts about the declaration rather than about a function
+    # this app wrote.
+    #
+    # Sabotage: dropped `:slots` from `GuardedSection`'s `use`. Thirteen cases
+    # went red across this file, `StatifierExamples.ViewModelPinTest` and
+    # `StatifierExamplesWeb.PlanLiveTest` - the splice, `pass_through/2`,
+    # `slot_accepts`, both walk cases, both data-twin cases and the outline and
+    # plan rows - because a composite that declares no slot carries the
+    # author's children nowhere. Reverted from a copy.
+    test "only the third exposes a slot of its own" do
+      assert AuthorizeWithDeadline.slots(%{}) == []
+      assert GuardedStep.slots(%{}) == []
+
+      # P1's `:label` is declared and its `:arity` is left to default.
+      assert GuardedSection.slots(%{}) == [{"body", :any, "Then"}]
     end
 
     # The params ARE the config schema, which is what lets the compiler's own
@@ -93,6 +126,11 @@ defmodule StatifierExamples.CompositesTest do
              ]
 
       assert Enum.map(GuardedStep.config_schema(%{}), & &1.key) == [
+               "invoke_type",
+               "failure_template"
+             ]
+
+      assert Enum.map(GuardedSection.config_schema(%{}), & &1.key) == [
                "invoke_type",
                "failure_template"
              ]
@@ -188,6 +226,20 @@ defmodule StatifierExamples.CompositesTest do
       assert compiled.scxml =~ "s_blk_gs_step_call"
       assert compiled.scxml =~ "s_blk_gs_step_notify"
       refute compiled.scxml =~ "s_blk_gs_step\""
+
+      # The pass-through composite says the same thing twice over: the minted
+      # members are in the chart, the composite is not, and the child the
+      # AUTHOR placed is there at the id the author gave it. `ADR-0004`'s T2 -
+      # a spliced child is not minted, so its state id is the one it would
+      # have had had the author placed the expansion by hand.
+      assert {:ok, compiled} = compile(fixture_document(@section_key))
+
+      assert compiled.scxml =~ "s_#{@section_id}_call"
+      assert compiled.scxml =~ "s_#{@section_id}_notify"
+      assert compiled.scxml =~ "s_#{@section_id}_then"
+      assert compiled.scxml =~ "s_#{@section_child}"
+      refute compiled.scxml =~ "s_#{@section_id}\""
+      refute compiled.scxml =~ "s_#{@section_id}_confirm"
 
       assert {:ok, compiled} = compile(fixture_document("card_processing_composite"))
 
@@ -285,6 +337,245 @@ defmodule StatifierExamples.CompositesTest do
     end
   end
 
+  describe "P4: the pass-through slot carries the author's children" do
+    # ADR-0002's P4, over this app's own fixture. The children the author put
+    # under the composite's declared slot are placed in the mapped inner slot
+    # of the member the local id names, in their stored order, and they are
+    # NOT minted - minting is what turns a subtree's local ids into document
+    # ids, and a child arrived carrying a document id already.
+    #
+    # Sabotage: renamed the fixture block's slot key from `body` to `then`,
+    # which is the LOCAL id rather than the declared slot name; the splice
+    # found nothing to carry and this went red on the child's absence, taking
+    # six more with it - the chart's own state ids, both outline pins and both
+    # plan-page rows. Reverted from a copy.
+    test "the child lands in the mapped inner slot, id unchanged" do
+      {members, _param_map} = Composite.expand(section_block(), GuardedSection)
+
+      assert [
+               %Block{type: "core.invoke", id: "blk_gx_section_call"},
+               %Block{type: "core.group", id: "blk_gx_section_then"} = group
+             ] = members
+
+      assert [%Block{id: @section_child, type: "myapp.notify"}] = group.slots["body"]
+
+      # Only the mapped inner slot is written. `interrupts` is the group's
+      # other slot and the subtree wrote it empty; the splice leaves it that
+      # way rather than reaching a slot nothing mapped to.
+      assert group.slots["interrupts"] == []
+    end
+
+    # `pass_through/2` is the mapping resolved to the MINTED id, which is what
+    # the environment walk needs to find the inner position and what a caller
+    # must not derive for itself - `mint_id/3` is the package's rule and a
+    # second implementation of it would be a second chance to disagree.
+    #
+    # Sabotage: pointed the declaration's `:to` at `{"call", "on_error"}`,
+    # which the subtree fills with the notification. `expand/2` raised P5's
+    # third refusal by name - "the mapped inner slot holds the author's
+    # children and only them" - and sixteen cases went red with it, which is
+    # every case that expands this composite. Reverted from a copy.
+    test "pass_through/2 answers the mapping under the minted id" do
+      assert Composite.pass_through(section_block(), GuardedSection) == %{
+               "body" => {"blk_gx_section_then", "body"}
+             }
+
+      # A composite that declares nothing answers nothing, which is every
+      # composite this app shipped before this one.
+      assert Composite.pass_through(block("signup_guarded_step", "blk_gs_step"), GuardedStep) ==
+               %{}
+    end
+
+    # `ADR-0004`'s T3: the expansion index maps expansion MEMBERS only, so the
+    # param map is taken before the author's children are spliced in and a
+    # pass-through child has no entry in it. That is what keeps a finding on a
+    # child from ever being re-anchored onto the composite.
+    #
+    # Sabotage: in `deps/statifier_blocks`, had `expand/2` take the param map
+    # over the SPLICED tree rather than over the minted members
+    # (`MIX_ENV=test mix deps.compile statifier_blocks --force` before and
+    # after); the child appeared in it against `nil`, and this went red on the
+    # key list with the child-attribution case below - which is the pairing
+    # that says the index and the attribution are one fact. Reverted from a
+    # copy and recompiled.
+    test "the param map names the minted members and no spliced child" do
+      {_members, param_map} = Composite.expand(section_block(), GuardedSection)
+
+      assert param_map == %{
+               "blk_gx_section_call" => "invoke_type",
+               "blk_gx_section_notify" => "failure_template",
+               "blk_gx_section_then" => nil
+             }
+
+      refute Map.has_key?(param_map, @section_child)
+    end
+
+    # `io/1`'s `slot_accepts` is `%{}` for a composite that declares no slot
+    # and, for one that does, the MAPPED INNER slot's own answer - read off
+    # `core.group`, which is a core type and therefore exact behind the
+    # callback.
+    #
+    # Sabotage: mapped the declaration at `{"then", "interrupts"}`;
+    # `slot_accepts` answered the interrupt rail's `[:interrupt_handler]` and
+    # this went red, taking eight more with it - the splice, `pass_through/2`,
+    # both byte-identity cases, both walk cases and both data-twin cases, since
+    # a `myapp.notify` spliced onto an interrupt rail is not a legal document.
+    # Reverted from a copy.
+    test "slot_accepts answers the mapped inner slot's kinds" do
+      %{slot_accepts: accepts} = GuardedSection.io(%{})
+
+      # `core.group`'s own answer for the slot the declaration maps into
+      # (`lib/statifier_blocks/core/group.ex:56-60`), pinned as the literal:
+      # what a reader wants to be told about is the kinds an author may drop
+      # into the composite's interior, and a test that re-derived them would
+      # agree with any answer at all.
+      assert accepts == %{"body" => [:step]}
+
+      assert %{slot_accepts: %{}} = GuardedStep.io(%{})
+    end
+  end
+
+  describe "ADR-0011 section 2 and 3: the walk descends at the mapped inner position" do
+    # Section 2, and the reason the composite records at a path of its own.
+    # The environment a child of the declared slot is read against is NOT the
+    # environment reaching the composite: it is the one obtained by walking
+    # the expansion up to the mapped member, so the call's `assign_to` has
+    # already been applied by the time the child is read.
+    #
+    # The two halves are asserted together because either alone proves
+    # nothing: an entry present at both positions would say the walk never
+    # descended, and one present at neither would say the call writes nothing.
+    #
+    # Sabotage: pointed the MODULE subtree's `assign_to` at `""`, so the call
+    # records nowhere; the first assertion went red and the second stayed
+    # green, which is the pair doing its job. It took both data-twin cases with
+    # it, because `declaration/0` still wrote the path and the two spellings
+    # stopped agreeing - which is the other thing this composite is here to
+    # keep true. Reverted from a copy.
+    test "the child is read against the environment inside the mapped member" do
+      document = fixture_document(@section_key)
+      palette = Charts.palette()
+
+      inside = Environment.at(palette, document, {@section_id, "body", 0})
+      before = Environment.at(palette, document, {"blk_gx_root", "body", 0})
+
+      assert Map.has_key?(inside, "signup.step_outcome")
+      refute Map.has_key?(before, "signup.step_outcome")
+    end
+
+    # The other half of section 2's worked example, in the terms this app can
+    # state it: the fixture's own child reads clean, which it could not do
+    # against an environment the walk refused to descend into.
+    test "a child's read of the step's produced path is satisfied" do
+      assert Assignability.validate(Charts.palette(), fixture_document(@section_key), %{}) == :ok
+    end
+
+    # Section 3, and `ADR-0004`'s T3 with it: a finding whose owner is a block
+    # the AUTHOR placed is reported against that block, at that block's own
+    # id. It is not lifted one level onto the composite the way a finding on a
+    # member of the expansion is, because the author can see it and can change
+    # it.
+    #
+    # The pair is asserted in one case so that the two arms are read together:
+    # the same document, the same compile, one finding on the child and one on
+    # the composite, and each names the block whose author owns it.
+    #
+    # Sabotage: in `deps/statifier_blocks`, had `expand/2` take the param map -
+    # which is what the compiler builds its expansion index from - over the
+    # SPLICED tree, so the child the author placed was indexed as an expansion
+    # member (`MIX_ENV=test mix deps.compile statifier_blocks --force` before
+    # and after); the child's finding was re-anchored onto `blk_gx_section` and
+    # this went red on the first assertion, with the param-map case above.
+    # Reverted from a copy and recompiled.
+    test "a wrong read on a child is the child's finding, and one on a member is the composite's" do
+      child =
+        Block.new("core.invoke",
+          id: "blk_gx_stray",
+          config: %{"invoke_type" => "myapp:nobody", "assign_to" => "", "params" => ""}
+        )
+
+      assert {:ok, compiled} = compile(document([section_block([child])]))
+
+      assert [%Finding{} = warning] = compiled.warnings
+      assert warning.block_id == "blk_gx_stray"
+
+      # And the other arm, unmoved: a minted member the author never typed is
+      # still re-anchored onto the composite, on the param whose value it
+      # carries.
+      stray = %{section_block() | config: %{section_block().config | "invoke_type" => "nope"}}
+
+      assert {:error, [%Finding{} = finding]} = compile(document([stray]))
+      assert finding.block_id == @section_id
+      assert finding.config_key == "invoke_type"
+    end
+  end
+
+  describe "P9: the same declaration, held as data" do
+    # The twin proper, and the one thing that makes it byte-identical rather
+    # than merely equivalent: each node's `"id_suffix"` is the local id
+    # `subtree/1` writes, so the two kinds mint the same ids.
+    #
+    # Sabotage: changed the row's `"then"` `"id_suffix"` to `"group"`; the two
+    # expansions stopped being equal and this went red, as did both
+    # byte-identity cases below and nothing else. Reverted from a copy.
+    test "the data twin expands block for block to the module twin's" do
+      state = section_state()
+
+      assert Composite.expand(section_block(), GuardedSection) ==
+               Composite.expand(section_block(), {Data, state})
+
+      # And the declaration-level `"slots"` key decodes to the same list the
+      # `use` writes, which is P2's whole claim.
+      assert Data.slots(state, %{}) == GuardedSection.slots(%{})
+    end
+
+    # Consent clause 6 for the data kind: the same document, compiled over a
+    # palette carrying the declaration instead of the module, is the same
+    # bytes.
+    #
+    # What CANNOT redden this is a change that keeps both compiles legal -
+    # both sides read one `Composite.expand/2` - which is the shape of the
+    # obligation rather than a weakness, exactly as the module cases above
+    # record.
+    test "a document holding the data twin compiles to the module twin's bytes" do
+      document = fixture_document(@section_key)
+      palette = Charts.palette([{"myapp.guarded_section", {Data, section_state()}}])
+
+      assert {:ok, from_module} = compile(document)
+      assert {:ok, from_data} = Compiler.compile(document, palette, known_invoke_types: known())
+
+      assert from_module.scxml == from_data.scxml
+      assert from_module.provenance == from_data.provenance
+      assert from_module.invoke_types == from_data.invoke_types
+    end
+
+    # T4 for the data kind against its own hand-expansion, which is the same
+    # obligation the module cases state and the reason both are here: a
+    # declaration that expanded to something the compiler read differently
+    # would pass the case above and fail this one.
+    # The envelope is the fixture's own on both sides - a `Document` mints a
+    # fresh id, and two documents built by hand would differ in the `name`
+    # attribute for a reason that has nothing to do with the expansion.
+    test "the data twin's document compiles to its own expansion's bytes" do
+      state = section_state()
+      palette = Charts.palette([{"myapp.guarded_section", {Data, state}}])
+      document = fixture_document(@section_key)
+      {members, _param_map} = Composite.expand(section_block(), {Data, state})
+
+      assert {:ok, composed} =
+               Compiler.compile(document, palette, known_invoke_types: known())
+
+      assert {:ok, expanded} =
+               Compiler.compile(expanded_document(document, members), palette,
+                 known_invoke_types: known()
+               )
+
+      assert composed.scxml == expanded.scxml
+      assert composed.provenance == expanded.provenance
+      assert composed.invoke_types == expanded.invoke_types
+    end
+  end
+
   # -- helpers -----------------------------------------------------------
 
   @spec block(String.t(), String.t()) :: Block.t()
@@ -306,7 +597,7 @@ defmodule StatifierExamples.CompositesTest do
   # The fixture, with the one composite in its body replaced by the blocks it
   # stands for. The envelope, the root's own id and the document's declared
   # roots are the fixture's own - which is what makes the comparison below
-  # about the expansion and about nothing else. Both fixtures are a
+  # about the expansion and about nothing else. All three fixtures are a
   # `core.sequence` root whose `body` holds exactly the composite, so the
   # splice is the whole body.
   @spec expanded_document(Document.t(), [Block.t()]) :: Document.t()
@@ -325,8 +616,32 @@ defmodule StatifierExamples.CompositesTest do
   # invoke types it actually answers.
   @spec compile(Document.t()) :: {:ok, struct()} | {:error, [struct()]}
   defp compile(document) do
-    Compiler.compile(document, Charts.palette(),
-      known_invoke_types: MapSet.new(Charts.invoke_types())
-    )
+    Compiler.compile(document, Charts.palette(), known_invoke_types: known())
+  end
+
+  @spec known() :: MapSet.t()
+  defp known, do: MapSet.new(Charts.invoke_types())
+
+  # The pass-through composite as its fixture stores it, optionally with the
+  # `body` slot's children replaced - which is how the cases that need a
+  # different child ask for one without a second fixture.
+  @spec section_block() :: Block.t()
+  defp section_block, do: block(@section_key, @section_id)
+
+  @spec section_block([Block.t()]) :: Block.t()
+  defp section_block(children) when is_list(children) do
+    block = section_block()
+
+    %{block | slots: Map.put(block.slots, "body", children)}
+  end
+
+  # The same composite's declaration, decoded. `declaration/1` is where a data
+  # composite's pass-through mapping is refused, so a row that got this far is
+  # one whose mapping fits its own subtree.
+  @spec section_state() :: map()
+  defp section_state do
+    assert {:ok, state} = Data.declaration(GuardedSection.declaration())
+
+    state
   end
 end

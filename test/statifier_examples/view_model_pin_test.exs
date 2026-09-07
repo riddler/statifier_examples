@@ -66,7 +66,7 @@ defmodule StatifierExamples.ViewModelPinTest do
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.CardAuth.AuthorizeWithDeadline
   alias StatifierExamples.Charts
-  alias StatifierExamples.Signup.GuardedStep
+  alias StatifierExamples.Signup.{GuardedSection, GuardedStep}
 
   # The pin. `StatifierExamplesWeb.PlanLiveTest` builds its expectation from
   # the same `ViewModel.outline/1` call the page renders from, which is the
@@ -108,7 +108,13 @@ defmodule StatifierExamples.ViewModelPinTest do
     "signup_bulk_invites" => {5, %{step: 4, rail: 1}},
     "signup_bulk_invites_strict" => {5, %{step: 4, rail: 1}},
     "signup_invite_chunk" => {2, %{step: 2}},
-    "signup_guarded_step" => {2, %{step: 2}}
+    "signup_guarded_step" => {2, %{step: 2}},
+
+    # Three rows rather than two, and the third is the point: the composite
+    # declares a pass-through slot, so the block the AUTHOR put in it is a row
+    # of its own beneath the composite's. The expansion's own members are
+    # still not rows.
+    "signup_guarded_section" => {3, %{step: 3}}
   }
 
   # The two fixtures whose prose is pinned as well as counted, as
@@ -182,6 +188,16 @@ defmodule StatifierExamples.ViewModelPinTest do
     {"blk_gs_step", 1, "Run myapp:provision, notify on failure"}
   ]
 
+  # The pass-through composite, whose prose is pinned for the same reason and
+  # one more: the depth. The author's child is drawn BENEATH the composite,
+  # one deeper, and a walk that flattened the two into siblings would keep the
+  # row count intact.
+  @signup_guarded_section_steps [
+    {"blk_gx_root", 0, "Sequence"},
+    {"blk_gx_section", 1, "Run myapp:provision, notify on failure, then continue"},
+    {"blk_gx_confirm", 2, "Notify"}
+  ]
+
   # The two composites this app ships, as `{fixture key, block id, module}`.
   # The module is here so a case can ask the DECLARATION what it declares
   # rather than repeat it: the params and the expansion are the composite's
@@ -189,7 +205,8 @@ defmodule StatifierExamples.ViewModelPinTest do
   # mistake.
   @composites [
     {"card_processing_composite", "blk_cpx_authz", AuthorizeWithDeadline},
-    {"signup_guarded_step", "blk_gs_step", GuardedStep}
+    {"signup_guarded_step", "blk_gs_step", GuardedStep},
+    {"signup_guarded_section", "blk_gx_section", GuardedSection}
   ]
 
   # The four kinds `ViewModel.outline/1` may hand back. Pinned as a set of
@@ -229,7 +246,7 @@ defmodule StatifierExamples.ViewModelPinTest do
     # here and took the row-count case above with it, which is the pairing
     # that makes an unwalked fixture impossible rather than merely unlikely.
     # Reverted from a copy.
-    test "the ten fixtures are the ten fixtures" do
+    test "the eleven fixtures are the eleven fixtures" do
       assert Charts.fixtures() |> Enum.map(& &1.key) |> Enum.sort() ==
                @outlines |> Map.keys() |> Enum.sort()
     end
@@ -298,7 +315,7 @@ defmodule StatifierExamples.ViewModelPinTest do
     end
   end
 
-  describe "the two composite fixtures read as one row each" do
+  describe "the three composite fixtures read as one row each, plus the author's own" do
     # `RQ-SF037-3`: a composite exposes no slot of its own, so the walk has
     # nothing to descend into and the arrangement `subtree/1` describes is
     # not in the outline at all. What an author sees is the declaration's
@@ -317,6 +334,20 @@ defmodule StatifierExamples.ViewModelPinTest do
       assert steps_of("signup_guarded_step") == @signup_guarded_step_steps
     end
 
+    # `RQ-SF038-5` at the walk: a composite that DOES declare a slot draws its
+    # own row and then, beneath it, the rows of the blocks the author put in
+    # that slot - at their own ids, one depth deeper, with their own
+    # sentences. Nothing about the expansion is in the outline either way.
+    #
+    # Sabotage: emptied the fixture block's `body` slot, which is an author who
+    # has not filled the interior yet; this went red on the missing third line
+    # and took the row count above, the chart's state ids, the splice case and
+    # the plan page's child rows with it, while the two other composites stayed
+    # green. Reverted from a copy.
+    test "signup_guarded_section reads as these lines" do
+      assert steps_of("signup_guarded_section") == @signup_guarded_section_steps
+    end
+
     # The other half of "one row": the row is the COMPOSITE, not the first
     # block of its expansion. `expand/2` is asked for the members here rather
     # than the ids being written down, so an expansion that reshaped would
@@ -328,16 +359,25 @@ defmodule StatifierExamples.ViewModelPinTest do
     # --force` in BOTH `dev` and `test` around it - a dep sabotaged in `dev`
     # alone leaves `mix test` reading the old build and looks green); this
     # went red on `blk_cpx_authz`, and its `PlanLiveTest` twin with it.
-    test "no expanded block appears in either outline" do
+    test "no expanded block appears in any outline" do
       for {key, block_id, module} <- @composites do
         ids = key |> outline_of_key() |> Enum.map(fn {node, _depth, _kind} -> node.block_id end)
 
-        assert ids == [root_id(key), block_id]
+        # The composite's row, and then the author's own blocks under whatever
+        # slots the DECLARATION exposes - computed from `slots/1` rather than
+        # written down, so a composite that gains or loses a pass-through slot
+        # is followed here rather than gone red on for the wrong reason.
+        assert ids == [root_id(key), block_id | authored_children(key, block_id, module)]
 
         {members, _params} =
           Composite.expand(block_in(key, block_id), module)
 
-        for %Block{id: expanded} <- Composite.flatten(members) do
+        # `expand/2` answers the SPLICED tree, so the author's own children are
+        # in it and are the one thing in it that legitimately reaches the
+        # outline. What must not reach it is a MINTED member.
+        authored = authored_children(key, block_id, module)
+
+        for %Block{id: expanded} <- Composite.flatten(members), expanded not in authored do
           refute expanded in ids,
                  "#{key}: #{expanded} is an expanded block and reached the outline"
         end
@@ -418,6 +458,19 @@ defmodule StatifierExamples.ViewModelPinTest do
   defp outline_of_key(key) do
     {:ok, fixture} = Charts.fixture(key)
     outline_of(fixture)
+  end
+
+  # The ids of the blocks the author placed in a composite's declared
+  # pass-through slots, in declaration order and pre-order within each - the
+  # rows the outline draws beneath the composite's own.
+  @spec authored_children(String.t(), String.t(), module()) :: [String.t()]
+  defp authored_children(key, block_id, module) do
+    block = block_in(key, block_id)
+
+    module.slots(%{})
+    |> Enum.flat_map(fn {name, _arity, _label} -> Map.get(block.slots, name, []) end)
+    |> Composite.flatten()
+    |> Enum.map(& &1.id)
   end
 
   defp root_id(key) do

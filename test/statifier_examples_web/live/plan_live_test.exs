@@ -14,7 +14,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.Messaging.Notify
   alias StatifierExamples.Documents
-  alias StatifierExamples.Signup.GuardedStep
+  alias StatifierExamples.Signup.{GuardedSection, GuardedStep}
 
   @themes ["light", "dark", "brand"]
 
@@ -34,15 +34,19 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   @plan_block "blk_cp_intake"
   @plan_slot "body"
 
-  # The two composites this app ships, as `{fixture key, block id, module,
-  # sentence}`. Each is read on a fixture of its own that holds nothing else,
-  # so "one row for the composite" is a question the row COUNT can answer.
-  # The module is carried so a case can ask the declaration what its params
-  # are rather than transcribe them.
+  # The three composites this app ships, as `{fixture key, block id, module,
+  # sentence}`. Each is read on a fixture of its own that holds its root, the
+  # composite and nothing else the author did not put inside the composite -
+  # so "one row for the composite, and one for each block the author placed"
+  # is a question the row COUNT can answer. The module is carried so a case
+  # can ask the declaration what its params and its slots are rather than
+  # transcribe them.
   @composites [
     {"card_processing_composite", "blk_cpx_authz", AuthorizeWithDeadline,
      "Authorize within 1h, else abandon"},
-    {"signup_guarded_step", "blk_gs_step", GuardedStep, "Run myapp:provision, notify on failure"}
+    {"signup_guarded_step", "blk_gs_step", GuardedStep, "Run myapp:provision, notify on failure"},
+    {"signup_guarded_section", "blk_gx_section", GuardedSection,
+     "Run myapp:provision, notify on failure, then continue"}
   ]
 
   describe "the outline as rows" do
@@ -350,17 +354,62 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       for {key, block_id, module, sentence} <- @composites do
         {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: key]}")
 
-        assert rows_in(html) == 2, "#{key}: a composite and its root are two rows"
+        authored = authored_children(key, block_id, module)
+
+        assert rows_in(html) == 2 + length(authored),
+               "#{key}: the root, the composite and the author's own blocks are the rows"
+
         assert occurrences(html, ~s(data-block-id="#{block_id}")) == 1
         assert html =~ escaped(sentence)
 
         {members, _params} = Composite.expand(block_in(key, block_id), module)
 
-        for %Block{id: expanded} <- Composite.flatten(members) do
+        # `expand/2` answers the SPLICED tree, so the author's own children are
+        # in it - and they are the one thing in it the page is right to draw.
+        for %Block{id: expanded} <- Composite.flatten(members), expanded not in authored do
           refute html =~ ~s(data-block-id="#{expanded}"),
                  "#{key}: #{expanded} is an expanded block and was drawn"
         end
       end
+    end
+
+    # `RQ-SF038-5` at the page, and the half the count above cannot see: a
+    # composite that declares a pass-through slot draws as ONE row with the
+    # author's blocks as rows BENEATH it - one `data-depth` deeper - rather
+    # than as siblings, and the block the author placed carries its own id and
+    # its own sentence exactly as it would have anywhere else in the document.
+    #
+    # This goes through the page rather than only through
+    # `StatifierExamples.ViewModelPinTest` for the reason the case above gives:
+    # the row is what an author reads.
+    #
+    # Sabotage: dropped `:slots` from `GuardedSection`'s `use`, which is a
+    # composite that carries the author's blocks nowhere; the child row went
+    # away and this went red, one of thirteen cases across this file,
+    # `StatifierExamples.CompositesTest` and
+    # `StatifierExamples.ViewModelPinTest`. Reverted from a copy.
+    test "the pass-through composite's children are rows beneath it", %{conn: conn} do
+      key = "signup_guarded_section"
+      block_id = "blk_gx_section"
+      child = "blk_gx_confirm"
+
+      {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: key]}")
+
+      assert authored_children(key, block_id, GuardedSection) == [child]
+
+      composite = row(html, block_id)
+      child_row = row(html, child)
+
+      assert composite =~ ~s(data-depth="1")
+      assert child_row =~ ~s(data-depth="2")
+
+      assert html =~ escaped("Run myapp:provision, notify on failure, then continue")
+      assert html =~ escaped("Notify")
+
+      # The composite is still one row: the interior is where the child is
+      # drawn, not a second card for the composite.
+      assert occurrences(html, ~s(data-block-id="#{block_id}")) == 1
+      assert occurrences(html, ~s(data-block-id="#{child}")) == 1
     end
 
     # What the row opens onto. `shown_fields/1` is the filter and the
@@ -704,6 +753,27 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   end
 
   defp occurrences(html, needle), do: length(String.split(html, needle)) - 1
+
+  # The markup of one row, from its `data-block-id` to the end of that
+  # element's opening tag, so a case can ask what a single row carries.
+  defp row(html, block_id) do
+    [_before, rest] = String.split(html, ~s(data-block-id="#{block_id}"), parts: 2)
+
+    hd(String.split(rest, ">", parts: 2))
+  end
+
+  # The ids of the blocks the author placed in a composite's declared
+  # pass-through slots, in declaration order - the rows the plan draws beneath
+  # the composite's own. Computed from `slots/1` rather than written down, so
+  # a composite that gains or loses a slot is followed here.
+  defp authored_children(key, block_id, module) do
+    block = block_in(key, block_id)
+
+    module.slots(%{})
+    |> Enum.flat_map(fn {name, _arity, _label} -> Map.get(block.slots, name, []) end)
+    |> Composite.flatten()
+    |> Enum.map(& &1.id)
+  end
 
   defp block_in(key, block_id) do
     key
