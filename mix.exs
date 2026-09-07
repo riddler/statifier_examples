@@ -794,23 +794,37 @@ defmodule StatifierExamples.MixProject do
   # app's documents leans on the looser reading.
   #
   # The default arm is a GIT PIN again, at
-  # `ecc0db4fe3cda55b8d15bdcd10fed688a9eef227` on `statifier_blocks` main,
-  # for `se-2ox`: the two reference composites this app now registers are
-  # written against three seams that land after 0.24.0 and are unpublished
-  # while they are written. `sb-xio9` adds the `use StatifierBlocks.Composite`
-  # declaration macro itself - params plus a pure `subtree/1`, and the
-  # `Composite.expand/2` that is the one expansion function every reader of
-  # "what does this composite stand for" goes through. `sb-qxyh` makes the
-  # compiler splice that expansion in at Resolve and re-anchor a finding
-  # raised inside it against the composite block. `sb-hgxl` adds the editor's
-  # Expand control, which commits the same expansion into the document, so a
-  # reader can see the arrangement a composite stands for.
+  # `3a210a917f8776e1b189b9a1ba1927c4fdb9caf9` on `statifier_blocks` main,
+  # for `se-2ox` and then `se-avi`: the two reference composites this app
+  # registers are written against three seams that land after 0.24.0 and are
+  # unpublished while they are written. `sb-xio9` adds the
+  # `use StatifierBlocks.Composite` declaration macro itself - params plus a
+  # pure `subtree/1`, and the `Composite.expand/2` that is the one expansion
+  # function every reader of "what does this composite stand for" goes
+  # through. `sb-qxyh` makes the compiler splice that expansion in at Resolve
+  # and re-anchor a finding raised inside it against the composite block.
+  # `sb-hgxl` adds the editor's Expand control, which commits the same
+  # expansion into the document, so a reader can see the arrangement a
+  # composite stands for.
+  #
+  # `se-avi` advanced the pin from
+  # `ecc0db4fe3cda55b8d15bdcd10fed688a9eef227` to this commit for three more
+  # unpublished seams, the ones the Plan view stopped keeping its own copies
+  # of. `sb-0buo` promotes the reading half - `ViewModel.find_node/2`,
+  # `parent_of/2`, `positions/1`, `sentence/1`, `shown_fields/1`,
+  # `fields_for/2`, `overlay_draft/2`, `drafted_field/2`, and
+  # `Document.committed_config/2` and `effective_config/2`. `sb-mcs8`
+  # promotes the writing half - `StatifierBlocks.Edit.Session` with
+  # `commit/2`, `change_config/3`, `step/2`, `update_list/4` and
+  # `apply_gesture/2`, plus `Edit.Targets.accepted_types/4` and
+  # `Assignability.context/1` for the fit filter. `sb-gbxt` makes
+  # `selected_id` a host-written input assign on the editor component.
   #
   # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout is
   # unaffected either way. `se-k6q` puts the Hex arm back once the operator
   # publishes; the ledger entry
   # `se-2ox-statifier_blocks-sb-xio9+sb-qxyh+sb-hgxl` carries the pin until
-  # then, and `se-avi` advances it once to a later main SHA before that.
+  # then, advanced here rather than doubled.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
@@ -819,7 +833,7 @@ defmodule StatifierExamples.MixProject do
       _ ->
         {:statifier_blocks,
          git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "ecc0db4fe3cda55b8d15bdcd10fed688a9eef227"}
+         ref: "3a210a917f8776e1b189b9a1ba1927c4fdb9caf9"}
     end
   end
 
