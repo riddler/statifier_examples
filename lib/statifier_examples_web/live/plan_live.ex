@@ -22,7 +22,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   | writes to the document | `StatifierBlocks.Edit.Session.commit/2`, `change_config/3` |
   | edits a list field | `Edit.Session.update_list/4` |
   | steps back and forward | `Edit.Session.step/2` |
-  | shows a refused draft | `ViewModel.overlay_draft/2`, `BlockType.validate_config/1` |
+  | shows a refused draft | `ViewModel.overlay_draft/2`, `ViewModel.overlay_findings/2` |
   | says which types fit a gap | `StatifierBlocks.Edit.Targets.accepted_types/4` |
   | names the data-flow context | `StatifierBlocks.Assignability.context/1` |
   | builds an inserted block | `StatifierBlocks.Palette.new_block/2` |
@@ -79,13 +79,20 @@ defmodule StatifierExamplesWeb.PlanLive do
   an `{:invalid_config, id, findings}` refusal becomes a draft and every
   other refusal becomes an error.
 
-  The values come back on screen through `ViewModel.overlay_draft/2`, and
-  the findings beside them are derived here: that function's own
-  documentation says it states no opinion about whether a draft validates
-  and that a consumer wanting the findings derives them. `se-f4a` is that
-  derivation - `BlockType.validate_config/1`, routed onto the field whose
-  key each finding names, with anything routing nowhere drawn above the
-  form. A refused draft names the field it was about.
+  The values come back on screen through `ViewModel.overlay_draft/2` and
+  the findings beside them through `ViewModel.overlay_findings/2`: the
+  first puts the author's bytes back on the fields, the second routes the
+  refusal's own per-field findings onto them, with anything routing
+  nowhere drawn above the form. A refused draft names the field it was
+  about.
+
+  `se-f4a` derived those findings here instead, by re-running
+  `BlockType.validate_config/1` over the draft, because the funnel
+  discarded the findings its own refusal carried. That was this page's one
+  standing piece of residue against the package and `sb-8fa8` closed it:
+  `change_config/3` keeps them in the session's `draft_findings`, so the
+  form draws what the refusal said rather than a second derivation of it.
+  Two host functions went with the residue.
 
   ## Read-only
 
@@ -694,17 +701,19 @@ defmodule StatifierExamplesWeb.PlanLive do
   # Everything the render reads, derived once per change rather than per
   # render. Every question in here is the package's: `outline/1` orders the
   # rows, `positions/1` says where each block sits, and `overlay_draft/2`
-  # puts a refused draft's bytes back on the fields.
+  # with `overlay_findings/2` puts a refused draft's bytes and its findings
+  # back on the fields.
   @spec rebuild(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp rebuild(socket) do
-    %Session{document: document, palette: palette, drafts: drafts} = socket.assigns.session
+    %Session{document: document, palette: palette, drafts: drafts, draft_findings: findings} =
+      socket.assigns.session
 
     view_model = ViewModel.build(document, palette, [])
 
     outline =
       view_model
       |> ViewModel.outline()
-      |> Enum.map(&overlay_draft(&1, drafts, palette))
+      |> Enum.map(&overlay_draft(&1, drafts, findings))
 
     socket
     |> assign(:view_model, view_model)
@@ -715,72 +724,35 @@ defmodule StatifierExamplesWeb.PlanLive do
     |> assign_insertable()
   end
 
-  # One outline entry with its draft over it, where a draft is held. The
-  # values are `ViewModel.overlay_draft/2`'s - decision 9's own treatment,
-  # public since `sb-0buo` - and the findings are `route_findings/3`
-  # below, which is the half that function states no opinion about.
+  # One outline entry with its draft over it, where a draft is held. Both
+  # halves are the package's now: `ViewModel.overlay_draft/2` puts the
+  # refused bytes back on the fields, and `ViewModel.overlay_findings/2`
+  # routes the refusal's own per-field findings onto them.
+  #
+  # `se-f4a` derived those findings here, by re-running the type's
+  # `validate_config/1` over the draft, because `Edit.Session` threw away
+  # the `{:invalid_config, id, findings}` it had already been handed. That
+  # was this page's residue and it is `sb-8fa8`'s answer now: a refused
+  # `Session.change_config/3` keeps them in `draft_findings` under the
+  # block's id, so what reaches the form is what the funnel actually said
+  # rather than a second derivation that could disagree with it.
   @spec overlay_draft(
           {ViewModel.Node.t(), non_neg_integer(), atom()},
           Session.drafts(),
-          Palette.t()
+          Session.draft_findings()
         ) :: {ViewModel.Node.t(), non_neg_integer(), atom()}
-  defp overlay_draft({%ViewModel.Node{} = node, depth, kind} = entry, drafts, palette) do
+  defp overlay_draft({%ViewModel.Node{} = node, depth, kind} = entry, drafts, findings) do
     case Map.fetch(drafts, node.block_id) do
       :error ->
         entry
 
       {:ok, draft} ->
-        {node |> ViewModel.overlay_draft(draft) |> route_findings(palette, draft), depth, kind}
-    end
-  end
+        overlaid =
+          node
+          |> ViewModel.overlay_draft(draft)
+          |> ViewModel.overlay_findings(Map.get(findings, node.block_id, []))
 
-  # `se-f4a`. `ViewModel.overlay_draft/2`'s own doc says it "states no
-  # opinion about whether the draft validates" and that a consumer wanting
-  # the draft's findings derives them - so this derives them, from the
-  # public `validate_config/1` that is the only authority on a config's own
-  # bytes, and routes each one onto the field its key names. A finding
-  # whose key matches no field goes to `form.unrouted`, which is where the
-  # view model's own routing table puts one for a committed config: the
-  # page draws every refusal it was handed or it draws a refusal nobody can
-  # act on.
-  @spec route_findings(ViewModel.Node.t(), Palette.t(), Block.config()) :: ViewModel.Node.t()
-  defp route_findings(%ViewModel.Node{form: nil} = node, _palette, _draft), do: node
-
-  defp route_findings(%ViewModel.Node{form: %ViewModel.Form{} = form} = node, palette, draft) do
-    by_key = draft_findings(node, palette, draft)
-    keys = MapSet.new(form.fields, & &1.key)
-
-    fields =
-      Enum.map(form.fields, fn field ->
-        %{field | findings: Map.get(by_key, field.key, [])}
-      end)
-
-    unrouted =
-      by_key
-      |> Enum.reject(fn {key, _findings} -> MapSet.member?(keys, key) end)
-      |> Enum.sort()
-      |> Enum.flat_map(fn {_key, findings} -> findings end)
-
-    %{node | form: %{form | fields: fields, unrouted: unrouted}}
-  end
-
-  # The draft's own refusals, keyed by the field key each one names. A type
-  # that does not resolve, or one that accepts the draft, contributes none -
-  # a draft is held for reasons `validate_config/1` is not the only source
-  # of, and a page that invented a finding for those would be saying
-  # something the package did not.
-  @spec draft_findings(ViewModel.Node.t(), Palette.t(), Block.config()) ::
-          %{optional(String.t()) => [Finding.t()]}
-  defp draft_findings(%ViewModel.Node{block_id: id, type: type}, palette, draft) do
-    with {:ok, module} <- Palette.fetch(palette, type),
-         {:error, findings} <- module.validate_config(draft) do
-      Enum.group_by(
-        findings,
-        fn {key, _message} -> key end,
-        fn {key, message} -> Finding.new({:config, id, key}, :config, message) end
-      )
-    else
-      _accepted_or_unknown_type -> %{}
+        {overlaid, depth, kind}
     end
   end
 

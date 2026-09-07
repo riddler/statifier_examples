@@ -265,22 +265,31 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       refute render(plan) =~ "Nothing is stored yet"
     end
 
-    # `se-f4a`, folded into `se-avi`. The page used to say a refusal
-    # happened and stop there. It now derives the draft's own findings from
-    # the public `validate_config/1` and routes each onto the field its key
-    # names, which is what `ViewModel.overlay_draft/2`'s documentation says
-    # a consumer wanting them does - that function is the values half and
-    # states no opinion about whether a draft validates.
+    # `se-f4a`, folded into `se-avi`, and re-pointed by `se-6jn`. The page
+    # used to say a refusal happened and stop there; then it derived the
+    # draft's own findings by re-running `validate_config/1` over the
+    # draft, because `Edit.Session.change_config/3` discarded the findings
+    # its own `{:invalid_config, id, findings}` refusal carried.
     #
-    # Both halves of the expectation are asked of the declaration rather
-    # than written down: the label off `config_schema/1` and the message off
-    # `validate_config/1`, so a type that rewords either is a change this
-    # case follows instead of one it goes red on for the wrong reason.
+    # `sb-8fa8` closed that: the refusal's findings are kept in the
+    # session's `draft_findings` under the block's id and
+    # `ViewModel.overlay_findings/2` routes them onto the form. The page's
+    # `route_findings/3` and `draft_findings/3` are gone with it, and what
+    # this case now pins is that the findings on screen are the ones the
+    # funnel stated rather than a second derivation of them.
     #
-    # Sabotage: pointed `route_findings/3`'s field map at `&1.key` on the
-    # findings map instead of `Map.get(by_key, field.key, [])`, so every
-    # field got every finding; the "one field named" assertion went red.
-    # Reverted from a copy.
+    # Both halves of the expectation are still asked of the declaration
+    # rather than written down: the label off `config_schema/1` and the
+    # message off `validate_config/1`, so a type that rewords either is a
+    # change this case follows instead of one it goes red on for the wrong
+    # reason. `validate_config/1` is called by the TEST to state the
+    # expectation; the page no longer calls it at all.
+    #
+    # Sabotage: replaced `Map.get(findings, node.block_id, [])` in
+    # `overlay_draft/3` with `[]`, so the refusal's findings never reached
+    # the form; this went red on the pending sentence, which is built from
+    # the fields the findings landed on, and no other case in the file
+    # moved. Reverted from a copy.
     test "a refused draft names the field it is about", %{conn: conn} do
       {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: @doc_key]}")
 
@@ -549,6 +558,88 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       end
 
       refute render(plan) =~ "A crafted write"
+    end
+  end
+
+  describe "the transparent-container readers" do
+    # `se-6jn`. `sb-6xkf` promoted the three readers a host that FLATTENS
+    # containers out of its own outline needs - `ViewModel.transparent?/2`,
+    # `effective_parent/3` and `end_of_list_target/3`, over a caller's own
+    # list of transparent type names with `ViewModel.core_containers/0` as
+    # the documented default.
+    #
+    # This page flattens nothing. Every block the walk hands over is drawn,
+    # indented by its own depth, and where the "+" under a row inserts is
+    # the next place in the row's OWN slot - `gap_target/2`, built on the
+    # `ViewModel.positions/1` map. So the honest answer to "does this page
+    # adopt the readers" is no, and the honest measurement is that not one
+    # line was deleted for them.
+    #
+    # What is worth pinning is the AGREEMENT, which is the reason the
+    # readers were promoted in the first place: with the caller's list
+    # EMPTY - this page's list, since it draws through nothing - the
+    # package's reader gives the same answer this page's own map does, for
+    # every block of every fixture and for a row nested inside a
+    # `core.group`, which no fixture has. If the two ever disagree, one of
+    # the two views of this document is wrong about where a row sits.
+    #
+    # The `core_containers/0` half is asserted too, and asserted to be
+    # DIFFERENT: it is what this page would get if it adopted flattening,
+    # so a later pass that adopts it is a deliberate change to this case
+    # rather than a silent one.
+    #
+    # Sabotage: the code under test is the DEPENDENCY's, so the mutation
+    # was too - dropped the `transparent?(parent, types)` half of
+    # `effective_parent/3`'s climb guard in `deps/statifier_blocks`, making
+    # it climb past every ancestor whatever the caller's list said. Both
+    # cases below went red, the first naming `blk_cp_three_ds_group` in
+    # `card_processing`. Reverted from a copy, with
+    # `MIX_ENV=test mix deps.compile statifier_blocks --force` run either
+    # side of the revert - a stale test build reads as a false green.
+    test "agree with the positions map this page's gap target reads" do
+      for fixture <- Charts.fixtures() do
+        vm = ViewModel.build(fixture.document, Charts.palette(), [])
+        positions = ViewModel.positions(vm)
+
+        refute Enum.empty?(positions)
+
+        for {id, position} <- positions do
+          assert ViewModel.effective_parent(vm, id, []) == position,
+                 "#{fixture.key}: the package reader and this page's map disagree about #{id}"
+        end
+      end
+    end
+
+    test "climb past a group only when the caller asks them to" do
+      wait_a = Block.new("core.wait", id: "wait_a", config: %{"duration" => "30s"})
+      wait_b = Block.new("core.wait", id: "wait_b", config: %{"duration" => "1s"})
+      group = Block.new("core.group", id: "grp", slots: %{"body" => [wait_a, wait_b]})
+
+      vm =
+        "core.sequence"
+        |> Block.new(id: "root", slots: %{"body" => [group]})
+        |> Document.new()
+        |> ViewModel.build(Charts.palette(), [])
+
+      positions = ViewModel.positions(vm)
+
+      # This page's list is empty, and on it the reader is the map.
+      assert positions["wait_b"] == {"grp", "body", 1}
+      assert ViewModel.effective_parent(vm, "wait_b", []) == {"grp", "body", 1}
+
+      # `gap_target/2` is "the next place in the row's own slot", and for
+      # the last row of a slot that is the end of the list - which is the
+      # other reader, on the same empty list.
+      assert ViewModel.end_of_list_target(vm, "wait_b", []) == {"grp", "body", 2}
+
+      # And what the page does NOT do: draw the group through.
+      assert ViewModel.transparent?(ViewModel.find_node(vm, "grp"), ViewModel.core_containers())
+
+      assert ViewModel.effective_parent(vm, "wait_b", ViewModel.core_containers()) ==
+               {"root", "body", 0}
+
+      refute ViewModel.effective_parent(vm, "wait_b", ViewModel.core_containers()) ==
+               positions["wait_b"]
     end
   end
 
