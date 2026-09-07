@@ -1,3 +1,59 @@
+# Defined BEFORE the test module on purpose. `mix test` starts async test
+# modules as their `defmodule` finishes, while the parallel require is
+# still reading the rest of the file, so a support module written after
+# the test module can still be undefined when the first test calls it
+# (`se-bur`: the flags cases went red on `current_version/0` roughly one
+# run in five, whenever the seed put one of them first).
+defmodule StatifierExamples.ViewModelPinTest.FlaggedType do
+  @moduledoc """
+  A block type that exists only so `StatifierExamples.ViewModelPinTest` has
+  one field of each rendering flag to look at.
+
+  It is here rather than in `lib/` because it is not a type this app ships:
+  registering it in `StatifierExamples.Charts.palette/0` would put it in the
+  editor's palette for every author, and editing a shipped fixture to carry
+  a flag would change what the app ships in order to test what the package
+  declares.
+  """
+
+  use StatifierBlocks.BlockType
+
+  alias StatifierBlocks.Block
+
+  # Never compiled: this type exists to be READ by `ViewModel.build/3`, and
+  # nothing in this file asks the compiler for it. The callback is required
+  # by the behaviour, so it is here, and it refuses rather than pretending
+  # to emit - a test-only type reaching a compile is a bug in the test, not
+  # a document to be compiled.
+  @impl StatifierBlocks.BlockType
+  def emit(%Block{}, _context) do
+    {:error, [{"type", "myapp.flagged is a test-only type and emits nothing"}]}
+  end
+
+  @impl StatifierBlocks.BlockType
+  def config_schema(_config) do
+    [
+      %{key: "plain", type: :string, label: "Plain", required?: false, default: "a"},
+      %{
+        key: "secret",
+        type: :string,
+        label: "Secret",
+        required?: false,
+        default: "kept",
+        hidden?: true
+      },
+      %{
+        key: "shown",
+        type: :string,
+        label: "Shown",
+        required?: false,
+        default: "b",
+        readonly?: true
+      }
+    ]
+  end
+end
+
 defmodule StatifierExamples.ViewModelPinTest do
   @moduledoc false
 
@@ -270,55 +326,5 @@ defmodule StatifierExamples.ViewModelPinTest do
     |> Map.fetch!(:root)
     |> Map.fetch!(:form)
     |> Map.fetch!(:fields)
-  end
-end
-
-defmodule StatifierExamples.ViewModelPinTest.FlaggedType do
-  @moduledoc """
-  A block type that exists only so `StatifierExamples.ViewModelPinTest` has
-  one field of each rendering flag to look at.
-
-  It is here rather than in `lib/` because it is not a type this app ships:
-  registering it in `StatifierExamples.Charts.palette/0` would put it in the
-  editor's palette for every author, and editing a shipped fixture to carry
-  a flag would change what the app ships in order to test what the package
-  declares.
-  """
-
-  use StatifierBlocks.BlockType
-
-  alias StatifierBlocks.Block
-
-  # Never compiled: this type exists to be READ by `ViewModel.build/3`, and
-  # nothing in this file asks the compiler for it. The callback is required
-  # by the behaviour, so it is here, and it refuses rather than pretending
-  # to emit - a test-only type reaching a compile is a bug in the test, not
-  # a document to be compiled.
-  @impl StatifierBlocks.BlockType
-  def emit(%Block{}, _context) do
-    {:error, [{"type", "myapp.flagged is a test-only type and emits nothing"}]}
-  end
-
-  @impl StatifierBlocks.BlockType
-  def config_schema(_config) do
-    [
-      %{key: "plain", type: :string, label: "Plain", required?: false, default: "a"},
-      %{
-        key: "secret",
-        type: :string,
-        label: "Secret",
-        required?: false,
-        default: "kept",
-        hidden?: true
-      },
-      %{
-        key: "shown",
-        type: :string,
-        label: "Shown",
-        required?: false,
-        default: "b",
-        readonly?: true
-      }
-    ]
   end
 end
