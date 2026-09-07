@@ -60,10 +60,13 @@ defmodule StatifierExamples.ViewModelPinTest do
   use ExUnit.Case, async: true
 
   alias StatifierBlocks.Block
+  alias StatifierBlocks.Composite
   alias StatifierBlocks.Document
   alias StatifierBlocks.Palette
   alias StatifierBlocks.ViewModel
+  alias StatifierExamples.CardAuth.AuthorizeWithDeadline
   alias StatifierExamples.Charts
+  alias StatifierExamples.Signup.GuardedStep
 
   # The pin. `StatifierExamplesWeb.PlanLiveTest` builds its expectation from
   # the same `ViewModel.outline/1` call the page renders from, which is the
@@ -158,6 +161,35 @@ defmodule StatifierExamples.ViewModelPinTest do
     {"blk_su_onboarding_deadline", 2, "Send signup.abandoned"},
     {"blk_su_plan", 2, "Decide: When \"business\", otherwise"},
     {"blk_su_provision", 2, "Provision"}
+  ]
+
+  # The two composite fixtures, pinned the same way. A composite is ONE row
+  # (`RQ-SF037-3`: it exposes no slot, so `outline/1` has nothing to descend
+  # into), and the row's words are the declaration's `sentence` template with
+  # the block's own params filled in - so a param renamed, a template
+  # reworded, or an expansion that leaked into the walk all land here.
+  #
+  # Pinned as prose and not only as the {2, %{step: 2}} counts above because
+  # the count alone cannot tell a composite drawn as itself from a composite
+  # silently drawn as the first block of its subtree.
+  @card_processing_composite_steps [
+    {"blk_cpx_root", 0, "Sequence"},
+    {"blk_cpx_authz", 1, "Authorize within 1h, else abandon"}
+  ]
+
+  @signup_guarded_step_steps [
+    {"blk_gs_root", 0, "Sequence"},
+    {"blk_gs_step", 1, "Run myapp:provision, notify on failure"}
+  ]
+
+  # The two composites this app ships, as `{fixture key, block id, module}`.
+  # The module is here so a case can ask the DECLARATION what it declares
+  # rather than repeat it: the params and the expansion are the composite's
+  # own, and a test that transcribed either would go green on a copy of the
+  # mistake.
+  @composites [
+    {"card_processing_composite", "blk_cpx_authz", AuthorizeWithDeadline},
+    {"signup_guarded_step", "blk_gs_step", GuardedStep}
   ]
 
   # The four kinds `ViewModel.outline/1` may hand back. Pinned as a set of
@@ -266,6 +298,77 @@ defmodule StatifierExamples.ViewModelPinTest do
     end
   end
 
+  describe "the two composite fixtures read as one row each" do
+    # `RQ-SF037-3`: a composite exposes no slot of its own, so the walk has
+    # nothing to descend into and the arrangement `subtree/1` describes is
+    # not in the outline at all. What an author sees is the declaration's
+    # sentence with this block's params in it, at the block's own depth.
+    #
+    # Sabotage: changed `AuthorizeWithDeadline`'s `sentence` template from
+    # "else {outcome}" to "otherwise {outcome}" (restored from a copy); this
+    # case alone went red, on the one line, and its `signup_guarded_step`
+    # twin stayed green - which is what says each composite is pinned to its
+    # own prose rather than to a shared shape.
+    test "card_processing_composite reads as these lines" do
+      assert steps_of("card_processing_composite") == @card_processing_composite_steps
+    end
+
+    test "signup_guarded_step reads as these lines" do
+      assert steps_of("signup_guarded_step") == @signup_guarded_step_steps
+    end
+
+    # The other half of "one row": the row is the COMPOSITE, not the first
+    # block of its expansion. `expand/2` is asked for the members here rather
+    # than the ids being written down, so an expansion that reshaped would
+    # still be refuted by the same case.
+    #
+    # Sabotage: made `mint_id/3` in the pinned `composite.ex` answer the
+    # composite's own id rather than `composite_id <> "_" <> local_id`
+    # (restored from a copy taken first, `mix deps.compile statifier_blocks
+    # --force` in BOTH `dev` and `test` around it - a dep sabotaged in `dev`
+    # alone leaves `mix test` reading the old build and looks green); this
+    # went red on `blk_cpx_authz`, and its `PlanLiveTest` twin with it.
+    test "no expanded block appears in either outline" do
+      for {key, block_id, module} <- @composites do
+        ids = key |> outline_of_key() |> Enum.map(fn {node, _depth, _kind} -> node.block_id end)
+
+        assert ids == [root_id(key), block_id]
+
+        {members, _params} =
+          Composite.expand(block_in(key, block_id), module)
+
+        for %Block{id: expanded} <- Composite.flatten(members) do
+          refute expanded in ids,
+                 "#{key}: #{expanded} is an expanded block and reached the outline"
+        end
+      end
+    end
+
+    # What a plan view draws under the row. The composite's `config_schema/1`
+    # is its params (`RQ-SF037-15` leaves it there), and `hidden?` is the
+    # only thing that takes one off the surface - so this is the set
+    # `StatifierExamplesWeb.PlanLive` renders, asserted where the view model
+    # produces it rather than only where the page consumes it.
+    #
+    # Sabotage: wrapped `build_fields/3`'s result in `Enum.reverse/1` in the
+    # pinned `view_model.ex` (restored from a copy, `mix deps.compile
+    # statifier_blocks --force` in `dev` and `test` around it); this went red
+    # on the field list, and the `PlanLiveTest` case that reads the same set
+    # off the rendered form went red with it.
+    test "a composite's fields are its params, and the hidden ones are marked" do
+      for {key, block_id, module} <- @composites do
+        fields = fields_of(key, block_id)
+        params = module.config_schema(%{})
+
+        assert Enum.map(fields, & &1.key) == Enum.map(params, & &1.key),
+               "#{key}: the field list is not the param list"
+
+        assert Enum.map(fields, & &1.hidden?) == Enum.map(params, &Map.get(&1, :hidden?, false)),
+               "#{key}: a param's hidden? did not reach the view model"
+      end
+    end
+  end
+
   describe "a field's rendering flags" do
     # The bead's third criterion. No shipped fixture declares a `hidden?` or
     # `readonly?` field - no `core.*` type does, and neither does any of this
@@ -310,6 +413,37 @@ defmodule StatifierExamples.ViewModelPinTest do
     |> outline_of()
     |> Enum.filter(fn {_node, _depth, kind} -> kind == :step end)
     |> Enum.map(fn {node, depth, _kind} -> {node.block_id, depth, node.sentence} end)
+  end
+
+  defp outline_of_key(key) do
+    {:ok, fixture} = Charts.fixture(key)
+    outline_of(fixture)
+  end
+
+  defp root_id(key) do
+    {:ok, fixture} = Charts.fixture(key)
+    fixture.document.root.id
+  end
+
+  defp block_in(key, block_id) do
+    {:ok, fixture} = Charts.fixture(key)
+
+    fixture.document
+    |> Document.blocks()
+    |> Enum.find(&(&1.id == block_id))
+  end
+
+  # The fields the view model builds for one block of one fixture - the same
+  # list `StatifierExamplesWeb.PlanLive` filters `hidden?` out of.
+  defp fields_of(key, block_id) do
+    {:ok, fixture} = Charts.fixture(key)
+
+    fixture.document
+    |> ViewModel.build(Charts.palette(), [])
+    |> ViewModel.outline()
+    |> Enum.find_value(fn {node, _depth, _kind} ->
+      node.block_id == block_id && node.form.fields
+    end)
   end
 
   defp field(fields, key), do: Enum.find(fields, &(&1.key == key))

@@ -6,10 +6,14 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias StatifierBlocks.Block
+  alias StatifierBlocks.Composite
   alias StatifierBlocks.Document
   alias StatifierBlocks.ViewModel
+  alias StatifierExamples.CardAuth.AuthorizeWithDeadline
   alias StatifierExamples.Charts
   alias StatifierExamples.Documents
+  alias StatifierExamples.Signup.GuardedStep
 
   @themes ["light", "dark", "brand"]
 
@@ -28,6 +32,17 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   @plan_doc "card_processing"
   @plan_block "blk_cp_intake"
   @plan_slot "body"
+
+  # The two composites this app ships, as `{fixture key, block id, module,
+  # sentence}`. Each is read on a fixture of its own that holds nothing else,
+  # so "one row for the composite" is a question the row COUNT can answer.
+  # The module is carried so a case can ask the declaration what its params
+  # are rather than transcribe them.
+  @composites [
+    {"card_processing_composite", "blk_cpx_authz", AuthorizeWithDeadline,
+     "Authorize within 1h, else abandon"},
+    {"signup_guarded_step", "blk_gs_step", GuardedStep, "Run myapp:provision, notify on failure"}
+  ]
 
   describe "the outline as rows" do
     # The bead's first criterion, asked of every fixture rather than of a
@@ -250,6 +265,78 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     end
   end
 
+  describe "a composite as a row" do
+    # `RQ-SF037-3` at the page: a composite exposes no slot, so it is ONE
+    # row - the declaration's sentence with this block's params in it - and
+    # the arrangement `subtree/1` describes is drawn nowhere. The expanded
+    # ids are asked of `Composite.expand/2` rather than written down, so an
+    # expansion that reshaped is still refuted by the same case.
+    #
+    # This goes through the page rather than only through
+    # `StatifierExamples.ViewModelPinTest` because the row is what an author
+    # reads: a composite the walk answers as one node and the page draws as
+    # two is a defect the view model's own test cannot see.
+    #
+    # Sabotage: dropped `sentence/1`'s binary clause in `plan_live.ex`, so
+    # every row fell through to `ViewModel.title/1`; this went red on the
+    # composite's line and took the all-fixtures case above with it, then
+    # was reverted from a copy.
+    test "each composite is one row carrying its own sentence", %{conn: conn} do
+      for {key, block_id, module, sentence} <- @composites do
+        {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: key]}")
+
+        assert rows_in(html) == 2, "#{key}: a composite and its root are two rows"
+        assert occurrences(html, ~s(data-block-id="#{block_id}")) == 1
+        assert html =~ escaped(sentence)
+
+        {members, _params} = Composite.expand(block_in(key, block_id), module)
+
+        for %Block{id: expanded} <- Composite.flatten(members) do
+          refute html =~ ~s(data-block-id="#{expanded}"),
+                 "#{key}: #{expanded} is an expanded block and was drawn"
+        end
+      end
+    end
+
+    # What the row opens onto. `shown_fields/1` is the filter and the
+    # composite's `config_schema/1` is its params, so the form under a
+    # selected composite carries one field per param that is not `hidden?`,
+    # in declaration order.
+    #
+    # Neither shipped composite declares a hidden param today, so the
+    # expectation is computed from the declaration rather than written down:
+    # a param that GAINS `hidden?` later is then a change this case follows
+    # instead of one it goes red on for the wrong reason.
+    #
+    # Sabotage: pointed `shown_fields/1` at `& &1.required?` instead of
+    # `& &1.hidden?`, so the required params came off the surface; this went
+    # red naming `card_processing_composite`, and nothing else in the file
+    # did - the plan page's field surface was untested before this case.
+    # Reverted from a copy.
+    #
+    # A second sabotage is worth recording because it did NOT go red: marking
+    # `outcome` hidden AND dropping `shown_fields/1`'s reject left this green,
+    # because `Field.field/1` renders nothing for a hidden field on its own.
+    # The two filters are redundant by design (`plan_live.ex` says so at
+    # `shown_fields/1`), so what this case pins is the SURFACE - which is the
+    # claim the bead makes - and not which of the two produced it.
+    test "a selected composite's fields are its params minus the hidden ones", %{conn: conn} do
+      for {key, block_id, module, _sentence} <- @composites do
+        {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: key]}")
+
+        shown =
+          module.config_schema(%{})
+          |> Enum.reject(&Map.get(&1, :hidden?, false))
+          |> Enum.map(& &1.key)
+
+        refute Enum.empty?(shown)
+
+        assert plan |> select(block_id) |> field_keys() == shown,
+               "#{key}: the form under the composite row is not its params"
+      end
+    end
+  end
+
   describe "read-only" do
     # `?readonly=1` renders values and no controls. Every gesture is checked
     # rather than one representative: what makes a read-only page read-only
@@ -354,6 +441,25 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     |> Map.fetch!(:slots)
     |> Map.fetch!(@plan_slot)
     |> Enum.map(& &1.id)
+  end
+
+  defp occurrences(html, needle), do: length(String.split(html, needle)) - 1
+
+  defp block_in(key, block_id) do
+    key
+    |> fixture()
+    |> Map.fetch!(:document)
+    |> Document.blocks()
+    |> Enum.find(&(&1.id == block_id))
+  end
+
+  # The field keys in a rendered row, in order. `Field.field/1` stamps
+  # `data-field` on every field it draws and draws nothing at all for a
+  # hidden one, so this is exactly what the page put on the surface.
+  defp field_keys(html) do
+    ~r/data-field="([^"]+)"/
+    |> Regex.scan(html)
+    |> Enum.map(fn [_all, key] -> key end)
   end
 
   defp index_of(ids, id), do: Enum.find_index(ids, &(&1 == id))
