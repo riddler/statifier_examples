@@ -277,8 +277,15 @@ The card-processing domain declares what its paths hold, so the editor and
 the compiler can refuse a document that contradicts itself. The declarations
 live in `priv/fixtures/card-processing.datamodel.json` - a
 `statifier_datamodel` document, keyed on the **domain** rather than on one
-chart, so `card_processing` and `card_processing_sketch` share one
-vocabulary. It carries three scopes of declared paths and a fourth key,
+chart, so all three card-processing charts - `card_processing`,
+`card_processing_sketch` and `card_processing_composite` - share one
+vocabulary. The composite document joined them on 2026-09-07 (`se-0u1`);
+until then it carried no `metadata.domain` and was the one card chart the
+advisories were off for. Joining meant declaring what it writes:
+`myapp.authorize_with_deadline` records each lane's answer at
+`<lane name>.result`, so the three lane roots its defaults name -
+`fraud_review`, `balance_check` and `three_ds` - each carry a `result` in
+the datamodel document. It carries three scopes of declared paths and a fourth key,
 `types`, naming two records and a shape: `cards.credit_txn`, what the flow is
 about; `cards.settlement`, what a settled amount would be; and `Settleable`,
 the amount-and-currency pair a capture needs and no more.

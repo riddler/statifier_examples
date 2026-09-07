@@ -30,7 +30,7 @@ defmodule StatifierExamples.CardAuth.Park do
       description: "Puts the work on a queue and waits for a human.",
       icon: "pause",
       keywords: ["park", "queue", "hold", "wait"],
-      order: 6,
+      order: 8,
       accent_token: Step.accent_token()
     }
 

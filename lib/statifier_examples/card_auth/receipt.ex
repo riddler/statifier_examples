@@ -52,7 +52,7 @@ defmodule StatifierExamples.CardAuth.Receipt do
       description: "Renders the receipt for the completed transaction.",
       icon: "document-text",
       keywords: ["receipt", "summary", "document"],
-      order: 8,
+      order: 3,
       accent_token: Step.accent_token()
     }
 

@@ -393,6 +393,70 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     end
   end
 
+  describe "the field surface of a selected row" do
+    # The case above asked "fields == the declaration's params minus the
+    # hidden ones" of the two composites. `se-0u1` asks it of every row of
+    # every fixture, for the reason the outline case is asked of every
+    # fixture: the claim is about the PAGE's form, and a form is built the
+    # same way for a `core.branch` with arms in it as it is for a composite
+    # with eight params. A two-fixture case reads as a claim about
+    # composites; this one is the claim the page actually makes.
+    #
+    # The expectation comes from `ViewModel.shown_fields/1` on the same node
+    # the page renders, so what is asserted is that the page put on the
+    # surface exactly what the view model handed it - in order, and nothing
+    # else. What `shown_fields/1` itself decides is `statifier_blocks`'
+    # test's business.
+    #
+    # One LiveView per fixture rather than one per row: `select-row` toggles
+    # only when the SAME row is clicked twice, so clicking each row in turn
+    # walks the document without a reload.
+    #
+    # Sabotage: pointed the row template's `:for` at `@node.form.fields`
+    # instead of `ViewModel.shown_fields(@node)`; this stayed green, because
+    # `Field.field/1` draws nothing for a hidden field on its own and no
+    # shipped type declares one - the same redundancy the composite case
+    # above records. Reverted from a copy. A discriminating sabotage:
+    # dropped the `<Field.field>` line from the non-readonly form, which
+    # went red on the first fixture with a selected row that has fields, and
+    # was reverted from a copy.
+    test "every fixture's every row shows exactly its shown fields", %{conn: conn} do
+      surfaces =
+        for fixture <- Charts.fixtures() do
+          {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: fixture.key]}")
+
+          view_model = ViewModel.build(fixture.document, Charts.palette(), [])
+
+          checked =
+            for {node, _depth, _kind} <- ViewModel.outline(view_model) do
+              expected = view_model |> ViewModel.find_node(node.block_id) |> shown_keys()
+              html = select(plan, node.block_id)
+
+              assert field_keys(html) == expected,
+                     "#{fixture.key}/#{node.block_id}: the form is not this node's shown fields"
+
+              length(expected)
+            end
+
+          refute Enum.empty?(checked), "#{fixture.key}: no row was checked"
+
+          {fixture.key, Enum.sum(checked)}
+        end
+
+      # A page that drew no field anywhere would satisfy every assertion
+      # above, so the walk says how much surface it actually read - and the
+      # two composite fixtures are named, because their rows are the ones
+      # the narrower case already covered.
+      assert Enum.sum(Enum.map(surfaces, fn {_key, fields} -> fields end)) > 50
+
+      for {key, _block_id, module, _sentence} <- @composites do
+        params = module.config_schema(%{}) |> Enum.reject(&Map.get(&1, :hidden?, false))
+        assert {^key, count} = Enum.find(surfaces, fn {k, _} -> k == key end)
+        assert count >= length(params)
+      end
+    end
+  end
+
   describe "read-only" do
     # `?readonly=1` renders values and no controls. Every gesture is checked
     # rather than one representative: what makes a read-only page read-only
@@ -566,6 +630,10 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     |> Regex.scan(html)
     |> Enum.map(fn [_all, key] -> key end)
   end
+
+  # The field keys a node puts on the surface, in order: the same call the
+  # row template renders from, so the expectation and the page cannot drift.
+  defp shown_keys(node), do: node |> ViewModel.shown_fields() |> Enum.map(& &1.key)
 
   defp index_of(ids, id), do: Enum.find_index(ids, &(&1 == id))
 

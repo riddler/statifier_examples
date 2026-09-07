@@ -154,12 +154,49 @@
           "path": "three_ds",
           "type": "object",
           "label": "Cardholder challenge",
+          "note": "Also the third lane's root in the composite document: myapp.authorize_with_deadline records a lane's answer at <lane name>.result, and three_ds is the third lane's default name.",
           "fields": [
             {
               "name": "completed",
               "path": "three_ds.completed",
               "type": "boolean",
               "label": "Challenge completed"
+            },
+            {
+              "name": "result",
+              "path": "three_ds.result",
+              "type": "object",
+              "label": "Challenge lane result"
+            }
+          ]
+        },
+        {
+          "name": "fraud_review",
+          "path": "fraud_review",
+          "type": "object",
+          "label": "Fraud lane",
+          "note": "The first lane of the deadline arrangement, under its default name. The lane's name IS the root it records at, so a chart that renames the lane declares the new name here.",
+          "fields": [
+            {
+              "name": "result",
+              "path": "fraud_review.result",
+              "type": "object",
+              "label": "Fraud lane result"
+            }
+          ]
+        },
+        {
+          "name": "balance_check",
+          "path": "balance_check",
+          "type": "object",
+          "label": "Balance lane",
+          "note": "The second lane of the deadline arrangement, under its default name. Distinct from `balance`, which is what the hand-written document's own balance step writes.",
+          "fields": [
+            {
+              "name": "result",
+              "path": "balance_check.result",
+              "type": "object",
+              "label": "Balance lane result"
             }
           ]
         },

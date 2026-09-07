@@ -37,7 +37,7 @@ defmodule StatifierExamples.CardAuth.LegacyCheck do
       description: "Runs the older velocity ruleset over the transaction.",
       icon: "archive-box",
       keywords: ["legacy", "velocity", "ruleset"],
-      order: 9,
+      order: 10,
       accent_token: Step.accent_token()
     }
 end

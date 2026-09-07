@@ -30,7 +30,7 @@ defmodule StatifierExamples.CardAuth.RiskRating do
       description: "Scores the transaction against the fraud model.",
       icon: "shield-exclamation",
       keywords: ["risk", "fraud", "rating"],
-      order: 2,
+      order: 4,
       accent_token: Step.accent_token()
     }
 end

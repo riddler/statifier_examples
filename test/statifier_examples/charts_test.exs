@@ -43,6 +43,66 @@ defmodule StatifierExamples.ChartsTest do
            ]
   end
 
+  # The Card processing group's order is a decision, and
+  # `StatifierExamples.CardAuth`'s moduledoc is where it is written down.
+  # This case is the other half of that: the list here and the table there
+  # are one claim, so a renumbering that does not visit the table goes red.
+  #
+  # It asserts the ORDER of the names rather than the numbers, and
+  # separately that the numbers are 0..n with no gap - the two things the
+  # table promises. `statifier_blocks` refuses a duplicate within a group,
+  # so uniqueness is already somebody else's assertion.
+  #
+  # Sabotage: swapped myapp.intake back to 10; this went red naming intake
+  # in the wrong position, and nothing else in the suite did. Reverted from
+  # a copy.
+  test "the Card processing group is listed in the order CardAuth documents" do
+    ordered = group_order("Card processing")
+
+    assert Enum.map(ordered, fn {name, _order} -> name end) == [
+             "myapp.intake",
+             "myapp.authorize",
+             "myapp.capture",
+             "myapp.receipt",
+             "myapp.risk_rating",
+             "myapp.balance_check",
+             "myapp.three_ds_challenge",
+             "myapp.manual_flag",
+             "myapp.park",
+             "myapp.resolve_review",
+             "myapp.legacy_check",
+             "myapp.authorize_with_deadline"
+           ]
+
+    assert Enum.map(ordered, fn {_name, order} -> order end) ==
+             Enum.to_list(0..(length(ordered) - 1))
+  end
+
+  # The other two groups carry the same promise and are small enough to
+  # spell: an order somebody wrote is contiguous from 0, in every group.
+  #
+  # Sabotage: gave myapp.provision order 4; this went red on the signup
+  # group's number run, then reverted.
+  test "every palette group's order runs 0..n with no gap" do
+    %Palette{types: types} = Charts.palette()
+
+    groups =
+      types
+      |> Map.values()
+      |> Enum.map(& &1.palette_entry())
+      |> Enum.group_by(&Map.get(&1, :group))
+      |> Map.delete(nil)
+
+    refute Enum.empty?(groups)
+
+    for {group, entries} <- groups do
+      orders = entries |> Enum.map(&Map.get(&1, :order)) |> Enum.sort()
+
+      assert orders == Enum.to_list(0..(length(entries) - 1)),
+             "#{group} does not run 0..#{length(entries) - 1}: #{inspect(orders)}"
+    end
+  end
+
   # Sabotage: registered "core.wait" against a host module in registrations/0;
   # this went red, then reverted.
   test "no host registration claims a core name" do
@@ -152,5 +212,16 @@ defmodule StatifierExamples.ChartsTest do
   test "a fixture is found by key, and an unknown key is an ordinary answer" do
     assert {:ok, %{key: "card_processing"}} = Charts.fixture("card_processing")
     assert Charts.fixture("no_such_document") == :error
+  end
+
+  # The `{type name, order}` pairs of one palette group, sorted by order -
+  # which is the list the drawer draws.
+  defp group_order(group) do
+    %Palette{types: types} = Charts.palette()
+
+    types
+    |> Enum.filter(fn {_name, module} -> Map.get(module.palette_entry(), :group) == group end)
+    |> Enum.map(fn {name, module} -> {name, Map.get(module.palette_entry(), :order)} end)
+    |> Enum.sort_by(fn {_name, order} -> order end)
   end
 end

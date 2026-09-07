@@ -44,7 +44,7 @@ defmodule StatifierExamples.CardAuth.Capture do
       description: "Captures a previously authorized amount.",
       icon: "banknotes",
       keywords: ["capture", "settle", "payment"],
-      order: 1,
+      order: 2,
       accent_token: Step.accent_token()
     }
 

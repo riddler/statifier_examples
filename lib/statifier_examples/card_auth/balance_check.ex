@@ -30,7 +30,7 @@ defmodule StatifierExamples.CardAuth.BalanceCheck do
       description: "Reads the available balance on the funding source.",
       icon: "scale",
       keywords: ["balance", "funds", "available"],
-      order: 4,
+      order: 5,
       accent_token: Step.accent_token()
     }
 end

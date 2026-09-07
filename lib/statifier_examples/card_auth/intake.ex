@@ -42,14 +42,13 @@ defmodule StatifierExamples.CardAuth.Intake do
       description: "Accepts the incoming payment request and normalizes it.",
       icon: "inbox",
       keywords: ["intake", "request", "normalize"],
-      # `myapp.authorize` holds 0, and the group's other nine types run 1..9
-      # in the order somebody chose; this entry's own 0 was a second claim on
-      # a taken number rather than a place in that run. `statifier_blocks`
-      # refuses a duplicate order in one group as of the commit `se-2ox`
-      # pins, so the outlier takes the next free number and the deliberate
-      # 0..9 run is left exactly as it was. Where intake really belongs in
-      # this group is a question for whoever wrote the run.
-      order: 10,
+      # First in the group, which is a decision rather than an accident:
+      # intake is the step that seeds `cards.current_txn`, and every later
+      # step in the domain reads it. The group's whole order and the
+      # reasoning behind it are in `StatifierExamples.CardAuth`'s moduledoc,
+      # and `StatifierExamples.ChartsTest` asserts the palette still spells
+      # it.
+      order: 0,
       accent_token: Step.accent_token()
     }
 end

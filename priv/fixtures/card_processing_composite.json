@@ -4,7 +4,8 @@
   "revision": 1,
   "metadata": {
     "name": "Card processing (composite)",
-    "description": "The three-lane authorization arrangement card_processing.json spells out by hand, expressed as one myapp.authorize_with_deadline block. The compiled chart is the same either way, which is the reading this document exists for."
+    "description": "The three-lane authorization arrangement card_processing.json spells out by hand, expressed as one myapp.authorize_with_deadline block. The compiled chart is the same either way, which is the reading this document exists for.",
+    "domain": "card-processing"
   },
   "datamodel": [
     {

@@ -20,7 +20,7 @@ defmodule StatifierExamples.CardAuth.ThreeDsChallenge do
       description: "Sends the cardholder a step-up authentication challenge.",
       icon: "device-phone-mobile",
       keywords: ["3ds", "challenge", "step-up"],
-      order: 5,
+      order: 6,
       accent_token: Step.accent_token()
     }
 
