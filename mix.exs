@@ -793,47 +793,58 @@ defmodule StatifierExamples.MixProject do
   # `StatifierExamples.Charts.TypedEnvironmentTest` saying none of this
   # app's documents leans on the looser reading.
   #
-  # The default arm is a GIT PIN again, at
-  # `3a210a917f8776e1b189b9a1ba1927c4fdb9caf9` on `statifier_blocks` main,
-  # for `se-2ox` and then `se-avi`: the two reference composites this app
-  # registers are written against three seams that land after 0.24.0 and are
-  # unpublished while they are written. `sb-xio9` adds the
-  # `use StatifierBlocks.Composite` declaration macro itself - params plus a
-  # pure `subtree/1`, and the `Composite.expand/2` that is the one expansion
-  # function every reader of "what does this composite stand for" goes
-  # through. `sb-qxyh` makes the compiler splice that expansion in at Resolve
-  # and re-anchor a finding raised inside it against the composite block.
-  # `sb-hgxl` adds the editor's Expand control, which commits the same
-  # expansion into the document, so a reader can see the arrangement a
-  # composite stands for.
+  # The default arm moves to the 0.25 line, and it is a Hex requirement
+  # again: the interim git pin `se-2ox` took while the composite seams
+  # were unpublished, and `se-avi` advanced, is retired by `se-k6q`, and
+  # the `refute` in `StatifierExamples.MixDepsTest` is what says it did
+  # not come back. `STATIFIER_BLOCKS_PATH` still wins over the
+  # requirement, so a local checkout is unaffected either way. The ledger
+  # entry `se-2ox-statifier_blocks-sb-xio9+sb-qxyh+sb-hgxl` is what
+  # carried the pin until here, and it resolves with this arm.
   #
-  # `se-avi` advanced the pin from
-  # `ecc0db4fe3cda55b8d15bdcd10fed688a9eef227` to this commit for three more
-  # unpublished seams, the ones the Plan view stopped keeping its own copies
-  # of. `sb-0buo` promotes the reading half - `ViewModel.find_node/2`,
-  # `parent_of/2`, `positions/1`, `sentence/1`, `shown_fields/1`,
-  # `fields_for/2`, `overlay_draft/2`, `drafted_field/2`, and
-  # `Document.committed_config/2` and `effective_config/2`. `sb-mcs8`
-  # promotes the writing half - `StatifierBlocks.Edit.Session` with
-  # `commit/2`, `change_config/3`, `step/2`, `update_list/4` and
-  # `apply_gesture/2`, plus `Edit.Targets.accepted_types/4` and
-  # `Assignability.context/1` for the fit filter. `sb-gbxt` makes
-  # `selected_id` a host-written input assign on the editor component.
+  # That pin bought six seams, none of them reachable from 0.24.0, and
+  # 0.25.0 carries all six:
   #
-  # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout is
-  # unaffected either way. `se-k6q` puts the Hex arm back once the operator
-  # publishes; the ledger entry
-  # `se-2ox-statifier_blocks-sb-xio9+sb-qxyh+sb-hgxl` carries the pin until
-  # then, advanced here rather than doubled.
+  #   * `sb-xio9` adds the `use StatifierBlocks.Composite` declaration
+  #     macro - params plus a pure `subtree/1` - and the
+  #     `Composite.expand/2` that is the one expansion function every
+  #     reader of "what does this composite stand for" goes through.
+  #   * `sb-qxyh` makes the compiler splice that expansion in at Resolve
+  #     and re-anchor a finding raised inside it against the composite
+  #     block.
+  #   * `sb-hgxl` adds the editor's Expand control, which commits the same
+  #     expansion into the document.
+  #   * `sb-0buo` promotes the reading half the Plan view stopped keeping
+  #     its own copies of - `ViewModel.find_node/2`, `parent_of/2`,
+  #     `positions/1`, `sentence/1`, `shown_fields/1`, `fields_for/2`,
+  #     `overlay_draft/2`, `drafted_field/2`, and
+  #     `Document.committed_config/2` and `effective_config/2`.
+  #   * `sb-mcs8` promotes the writing half - `StatifierBlocks.Edit.Session`
+  #     with `commit/2`, `change_config/3`, `step/2`, `update_list/4` and
+  #     `apply_gesture/2`, plus `Edit.Targets.accepted_types/4` and
+  #     `Assignability.context/1` for the fit filter.
+  #   * `sb-gbxt` makes `selected_id` a host-written input assign on the
+  #     editor component.
+  #
+  # What the release adds ON TOP of the pinned commit is one change:
+  # `sb-5xqr`'s stateful data composite - `Palette.types` admitting a
+  # `{module, state}` entry beside a bare module, the one `Palette.call/4`
+  # seam every census site goes through, and
+  # `StatifierBlocks.Composite.Data`. It is additive here: this app calls
+  # `Palette.call/4` nowhere and registers no stateful entry - every
+  # registration goes through `StatifierExamples.Charts.registrations/0`,
+  # which flat-maps three `block_types/0` maps of bare modules, so
+  # `Palette.fetch/2` answers a bare module at the one site that reads
+  # one (`StatifierExamplesWeb.PlanLive`'s `draft_findings/3`, which then
+  # calls `validate_config/1` on it). 0.25.0 is a minor and no compiled
+  # chart bytes move.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "3a210a917f8776e1b189b9a1ba1927c4fdb9caf9"}
+        {:statifier_blocks, "~> 0.25"}
     end
   end
 

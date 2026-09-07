@@ -211,57 +211,42 @@ defmodule StatifierExamples.MixDepsTest do
   # reporting the resolved 0.24.0 entry against the mutated expectation.
   # Reverted from a backup copy.
   #
-  # `se-2ox`: the arm is a GIT PIN again, at
-  # `3a210a917f8776e1b189b9a1ba1927c4fdb9caf9`, so what this asserts is the
-  # pin rather than a Hex requirement. It is not a weakening of the check: a
-  # pin is exact where a Hex requirement is a range, and `mix.lock` recording
-  # the same commit is what proves the tree is on the code the pin names
-  # rather than on whatever `main` has become since.
+  # The arm moves to the 0.25 line, and back to a Hex requirement: 0.25.0
+  # is published and carries the six seams `se-2ox` pinned for and `se-avi`
+  # advanced the pin for, so `se-k6q` retires that pin and the `refute`
+  # below is what says it did not come back. The ledger entry
+  # `se-2ox-statifier_blocks-sb-xio9+sb-qxyh+sb-hgxl` is what carried it
+  # until here, and it resolves with this arm.
   #
-  # What the pin buys is what `StatifierExamples.CompositesTest` asserts.
-  # `sb-xio9` is the half nothing else could reach: `use
-  # StatifierBlocks.Composite` is the declaration macro the two reference
-  # composites are written with, and `Composite.expand/2` is the one function
-  # that answers what one stands for. `sb-qxyh` makes the compiler splice
-  # that expansion in at Resolve, which is what makes the byte-identity case
-  # in that file a fact about the compiler rather than about a test helper.
-  # `sb-hgxl` adds the editor's Expand control, which commits the same
-  # expansion into the document.
+  # What the pin bought is what `StatifierExamples.CompositesTest` and
+  # `StatifierExamplesWeb.PlanLiveTest` assert between them: `sb-xio9`'s
+  # `use StatifierBlocks.Composite` and `Composite.expand/2`, `sb-qxyh`'s
+  # splice at Resolve, `sb-hgxl`'s editor Expand control, and the three
+  # promotions the Plan view stopped keeping copies of - `sb-0buo`'s
+  # reading half on `ViewModel` and `Document`, `sb-mcs8`'s
+  # `StatifierBlocks.Edit.Session` and `Edit.Targets`, and `sb-gbxt`'s
+  # host-written `selected_id`.
   #
-  # The pinned commit also carries `statifier_blocks`' refusal of two palette
-  # entries claiming one order in one group, which is what
-  # `StatifierExamples.CardAuth.Intake`'s order moved for.
+  # What the release adds on top of the pinned commit is one change and it
+  # is additive here: `sb-5xqr`'s stateful data composite - `Palette.types`
+  # admitting a `{module, state}` entry beside a bare module, the one
+  # `Palette.call/4` seam, and `StatifierBlocks.Composite.Data`. This app
+  # registers no stateful entry (`StatifierExamples.Charts.registrations/0`
+  # flat-maps three `block_types/0` maps of bare modules) and calls
+  # `Palette.call/4` nowhere, so `Palette.fetch/2` answers a bare module at
+  # the one site that reads one. The `statifier_datamodel` floor is
+  # unchanged at `~> 0.4`, which is what the test below still records.
   #
-  # `se-avi` advanced the pin from
-  # `ecc0db4fe3cda55b8d15bdcd10fed688a9eef227` to the commit above, which is
-  # where the Plan view's promoted seams live: `sb-0buo`'s reading half on
-  # `ViewModel` and `Document`, `sb-mcs8`'s `StatifierBlocks.Edit.Session`
-  # and `Edit.Targets`, and `sb-gbxt`'s host-written `selected_id`.
-  # `StatifierExamplesWeb.PlanLiveTest` is what asserts that half.
-  #
-  # `se-k6q` puts the Hex arm and this test's Hex spelling back together
-  # after the operator publishes. The ledger entry
-  # `se-2ox-statifier_blocks-sb-xio9+sb-qxyh+sb-hgxl` is what carries it,
-  # advanced rather than doubled.
-  #
-  @statifier_blocks_ref "3a210a917f8776e1b189b9a1ba1927c4fdb9caf9"
-
-  # Sabotage: pointed the attribute above at a real-but-wrong commit of
-  # `statifier_blocks` main and left `mix.lock` alone; this went red
-  # reporting the pinned ref against the mutated expectation, which is the
-  # half that matters - the dep spelling and the lock have to agree on one
-  # commit or the tree is not on the code the pin names. Reverted from a
-  # copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.24.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.25.0 entry against the mutated expectation.
+  # Reverted from a copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks,
-            [
-              git: "https://github.com/riddler/statifier_blocks.git",
-              ref: @statifier_blocks_ref
-            ]} in deps
+    assert {:statifier_blocks, "~> 0.25"} in deps
 
     lock_line =
       "mix.lock"
@@ -270,9 +255,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
-    assert lock_line =~ @statifier_blocks_ref
-    refute lock_line =~ ":hex,"
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.25.)
+    refute lock_line =~ ":git,"
   end
 
   # The path/type index the editor package reads a datamodel document
