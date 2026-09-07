@@ -12,6 +12,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.CardAuth.AuthorizeWithDeadline
   alias StatifierExamples.Charts
+  alias StatifierExamples.Charts.Messaging.Notify
   alias StatifierExamples.Documents
   alias StatifierExamples.Signup.GuardedStep
 
@@ -263,6 +264,61 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       refute render(plan) =~ "Nothing is stored yet"
     end
+
+    # `se-f4a`, folded into `se-avi`. The page used to say a refusal
+    # happened and stop there. It now derives the draft's own findings from
+    # the public `validate_config/1` and routes each onto the field its key
+    # names, which is what `ViewModel.overlay_draft/2`'s documentation says
+    # a consumer wanting them does - that function is the values half and
+    # states no opinion about whether a draft validates.
+    #
+    # Both halves of the expectation are asked of the declaration rather
+    # than written down: the label off `config_schema/1` and the message off
+    # `validate_config/1`, so a type that rewords either is a change this
+    # case follows instead of one it goes red on for the wrong reason.
+    #
+    # Sabotage: pointed `route_findings/3`'s field map at `&1.key` on the
+    # findings map instead of `Map.get(by_key, field.key, [])`, so every
+    # field got every finding; the "one field named" assertion went red.
+    # Reverted from a copy.
+    test "a refused draft names the field it is about", %{conn: conn} do
+      {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: @doc_key]}")
+
+      select(plan, @block_id)
+
+      label =
+        Notify.config_schema(%{})
+        |> Enum.find(&(&1.key == "template"))
+        |> Map.fetch!(:label)
+
+      {:error, findings} =
+        @doc_key
+        |> config_of(@block_id)
+        |> Map.put("template", "")
+        |> Notify.validate_config()
+
+      {"template", message} = Enum.find(findings, &(elem(&1, 0) == "template"))
+
+      html =
+        plan
+        |> element("#plan-form-#{@block_id}")
+        |> render_change(%{"config" => %{"template" => ""}})
+
+      # The sentence names the field, and the finding is drawn under it.
+      assert html =~ "Nothing is stored yet: #{label}"
+      assert html =~ escaped(message)
+
+      # One field is named, not every field: the routing is by key.
+      assert occurrences(html, "Nothing is stored yet: #{label}.") == 1
+
+      # And the draft is still a draft - the document kept what it had.
+      assert config_of(@doc_key, @block_id)["template"] != ""
+
+      # Discarding takes the finding away with the bytes.
+      refute plan
+             |> element(~s(li[data-block-id="#{@block_id}"] button), "Discard edits")
+             |> render_click() =~ escaped(message)
+    end
   end
 
   describe "a composite as a row" do
@@ -380,6 +436,55 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       render_hook(plan, "move", %{"block-id" => @block_id, "dir" => "up"})
 
       assert document(@doc_key) == before
+    end
+
+    # `se-4v1`, folded into `se-avi`, and answered the other way round from
+    # how it was filed. The bead asked for the host's `handle_event/3`
+    # catch-all to be deleted once `statifier_blocks` had its own
+    # `read_only?` profile. It is not deleted, because the profile is an
+    # assign on the `StatifierBlocks.Editor` live component and this page
+    # mounts no editor, and because the package's own `docs/profiles.md`
+    # says `read_only?` "is not an authorization boundary... If you must
+    # prevent a write, enforce that where you handle the write, not by
+    # trusting a rendering."
+    #
+    # So the two halves are separate here, and this pins both: the package
+    # owns the RENDERING (a field drawn as a value, `readonly?` raised),
+    # and this page owns the GATE. Every event the guard names is sent, and
+    # a `config-change` that the editable page in `describe "editing"`
+    # above commits is the one that proves the gate is what refused it.
+    #
+    # Sabotage: removed the `readonly?: true` catch-all clause; the
+    # config-change assertion went red on the stored config, which the
+    # existing crafted-payload case above did not catch. Reverted from a
+    # copy.
+    test "the package draws the value and this page keeps the write gate", %{conn: conn} do
+      {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: @doc_key, readonly: "1"]}")
+
+      # The package's read-only rendering, per field.
+      assert select(plan, @block_id) =~ ~s(data-field-readonly="true")
+
+      before = document(@doc_key)
+
+      for {event, params} <- [
+            {"config-change",
+             %{"block-id" => @block_id, "config" => %{"label" => "A crafted write"}}},
+            {"discard-draft", %{"block-id" => @block_id}},
+            {"field-list-add", %{"key" => "template"}},
+            {"field-list-remove", %{"key" => "template", "index" => "0"}},
+            {"insert-open", %{"block-id" => @block_id}},
+            {"insert-close", %{}},
+            {"insert", %{"block-id" => @block_id, "type" => "myapp.notify"}},
+            {"move", %{"block-id" => @block_id, "dir" => "down"}},
+            {"remove", %{"block-id" => @block_id}},
+            {"undo", %{}},
+            {"redo", %{}}
+          ] do
+        render_hook(plan, event, params)
+        assert document(@doc_key) == before, "#{event} reached the document"
+      end
+
+      refute render(plan) =~ "A crafted write"
     end
   end
 

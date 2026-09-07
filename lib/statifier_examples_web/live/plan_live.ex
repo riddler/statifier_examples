@@ -13,13 +13,28 @@ defmodule StatifierExamplesWeb.PlanLive do
   |---|---|
   | reads the document | `StatifierBlocks.ViewModel.build/3` |
   | orders the rows | `StatifierBlocks.ViewModel.outline/1` |
-  | labels a row | `ViewModel.Node.sentence`, `ViewModel.title/1` |
+  | labels a row | `ViewModel.sentence/1` |
+  | picks a row's fields | `ViewModel.shown_fields/1`, `ViewModel.fields_for/2` |
+  | finds a block, and where it sits | `ViewModel.find_node/2`, `ViewModel.positions/1` |
+  | reads a block's config | `StatifierBlocks.Document.committed_config/2`, `effective_config/3` |
   | draws a field | `StatifierBlocks.Editor.Field.field/1` |
   | reads a form back | `StatifierBlocks.Editor.ConfigForm.decode/3` |
-  | writes to the document | `StatifierBlocks.Edit.History.commit/4` |
-  | steps back and forward | `Edit.History.undo/3`, `redo/3` |
-  | says which types fit a gap | `StatifierBlocks.Edit.Targets.droppable_slots_for/4` |
+  | writes to the document | `StatifierBlocks.Edit.Session.commit/2`, `change_config/3` |
+  | edits a list field | `Edit.Session.update_list/4` |
+  | steps back and forward | `Edit.Session.step/2` |
+  | shows a refused draft | `ViewModel.overlay_draft/2`, `BlockType.validate_config/1` |
+  | says which types fit a gap | `StatifierBlocks.Edit.Targets.accepted_types/4` |
+  | names the data-flow context | `StatifierBlocks.Assignability.context/1` |
   | builds an inserted block | `StatifierBlocks.Palette.new_block/2` |
+
+  `se-avi` is where that table stopped being an aspiration. The page used
+  to hold its own copy of fourteen of these - a `find_node/2`, a
+  `positions/1`, a commit funnel, a draft treatment, a fit filter - written
+  against the same document the package's editor was written against and
+  free to drift from it. `statifier_blocks` promoted them, and this module
+  deleted its copies. What is left below the render is this app's: the
+  store, the page's own parameter reading, the crafted-payload guards, and
+  the wording of a refusal.
 
   There is no drag anywhere on this page, which is the point rather than an
   omission. A plan is a list, a list is reordered with two buttons, and the
@@ -59,12 +74,18 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   A refused value is held as a **draft**: the author's bytes stay on
   screen, the document keeps what it had, and `Discard edits` is the way
-  out. That is decision 9's treatment, simplified in one way this module
-  states rather than hides - the package's editor re-derives per-field
-  findings from the draft and this page does not, so a refused draft here
-  says that nothing is stored and not which field the refusal was about.
-  A host wanting the second sentence has `StatifierBlocks.BlockType`'s
-  `validate_config/1` to ask, exactly as the package's editor does.
+  out. That is decision 9's treatment, and it is the package's rather than
+  a re-implementation - `Edit.Session.change_config/3` is what decides that
+  an `{:invalid_config, id, findings}` refusal becomes a draft and every
+  other refusal becomes an error.
+
+  The values come back on screen through `ViewModel.overlay_draft/2`, and
+  the findings beside them are derived here: that function's own
+  documentation says it states no opinion about whether a draft validates
+  and that a consumer wanting the findings derives them. `se-f4a` is that
+  derivation - `BlockType.validate_config/1`, routed onto the field whose
+  key each finding names, with anything routing nowhere drawn above the
+  form. A refused draft names the field it was about.
 
   ## Read-only
 
@@ -75,18 +96,30 @@ defmodule StatifierExamplesWeb.PlanLive do
   the field's own `readonly?` flag raised, which is `sb-21gm`'s second flag
   used as a host would use it - the package draws the value, and this page
   does not grow a second field renderer to draw one.
+
+  `se-4v1` asked whether the package's own `read_only?` profile
+  (`statifier_blocks` 0.24.0) replaces this. It does not, for two reasons
+  the package states itself. `profile` is an assign on the
+  `StatifierBlocks.Editor` live component, and this page mounts no editor;
+  and `docs/profiles.md` says `read_only?` "is not an authorization
+  boundary... If you must prevent a write, enforce that where you handle
+  the write, not by trusting a rendering." So the write gate below stays a
+  `handle_event/3` clause, and what the package's read-only treatment owns
+  here is the rendering: the field, drawn as a value.
   """
 
   use StatifierExamplesWeb, :live_view
 
+  alias StatifierBlocks.Assignability
   alias StatifierBlocks.Block
-  alias StatifierBlocks.BlockType
   alias StatifierBlocks.Document
   alias StatifierBlocks.Edit
   alias StatifierBlocks.Edit.History
+  alias StatifierBlocks.Edit.Session
   alias StatifierBlocks.Edit.Targets
   alias StatifierBlocks.Editor.ConfigForm
   alias StatifierBlocks.Editor.Field
+  alias StatifierBlocks.Finding
   alias StatifierBlocks.Palette
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
@@ -99,13 +132,10 @@ defmodule StatifierExamplesWeb.PlanLive do
     {:ok,
      assign(socket,
        page_title: "Plan",
-       palette: Charts.palette(),
        fixtures: Charts.fixtures(),
-       history: History.new(),
+       session: nil,
        selected_id: nil,
-       drafts: %{},
-       inserting: nil,
-       last_error: nil
+       inserting: nil
      )}
   end
 
@@ -139,6 +169,21 @@ defmodule StatifierExamplesWeb.PlanLive do
   # each handler: a read-only page draws no control that could send these,
   # and what this defends against is a crafted payload rather than a
   # button.
+  #
+  # `se-4v1` asked for this clause to go once the package had its own
+  # `read_only?` profile. It stays, and the package's own guide is why:
+  # `docs/profiles.md` says in as many words that `read_only?` "is not an
+  # authorization boundary... If you must prevent a write, enforce that
+  # where you handle the write, not by trusting a rendering." A profile is
+  # also an assign on the `StatifierBlocks.Editor` live component, and this
+  # page mounts no editor - it draws its own rows around
+  # `Editor.Field.field/1` - so there is no profile for it to pass. What
+  # the package's read-only treatment does own here is the FIELD: each one
+  # is drawn with its own `readonly?` raised, which is the same
+  # value-not-control rendering clause 3 of that guide describes. Two
+  # answers to "may this write" would be one too many if both were
+  # renderings; one of these is a write gate and the other is a drawing,
+  # and a host needs both.
   def handle_event(event, _params, %{assigns: %{readonly?: true}} = socket)
       when event in ~w(config-change discard-draft field-list-add field-list-remove
                        insert-open insert-close insert move remove undo redo) do
@@ -146,13 +191,25 @@ defmodule StatifierExamplesWeb.PlanLive do
   end
 
   def handle_event("config-change", %{"block-id" => id} = params, socket) do
-    config = ConfigForm.decode(fields_for(socket, id), params, effective_config(socket, id))
+    %{session: session} = socket.assigns
 
-    {:noreply, change_config(socket, id, config)}
+    config =
+      ConfigForm.decode(
+        fields_for(socket, id),
+        params,
+        Document.effective_config(session.document, id, session.drafts)
+      )
+
+    {:noreply, apply_session(socket, Session.change_config(session, id, config))}
   end
 
   def handle_event("discard-draft", %{"block-id" => id}, socket) do
-    {:noreply, socket |> update(:drafts, &Map.delete(&1, id)) |> rebuild()}
+    %{session: session} = socket.assigns
+
+    {:noreply,
+     socket
+     |> assign(:session, %{session | drafts: Map.delete(session.drafts, id)})
+     |> rebuild()}
   end
 
   def handle_event("field-list-add", %{"key" => key}, socket) do
@@ -176,11 +233,11 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   def handle_event("insert", %{"block-id" => id, "type" => type}, socket) do
     with {_parent_id, _slot, _index} = target <- gap_target(socket, id),
-         {:ok, %Block{} = block} <- Palette.new_block(socket.assigns.palette, type) do
+         {:ok, %Block{} = block} <- Palette.new_block(socket.assigns.session.palette, type) do
       socket =
         socket
         |> assign(:inserting, nil)
-        |> commit({:insert, target, block})
+        |> apply_session(Session.commit(socket.assigns.session, {:insert, target, block}))
 
       {:noreply, socket}
     else
@@ -193,7 +250,11 @@ defmodule StatifierExamplesWeb.PlanLive do
 
     case position(socket, id) do
       {parent_id, slot, index} when index + step >= 0 ->
-        {:noreply, commit(socket, {:move, id, {parent_id, slot, index + step}})}
+        {:noreply,
+         apply_session(
+           socket,
+           Session.commit(socket.assigns.session, {:move, id, {parent_id, slot, index + step}})
+         )}
 
       _at_the_top_or_unplaced ->
         {:noreply, socket}
@@ -201,15 +262,18 @@ defmodule StatifierExamplesWeb.PlanLive do
   end
 
   def handle_event("remove", %{"block-id" => id}, socket) do
-    {:noreply, socket |> assign(:selected_id, nil) |> commit({:remove, id})}
+    {:noreply,
+     socket
+     |> assign(:selected_id, nil)
+     |> apply_session(Session.commit(socket.assigns.session, {:remove, id}))}
   end
 
   def handle_event("undo", _params, socket) do
-    {:noreply, step(socket, &History.undo/3)}
+    {:noreply, apply_session(socket, Session.step(socket.assigns.session, :undo))}
   end
 
   def handle_event("redo", _params, socket) do
-    {:noreply, step(socket, &History.redo/3)}
+    {:noreply, apply_session(socket, Session.step(socket.assigns.session, :redo))}
   end
 
   # ----------------------------------------------------------------- render
@@ -227,7 +291,7 @@ defmodule StatifierExamplesWeb.PlanLive do
           <div class="myapp-header__identity">
             <span class="myapp-header__title">{@fixture.name}</span>
             <span class="myapp-header__meta">
-              revision {@document.revision} &middot; {@document.id}
+              revision {@session.document.revision} &middot; {@session.document.id}
             </span>
           </div>
 
@@ -249,7 +313,7 @@ defmodule StatifierExamplesWeb.PlanLive do
             class="myapp-header__button"
             type="button"
             phx-click="undo"
-            disabled={not History.can_undo?(@history)}
+            disabled={not History.can_undo?(@session.history)}
           >
             Undo
           </button>
@@ -259,7 +323,7 @@ defmodule StatifierExamplesWeb.PlanLive do
             class="myapp-header__button"
             type="button"
             phx-click="redo"
-            disabled={not History.can_redo?(@history)}
+            disabled={not History.can_redo?(@session.history)}
           >
             Redo
           </button>
@@ -268,8 +332,8 @@ defmodule StatifierExamplesWeb.PlanLive do
             Open in editor
           </.link>
 
-          <span :if={@last_error} class="myapp-header__verdict" data-plan-error="true">
-            {error_sentence(@last_error)}
+          <span :if={@session.last_error} class="myapp-header__verdict" data-plan-error="true">
+            {error_sentence(@session.last_error)}
           </span>
         </div>
 
@@ -284,7 +348,7 @@ defmodule StatifierExamplesWeb.PlanLive do
               inserting={@inserting}
               insertable={@insertable}
               readonly?={@readonly?}
-              drafted?={Map.has_key?(@drafts, node.block_id)}
+              drafted?={Map.has_key?(@session.drafts, node.block_id)}
             />
           </ol>
 
@@ -300,7 +364,7 @@ defmodule StatifierExamplesWeb.PlanLive do
                 inserting={@inserting}
                 insertable={@insertable}
                 readonly?={@readonly?}
-                drafted?={Map.has_key?(@drafts, node.block_id)}
+                drafted?={Map.has_key?(@session.drafts, node.block_id)}
               />
             </ol>
           </section>
@@ -317,7 +381,7 @@ defmodule StatifierExamplesWeb.PlanLive do
                 inserting={@inserting}
                 insertable={@insertable}
                 readonly?={@readonly?}
-                drafted?={Map.has_key?(@drafts, node.block_id)}
+                drafted?={Map.has_key?(@session.drafts, node.block_id)}
               />
             </ol>
           </footer>
@@ -356,7 +420,7 @@ defmodule StatifierExamplesWeb.PlanLive do
           phx-click="select-row"
           phx-value-block-id={@node.block_id}
         >
-          {sentence(@node)}
+          {ViewModel.sentence(@node)}
         </button>
 
         <span :if={@node.findings_count > 0} class="myapp-plan__findings">
@@ -395,7 +459,7 @@ defmodule StatifierExamplesWeb.PlanLive do
 
       <div :if={@selected_id == @node.block_id and @node.form} class="myapp-plan__form">
         <p :if={@drafted?} class="myapp-plan__pending">
-          Nothing is stored yet.
+          Nothing is stored yet{refused_fields(@node)}.
           <button
             :if={not @readonly?}
             class="myapp-plan__control"
@@ -407,9 +471,17 @@ defmodule StatifierExamplesWeb.PlanLive do
           </button>
         </p>
 
+        <p
+          :for={finding <- unrouted_findings(@node)}
+          class="myapp-plan__pending"
+          data-plan-unrouted="true"
+        >
+          {finding.message}
+        </p>
+
         <div :if={@readonly?} class="myapp-plan__fields">
           <Field.field
-            :for={field <- shown_fields(@node)}
+            :for={field <- ViewModel.shown_fields(@node)}
             field={%{field | readonly?: true}}
             target={nil}
           />
@@ -423,7 +495,7 @@ defmodule StatifierExamplesWeb.PlanLive do
           phx-submit="config-change"
         >
           <input type="hidden" name="block-id" value={@node.block_id} />
-          <Field.field :for={field <- shown_fields(@node)} field={field} target={nil} />
+          <Field.field :for={field <- ViewModel.shown_fields(@node)} field={field} target={nil} />
         </form>
 
         <span :if={not @readonly?} class="myapp-plan__controls">
@@ -490,25 +562,27 @@ defmodule StatifierExamplesWeb.PlanLive do
     """
   end
 
-  # A row's words. `Node.sentence` is the block type's own line of prose
-  # (`sb-w37s`), and `ViewModel.title/1` is the fallback the view model
-  # already uses for a block whose type declares no `sentence/1` - so a
-  # nil here is a block this page still names, never a blank row.
-  @spec sentence(ViewModel.Node.t()) :: String.t()
-  defp sentence(%ViewModel.Node{sentence: sentence}) when is_binary(sentence) and sentence != "",
-    do: sentence
+  # What a refused draft is about, as the tail of the pending sentence.
+  # `se-f4a`: "Nothing is stored yet" on its own says a refusal happened
+  # and not what it was about, and the field it was about is the one the
+  # author is looking at.
+  @spec refused_fields(ViewModel.Node.t()) :: String.t()
+  defp refused_fields(%ViewModel.Node{form: %ViewModel.Form{fields: fields}}) do
+    case fields |> Enum.reject(&(&1.findings == [])) |> Enum.map(& &1.label) do
+      [] -> ""
+      labels -> ": " <> Enum.join(labels, ", ")
+    end
+  end
 
-  defp sentence(%ViewModel.Node{} = node), do: ViewModel.title(node)
+  defp refused_fields(%ViewModel.Node{}), do: ""
 
-  # `sb-21gm`'s first flag, used the way ADR-0002 decision 7's amendment
-  # says a host uses it: the view model lists every declared field and the
-  # surface filters. `Field.field/1` renders nothing for a hidden field
-  # either, and neither of the two is load-bearing alone.
-  @spec shown_fields(ViewModel.Node.t()) :: [ViewModel.Field.t()]
-  defp shown_fields(%ViewModel.Node{form: %ViewModel.Form{fields: fields}}),
-    do: Enum.reject(fields, & &1.hidden?)
-
-  defp shown_fields(%ViewModel.Node{}), do: []
+  # The draft's findings that name no field of this form. The view model's
+  # own routing table puts them in `form.unrouted` for a committed config
+  # and this page draws the same place for a drafted one, because a
+  # refusal a surface routes nowhere is a refusal the author never reads.
+  @spec unrouted_findings(ViewModel.Node.t()) :: [Finding.t()]
+  defp unrouted_findings(%ViewModel.Node{form: %ViewModel.Form{unrouted: unrouted}}), do: unrouted
+  defp unrouted_findings(%ViewModel.Node{}), do: []
 
   # ------------------------------------------------------------- parameters
 
@@ -553,100 +627,51 @@ defmodule StatifierExamplesWeb.PlanLive do
   defp load_document(socket, fixture) do
     document = Documents.get(fixture.key, fixture.document)
 
+    session = %Session{
+      palette: Charts.palette(),
+      document: document,
+      history: History.new()
+    }
+
     socket
     |> assign(:fixture, fixture)
-    |> assign(:document, document)
+    |> assign(:session, session)
     |> assign(:page_title, fixture.name)
     |> assign(:selected_id, nil)
-    |> assign(:drafts, %{})
     |> assign(:inserting, nil)
   end
 
-  # The one place a command reaches the document, so the gate, the undo
-  # stack and the store have one caller each rather than one per gesture.
-  @spec commit(Phoenix.LiveView.Socket.t(), Edit.t()) :: Phoenix.LiveView.Socket.t()
-  defp commit(socket, command) do
-    %{history: history, palette: palette, document: document} = socket.assigns
-
-    case History.commit(history, palette, document, command) do
-      {:ok, new_history, new_document} ->
-        socket
-        |> assign(history: new_history, document: new_document, last_error: nil)
-        |> store()
-        |> rebuild()
-
-      {:error, reason} ->
-        socket |> assign(:last_error, reason) |> rebuild()
-    end
-  end
-
-  # A config change differs from every other command in one way: a refusal
-  # is the author's bytes rather than an error, so it is held as a draft and
-  # the document keeps what it had.
-  @spec change_config(Phoenix.LiveView.Socket.t(), Block.id(), Block.config()) ::
+  # Every write on this page is a `StatifierBlocks.Edit.Session` call, and
+  # this is what the page does with the answer: the session is the new
+  # state either way, and a session whose document moved is stored. The
+  # gate, the undo stack, the draft treatment and the refusal vocabulary
+  # are all the package's - what stays here is the store, which is this
+  # app's.
+  @spec apply_session(Phoenix.LiveView.Socket.t(), {:ok, Session.t()} | {:error, Session.t()}) ::
           Phoenix.LiveView.Socket.t()
-  defp change_config(socket, id, config) do
-    %{history: history, palette: palette, document: document} = socket.assigns
+  defp apply_session(socket, {:ok, %Session{} = session}),
+    do: socket |> assign(:session, session) |> store() |> rebuild()
 
-    case History.commit(history, palette, document, {:update_config, id, config}) do
-      {:ok, new_history, new_document} ->
-        socket
-        |> assign(history: new_history, document: new_document, last_error: nil)
-        |> update(:drafts, &Map.delete(&1, id))
-        |> store()
-        |> rebuild()
+  defp apply_session(socket, {:error, %Session{} = session}),
+    do: socket |> assign(:session, session) |> rebuild()
 
-      {:error, {:invalid_config, ^id, _findings}} ->
-        socket |> update(:drafts, &Map.put(&1, id, config)) |> rebuild()
-
-      {:error, reason} ->
-        socket |> assign(:last_error, reason) |> rebuild()
-    end
-  end
-
-  @spec step(Phoenix.LiveView.Socket.t(), fun()) :: Phoenix.LiveView.Socket.t()
-  defp step(socket, move) do
-    %{history: history, palette: palette, document: document} = socket.assigns
-
-    case move.(history, palette, document) do
-      {:ok, new_history, new_document} ->
-        socket
-        |> assign(history: new_history, document: new_document, last_error: nil)
-        |> store()
-        |> rebuild()
-
-      {:error, reason} ->
-        socket |> assign(:last_error, reason) |> rebuild()
-    end
-  end
-
-  # `key` is the field's identity and the value's address is its
-  # `value_path`, so the rows are read and written where the form's other
-  # writes go. A key naming no field in the selected block edits nothing,
-  # which is the same crafted-payload guard `ConfigForm.decode/3` applies.
-  @spec update_list(Phoenix.LiveView.Socket.t(), String.t(), :add | {:remove, integer()}) ::
+  # `key` is the field's identity, and a key naming no field in the
+  # selected block edits nothing - the same crafted-payload guard
+  # `ConfigForm.decode/3` applies. What the gesture then MEANS is
+  # `Session.update_list/4`'s: it reads the rows off the effective config
+  # at the field's own `value_path/1`, applies the gesture, and commits
+  # through the draft treatment, so a list edit that leaves the config
+  # invalid is held like any other refused config rather than lost.
+  @spec update_list(Phoenix.LiveView.Socket.t(), String.t(), Session.list_gesture()) ::
           Phoenix.LiveView.Socket.t()
   defp update_list(socket, key, gesture) do
     with id when is_binary(id) <- socket.assigns.selected_id,
          %ViewModel.Field{} = field <- Enum.find(fields_for(socket, id), &(&1.key == key)) do
-      config = effective_config(socket, id)
-      path = ViewModel.Field.value_path(field)
-
-      rows =
-        case BlockType.fetch_value(config, path) do
-          {:ok, value} -> List.wrap(value)
-          :error -> []
-        end
-
-      change_config(socket, id, BlockType.put_value(config, path, apply_gesture(rows, gesture)))
+      apply_session(socket, Session.update_list(socket.assigns.session, id, field, gesture))
     else
       _no_selection_or_field -> socket
     end
   end
-
-  @spec apply_gesture([term()], :add | {:remove, integer()}) :: [term()]
-  defp apply_gesture(rows, :add), do: rows ++ [""]
-  defp apply_gesture(rows, {:remove, index}), do: List.delete_at(rows, index)
 
   @spec to_index(term()) :: integer()
   defp to_index(index) when is_binary(index) do
@@ -660,73 +685,112 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   @spec store(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp store(socket) do
-    :ok = Documents.put(socket.assigns.fixture.key, socket.assigns.document)
+    :ok = Documents.put(socket.assigns.fixture.key, socket.assigns.session.document)
     socket
   end
 
   # ------------------------------------------------------------- projection
 
   # Everything the render reads, derived once per change rather than per
-  # render. `positions` is the one thing here the package does not answer:
-  # `outline/1` says what order the blocks are in and `Targets` says which
-  # slots accept a block, but where a given block sits - its parent, its
-  # slot and its index - is a question a host asks of the tree it was
-  # handed, so it is asked once here off the same public slots.
+  # render. Every question in here is the package's: `outline/1` orders the
+  # rows, `positions/1` says where each block sits, and `overlay_draft/2`
+  # puts a refused draft's bytes back on the fields.
   @spec rebuild(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp rebuild(socket) do
-    %{document: document, palette: palette} = socket.assigns
+    %Session{document: document, palette: palette, drafts: drafts} = socket.assigns.session
 
     view_model = ViewModel.build(document, palette, [])
-    outline = view_model |> ViewModel.outline() |> Enum.map(&overlay_draft(&1, socket))
+
+    outline =
+      view_model
+      |> ViewModel.outline()
+      |> Enum.map(&overlay_draft(&1, drafts, palette))
 
     socket
     |> assign(:view_model, view_model)
-    |> assign(:positions, positions(view_model.root))
+    |> assign(:positions, ViewModel.positions(view_model))
     |> assign(:plan, Enum.filter(outline, fn {_node, _depth, kind} -> kind in [:step, :arm] end))
     |> assign(:rails, Enum.filter(outline, fn {_node, _depth, kind} -> kind == :rail end))
     |> assign(:trays, Enum.filter(outline, fn {_node, _depth, kind} -> kind == :tray end))
     |> assign_insertable()
   end
 
-  # The author's keystrokes, back on screen. Values only: the findings a
-  # draft would carry are the package editor's second half of decision 9's
-  # treatment, and this page states in its moduledoc that it does not draw
-  # them rather than deriving a second set of them here.
+  # One outline entry with its draft over it, where a draft is held. The
+  # values are `ViewModel.overlay_draft/2`'s - decision 9's own treatment,
+  # public since `sb-0buo` - and the findings are `route_findings/3`
+  # below, which is the half that function states no opinion about.
   @spec overlay_draft(
           {ViewModel.Node.t(), non_neg_integer(), atom()},
-          Phoenix.LiveView.Socket.t()
-        ) ::
-          {ViewModel.Node.t(), non_neg_integer(), atom()}
-  defp overlay_draft({%ViewModel.Node{form: nil}, _depth, _kind} = entry, _socket), do: entry
-
-  defp overlay_draft({%ViewModel.Node{} = node, depth, kind} = entry, socket) do
-    case Map.fetch(socket.assigns.drafts, node.block_id) do
+          Session.drafts(),
+          Palette.t()
+        ) :: {ViewModel.Node.t(), non_neg_integer(), atom()}
+  defp overlay_draft({%ViewModel.Node{} = node, depth, kind} = entry, drafts, palette) do
+    case Map.fetch(drafts, node.block_id) do
       :error ->
         entry
 
       {:ok, draft} ->
-        fields = Enum.map(node.form.fields, &drafted_field(&1, draft))
-        {%{node | form: %{node.form | fields: fields}}, depth, kind}
+        {node |> ViewModel.overlay_draft(draft) |> route_findings(palette, draft), depth, kind}
     end
   end
 
-  # One field, showing the draft's value where the draft has one. A field
-  # the draft says nothing about keeps the document's, which is what makes
-  # a partially typed form show one changed row rather than a blank set.
-  @spec drafted_field(ViewModel.Field.t(), Block.config()) :: ViewModel.Field.t()
-  defp drafted_field(%ViewModel.Field{} = field, draft) do
-    case BlockType.fetch_value(draft, ViewModel.Field.value_path(field)) do
-      {:ok, value} -> %{field | value: value}
-      :error -> field
+  # `se-f4a`. `ViewModel.overlay_draft/2`'s own doc says it "states no
+  # opinion about whether the draft validates" and that a consumer wanting
+  # the draft's findings derives them - so this derives them, from the
+  # public `validate_config/1` that is the only authority on a config's own
+  # bytes, and routes each one onto the field its key names. A finding
+  # whose key matches no field goes to `form.unrouted`, which is where the
+  # view model's own routing table puts one for a committed config: the
+  # page draws every refusal it was handed or it draws a refusal nobody can
+  # act on.
+  @spec route_findings(ViewModel.Node.t(), Palette.t(), Block.config()) :: ViewModel.Node.t()
+  defp route_findings(%ViewModel.Node{form: nil} = node, _palette, _draft), do: node
+
+  defp route_findings(%ViewModel.Node{form: %ViewModel.Form{} = form} = node, palette, draft) do
+    by_key = draft_findings(node, palette, draft)
+    keys = MapSet.new(form.fields, & &1.key)
+
+    fields =
+      Enum.map(form.fields, fn field ->
+        %{field | findings: Map.get(by_key, field.key, [])}
+      end)
+
+    unrouted =
+      by_key
+      |> Enum.reject(fn {key, _findings} -> MapSet.member?(keys, key) end)
+      |> Enum.sort()
+      |> Enum.flat_map(fn {_key, findings} -> findings end)
+
+    %{node | form: %{form | fields: fields, unrouted: unrouted}}
+  end
+
+  # The draft's own refusals, keyed by the field key each one names. A type
+  # that does not resolve, or one that accepts the draft, contributes none -
+  # a draft is held for reasons `validate_config/1` is not the only source
+  # of, and a page that invented a finding for those would be saying
+  # something the package did not.
+  @spec draft_findings(ViewModel.Node.t(), Palette.t(), Block.config()) ::
+          %{optional(String.t()) => [Finding.t()]}
+  defp draft_findings(%ViewModel.Node{block_id: id, type: type}, palette, draft) do
+    with {:ok, module} <- Palette.fetch(palette, type),
+         {:error, findings} <- module.validate_config(draft) do
+      Enum.group_by(
+        findings,
+        fn {key, _message} -> key end,
+        fn {key, message} -> Finding.new({:config, id, key}, :config, message) end
+      )
+    else
+      _accepted_or_unknown_type -> %{}
     end
   end
 
-  # The palette entries the armed gap accepts, asked of the package's own
-  # drop check rather than of a rule written here: an unconfigured block of
-  # each type is offered to `Targets.droppable_slots_for/4`, and the types
-  # whose answer contains this gap's slot are the ones drawn. Recipes are
-  # not offered - a recipe is the palette's other namespace and inserting
-  # one is more than one command, which is a seam this page does not need.
+  # The palette entries the armed gap accepts, asked of the package's one
+  # answer to the question: `Targets.accepted_types/4` probes every type in
+  # the palette with the entry's own `default_config` merged in and answers
+  # with the type NAMES that fit, and this filters the entry list the page
+  # is already drawing by membership. Recipes are not offered - a recipe is
+  # the palette's other namespace and inserting one is more than one
+  # command, which is a seam this page does not need.
   @spec assign_insertable(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp assign_insertable(%{assigns: %{inserting: nil}} = socket),
     do: assign(socket, :insertable, [])
@@ -739,33 +803,20 @@ defmodule StatifierExamplesWeb.PlanLive do
   defp insertable(_socket, nil), do: []
 
   defp insertable(socket, {parent_id, slot, _index}) do
-    %{document: document, palette: palette, fixture: fixture} = socket.assigns
-    ctx = assignability_context(fixture)
+    %Session{document: document, palette: palette} = socket.assigns.session
+
+    accepted =
+      Targets.accepted_types(
+        document,
+        palette,
+        {parent_id, slot},
+        Assignability.context(socket.assigns.fixture)
+      )
 
     socket.assigns.view_model.palette_groups
     |> Enum.flat_map(& &1.entries)
-    |> Enum.filter(&(&1.kind == :type and fits?(&1, document, palette, {parent_id, slot}, ctx)))
+    |> Enum.filter(&(&1.kind == :type and MapSet.member?(accepted, &1.name)))
   end
-
-  # Whether one palette entry's type would land in one slot, asked of the
-  # package: an unconfigured block of the type - the same value the editor's
-  # own insert builds - offered to the drop check, and the slot looked for in
-  # the answer.
-  @spec fits?(map(), Document.t(), Palette.t(), {Block.id(), Block.slot_name()}, map()) ::
-          boolean()
-  defp fits?(entry, document, palette, slot_ref, ctx) do
-    case Palette.new_block(palette, entry.name) do
-      {:ok, probe} -> slot_ref in Targets.droppable_slots_for(document, palette, probe, ctx)
-      :error -> false
-    end
-  end
-
-  # The host's datamodel document and nothing else, which is the context
-  # the package's own editor asks its data-flow questions with. Two views
-  # asking the same question with different contexts would be two answers.
-  @spec assignability_context(Charts.Fixture.t()) :: map()
-  defp assignability_context(%{datamodel: nil}), do: %{}
-  defp assignability_context(%{datamodel: datamodel}), do: %{datamodel: datamodel}
 
   @spec position(Phoenix.LiveView.Socket.t(), Block.id() | nil) :: Edit.target() | nil
   defp position(_socket, nil), do: nil
@@ -792,7 +843,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   # one row whose "+" cannot mean "after me".
   @spec first_body_target(ViewModel.Node.t(), Block.id()) :: Edit.target() | nil
   defp first_body_target(root, id) do
-    with %ViewModel.Node{} = node <- find_node(root, id),
+    with %ViewModel.Node{} = node <- ViewModel.find_node(root, id),
          [%ViewModel.Slot{name: name} | _rest] <- ViewModel.body_slots(node) do
       {id, name, 0}
     else
@@ -800,59 +851,11 @@ defmodule StatifierExamplesWeb.PlanLive do
     end
   end
 
-  # Where every block sits, as `Edit.target/0`s. The root has no position,
-  # which is what makes moving and deleting it refuse rather than raise -
-  # `Edit.apply/2` refuses `{:remove, root}` too, and this is the same
-  # refusal one step earlier so the row draws no button that cannot work.
-  @spec positions(ViewModel.Node.t()) :: %{Block.id() => Edit.target()}
-  defp positions(%ViewModel.Node{} = root), do: positions(root, %{})
-
-  @spec positions(ViewModel.Node.t(), %{Block.id() => Edit.target()}) ::
-          %{Block.id() => Edit.target()}
-  defp positions(%ViewModel.Node{block_id: parent_id, slots: slots}, acc) do
-    Enum.reduce(slots, acc, fn slot, slot_acc ->
-      slot.children
-      |> Enum.with_index()
-      |> Enum.reduce(slot_acc, fn {child, index}, child_acc ->
-        child_acc
-        |> Map.put(child.block_id, {parent_id, slot.name, index})
-        |> then(&positions(child, &1))
-      end)
-    end)
-  end
-
+  # The selected block's declared fields, off the view model the render
+  # was built from. `ViewModel.fields_for/2` is `find_node/2` and the form
+  # in one call, which is exactly what the form decoder needs.
   @spec fields_for(Phoenix.LiveView.Socket.t(), Block.id()) :: [ViewModel.Field.t()]
-  defp fields_for(socket, id) do
-    case find_node(socket.assigns.view_model.root, id) do
-      %ViewModel.Node{form: %ViewModel.Form{fields: fields}} -> fields
-      _no_node_or_form -> []
-    end
-  end
-
-  @spec find_node(ViewModel.Node.t(), Block.id()) :: ViewModel.Node.t() | nil
-  defp find_node(%ViewModel.Node{block_id: id} = node, id), do: node
-
-  defp find_node(%ViewModel.Node{slots: slots}, id) do
-    slots
-    |> Enum.flat_map(& &1.children)
-    |> Enum.find_value(fn child -> find_node(child, id) end)
-  end
-
-  @spec effective_config(Phoenix.LiveView.Socket.t(), Block.id()) :: Block.config()
-  defp effective_config(socket, id) do
-    case Map.fetch(socket.assigns.drafts, id) do
-      {:ok, draft} -> draft
-      :error -> committed_config(socket.assigns.document, id)
-    end
-  end
-
-  @spec committed_config(Document.t(), Block.id()) :: Block.config()
-  defp committed_config(document, id) do
-    case Enum.find(Document.blocks(document), &(&1.id == id)) do
-      %Block{config: config} -> config
-      nil -> %{}
-    end
-  end
+  defp fields_for(socket, id), do: ViewModel.fields_for(socket.assigns.view_model, id)
 
   # A refused command in one line. The reasons are `Edit.apply/2`'s own
   # union and this app renders them rather than swallowing them: a Delete

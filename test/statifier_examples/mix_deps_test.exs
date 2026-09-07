@@ -212,7 +212,7 @@ defmodule StatifierExamples.MixDepsTest do
   # Reverted from a backup copy.
   #
   # `se-2ox`: the arm is a GIT PIN again, at
-  # `ecc0db4fe3cda55b8d15bdcd10fed688a9eef227`, so what this asserts is the
+  # `3a210a917f8776e1b189b9a1ba1927c4fdb9caf9`, so what this asserts is the
   # pin rather than a Hex requirement. It is not a weakening of the check: a
   # pin is exact where a Hex requirement is a range, and `mix.lock` recording
   # the same commit is what proves the tree is on the code the pin names
@@ -232,12 +232,19 @@ defmodule StatifierExamples.MixDepsTest do
   # entries claiming one order in one group, which is what
   # `StatifierExamples.CardAuth.Intake`'s order moved for.
   #
-  # `se-k6q` puts the Hex arm and this test's Hex spelling back together
-  # after the operator publishes; `se-avi` advances the pin once before that.
-  # The ledger entry
-  # `se-2ox-statifier_blocks-sb-xio9+sb-qxyh+sb-hgxl` is what carries it.
+  # `se-avi` advanced the pin from
+  # `ecc0db4fe3cda55b8d15bdcd10fed688a9eef227` to the commit above, which is
+  # where the Plan view's promoted seams live: `sb-0buo`'s reading half on
+  # `ViewModel` and `Document`, `sb-mcs8`'s `StatifierBlocks.Edit.Session`
+  # and `Edit.Targets`, and `sb-gbxt`'s host-written `selected_id`.
+  # `StatifierExamplesWeb.PlanLiveTest` is what asserts that half.
   #
-  @statifier_blocks_ref "ecc0db4fe3cda55b8d15bdcd10fed688a9eef227"
+  # `se-k6q` puts the Hex arm and this test's Hex spelling back together
+  # after the operator publishes. The ledger entry
+  # `se-2ox-statifier_blocks-sb-xio9+sb-qxyh+sb-hgxl` is what carries it,
+  # advanced rather than doubled.
+  #
+  @statifier_blocks_ref "3a210a917f8776e1b189b9a1ba1927c4fdb9caf9"
 
   # Sabotage: pointed the attribute above at a real-but-wrong commit of
   # `statifier_blocks` main and left `mix.lock` alone; this went red
