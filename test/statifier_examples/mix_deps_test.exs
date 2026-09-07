@@ -243,7 +243,7 @@ defmodule StatifierExamples.MixDepsTest do
   # Reverted from a copy.
   #
   # `se-gx4`: the arm is a GIT PIN again, at
-  # `7fa35a205445020857fa63f89fe0d55052c861f6`, so what this asserts is
+  # `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd`, so what this asserts is
   # the pin rather than a Hex requirement. It is not a weakening of the
   # check: a pin is exact where a Hex requirement is a range, and `mix.lock`
   # recording the same commit is what proves the tree is on the code the pin
@@ -256,11 +256,20 @@ defmodule StatifierExamples.MixDepsTest do
   # the editor's "Save as a step" gesture with its `on_collapse` callback.
   # Neither is reachable from 0.25.0.
   #
+  # `se-6jn` advanced the pin to the commit named above. What that buys is
+  # what `StatifierExamplesWeb.PlanLiveTest` asserts on the other side of
+  # the two deletions it made: `sb-8fa8`'s `Edit.Session` `draft_findings`
+  # field and `ViewModel.overlay_findings/2`, which together replaced the
+  # page's own `route_findings/3` and `draft_findings/3`; and `sb-6xkf`'s
+  # `ViewModel.transparent?/2`, `effective_parent/3`, `end_of_list_target/3`
+  # and `core_containers/0`, which the page's reader-agreement case reads.
+  # None of the six is reachable from `7fa35a2`.
+  #
   # `se-c9l` puts the Hex arm and this test's Hex spelling back together
   # after the operator publishes 0.26.0; `se-1q8` and `se-6jn` advance the
   # pin before that. The ledger entry `se-gx4-statifier_blocks-sb-uzly` is
   # what carries it.
-  @statifier_blocks_ref "7fa35a205445020857fa63f89fe0d55052c861f6"
+  @statifier_blocks_ref "eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd"
 
   # Sabotage: pointed the attribute above at a real-but-wrong commit of
   # `statifier_blocks` main and left `mix.lock` alone; this went red

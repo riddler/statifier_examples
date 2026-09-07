@@ -840,7 +840,7 @@ defmodule StatifierExamples.MixProject do
   # chart bytes move.
   #
   # The default arm is a GIT PIN again, at
-  # `7fa35a205445020857fa63f89fe0d55052c861f6` on `statifier_blocks` main, for
+  # `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd` on `statifier_blocks` main, for
   # `se-gx4`: the Collapse walk this app now carries is written over two
   # seams that land after 0.25.0 and are unpublished while it is written.
   # `sb-uzly` adds `StatifierBlocks.Composite.Collapse` - `propose/3`, the
@@ -849,6 +849,19 @@ defmodule StatifierExamples.MixProject do
   # commits itself - and the editor's "Save as a step" gesture with the
   # `on_collapse` callback this app's editor page now passes. Both are ADR
   # -0005 part (iii) as amended 2026-09-07, clauses `15E` to `20E`.
+  #
+  # `se-6jn` advanced the pin from `7fa35a2` to the commit above for two
+  # further seams, both of which delete host code rather than add any:
+  # `sb-8fa8` keeps a refused `Edit.Session.change_config/3`'s per-field
+  # findings in the session's `draft_findings` and routes them with
+  # `ViewModel.overlay_findings/2`, which is what let the Plan view's
+  # `route_findings/3` and `draft_findings/3` go; and `sb-6xkf` adds the
+  # three transparent-container readers `ViewModel.transparent?/2`,
+  # `effective_parent/3` and `end_of_list_target/3` with
+  # `ViewModel.core_containers/0` as the documented default type list.
+  # This app draws no container through, so it adopts none of the three -
+  # the readers are pinned here by a test that they agree with the page's
+  # own positions map, which is the honest measurement.
   #
   # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout is
   # unaffected either way. The ledger entry
@@ -863,7 +876,7 @@ defmodule StatifierExamples.MixProject do
       _ ->
         {:statifier_blocks,
          git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "7fa35a205445020857fa63f89fe0d55052c861f6"}
+         ref: "eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd"}
     end
   end
 
