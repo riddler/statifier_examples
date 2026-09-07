@@ -242,58 +242,45 @@ defmodule StatifierExamples.MixDepsTest do
   # reporting the resolved 0.25.0 entry against the mutated expectation.
   # Reverted from a copy.
   #
-  # `se-gx4`: the arm is a GIT PIN again, at
-  # `e61890ab5af7f250e64ec10c5ac6d6bf09663bac`, so what this asserts is
-  # the pin rather than a Hex requirement. It is not a weakening of the
-  # check: a pin is exact where a Hex requirement is a range, and `mix.lock`
-  # recording the same commit is what proves the tree is on the code the pin
-  # names rather than on whatever `main` has become since.
+  # `se-c9l`: 0.26.0 is published and carries all four seams the pin was
+  # taken and advanced for, so the arm is a Hex requirement again and this
+  # test asserts the Hex spelling. The pinned commit is an ancestor of
+  # `v0.26.0` (`f9b62c5`), so nothing the pin bought is missing from the
+  # release; what the release adds on top of it is nine commits, none of
+  # which this app's own code names.
   #
-  # What the pin buys is what `StatifierExamples.CollapseWalkTest` and the
-  # "saving an expansion as a step" cases in
+  # What the pin bought is what `StatifierExamples.CollapseWalkTest`,
+  # `StatifierExamples.CompositesTest`, `StatifierExamplesWeb.PlanLiveTest`
+  # and the "saving an expansion as a step" cases in
   # `StatifierExamplesWeb.EditorLiveTest` assert between them: `sb-uzly`'s
-  # `StatifierBlocks.Composite.Collapse.propose/3` and `replacement/4`, and
-  # the editor's "Save as a step" gesture with its `on_collapse` callback.
-  # Neither is reachable from 0.25.0.
-  #
-  # `se-6jn` advanced the pin from `7fa35a2` to
-  # `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd`. What that bought is what
-  # `StatifierExamplesWeb.PlanLiveTest` asserts on the other side of the two
-  # deletions it made: `sb-8fa8`'s `Edit.Session` `draft_findings` field and
-  # `ViewModel.overlay_findings/2`, which together replaced the page's own
-  # `route_findings/3` and `draft_findings/3`; and `sb-6xkf`'s
+  # `StatifierBlocks.Composite.Collapse.propose/3` and `replacement/4` with
+  # the editor's "Save as a step" gesture and its `on_collapse` callback;
+  # `sb-8fa8`'s `Edit.Session` `draft_findings` field and
+  # `ViewModel.overlay_findings/2`, which together replaced the Plan view's
+  # own `route_findings/3` and `draft_findings/3`; `sb-6xkf`'s
   # `ViewModel.transparent?/2`, `effective_parent/3`, `end_of_list_target/3`
-  # and `core_containers/0`, which the page's reader-agreement case reads.
-  # None of the six is reachable from `7fa35a2`.
+  # and `core_containers/0`, which the page's reader-agreement case reads;
+  # and `sb-q183`'s pass-through slots, which
+  # `StatifierExamples.Signup.GuardedSection` is written over. None of the
+  # four is reachable from 0.25.0, and the case below is what says the
+  # release carries the last of them rather than trusting the version
+  # number.
   #
-  # `se-1q8` advanced it again, to the commit named above, for `sb-q183`:
-  # **pass-through slots**, which is what `StatifierExamples.Signup.GuardedSection`
-  # and the cases in `StatifierExamples.CompositesTest` are written over. The
-  # case below names the three functions that arrived with it, because a pin
-  # whose reason is not written down is a pin nobody can retire.
+  # The ledger entry `se-gx4-statifier_blocks-sb-uzly` is what carried the
+  # pin across all three advances, and it resolves with this arm. The
+  # `statifier_datamodel` floor `statifier_blocks` states is unchanged at
+  # `~> 0.4`, which is what the test further down still records.
   #
-  # `se-c9l` puts the Hex arm and this test's Hex spelling back together
-  # after the operator publishes 0.26.0. The ledger entry
-  # `se-gx4-statifier_blocks-sb-uzly` is what carries the pin across all
-  # three advances.
-  @statifier_blocks_ref "e61890ab5af7f250e64ec10c5ac6d6bf09663bac"
-
-  # Sabotage: pointed the attribute above at a real-but-wrong commit of
-  # `statifier_blocks` main and left `mix.lock` alone; this went red
-  # reporting the pinned ref against the mutated expectation, which is the
-  # half that matters - the dep spelling and the lock have to agree on one
-  # commit or the tree is not on the code the pin names. Reverted from a
-  # copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.25.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.26.0 entry against the mutated expectation.
+  # Reverted from a copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks,
-            [
-              git: "https://github.com/riddler/statifier_blocks.git",
-              ref: @statifier_blocks_ref
-            ]} in deps
+    assert {:statifier_blocks, "~> 0.26"} in deps
 
     lock_line =
       "mix.lock"
@@ -302,25 +289,26 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
-    assert lock_line =~ @statifier_blocks_ref
-    refute lock_line =~ ":hex,"
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.26.)
+    refute lock_line =~ ":git,"
   end
 
-  # The other half of a pin, and the half a SHA alone cannot state: what the
-  # tree is on the pin FOR. `se-1q8` advanced it for `sb-q183`'s pass-through
-  # slots, and these are the three functions that arrived with them - the
-  # mapping resolved to the minted id, the shared refusal both composite kinds
-  # answer, and the data kind's own `slots/2`. None is reachable from 0.25.0,
-  # so a re-pin to a published release that did not carry them would go red
-  # here rather than in the six cases that read them.
+  # The other half of the retired pin, and the half a version number alone
+  # cannot state: that the release the arm now names really carries what
+  # the tree was on the pin FOR. `se-1q8` advanced the pin for `sb-q183`'s
+  # pass-through slots, and these are the three functions that arrived with
+  # them - the mapping resolved to the minted id, the shared refusal both
+  # composite kinds answer, and the data kind's own `slots/2`. None is
+  # reachable from 0.25.0, so a re-pin to a published release that did not
+  # carry them would go red here rather than in the six cases that read
+  # them.
   #
   # `function_exported?/3` needs the module loaded, which under a release
   # build it is not - hence the `ensure_loaded` around each.
   #
   # Sabotage: pointed the arity of `pass_through` at 3; this went red naming
   # it, and nothing else in the file moved. Reverted from a copy.
-  test "the pinned statifier_blocks carries the pass-through seam the pin is for" do
+  test "the published statifier_blocks carries the pass-through seam the pin was for" do
     for {module, function, arity} <- [
           {StatifierBlocks.Composite, :pass_through, 2},
           {StatifierBlocks.Composite, :mapping_errors, 2},

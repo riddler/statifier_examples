@@ -839,53 +839,70 @@ defmodule StatifierExamples.MixProject do
   # calls `validate_config/1` on it). 0.25.0 is a minor and no compiled
   # chart bytes move.
   #
-  # The default arm is a GIT PIN again, at
-  # `e61890ab5af7f250e64ec10c5ac6d6bf09663bac` on `statifier_blocks` main, for
-  # `se-gx4`: the Collapse walk this app now carries is written over two
-  # seams that land after 0.25.0 and are unpublished while it is written.
-  # `sb-uzly` adds `StatifierBlocks.Composite.Collapse` - `propose/3`, the
-  # pure proposer that reads a selection back as the `Composite.Data`
-  # declaration standing for it, and `replacement/4`, the compound a host
-  # commits itself - and the editor's "Save as a step" gesture with the
-  # `on_collapse` callback this app's editor page now passes. Both are ADR
-  # -0005 part (iii) as amended 2026-09-07, clauses `15E` to `20E`.
+  # The default arm moves to the 0.26 line, and it is a Hex requirement
+  # again: the interim git pin `se-gx4` took while the Collapse seams were
+  # unpublished, and `se-6jn` and `se-1q8` advanced, is retired by
+  # `se-c9l`, and the `refute` in `StatifierExamples.MixDepsTest` is what
+  # says it did not come back. `STATIFIER_BLOCKS_PATH` still wins over the
+  # requirement, so a local checkout is unaffected either way. The ledger
+  # entry `se-gx4-statifier_blocks-sb-uzly` is what carried the pin across
+  # all three advances, and it resolves with this arm.
   #
-  # `se-6jn` advanced the pin from `7fa35a2` to the commit above for two
-  # further seams, both of which delete host code rather than add any:
-  # `sb-8fa8` keeps a refused `Edit.Session.change_config/3`'s per-field
-  # findings in the session's `draft_findings` and routes them with
-  # `ViewModel.overlay_findings/2`, which is what let the Plan view's
-  # `route_findings/3` and `draft_findings/3` go; and `sb-6xkf` adds the
-  # three transparent-container readers `ViewModel.transparent?/2`,
-  # `effective_parent/3` and `end_of_list_target/3` with
-  # `ViewModel.core_containers/0` as the documented default type list.
-  # This app draws no container through, so it adopts none of the three -
-  # the readers are pinned here by a test that they agree with the page's
-  # own positions map, which is the honest measurement.
+  # That pin bought four seams, none of them reachable from 0.25.0, and
+  # 0.26.0 carries all four - the pinned commit is an ancestor of
+  # `v0.26.0` (`f9b62c5`):
   #
-  # `se-1q8` advanced it again, from `eb64d4c` to the commit above, for
-  # `sb-q183`: **pass-through slots** on a composite, for the module kind and
-  # the data kind alike - `Composite.pass_through/2`, `mapping_errors/2`, the
-  # splice in `expand/2`, the declaration-level `"slots"` key on
-  # `Composite.Data`, and the environment walk descending at the mapped inner
-  # position. `StatifierExamples.Signup.GuardedSection` is the reference
-  # composite written over them and `StatifierExamples.CompositesTest` is what
-  # reads them; none is reachable from 0.25.0.
+  #   * `sb-uzly` adds `StatifierBlocks.Composite.Collapse` - `propose/3`,
+  #     the pure proposer that reads a selection back as the
+  #     `Composite.Data` declaration standing for it, and `replacement/4`,
+  #     the compound a host commits itself - and the editor's "Save as a
+  #     step" gesture with the `on_collapse` callback this app's editor
+  #     page passes.
+  #   * `sb-8fa8` keeps a refused `Edit.Session.change_config/3`'s
+  #     per-field findings in the session's `draft_findings` and routes
+  #     them with `ViewModel.overlay_findings/2`, which is what let the
+  #     Plan view's `route_findings/3` and `draft_findings/3` go.
+  #   * `sb-6xkf` adds the three transparent-container readers
+  #     `ViewModel.transparent?/2`, `effective_parent/3` and
+  #     `end_of_list_target/3`, with `ViewModel.core_containers/0` as the
+  #     documented default type list. This app draws no container through,
+  #     so it adopts none of the three - they are held here by a test that
+  #     they agree with the page's own positions map.
+  #   * `sb-q183` adds pass-through slots on a composite, for the module
+  #     kind and the data kind alike - `Composite.pass_through/2`,
+  #     `mapping_errors/2`, the splice in `expand/2`, the
+  #     declaration-level `"slots"` key on `Composite.Data`, and the
+  #     environment walk descending at the mapped inner position.
+  #     `StatifierExamples.Signup.GuardedSection` is the reference
+  #     composite written over them.
   #
-  # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout is
-  # unaffected either way. The ledger entry
-  # `se-gx4-statifier_blocks-sb-uzly` carries the pin across all three
-  # advances, and `se-c9l` puts the Hex arm back once the operator publishes
-  # 0.26.0.
+  # What the release adds ON TOP of the pinned commit is nine commits, and
+  # none of them reaches this app's own code:
+  # `Edit.Targets.accepted_recipes/4` and `recipe_inserts/4`, the
+  # declarative `"migrations"` chain on a data declaration, the profile's
+  # honoured `palette_groups` order, an Expand that refuses a broken
+  # declaration, a read-only mount that draws no gap `"+"`, a `debounce`
+  # assign on the editor mount, four moduledoc corrections and the
+  # campaign's record flips. This app names none of those functions,
+  # passes no `profile` and no `debounce`, declares no `"migrations"` key,
+  # and mounts the editor read-write, so every one of them is additive
+  # here.
+  #
+  # Two things answer differently from 0.25.0 for a host that does
+  # nothing, and neither reaches this app. `Palette.new/2` now runs the
+  # duplicate-`order` refusal `from_modules/2` already ran, and this app
+  # builds its palette through `from_modules/2`
+  # (`StatifierExamples.Charts.palette/0`). And a composite's `slots/1`
+  # answers its declared pass-through slots rather than always `[]`, which
+  # is the seam `GuardedSection` was already written over on the pin.
+  # 0.26.0 is a minor and no compiled chart bytes move.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "e61890ab5af7f250e64ec10c5ac6d6bf09663bac"}
+        {:statifier_blocks, "~> 0.26"}
     end
   end
 
