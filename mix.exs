@@ -649,13 +649,46 @@ defmodule StatifierExamples.MixProject do
   # optional `payload` declaration and `core.map`'s `collect` accepts any
   # datamodel path rather than only a bare identifier; both are additive,
   # and this app's documents declare neither.
+  #
+  # `se-obu`: the default arm is a GIT PIN again, for as long as 0.23.0 is
+  # unpublished. It names a merged `main` commit rather than a branch, so
+  # it is exact where a Hex requirement is a range, and `mix.lock` records
+  # the same commit. `STATIFIER_BLOCKS_PATH` still wins over it, so a local
+  # checkout is unaffected either way, and `se-yag` puts the Hex arm back
+  # at `~> 0.23` once the operator publishes.
+  #
+  # The pin buys the two behaviours this app's editor suite is here to
+  # hold, and neither is reachable from 0.22.0:
+  #
+  #   * `sb-1c7g` builds the insert probe from `palette_entry/0`'s
+  #     `default_config` rather than from `config_schema/1`'s `default:`
+  #     values alone. A `{:path, _}` field defaulting to `""` names no
+  #     path, so before this a block whose read is declared on that field
+  #     asked nothing of any slot and every gap accepted it - the
+  #     drop-time refusal ADR-0011 promises never fired for exactly the
+  #     blocks whose reads are worth checking.
+  #   * `sb-c9b6` carries BOTH the config and the structure stages'
+  #     findings in one refusal: the structure stage runs past a
+  #     config-stage error over what it can still resolve, so a config
+  #     error on one block no longer hides another block's assignability
+  #     finding.
+  #
+  # Beside them the pinned commit carries `sb-w08l` (`config_key` on the
+  # `type_mismatch` finding, which is what names the field a refused read
+  # was declared on), `sb-8mki` (a `{:path, opts}` field declared with no
+  # `default:` is refused at declaration) and `sb-ym2w` (the armed palette
+  # is filtered by what will land). None of those three changes anything
+  # this app declares: every path field it ships states a `default:`, and
+  # the palette filter is the same predicate the drop already used.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.22"}
+        {:statifier_blocks,
+         git: "https://github.com/riddler/statifier_blocks.git",
+         ref: "583691a6536a7c31a7b825574bf68d2eb4e6ac22"}
     end
   end
 

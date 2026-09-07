@@ -139,32 +139,52 @@ defmodule StatifierExamples.MixDepsTest do
   # pin (`7c33c6c...`) and left `mix.lock` alone; it went red reporting
   # the recorded commit against the mutated expectation. Reverted from a
   # backup copy.
-  # The arm moves to the 0.22 line, and back to a Hex requirement: 0.22.0
-  # is published and carries both commits the pins bought, so `se-gty`
-  # retires them and the `refute` below is what says neither came back.
-  # The requirement is what this asserts again; a range is looser than a
-  # pin, and the lock assertion is what ties it to the release that
-  # actually resolved.
+  # The arm moved to the 0.22 line, and briefly back to a Hex requirement:
+  # 0.22.0 carries both commits the two earlier pins bought, so `se-gty`
+  # retired them. What came beside them is additive here - `core.on_event`
+  # takes an optional `payload` declaration, `core.map`'s `collect` accepts
+  # any datamodel path rather than only a bare identifier, and this app's
+  # documents declare neither - and the `statifier_datamodel` floor moved
+  # to `~> 0.3` with the release, which is what the test above records.
   #
-  # This app asked for both halves. `sb-hgjk`'s `compile_options` assign
-  # is above; `sb-hxs5` is the failure seam reaching `core.invoke`, which
-  # is what `se-cqr` deleted the host-side translation on. What comes
-  # beside them is additive here: `core.on_event` takes an optional
-  # `payload` declaration, `core.map`'s `collect` accepts any datamodel
-  # path rather than only a bare identifier, and this app's documents
-  # declare neither. The `statifier_datamodel` floor moves to `~> 0.3`
-  # with the release, which is what the test above now records.
+  @statifier_blocks_ref "583691a6536a7c31a7b825574bf68d2eb4e6ac22"
+
+  # se-obu: the default arm is a GIT PIN again for as long as 0.23.0 is
+  # unpublished, so what this asserts is the pin rather than a Hex
+  # requirement. It is not a weakening of the check: a pin is exact where a
+  # Hex requirement is a range, and `mix.lock` recording the same commit is
+  # what proves the tree is on the code the pin names rather than on
+  # whatever `main` has become since.
   #
-  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
-  # release line (`"0.21.`) and left `mix.lock` alone; it went red
-  # reporting the resolved 0.22.0 entry against the mutated expectation.
-  # Reverted from a backup copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
+  # `se-yag` puts the Hex arm and this test's Hex spelling back together at
+  # `~> 0.23`, after the operator publishes; the ledger entry
+  # `se-obu-statifier_blocks-sb-1c7g+sb-c9b6` is what carries the pin until
+  # then.
+  #
+  # What the pin buys is the pair `StatifierExamplesWeb.EditorLiveTest`
+  # asserts. `sb-c9b6` is the half nothing else could reach: the compiler
+  # runs Config and Structure as a pair rather than in sequence, so a
+  # config error on one card no longer hides an unsatisfied read on
+  # another and the refusal carries the union - which is exactly the seam
+  # the first production embedder met. `sb-1c7g` builds the insert probe
+  # from `palette_entry/0`'s `default_config` as well as the schema's own
+  # defaults, so a drop-time refusal is asked with the config an author is
+  # about to write rather than with an empty path.
+  #
+  # Sabotage: pointed the LOCK assertion at a real-but-wrong commit of
+  # `statifier_blocks` main and left `mix.lock` alone; it went red
+  # reporting the pinned ref against the mutated expectation. Reverted
+  # from a backup copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.22"} in deps
+    assert {:statifier_blocks,
+            [
+              git: "https://github.com/riddler/statifier_blocks.git",
+              ref: @statifier_blocks_ref
+            ]} in deps
 
     lock_line =
       "mix.lock"
@@ -173,8 +193,9 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.22.)
-    refute lock_line =~ ":git,"
+    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
+    assert lock_line =~ @statifier_blocks_ref
+    refute lock_line =~ ":hex,"
   end
 
   # The path/type index the editor package reads a datamodel document
