@@ -17,14 +17,15 @@ defmodule StatifierExamples.SignupTest do
   test "block_types/0 registers the two signup-wizard types under their myapp names" do
     assert Signup.block_types() == %{
              "myapp.signup_step" => SignupStep,
-             "myapp.provision" => Provision
+             "myapp.provision" => Provision,
+             "myapp.guarded_step" => StatifierExamples.Signup.GuardedStep
            }
   end
 
   # Sabotage: swapped the first two entries in @documents; this went red,
   # then reverted.
   test "fixtures/0 lists the domain's documents, keyed and named from the documents themselves" do
-    assert [wizard, invitations, onboarding, bulk, strict, chunk] = Signup.fixtures()
+    assert [wizard, invitations, onboarding, bulk, strict, chunk, guarded] = Signup.fixtures()
 
     assert %{key: "signup_wizard", name: "Signup wizard"} = wizard
     assert %{key: "signup_invitations", name: "Signup invitations"} = invitations
@@ -35,6 +36,9 @@ defmodule StatifierExamples.SignupTest do
              strict
 
     assert %{key: "signup_invite_chunk", name: "Invite chunk"} = chunk
+
+    # `se-2ox`: the document the domain's composite is read on.
+    assert %{key: "signup_guarded_step", name: "Guarded step"} = guarded
   end
 
   # Sabotage: pointed load/1 at a file that does not exist; this went red,

@@ -3,7 +3,12 @@ defmodule StatifierExamples.CardAuthTest do
 
   alias StatifierExamples.CardAuth
 
-  @types %{
+  # The eleven leaf types. The domain's twelfth registration is a COMPOSITE
+  # and is asserted apart from these: it is declared with
+  # `use StatifierBlocks.Composite` rather than over the invoke-step base, so
+  # the "every type" walks below - a label field, an invoke type of its own,
+  # the two call outcomes - are about these eleven and are not about it.
+  @leaf_types %{
     "myapp.authorize" => CardAuth.Authorize,
     "myapp.balance_check" => CardAuth.BalanceCheck,
     "myapp.capture" => CardAuth.Capture,
@@ -17,10 +22,14 @@ defmodule StatifierExamples.CardAuthTest do
     "myapp.three_ds_challenge" => CardAuth.ThreeDsChallenge
   }
 
+  @composite_types %{
+    "myapp.authorize_with_deadline" => CardAuth.AuthorizeWithDeadline
+  }
+
   # Sabotage: dropped "myapp.receipt" from @block_types; this went red, then
   # reverted.
-  test "the eleven card-processing types register under their myapp names" do
-    assert CardAuth.block_types() == @types
+  test "the eleven leaf types and the one composite register under their myapp names" do
+    assert CardAuth.block_types() == Map.merge(@leaf_types, @composite_types)
   end
 
   # The property se-bv9 turned around: every type the domain's documents name
@@ -39,7 +48,7 @@ defmodule StatifierExamples.CardAuthTest do
   # Sabotage: made every type file under the "Messaging" group; this went red,
   # then reverted.
   test "every type files under Card processing and points at the host accent" do
-    for {_name, module} <- CardAuth.block_types() do
+    for {_name, module} <- @leaf_types do
       assert %{group: "Card processing", accent_token: "--sb-accent-myapp"} =
                module.palette_entry()
     end
@@ -48,7 +57,7 @@ defmodule StatifierExamples.CardAuthTest do
   # Sabotage: made Step.config_schema/2 drop the invoke_type field; this went
   # red, then reverted.
   test "every type declares label then invoke_type, defaulted to its own" do
-    for {_name, module} <- CardAuth.block_types() do
+    for {_name, module} <- @leaf_types do
       assert [
                %{key: "label", type: :string, required?: false},
                %{key: "invoke_type", required?: true, default: default} | _rest
@@ -61,7 +70,7 @@ defmodule StatifierExamples.CardAuthTest do
   # Sabotage: made Step.outcomes/0 return only the done pair; this went red,
   # then reverted.
   test "every type declares the two call outcomes in compile order" do
-    for {_name, module} <- CardAuth.block_types() do
+    for {_name, module} <- @leaf_types do
       assert module.outcomes(%{}) == [{"done", "Done"}, {"error", "Error"}]
     end
   end
@@ -80,7 +89,16 @@ defmodule StatifierExamples.CardAuthTest do
   # @documents; this went red on the two-element match, then reverted from a
   # backup copy.
   test "the card-processing fixtures are registered and decoded" do
-    assert [fixture, sketch] = CardAuth.fixtures()
+    assert [fixture, sketch, composite] = CardAuth.fixtures()
+
+    # `se-2ox`: the third document is the first two's arrangement said the
+    # other way, one `myapp.authorize_with_deadline` block standing for the
+    # group, the deadline, the three lanes and the interrupt.
+    # `StatifierExamples.CompositesTest` is what says the compiled bytes do
+    # not move between the two spellings.
+    assert %{key: "card_processing_composite", name: "Card processing (composite)"} = composite
+    assert File.exists?(composite.path)
+    assert composite.document.id == "bdoc_cp_composite"
     assert %{key: "card_processing", name: "Card processing"} = fixture
 
     assert File.exists?(fixture.path)

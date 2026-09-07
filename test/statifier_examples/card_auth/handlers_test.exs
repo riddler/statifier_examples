@@ -36,9 +36,13 @@ defmodule StatifierExamples.CardAuth.HandlersTest do
   test "the handler registry names every invoke type the block types do" do
     assert Handlers.invoke_types() == @invoke_types
 
+    # A COMPOSITE names no invoke type of its own - it stands for blocks that
+    # do, and each of those is a leaf type already in this walk - so the
+    # domain's twelfth registration is rejected rather than asked (se-2ox).
     named =
       StatifierExamples.CardAuth.block_types()
-      |> Map.values()
+      |> Enum.map(fn {_name, module} -> module end)
+      |> Enum.reject(&StatifierBlocks.Composite.composite?/1)
       |> Enum.map(& &1.invoke_type())
       |> Enum.sort()
 

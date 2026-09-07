@@ -7,7 +7,14 @@ defmodule StatifierExamples.Signup do
   and it carries the A/B testing example. It models no real product: every
   address is `@example.com` and every name and amount is made up.
 
-  Two block types, both of them a call to a host handler with an outcome:
+  Three block types, and the third is declared the other way.
+  `myapp.guarded_step` is a **composite** - `use StatifierBlocks.Composite`,
+  params plus a pure subtree - standing for a `core.invoke` with a
+  `myapp.notify` on its `on_error` path, which is the pairing an author
+  forgets. `StatifierExamples.Signup.GuardedStep` carries the reasoning and
+  `signup_guarded_step` is the document that reads it.
+
+  The other two are a call to a host handler with an outcome:
   `myapp.signup_step` collects one step of the wizard and `myapp.provision`
   creates the workspace at the end of it. Everything else the three fixture
   documents are made of - the sequencing, the branch on the chosen plan, the
@@ -28,7 +35,7 @@ defmodule StatifierExamples.Signup do
 
   alias StatifierBlocks.{Block, Decode, Document, Edit}
   alias StatifierExamples.Charts.Fixture
-  alias StatifierExamples.Signup.{Provision, SignupStep}
+  alias StatifierExamples.Signup.{GuardedStep, Provision, SignupStep}
 
   @typedoc """
   One example document, as `StatifierExamples.Charts.fixtures/0` lists it.
@@ -71,7 +78,8 @@ defmodule StatifierExamples.Signup do
     {"signup_onboarding", "signup_onboarding.json", []},
     {"signup_bulk_invites", "signup_bulk_invites.json", []},
     {"signup_bulk_invites_strict", "signup_bulk_invites_strict.json", []},
-    {"signup_invite_chunk", "signup_invite_chunk.json", []}
+    {"signup_invite_chunk", "signup_invite_chunk.json", []},
+    {"signup_guarded_step", "signup_guarded_step.json", []}
   ]
 
   # The `core.send` whose delay is host configuration rather than a fact
@@ -90,7 +98,8 @@ defmodule StatifierExamples.Signup do
   def block_types,
     do: %{
       "myapp.signup_step" => SignupStep,
-      "myapp.provision" => Provision
+      "myapp.provision" => Provision,
+      "myapp.guarded_step" => GuardedStep
     }
 
   @doc """

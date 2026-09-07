@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_cp_composite",
+  "revision": 1,
+  "metadata": {
+    "name": "Card processing (composite)",
+    "description": "The three-lane authorization arrangement card_processing.json spells out by hand, expressed as one myapp.authorize_with_deadline block. The compiled chart is the same either way, which is the reading this document exists for."
+  },
+  "datamodel": [
+    {
+      "id": "fraud_review",
+      "description": "What the fraud lane answered. The lane's name is the root it records at, so renaming the lane renames this."
+    },
+    {
+      "id": "balance_check",
+      "description": "What the balance lane answered."
+    },
+    {
+      "id": "three_ds",
+      "description": "What the 3-D Secure lane answered."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_cpx_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.authorize_with_deadline",
+          "id": "blk_cpx_authz",
+          "type_version": 1,
+          "config": {
+            "deadline": "1h",
+            "first_lane": "fraud_review",
+            "first_call": "myapp:risk_rating",
+            "second_lane": "balance_check",
+            "second_call": "myapp:balance_check",
+            "third_lane": "three_ds",
+            "third_call": "myapp:three_ds",
+            "outcome": "abandon"
+          }
+        }
+      ]
+    }
+  }
+}
