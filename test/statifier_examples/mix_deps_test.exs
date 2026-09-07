@@ -241,12 +241,43 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.24.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.25.0 entry against the mutated expectation.
   # Reverted from a copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
+  #
+  # `se-gx4`: the arm is a GIT PIN again, at
+  # `7fa35a205445020857fa63f89fe0d55052c861f6`, so what this asserts is
+  # the pin rather than a Hex requirement. It is not a weakening of the
+  # check: a pin is exact where a Hex requirement is a range, and `mix.lock`
+  # recording the same commit is what proves the tree is on the code the pin
+  # names rather than on whatever `main` has become since.
+  #
+  # What the pin buys is what `StatifierExamples.CollapseWalkTest` and the
+  # "saving an expansion as a step" cases in
+  # `StatifierExamplesWeb.EditorLiveTest` assert between them: `sb-uzly`'s
+  # `StatifierBlocks.Composite.Collapse.propose/3` and `replacement/4`, and
+  # the editor's "Save as a step" gesture with its `on_collapse` callback.
+  # Neither is reachable from 0.25.0.
+  #
+  # `se-c9l` puts the Hex arm and this test's Hex spelling back together
+  # after the operator publishes 0.26.0; `se-1q8` and `se-6jn` advance the
+  # pin before that. The ledger entry `se-gx4-statifier_blocks-sb-uzly` is
+  # what carries it.
+  @statifier_blocks_ref "7fa35a205445020857fa63f89fe0d55052c861f6"
+
+  # Sabotage: pointed the attribute above at a real-but-wrong commit of
+  # `statifier_blocks` main and left `mix.lock` alone; this went red
+  # reporting the pinned ref against the mutated expectation, which is the
+  # half that matters - the dep spelling and the lock have to agree on one
+  # commit or the tree is not on the code the pin names. Reverted from a
+  # copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.25"} in deps
+    assert {:statifier_blocks,
+            [
+              git: "https://github.com/riddler/statifier_blocks.git",
+              ref: @statifier_blocks_ref
+            ]} in deps
 
     lock_line =
       "mix.lock"
@@ -255,8 +286,9 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.25.)
-    refute lock_line =~ ":git,"
+    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
+    assert lock_line =~ @statifier_blocks_ref
+    refute lock_line =~ ":hex,"
   end
 
   # The path/type index the editor package reads a datamodel document

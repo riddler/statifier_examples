@@ -1357,6 +1357,143 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
   end
 
+  describe "saving an expansion as a step" do
+    # Collapse, walked from the host's side, and the OTHER direction of the
+    # gesture above. sb ADR-0005 part (iii) as amended 2026-09-07, clauses
+    # `15E` to `20E`: the author expands a composite into the primitives it
+    # stands for, arranges them, and asks for the arrangement back as a step
+    # of its own. What the package does is hand this page a DECLARATION
+    # through `on_collapse` - a map, in `StatifierBlocks.Composite.Data`'s
+    # shape and without a name, because naming the type is the host's act.
+    #
+    # The load-bearing claim is a negative one, and it is the consent
+    # breach the record names in as many words: the gesture edits no
+    # document and the package persists nothing. So this case watches the
+    # document from the outside - through `Documents`, which is what a
+    # reload or the Plan view would read - and watches the history too: a
+    # single Undo after the whole walk puts the pre-Expand bytes back,
+    # which it could not do if saving had cost an entry.
+    #
+    # Sabotage, host half: had `handle_info({:step_proposed, _})` treat the
+    # proposal as a change - `Documents.put/2` with the document's revision
+    # advanced, the way `{:document_changed, _}` moves it. Red here on the
+    # unchanged-document assertion. Writing the SAME document back is NOT
+    # discriminating, which is worth knowing: the claim is about the bytes,
+    # not about whether `put/2` was called. Reverted from a copy.
+    #
+    # Sabotage, package half: in `deps/statifier_blocks`, made
+    # `Editor.save_as_step/1` commit `{:remove, root_id}` before notifying,
+    # which is the consent breach the record names - a gesture that edits
+    # the document. `MIX_ENV=test mix deps.compile statifier_blocks --force`
+    # before and after, since a stale test build reads as a false green.
+    # Red here. Reverted from a copy and recompiled.
+    test "the declaration reaches the host and the document does not move", %{conn: conn} do
+      key = "signup_guarded_step"
+      {:ok, fixture} = Charts.fixture(key)
+      before_json = Document.to_json(fixture.document)
+
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: key]}")
+
+      view
+      |> element(~s([data-block-id="blk_gs_step"] .sb-node__expand))
+      |> render_click()
+
+      expanded_json = Document.to_json(stored(key, fixture))
+      refute expanded_json == before_json
+
+      # Expand leaves the expansion's root selected, so the gesture's control
+      # is already on it - and on it alone. Its subject is a SELECTION, and
+      # the notification on the error path is in that selection's subtree
+      # without being the selection itself.
+      refute has_element?(view, ~s([data-block-id="blk_gs_step_notify"] .sb-node__save-step))
+
+      # Selected again the way an author selects it, because the walk this
+      # case is about is the author's rather than Expand's.
+
+      view
+      |> element(~s([data-block-id="blk_gs_step_call"] > .sb-node__chrome > .sb-node__label))
+      |> render_click()
+
+      assert has_element?(
+               view,
+               ~s([data-block-id="blk_gs_step_call"] .sb-node__save-step)
+             )
+
+      view
+      |> element(~s([data-block-id="blk_gs_step_call"] .sb-node__save-step))
+      |> render_click()
+
+      # The marking tray names every block in the selected subtree, which
+      # here is the call and the notification on its error path.
+      assert has_element?(
+               view,
+               ~s(.sb-save-step__field input[phx-value-block-id="blk_gs_step_call"])
+             )
+
+      assert has_element?(
+               view,
+               ~s(.sb-save-step__field input[phx-value-block-id="blk_gs_step_notify"])
+             )
+
+      view |> element(".sb-save-step__confirm") |> render_click()
+
+      # What the host was handed: the four values this arrangement carries
+      # that are not their fields' defaults, which is `18E`'s unmarked
+      # reading of a tray with nothing ticked.
+      assert view |> element("[data-proposed-step]") |> render() =~
+               ~s(data-proposed-step="invoke_type,assign_to,label,template")
+
+      # And the document is exactly where Expand left it: no command was
+      # committed, `on_change` never fired, and the tray is closed.
+      assert Document.to_json(stored(key, fixture)) == expanded_json
+      refute has_element?(view, ".sb-save-step")
+
+      # One press of Undo still takes the Expand back, which says the
+      # gesture cost no history entry of its own.
+      view |> element(~s(button[phx-click="undo"])) |> render_click()
+
+      assert Document.to_json(stored(key, fixture)) == before_json
+    end
+
+    # `18E`'s other half: the proposed params are the values the author
+    # MARKS. Ticking one box is the whole difference between a step that
+    # asks for four values and one that asks for the only value this
+    # author wanted parameterised.
+    #
+    # Sabotage: made the editor page pass `on_collapse` a function that
+    # ignores its argument and reports the unmarked four-key reading
+    # whatever the author ticked; red here and green everywhere else, which
+    # is the pair of cases doing its job. Reverted from a copy.
+    test "only the values the author ticks are asked for", %{conn: conn} do
+      key = "signup_guarded_step"
+
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: key]}")
+
+      view
+      |> element(~s([data-block-id="blk_gs_step"] .sb-node__expand))
+      |> render_click()
+
+      view
+      |> element(~s([data-block-id="blk_gs_step_call"] > .sb-node__chrome > .sb-node__label))
+      |> render_click()
+
+      view
+      |> element(~s([data-block-id="blk_gs_step_call"] .sb-node__save-step))
+      |> render_click()
+
+      view
+      |> element(
+        ~s(.sb-save-step__field input[phx-value-block-id="blk_gs_step_call"][phx-value-field-key="invoke_type"])
+      )
+      |> render_click()
+
+      view |> element(".sb-save-step__confirm") |> render_click()
+
+      assert view |> element("[data-proposed-step]") |> render() =~
+               ~s(data-proposed-step="invoke_type")
+    end
+  end
+
   # The document as this app has it NOW - the page writes every edit through
   # `Documents`, so this is what a reload, the plan view or a persist would
   # see, rather than a value read back out of the socket.
