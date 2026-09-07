@@ -71,8 +71,31 @@ defmodule StatifierExamples.Charts do
   decision that belongs to `statifier_blocks`, not to a host.
   """
   @spec palette() :: Palette.t()
-  def palette do
-    Palette.from_modules(registrations(), core: true)
+  def palette, do: palette([])
+
+  @doc """
+  The same palette, with `extra` registered on top of it.
+
+  The seam a host needs the moment its **users** save composites. `sb`
+  ADR-0005 part (iii), clauses `15E` to `20E`, makes "Save as a step" hand
+  the host a declaration and nothing else: naming the type and storing the
+  row are the host's act, and so is putting the saved type back in front of
+  the next author. That last step is this argument - a
+  `StatifierBlocks.Composite.Data` entry, `{"myapp.something", {module,
+  state}}`, registered beside the modules this app writes by hand.
+
+  Ordered after `registrations/0` and therefore winning over it, which is
+  what lets a saved composite be read beside the module composite it was
+  collapsed out of. `[]` - the default `palette/0` passes - is exactly the
+  palette this app has always handed the editor.
+
+  This app stores nothing, so the editor page passes nothing: what walks
+  the argument is `StatifierExamples.CollapseWalkTest`, which is where the
+  saved-composite half of the gesture is read.
+  """
+  @spec palette([Palette.registration()]) :: Palette.t()
+  def palette(extra) when is_list(extra) do
+    Palette.from_modules(registrations() ++ extra, core: true)
   end
 
   @doc """

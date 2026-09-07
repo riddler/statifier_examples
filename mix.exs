@@ -838,13 +838,32 @@ defmodule StatifierExamples.MixProject do
   # one (`StatifierExamplesWeb.PlanLive`'s `draft_findings/3`, which then
   # calls `validate_config/1` on it). 0.25.0 is a minor and no compiled
   # chart bytes move.
+  #
+  # The default arm is a GIT PIN again, at
+  # `7fa35a205445020857fa63f89fe0d55052c861f6` on `statifier_blocks` main, for
+  # `se-gx4`: the Collapse walk this app now carries is written over two
+  # seams that land after 0.25.0 and are unpublished while it is written.
+  # `sb-uzly` adds `StatifierBlocks.Composite.Collapse` - `propose/3`, the
+  # pure proposer that reads a selection back as the `Composite.Data`
+  # declaration standing for it, and `replacement/4`, the compound a host
+  # commits itself - and the editor's "Save as a step" gesture with the
+  # `on_collapse` callback this app's editor page now passes. Both are ADR
+  # -0005 part (iii) as amended 2026-09-07, clauses `15E` to `20E`.
+  #
+  # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout is
+  # unaffected either way. The ledger entry
+  # `se-gx4-statifier_blocks-sb-uzly` carries the pin; `se-1q8` and `se-6jn`
+  # advance it to later main SHAs, and `se-c9l` puts the Hex arm back once
+  # the operator publishes 0.26.0.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.25"}
+        {:statifier_blocks,
+         git: "https://github.com/riddler/statifier_blocks.git",
+         ref: "7fa35a205445020857fa63f89fe0d55052c861f6"}
     end
   end
 

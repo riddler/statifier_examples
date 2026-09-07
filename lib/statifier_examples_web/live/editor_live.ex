@@ -81,7 +81,9 @@ defmodule StatifierExamplesWeb.EditorLive do
        durable: nil,
        run_topic: nil,
        run_error: nil,
+       proposed_step: nil,
        on_change: fn document -> send(parent, {:document_changed, document}) end,
+       on_collapse: fn declaration -> send(parent, {:step_proposed, declaration}) end,
        on_drawer_resize: fn height -> send(parent, {:drawer_resized, height}) end
      )}
   end
@@ -141,6 +143,25 @@ defmodule StatifierExamplesWeb.EditorLive do
     {:noreply, socket}
   end
 
+  # The other seam out of the editor, and the one that is not a change.
+  # "Save as a step" hands this page the declaration standing for the
+  # arrangement the author selected - `StatifierBlocks.Composite.Collapse`'s
+  # proposal, sb ADR-0005 part (iii) as amended 2026-09-07, clauses `15E` to
+  # `20E`. The document is NOT edited by it and the package persists
+  # nothing, so nothing is written to `Documents` here and no recompile is
+  # run: what a host does with the map - which table, which tenant, whether
+  # it is stored at all - is the host's, and what this reference embedder
+  # does is show that it arrived.
+  #
+  # It stays in the socket rather than going anywhere, deliberately.
+  # Naming the type is the host's act (`15E`) and storing it is `R5`'s;
+  # neither is what this app is a reference for, and a demo that quietly
+  # minted a type name would be demonstrating the one thing the record
+  # refuses.
+  def handle_info({:step_proposed, declaration}, socket) do
+    {:noreply, assign(socket, :proposed_step, declaration)}
+  end
+
   def handle_info({:drawer_resized, height}, socket) do
     {:noreply, assign(socket, :drawer_height, height)}
   end
@@ -182,6 +203,7 @@ defmodule StatifierExamplesWeb.EditorLive do
         declare={@fixture.declare}
         compile_options={compile_options(@fixture)}
         on_change={@on_change}
+        on_collapse={@on_collapse}
         on_drawer_resize={@on_drawer_resize}
         drawer_height={@drawer_height}
       >
@@ -257,6 +279,14 @@ defmodule StatifierExamplesWeb.EditorLive do
 
             <span :if={@run_error} class="myapp-header__verdict" data-run-error={@run_error}>
               {@run_error}
+            </span>
+
+            <span
+              :if={@proposed_step}
+              class="myapp-header__verdict"
+              data-proposed-step={Enum.map_join(@proposed_step["params"], ",", & &1["key"])}
+            >
+              Step proposed: {length(@proposed_step["params"])} values
             </span>
           </div>
         </:header>
