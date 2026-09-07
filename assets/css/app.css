@@ -414,6 +414,145 @@
   padding: 0 0.4ch;
 }
 
+/* ----------------------------------------------------------------- plan
+ *
+ * `StatifierExamplesWeb.PlanLive`: the same documents as a list of steps
+ * (`se-1cl`, decision D16). The rows are host chrome, so they are ordinary
+ * CSS here rather than package tokens - but the shell they sit in carries
+ * the `sb-editor` class, which is what makes the theme blocks below dress
+ * this page as well as the editor and what gives the config fields the
+ * `--sb-*` tokens `.sb-field` reads. The package declares every token on
+ * `.sb-editor` itself, so a page wanting the package's controls to look
+ * like the package's controls has to be inside one.
+ */
+
+/* The editor's height bound is for a page whose content IS the editor. This
+   page's content is a list that grows with the document, so it takes the
+   token back to the package's own default and lets the page scroll. */
+.myapp-page--plan .sb-editor {
+  --sb-editor-height: auto;
+}
+
+.myapp-plan__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sb-space-2);
+  padding: var(--sb-space-2) var(--sb-space-half);
+}
+
+.myapp-plan__section-title {
+  font-size: var(--sb-text-sm);
+  font-weight: var(--sb-weight-medium, 500);
+  letter-spacing: var(--sb-tracking-caps);
+  text-transform: uppercase;
+  color: var(--sb-fg-muted);
+  margin: 0 0 var(--sb-space-half);
+}
+
+.myapp-plan__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The one place `outline/1`'s depth is drawn. It arrives as a custom
+   property on the row rather than as a class per level, because depth is a
+   number the walk hands over and a stylesheet enumerating levels would cap
+   at whatever level somebody remembered to write. */
+.myapp-plan__row {
+  margin-left: calc(var(--plan-depth, 0) * 1.5rem);
+  border-left: 2px solid var(--sb-border);
+  padding-left: var(--sb-space);
+}
+
+.myapp-plan__row--selected {
+  border-left-color: var(--sb-accent, #6c8cff);
+}
+
+.myapp-plan__line {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-space-half);
+  min-height: 2rem;
+}
+
+/* The sentence is a button because clicking it selects the row, and a
+   button is what a keyboard reaches. It is styled back down to text because
+   a plan of twenty buttons reads as a toolbar rather than as a plan. */
+.myapp-plan__sentence {
+  flex: 1;
+  border: 0;
+  background: none;
+  color: var(--sb-fg);
+  font: inherit;
+  text-align: left;
+  padding: var(--sb-space-half) 0;
+  cursor: pointer;
+}
+
+.myapp-plan__findings {
+  padding: 0 0.4ch;
+  border-radius: var(--sb-radius-sm, 3px);
+  color: var(--sb-error);
+  background: var(--sb-error-bg);
+  font-size: var(--sb-text-xs);
+}
+
+.myapp-plan__controls {
+  display: flex;
+  gap: var(--sb-space-half);
+}
+
+.myapp-plan__control,
+.myapp-plan__add {
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius-sm, 3px);
+  background: var(--sb-bg);
+  color: var(--sb-fg-muted);
+  font: inherit;
+  font-size: var(--sb-text-xs);
+  padding: 0 0.6ch;
+  cursor: pointer;
+}
+
+.myapp-plan__control:hover,
+.myapp-plan__add:hover {
+  color: var(--sb-fg);
+}
+
+.myapp-plan__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sb-space);
+  padding: var(--sb-space) 0;
+}
+
+.myapp-plan__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sb-space);
+  max-width: 32rem;
+}
+
+.myapp-plan__pending {
+  font-size: var(--sb-text-sm);
+  color: var(--sb-fg-muted);
+  margin: 0;
+}
+
+.myapp-plan__gap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sb-space-half);
+  padding: var(--sb-space-half) 0;
+}
+
+.myapp-plan__picker-empty {
+  font-size: var(--sb-text-xs);
+  color: var(--sb-fg-muted);
+  margin: 0;
+}
+
 /* --------------------------------------------------------------- themes
  *
  * Three host themes, each a block of `--sb-*` custom properties and nothing

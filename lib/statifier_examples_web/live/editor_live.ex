@@ -23,9 +23,12 @@ defmodule StatifierExamplesWeb.EditorLive do
       the DOCUMENT switcher, the THEME control and Compile. Undo and redo are
       deliberately **not** here - they are the package's toolbar, and a second
       pair in the header would be two controls over one history;
-    * the documents themselves, which live in this process' assigns and
-      nowhere else. An edit survives a document switch and does not survive a
-      reload: what this app stores is *runs*, not drafts;
+    * routing an edit to where the documents live, which since `se-1cl` is
+      `StatifierExamples.Documents` rather than this process' assigns. A
+      second view over the same documents - `StatifierExamplesWeb.PlanLive` -
+      is a second LiveView, so a map held here is one that page cannot see.
+      An edit now survives a document switch AND a reload, and still does not
+      survive a restart: what this app stores is *runs*, not drafts;
     * the run id, which is a query parameter for the same reason the other
       two are. A durable run outlives the process that started it, so the
       page needs a name for the one it is showing, and a name in the URL is
@@ -59,6 +62,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Charts.Replay
   alias StatifierExamples.Charts.Run
+  alias StatifierExamples.Documents
   alias StatifierExamplesWeb.Icons
 
   @default_theme :light
@@ -72,7 +76,6 @@ defmodule StatifierExamplesWeb.EditorLive do
        page_title: "Editor",
        palette: Charts.palette(),
        fixtures: Charts.fixtures(),
-       documents: %{},
        drawer_height: nil,
        run: nil,
        durable: nil,
@@ -128,10 +131,11 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   @impl Phoenix.LiveView
   def handle_info({:document_changed, %Document{} = document}, socket) do
+    :ok = Documents.put(socket.assigns.fixture.key, document)
+
     socket =
       socket
       |> assign(:document, document)
-      |> update(:documents, &Map.put(&1, socket.assigns.fixture.key, document))
       |> compile()
 
     {:noreply, socket}
@@ -297,7 +301,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   @spec load_document(Phoenix.LiveView.Socket.t(), Charts.Fixture.t()) ::
           Phoenix.LiveView.Socket.t()
   defp load_document(socket, fixture) do
-    document = Map.get(socket.assigns.documents, fixture.key, fixture.document)
+    document = Documents.get(fixture.key, fixture.document)
 
     socket
     |> end_run_on_switch(fixture)

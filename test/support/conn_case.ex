@@ -36,6 +36,12 @@ defmodule StatifierExamplesWeb.ConnCase do
   setup tags do
     :ok = checkout(tags)
 
+    # The edited documents live in one process now (`se-1cl`), so a test
+    # that edits a fixture would hand the next test a document it did not
+    # write. Clearing the store here is what keeps the pages under test
+    # starting from the bytes on disk.
+    :ok = StatifierExamples.Documents.reset()
+
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 

@@ -747,13 +747,35 @@ defmodule StatifierExamples.MixProject do
   # `sb-hgjk`. The `statifier_datamodel` floor moves to `~> 0.4` with the
   # release, and 0.4.0 resolves; this app still names that package
   # nowhere.
+  #
+  # The default arm is a GIT PIN again, at `ea2fdeec0e6b191659a0ff7020d1627e99786ab0`
+  # on `statifier_blocks` main, for `se-1cl`: the Plan view is built over
+  # three seams that land after 0.23.0 and are unpublished while it is
+  # written. `sb-21gm` puts `hidden?` and `readonly?` on
+  # `ViewModel.Field`, which is how a second view drops the fields the
+  # package editor draws but a plain list has no room for. `sb-w37s` adds
+  # the optional `sentence/1` block-type callback and the pure
+  # `ViewModel.outline/1`, which is the whole rendering input: a
+  # pre-order `{node, depth, kind}` walk with no editor state in it.
+  # `sb-zjyv` makes `Palette.new_block/2` public, so a host inserts the
+  # same block the package editor's drop does rather than assembling one
+  # by hand. Beside them the pinned commit carries `sb-gsg9`, `sb-vjjl`,
+  # `sb-mt61` and `sb-m9eq`; none of the four is named here.
+  #
+  # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout
+  # is unaffected either way. `se-298` puts the Hex arm back at
+  # `~> 0.24` once the operator publishes; the ledger entry
+  # `se-1cl-statifier_blocks-sb-21gm+sb-w37s+sb-zjyv` carries the pin
+  # until then.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.23"}
+        {:statifier_blocks,
+         git: "https://github.com/riddler/statifier_blocks.git",
+         ref: "ea2fdeec0e6b191659a0ff7020d1627e99786ab0"}
     end
   end
 

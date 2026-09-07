@@ -607,10 +607,14 @@ Nothing special. This beat needed git pins and a hook registration the app did
 not carry when it was first walked; both retired when the packages published,
 and `mix setup` is now the whole recipe.
 
-The packages come from Hex at the floors `mix.exs` states -
-`{:statifier_blocks, "~> 0.23"}` and `{:statifier_ui, "~> 0.10"}`, with
-`predicator` arriving under them - and no `override:` remains anywhere in the
-dependency list. The hook registration is committed, in `assets/js/app.js`:
+`statifier_ui` comes from Hex at the floor `mix.exs` states -
+`{:statifier_ui, "~> 0.10"}`, with `predicator` arriving under it - and no
+`override:` remains anywhere in the dependency list. `statifier_blocks` is the
+one exception while `se-1cl` runs: a committed git pin to
+`ea2fdeec0e6b191659a0ff7020d1627e99786ab0` on that repository's `main`, for
+the three unpublished seams the Plan view is built over. `se-298` puts the
+Hex arm back once 0.24.0 publishes. The hook registration is committed, in
+`assets/js/app.js`:
 `StatifierUIHooks` is imported beside `StatifierBlocks` and spread into the
 same `hooks` map, resolved through the esbuild `NODE_PATH` the
 `statifier_blocks` import already uses. Picklist mode is drawn on the server
