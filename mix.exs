@@ -840,7 +840,7 @@ defmodule StatifierExamples.MixProject do
   # chart bytes move.
   #
   # The default arm is a GIT PIN again, at
-  # `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd` on `statifier_blocks` main, for
+  # `e61890ab5af7f250e64ec10c5ac6d6bf09663bac` on `statifier_blocks` main, for
   # `se-gx4`: the Collapse walk this app now carries is written over two
   # seams that land after 0.25.0 and are unpublished while it is written.
   # `sb-uzly` adds `StatifierBlocks.Composite.Collapse` - `propose/3`, the
@@ -863,11 +863,20 @@ defmodule StatifierExamples.MixProject do
   # the readers are pinned here by a test that they agree with the page's
   # own positions map, which is the honest measurement.
   #
+  # `se-1q8` advanced it again, from `eb64d4c` to the commit above, for
+  # `sb-q183`: **pass-through slots** on a composite, for the module kind and
+  # the data kind alike - `Composite.pass_through/2`, `mapping_errors/2`, the
+  # splice in `expand/2`, the declaration-level `"slots"` key on
+  # `Composite.Data`, and the environment walk descending at the mapped inner
+  # position. `StatifierExamples.Signup.GuardedSection` is the reference
+  # composite written over them and `StatifierExamples.CompositesTest` is what
+  # reads them; none is reachable from 0.25.0.
+  #
   # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout is
   # unaffected either way. The ledger entry
-  # `se-gx4-statifier_blocks-sb-uzly` carries the pin; `se-1q8` and `se-6jn`
-  # advance it to later main SHAs, and `se-c9l` puts the Hex arm back once
-  # the operator publishes 0.26.0.
+  # `se-gx4-statifier_blocks-sb-uzly` carries the pin across all three
+  # advances, and `se-c9l` puts the Hex arm back once the operator publishes
+  # 0.26.0.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
@@ -876,7 +885,7 @@ defmodule StatifierExamples.MixProject do
       _ ->
         {:statifier_blocks,
          git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd"}
+         ref: "e61890ab5af7f250e64ec10c5ac6d6bf09663bac"}
     end
   end
 

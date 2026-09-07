@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_su_guarded_section",
+  "revision": 1,
+  "metadata": {
+    "name": "Guarded section",
+    "description": "One myapp.guarded_section block: the guarded call, and the steps the author put after it in the composite's own Then slot. The children are the author's own blocks, at their own ids, and the chart is the same whether the composite is expanded or not.",
+    "domain": "signup"
+  },
+  "datamodel": [
+    {
+      "id": "signup",
+      "description": "The wizard's own root. The guarded call records what it answered at signup.step_outcome, and the section's own steps are read against an environment that holds it."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_gx_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.guarded_section",
+          "id": "blk_gx_section",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:provision",
+            "failure_template": "provision_failed"
+          },
+          "slots": {
+            "body": [
+              {
+                "type": "myapp.notify",
+                "id": "blk_gx_confirm",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:notify",
+                  "label": "Confirm the workspace",
+                  "template": "workspace_ready"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

@@ -14,18 +14,20 @@ defmodule StatifierExamples.SignupTest do
 
   # Sabotage: dropped "myapp.provision" from block_types/0; this went red,
   # then reverted.
-  test "block_types/0 registers the two signup-wizard types under their myapp names" do
+  test "block_types/0 registers the signup-wizard types under their myapp names" do
     assert Signup.block_types() == %{
              "myapp.signup_step" => SignupStep,
              "myapp.provision" => Provision,
-             "myapp.guarded_step" => StatifierExamples.Signup.GuardedStep
+             "myapp.guarded_step" => StatifierExamples.Signup.GuardedStep,
+             "myapp.guarded_section" => StatifierExamples.Signup.GuardedSection
            }
   end
 
   # Sabotage: swapped the first two entries in @documents; this went red,
   # then reverted.
   test "fixtures/0 lists the domain's documents, keyed and named from the documents themselves" do
-    assert [wizard, invitations, onboarding, bulk, strict, chunk, guarded] = Signup.fixtures()
+    assert [wizard, invitations, onboarding, bulk, strict, chunk, guarded, section] =
+             Signup.fixtures()
 
     assert %{key: "signup_wizard", name: "Signup wizard"} = wizard
     assert %{key: "signup_invitations", name: "Signup invitations"} = invitations
@@ -39,6 +41,10 @@ defmodule StatifierExamples.SignupTest do
 
     # `se-2ox`: the document the domain's composite is read on.
     assert %{key: "signup_guarded_step", name: "Guarded step"} = guarded
+
+    # `se-1q8`: the document the domain's PASS-THROUGH composite is read on -
+    # the same guarded call, with a section after it that the author fills.
+    assert %{key: "signup_guarded_section", name: "Guarded section"} = section
   end
 
   # Sabotage: pointed load/1 at a file that does not exist; this went red,
