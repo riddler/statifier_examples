@@ -54,14 +54,21 @@ neither variable, so a CI run always resolves `statifier_blocks` from Hex.
    | `signup_bulk_invites_strict` | the same document with two characters changed: one descriptor is a deliberate bad id, and the `core.map` runs `on: "first_error"`. It is the pair that makes the two failure policies readable side by side |
    | `signup_invite_chunk` | the child the two bulk documents fan out over: one `core.invoke` of `myapp:process_rows` for the chunk a descriptor stands for, answering a summary. It is offered in the switcher because a child chart is a document like any other |
 
-2. Switch documents with the header's DOCUMENT select. Edits live in the
-   LiveView process, so an edit survives a document switch and does not
-   survive a reload - the editor writes to no store. The app does have a
-   database: `StatifierExamples.Repo`, on SQLite, carries
-   `statifier_persistence`'s run storage rather than documents.
+2. Switch documents with the header's DOCUMENT select. Edits live in
+   `StatifierExamples.Documents`, one process holding one map, so an edit
+   survives a document switch and a reload and does not survive a restart -
+   nothing writes a document to disk. The app does have a database:
+   `StatifierExamples.Repo`, on SQLite, carries `statifier_persistence`'s
+   run storage rather than documents.
 
 An unknown `doc=` is not a 404: the page falls back to the first fixture,
 `card_processing`, because a query-string name is a thing somebody typed.
+
+The same document has a second page: `/plan?doc=<key>`, which reads it as a
+list of steps instead of a canvas (`StatifierExamplesWeb.PlanLive`). It takes
+the same `doc=` and `theme=` parameters plus `readonly=1`, and its
+`Open in editor` link and the editor's own page are two views of one
+document, which is what the store above is for.
 
 ## Themes, and naming a screen by URL
 
