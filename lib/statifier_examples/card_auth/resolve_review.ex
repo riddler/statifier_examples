@@ -17,7 +17,7 @@ defmodule StatifierExamples.CardAuth.ResolveReview do
       description: "Applies the reviewer's decision and continues.",
       icon: "check",
       keywords: ["resolve", "review", "decision"],
-      order: 7,
+      order: 9,
       accent_token: Step.accent_token()
     }
 end

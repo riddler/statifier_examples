@@ -17,7 +17,7 @@ defmodule StatifierExamples.CardAuth.ManualFlag do
       description: "Marks the transaction for a human to look at.",
       icon: "flag",
       keywords: ["manual", "flag", "review"],
-      order: 3,
+      order: 7,
       accent_token: Step.accent_token()
     }
 end

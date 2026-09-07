@@ -39,6 +39,40 @@ defmodule StatifierExamples.CardAuth do
   one arrangement is the comparison, and rewriting the first would destroy
   it.
 
+  ## The order the drawer lists them in
+
+  A palette entry's `order` is a position inside its group, and
+  `statifier_blocks` refuses two entries in one group claiming the same
+  number - so the twelve numbers below are a list somebody has to write
+  down, and this is where it is written. It was an accident until
+  2026-09-07: `myapp.intake` claimed 0 alongside `myapp.authorize`, and
+  `se-2ox` moved it to 10 - the next free number - to make the palette
+  legal, which left the domain's first step listed last. `se-0u1` replaced
+  that with a decision.
+
+  The run is four passages, and each is in the order it happens:
+
+  | Order | Type | Why here |
+  |---|---|---|
+  | 0 | `myapp.intake` | The step that seeds `cards.current_txn`; every later step reads it, so it is the one an author reaches for first |
+  | 1 | `myapp.authorize` | The happy path, in the order it runs |
+  | 2 | `myapp.capture` | " |
+  | 3 | `myapp.receipt` | " - the terminal step |
+  | 4 | `myapp.risk_rating` | The checks that inform the authorization decision |
+  | 5 | `myapp.balance_check` | " |
+  | 6 | `myapp.three_ds_challenge` | " |
+  | 7 | `myapp.manual_flag` | The human-review path, in the order it runs |
+  | 8 | `myapp.park` | " |
+  | 9 | `myapp.resolve_review` | " |
+  | 10 | `myapp.legacy_check` | The older ruleset, last of the leaves because it is what a flow is being moved off |
+  | 11 | `myapp.authorize_with_deadline` | The composite, last: it stands for an arrangement of the types above it, so it reads as a summary of the group rather than a member of it |
+
+  The numbers are contiguous from 0 on purpose - a gap is a place a later
+  entry lands in silently - so adding a type means renumbering its
+  passage's tail, and saying in this table where it belongs.
+  `StatifierExamples.ChartsTest` asserts the palette spells exactly this
+  order, so a renumbering that does not come back here goes red.
+
   ## Every type the documents name is registered here
 
   Through campaign 032 `myapp.legacy_check` was left out on purpose, so

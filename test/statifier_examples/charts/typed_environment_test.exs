@@ -41,6 +41,48 @@ defmodule StatifierExamples.Charts.TypedEnvironmentTest do
       assert sketch.datamodel == datamodel
     end
 
+    # `se-0u1`. The composite document carried no `metadata.domain` until
+    # 2026-09-07, so it was the one card-processing chart the advisories
+    # were off for - a reference embedder demonstrating the typed
+    # environment on two of its three card documents. It joins the domain
+    # here, which is only honest if the vocabulary covers what it writes:
+    # `myapp.authorize_with_deadline` records each lane's answer at
+    # `<lane name>.result`, and its three lanes are at their declared
+    # defaults in this document.
+    #
+    # The lane names are read off the block's own config rather than
+    # written down, so a fixture that renames a lane and does not declare
+    # the new root goes red here rather than going quiet in the editor.
+    #
+    # Sabotage: dropped the `fraud_review` entry from the datamodel
+    # document; this went red naming `fraud_review.result`, and nothing
+    # else in the suite did. Reverted from a backup copy.
+    test "the composite chart is in the domain, and its lane roots are declared", %{
+      datamodel: datamodel
+    } do
+      {:ok, composite} = Charts.fixture("card_processing_composite")
+
+      assert composite.datamodel == datamodel
+
+      config =
+        composite.document
+        |> Document.blocks()
+        |> Enum.find(&(&1.type == "myapp.authorize_with_deadline"))
+        |> Map.fetch!(:config)
+
+      lanes = Enum.map(["first_lane", "second_lane", "third_lane"], &Map.fetch!(config, &1))
+      assert length(Enum.uniq(lanes)) == 3
+
+      declared = StatifierDatamodel.Document.declared_paths(datamodel)
+
+      for lane <- lanes do
+        assert MapSet.member?(declared, lane), "#{lane} is a lane root nothing declares"
+
+        assert MapSet.member?(declared, "#{lane}.result"),
+               "#{lane}.result is where the lane records and nothing declares it"
+      end
+    end
+
     # Sabotage: gave `signup_wizard.json` the domain `card-processing`; the
     # wizard picked the card vocabulary up and this went red. Reverted from
     # a backup copy.

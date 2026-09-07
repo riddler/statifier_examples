@@ -74,7 +74,7 @@ defmodule StatifierExamples.CardAuth.Authorize do
       description: "Authorizes the transaction against the card network.",
       icon: "credit-card",
       keywords: ["authorize", "card", "payment"],
-      order: 0,
+      order: 1,
       accent_token: Step.accent_token()
     }
 
