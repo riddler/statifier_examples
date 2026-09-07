@@ -74,8 +74,15 @@ document, which is what the store above is for.
 
 ## What the Plan view copied, measured
 
-Re-measured 2026-09-07, on the `statifier_blocks` commit `mix.exs` pins
-today: `3a210a917f8776e1b189b9a1ba1927c4fdb9caf9` (`3a210a9`). The first
+Re-measured 2026-09-07, on the `statifier_blocks` commit
+`3a210a917f8776e1b189b9a1ba1927c4fdb9caf9` (`3a210a9`), which is where
+`mix.exs` was pinned when the measurement was taken. `se-k6q` has since
+retired that pin for the Hex requirement `~> 0.25`, and `3a210a9` is an
+ancestor of `v0.25.0` (`7186b24`), so every cite below - all of them by
+module, function and clause rather than by line in the package - resolves
+unchanged on the release. What 0.25.0 adds on top of `3a210a9` is
+`sb-5xqr`'s stateful data composite, which this page neither registers
+nor calls. The first
 measurement was taken on `ea2fdee` and is what `se-avi` acted on: it read
 `StatifierExamplesWeb.PlanLive` fragment by fragment, said of each whether
 it was a copy of something inside the package's editor, and recommended
