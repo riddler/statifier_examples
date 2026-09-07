@@ -748,34 +748,57 @@ defmodule StatifierExamples.MixProject do
   # release, and 0.4.0 resolves; this app still names that package
   # nowhere.
   #
-  # The default arm is a GIT PIN again, at `ea2fdeec0e6b191659a0ff7020d1627e99786ab0`
-  # on `statifier_blocks` main, for `se-1cl`: the Plan view is built over
-  # three seams that land after 0.23.0 and are unpublished while it is
-  # written. `sb-21gm` puts `hidden?` and `readonly?` on
-  # `ViewModel.Field`, which is how a second view drops the fields the
-  # package editor draws but a plain list has no room for. `sb-w37s` adds
-  # the optional `sentence/1` block-type callback and the pure
-  # `ViewModel.outline/1`, which is the whole rendering input: a
-  # pre-order `{node, depth, kind}` walk with no editor state in it.
-  # `sb-zjyv` makes `Palette.new_block/2` public, so a host inserts the
-  # same block the package editor's drop does rather than assembling one
-  # by hand. Beside them the pinned commit carries `sb-gsg9`, `sb-vjjl`,
-  # `sb-mt61` and `sb-m9eq`; none of the four is named here.
+  # The default arm moves to the 0.24 line, and it is a Hex requirement
+  # again: the interim git pin `se-1cl` took while the Plan view's three
+  # seams were unpublished is retired by `se-298`, and the `refute` in
+  # `StatifierExamples.MixDepsTest` is what says it did not come back.
+  # `STATIFIER_BLOCKS_PATH` still wins over the requirement, so a local
+  # checkout is unaffected either way. The ledger entry
+  # `se-1cl-statifier_blocks-sb-21gm+sb-w37s+sb-zjyv` is what carried the
+  # pin until here.
   #
-  # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout
-  # is unaffected either way. `se-298` puts the Hex arm back at
-  # `~> 0.24` once the operator publishes; the ledger entry
-  # `se-1cl-statifier_blocks-sb-21gm+sb-w37s+sb-zjyv` carries the pin
-  # until then.
+  # That pin bought the three seams the Plan view is built over, none of
+  # them reachable from 0.23.0, and 0.24.0 carries all three:
+  #
+  #   * `sb-21gm` puts `hidden?` and `readonly?` on `ViewModel.Field`,
+  #     which is how a second view drops the fields the package editor
+  #     draws but a plain list has no room for.
+  #   * `sb-w37s` adds the optional `sentence/1` block-type callback and
+  #     the pure `ViewModel.outline/1`, which is the whole rendering
+  #     input: a pre-order `{node, depth, kind}` walk with no editor
+  #     state in it.
+  #   * `sb-zjyv` makes `Palette.new_block/2` public, so a host inserts
+  #     the same block the package editor's drop does rather than
+  #     assembling one by hand.
+  #
+  # Beside them the pinned commit already carried `sb-gsg9`, `sb-vjjl`,
+  # `sb-mt61` and `sb-m9eq`; none of the four is named here. What the
+  # release adds ON TOP of the pinned commit is one change: the editor's
+  # optional `profile` assign and its read-only mount (`sb-2bmk`), which
+  # names which drawer tabs, inspector tabs, palette groups and toolbar
+  # chips a mount draws. This app passes no `profile`, and a mount that
+  # names none renders exactly what it rendered before - there is no
+  # arrangement of the map, `%{}` included, that removes a surface a host
+  # did not name - so the editor page draws what it drew on the pin.
+  #
+  # 0.24.0 is a minor and no compiled chart bytes move. Two of its notes
+  # can refuse what 0.23.0 accepted, and both were already inside the
+  # pinned commit this app has been running on: a config field declared
+  # with no `default:` key is refused at compile whatever its field type,
+  # where before only a `{:path, opts}` field was - and this app declares
+  # no block type, so it spells no field declaration at all; and the
+  # typed environment now puts an entry at every member beneath a record,
+  # shape or inline-shape write, so a nested read that used to meet the
+  # nothing-is-known advisory is checked against the written type, with
+  # `StatifierExamples.Charts.TypedEnvironmentTest` saying none of this
+  # app's documents leans on the looser reading.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "ea2fdeec0e6b191659a0ff7020d1627e99786ab0"}
+        {:statifier_blocks, "~> 0.24"}
     end
   end
 

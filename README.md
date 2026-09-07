@@ -72,11 +72,16 @@ document, which is what the store above is for.
 
 ## What the Plan view copied, measured
 
-Taken 2026-09-07, on the `statifier_blocks` commit `mix.exs` pins:
-`ea2fdeec0e6b191659a0ff7020d1627e99786ab0` (`ea2fdee`). Every package
-file cited below resolves at that commit; `se-298` puts the Hex arm back
-at `~> 0.24` once that release is published, and these cites move with
-it.
+Taken 2026-09-07, on the `statifier_blocks` commit `mix.exs` pinned at the
+time: `ea2fdeec0e6b191659a0ff7020d1627e99786ab0` (`ea2fdee`). Every package
+file cited below resolves at that commit, and the cites are by module,
+function and clause rather than by line, so they resolve unchanged on the
+release: `se-298` has since put the Hex arm back at `~> 0.24`, and
+`ea2fdee` is an ancestor of `v0.24.0`. One row's *finding* does move with
+the release rather than its cite - the read-only write guard's, because
+0.24.0 landed the package's own `read_only?` profile (`sb-2bmk`), which is
+the thing that row says to delete this guard for. Acting on it is a
+separate decision, not a re-pin's.
 
 `StatifierExamplesWeb.PlanLive` is 867 lines
 (`wc -l lib/statifier_examples_web/live/plan_live.ex`); each row's count
@@ -101,7 +106,7 @@ something the editor also does.
 |---|---|---|---|---|
 | Moduledoc, including the public-API table (L2-95) | 94 | - | host-original | Keep host-side: it is this page's argument, not its code |
 | `mount/3`, `handle_params/3`, `select-document`, `select-row` (L97-135) | 38 | - | host-original | Keep host-side: page wiring |
-| Read-only write guard, the `handle_event/3` catch-all clause (L137-146) | 10 | nothing - `lib/statifier_blocks/editor.ex` has no read-only arm at the pin | host-original | Keep host-side, and delete it when the package's own `read_only?` profile lands: two answers to "may this write" is one too many |
+| Read-only write guard, the `handle_event/3` catch-all clause (L137-146) | 10 | nothing - `lib/statifier_blocks/editor.ex` had no read-only arm at the pin; 0.24.0 has one | host-original | Keep host-side, and delete it when the package's own `read_only?` profile lands: two answers to "may this write" is one too many |
 | `config-change`, `discard-draft`, `field-list-add`, `field-list-remove` (L148-164) | 17 | `lib/statifier_blocks/editor.ex:handle_event/3`, the four same-named clauses | near-verbatim - the list clauses drop the package's `params` member-path argument | Keep host-side: a `phx-` binding belongs to the page that draws the control. What promotes is what they call, two rows down |
 | `insert-open`, `insert-close`, `insert` (L166-189) | 24 | `lib/statifier_blocks/editor.ex:handle_event/3`, `palette-open` / `palette-close` / `palette-pick` | host-original shape, package call verbatim (`lib/statifier_blocks/palette.ex:new_block/2`) | Keep host-side |
 | `move`, `remove` (L191-205) | 15 | `lib/statifier_blocks/editor.ex:handle_event/3`, `"remove"`; there is no move clause - the canvas moves by drop | host-original | Keep host-side: two buttons are a list's answer to a gesture the canvas needs a pointer for |
