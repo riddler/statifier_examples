@@ -70,6 +70,73 @@ the same `doc=` and `theme=` parameters plus `readonly=1`, and its
 `Open in editor` link and the editor's own page are two views of one
 document, which is what the store above is for.
 
+## What the Plan view copied, measured
+
+Taken 2026-09-07, on the `statifier_blocks` commit `mix.exs` pins:
+`ea2fdeec0e6b191659a0ff7020d1627e99786ab0` (`ea2fdee`). Every package
+file cited below resolves at that commit; `se-298` puts the Hex arm back
+at `~> 0.24` once that release is published, and these cites move with
+it.
+
+`StatifierExamplesWeb.PlanLive` is 867 lines
+(`wc -l lib/statifier_examples_web/live/plan_live.ex`); each row's count
+below is `sed -n '<first>,<last>p' lib/statifier_examples_web/live/plan_live.ex | wc -l`
+over the span named in the row. Of those 867, **35 lines are verbatim
+copies** of the package editor's private helpers, **183 are
+near-verbatim**, and **649 are the host's own** - 94 of them the
+moduledoc and 274 of them this page's markup. The spans named in the
+table cover 833 of the 867; the other 34 are `defmodule`, the closing
+`end`, and the blank line between one span and the next, and they are
+the host's own by default.
+`lib/statifier_examples/documents.ex`, the store both pages share, is a
+further 81 lines with no package counterpart at all.
+
+The recommendation column applies the reference embedder's direction:
+components promote, layout modes do not. A fragment that answers a
+question about a document is a candidate to promote; a fragment that
+decides how this page is arranged is not, however exactly it repeats
+something the editor also does.
+
+| Fragment (span in `plan_live.ex`) | Lines | What it mirrors at `ea2fdee` | Kind | Recommendation |
+|---|---|---|---|---|
+| Moduledoc, including the public-API table (L2-95) | 94 | - | host-original | Keep host-side: it is this page's argument, not its code |
+| `mount/3`, `handle_params/3`, `select-document`, `select-row` (L97-135) | 38 | - | host-original | Keep host-side: page wiring |
+| Read-only write guard, the `handle_event/3` catch-all clause (L137-146) | 10 | nothing - `lib/statifier_blocks/editor.ex` has no read-only arm at the pin | host-original | Keep host-side, and delete it when the package's own `read_only?` profile lands: two answers to "may this write" is one too many |
+| `config-change`, `discard-draft`, `field-list-add`, `field-list-remove` (L148-164) | 17 | `lib/statifier_blocks/editor.ex:handle_event/3`, the four same-named clauses | near-verbatim - the list clauses drop the package's `params` member-path argument | Keep host-side: a `phx-` binding belongs to the page that draws the control. What promotes is what they call, two rows down |
+| `insert-open`, `insert-close`, `insert` (L166-189) | 24 | `lib/statifier_blocks/editor.ex:handle_event/3`, `palette-open` / `palette-close` / `palette-pick` | host-original shape, package call verbatim (`lib/statifier_blocks/palette.ex:new_block/2`) | Keep host-side |
+| `move`, `remove` (L191-205) | 15 | `lib/statifier_blocks/editor.ex:handle_event/3`, `"remove"`; there is no move clause - the canvas moves by drop | host-original | Keep host-side: two buttons are a list's answer to a gesture the canvas needs a pointer for |
+| `undo`, `redo` (L207-213) | 7 | `lib/statifier_blocks/editor.ex:handle_event/3`, `"undo"` and `"redo"` | near-verbatim - `step/2` where the package calls `replay/2` | Keep host-side, with `step/2` below |
+| `render/1`, the page chrome (L217-328) | 112 | - | host-original | Keep host-side: a page layout, which is exactly what does not promote |
+| `row/1`, one outline entry (L330-491) | 162 | composes `lib/statifier_blocks/editor/field.ex:field/1` unchanged; the surrounding markup is new | host-original | Keep host-side as a whole. The one promotable piece inside it is L410-427: the read-only/editable pair around `Field.field/1`, which every embedder will write identically - a `config_form/1` function component taking fields, a target and a `readonly?` |
+| `sentence/1` (L493-501) | 9 | falls back to `lib/statifier_blocks/view_model.ex:title/1` | host-original | Promote as `ViewModel.sentence/1`: every host that reads `Node.sentence` writes this same two-clause fallback |
+| `shown_fields/1` (L503-511) | 9 | - | host-original | Promote beside it: rejecting `hidden?` is the flag's whole contract, and repeating it per surface is how a hidden field gets drawn once by accident |
+| Param and path helpers, `load_document/2` (L513-563) | 51 | - | host-original | Keep host-side |
+| `commit/2` (L565-581) | 17 | `lib/statifier_blocks/editor.ex:commit/2` | near-verbatim - `store/1` where the package calls `notify_change/2` | Promote: two views funnel every command through the same four lines of `Edit.History.commit/4` handling |
+| `change_config/3` (L583-605) | 23 | `lib/statifier_blocks/editor.ex:change_config/3` | near-verbatim - same three clauses, `store/1` for `notify_change/2` | Promote with `commit/2`: holding a refused config as a draft is a decision the package made, so the host should not be re-implementing it |
+| `step/2` (L607-621) | 15 | `lib/statifier_blocks/editor.ex:replay/2` | near-verbatim | Promote with `commit/2` |
+| `update_list/3` (L623-645) | 23 | `lib/statifier_blocks/editor.ex:update_list/4` | near-verbatim - arity 3, with no member path, no `rows_of/2` and no `blank_row/1` | Promote as a list-gesture function over a field and an `:add` / `{:remove, i}`: the host's copy is the package's with the nested-member half deleted, which is a subset, not a difference |
+| `apply_gesture/2` (L647-649) | 3 | `lib/statifier_blocks/editor.ex:apply_gesture/4` | near-verbatim - the flat pair of the package's recursive four | Promote with `update_list/3` |
+| `to_index/1` (L651-659) | 9 | `lib/statifier_blocks/editor.ex:to_index/1` | near-verbatim - returns `-1` where the package returns `0` | Keep host-side: the two disagree about what an unparseable index means, and that disagreement is deliberate here |
+| `store/1` (L661-665) | 5 | - | host-original | Keep host-side |
+| `rebuild/1` (L667-689) | 23 | `lib/statifier_blocks/editor.ex:rebuild/1` | host-original - same name, different projection: three outline buckets, no run, marks or fit | Keep host-side |
+| `overlay_draft/2` (L691-711) | 21 | `lib/statifier_blocks/editor.ex:overlay_draft/3` | near-verbatim - over an outline entry rather than a node, and without the draft's findings | Promote with `drafted_field/2` |
+| `drafted_field/2` (L713-722) | 10 | the value half of `lib/statifier_blocks/editor.ex:apply_draft/3` | near-verbatim | Promote as a `ViewModel.Field` function: putting a draft value back on a field is one operation and it is written twice |
+| Insert fit filter: `assign_insertable/1`, `insertable/2`, `fits?/5` (L724-761) | 38 | `lib/statifier_blocks/editor.ex:accepted_types/3` and `probe/2` | near-verbatim - probes with `Palette.new_block/2` alone, and answers with entries rather than a `MapSet` of type names | Promote as a public "which palette entries fit this slot" function over `Edit.Targets.droppable_slots_for/4`. This is the row that most repays it: the host's copy drops the package's `palette_entry/0` default-config merge, so the two views can already answer the same question differently |
+| `assignability_context/1` (L763-768) | 6 | `lib/statifier_blocks/editor.ex:assignability_context/1` | verbatim - both clauses, character for character | Promote: the package's own comment says this key should be named once, and it is currently named twice |
+| `position/2`, `gap_target/2`, `first_body_target/2`, `positions/1` and `/2` (L770-822) | 53 | - | host-original: `outline/1` says what order blocks are in and `Edit.Targets` says which slots accept one, but not where a given block sits | Promote as a positions map on `ViewModel`: 53 lines is what every embedder pays to ask a question the view model already holds the answer to |
+| `fields_for/2` (L824-830) | 7 | `lib/statifier_blocks/editor.ex:fields_for/2` | verbatim, ignored-variable name aside | Promote onto `ViewModel` |
+| `find_node/2` (L832-839) | 8 | `lib/statifier_blocks/editor.ex:find_node/2` | verbatim | Promote onto `ViewModel`, with `fields_for/2` above it |
+| `effective_config/2` (L841-847) | 7 | `lib/statifier_blocks/editor.ex:effective_config/2` | verbatim | Promote with the drafts pair |
+| `committed_config/2` (L849-855) | 7 | `lib/statifier_blocks/editor.ex:committed_config/2` | verbatim | Promote onto `Document`: it is a lookup over `Document.blocks/1` and nothing else |
+| `error_sentence/1` (L857-866) | 10 | - | host-original | Keep host-side: the refusal reasons are the package's, the wording is the host's |
+
+Read down the recommendation column and the split is the direction's,
+not a judgement made here: nothing that decides where something sits on
+the page promotes, and every fragment that answers a question about a
+document does. The four verbatim helpers plus `assignability_context/1`
+are 35 lines a second embedder would have to copy out of a private
+module to write this page at all, which is the strongest of the cases.
+
 ## Themes, and naming a screen by URL
 
 1. Pick a theme with the header's THEME select, or ask for one:
