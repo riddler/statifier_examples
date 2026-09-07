@@ -11,9 +11,11 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   alias StatifierBlocks.Editor
   alias StatifierBlocks.Finding
   alias StatifierBlocks.Shell
+  alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{AsyncCalls, Durable}
   alias StatifierExamples.DivergentDocument
+  alias StatifierExamples.Documents
   alias StatifierExamples.TwoStageDocument
 
   @themes ["light", "dark", "brand"]
@@ -1286,6 +1288,97 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert html =~ "Findings 0"
       refute html =~ "parked work"
     end
+  end
+
+  describe "expanding a composite" do
+    # ADR-0005's 2026-09-07 amendment, walked from the host's side: the
+    # gesture is one click in the package, but what this app has to be able
+    # to say about it is a fact about a DOCUMENT. Three things have to hold
+    # together for the gesture to be usable, and each is invisible from
+    # inside the other two - the card becomes the steps it stands for, the
+    # whole replacement costs ONE history entry, and stepping back puts the
+    # bytes back exactly. A composite an author cannot un-expand is a
+    # one-way door, and one whose undo returns a document that only LOOKS
+    # the same is worse, because the difference surfaces later as a diff
+    # nobody made.
+    #
+    # Byte identity is read off `Document.to_json/1` rather than off struct
+    # equality: canonical JSON is what a host would persist, so it is the
+    # comparison a host actually cares about.
+    #
+    # Sabotage: made the package's expand handler commit the remove and the
+    # inserts as two history entries instead of one compound; the post-undo
+    # assertion went red with an EMPTY flow - one press took the inserts
+    # back and left the removal standing - then reverted.
+    test "one card becomes its steps, in one undoable entry", %{conn: conn} do
+      key = "card_processing_composite"
+      {:ok, fixture} = Charts.fixture(key)
+      before_json = Document.to_json(fixture.document)
+
+      # This document's root. `@flow_slot` names the hand-built card
+      # processing document's root, which is a different block.
+      flow = ~s(.sb-slot[data-parent-id="blk_cpx_root"][data-slot-name="body"])
+
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: key]}")
+
+      # One card in the root's flow, and one row under the root in the
+      # outline: a composite exposes no slot of its own, so it is a leaf to
+      # a reader either way.
+      assert child_ids(view, flow) == ["blk_cpx_authz"]
+      assert outline_ids(fixture.document) == ["blk_cpx_root", "blk_cpx_authz"]
+      assert undo_disabled?(view)
+
+      view
+      |> element(~s([data-block-id="blk_cpx_authz"] .sb-node__expand))
+      |> render_click()
+
+      ids = key |> stored(fixture) |> outline_ids()
+
+      # The composite is gone and the primitives it stood for are there: the
+      # group it expands to heads the flow, and the deadline send, the lane
+      # parallel and the timeout listener are all inside it.
+      refute "blk_cpx_authz" in ids
+      assert child_ids(view, flow) == ["blk_cpx_authz_authz"]
+
+      assert "blk_cpx_authz_authz" in ids
+      assert "blk_cpx_authz_deadline" in ids
+      assert "blk_cpx_authz_lanes" in ids
+      assert "blk_cpx_authz_timeout" in ids
+
+      # ONE entry for the whole replacement: the remove and every insert are
+      # one compound, so one press of Undo is all of it.
+      refute undo_disabled?(view)
+
+      view |> element(~s(button[phx-click="undo"])) |> render_click()
+
+      assert child_ids(view, flow) == ["blk_cpx_authz"]
+      assert Document.to_json(stored(key, fixture)) == before_json
+      assert undo_disabled?(view)
+    end
+  end
+
+  # The document as this app has it NOW - the page writes every edit through
+  # `Documents`, so this is what a reload, the plan view or a persist would
+  # see, rather than a value read back out of the socket.
+  @spec stored(String.t(), Charts.Fixture.t()) :: Document.t()
+  defp stored(key, fixture), do: Documents.get(key, fixture.document)
+
+  # Every block the outline walk reaches, in outline order.
+  @spec outline_ids(Document.t()) :: [String.t()]
+  defp outline_ids(%Document{} = document) do
+    document
+    |> ViewModel.build(Charts.palette(), [])
+    |> ViewModel.outline()
+    |> Enum.map(fn {node, _depth, _kind} -> node.block_id end)
+  end
+
+  # Whether the package's Undo is refusing. The history lives in the
+  # component's own assigns, so its DEPTH is not readable from out here;
+  # what is readable is whether there is anything to step back to, and
+  # reading that either side of a single press is what says "one entry".
+  @spec undo_disabled?(Phoenix.LiveViewTest.View.t()) :: boolean()
+  defp undo_disabled?(view) do
+    view |> element(~s(button[phx-click="undo"])) |> render() =~ "disabled"
   end
 
   # The editor's drag events are pushed by the client rather than by a
