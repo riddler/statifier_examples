@@ -15,10 +15,12 @@ defmodule StatifierExamples.CardAuth.Receipt do
   what this step needs at that path and leaves nothing there.
 
   Pointed at `cards.settlement`, which is where the card-processing
-  document's own receipt points it, the read is admitted and says
-  nothing: no block in that flow writes a settlement yet, so the
-  environment holds nothing at the path, nobody has contradicted anybody,
-  and an undeclared path is unknown rather than wrong.
+  document's own receipt points it, the read is **satisfied** and says
+  nothing further: that document declares the path AS the
+  `cards.settlement` record, so what the environment holds there is
+  exactly the record this field expects. No block in that flow writes a
+  settlement and none has to - a declared path type is seeded from the
+  document root forward, so the type is in hand from the first gap.
 
   Point the same field at the subject path - `cards.current_txn`, where
   intake left a `cards.credit_txn` - and it is **refused**, naming the
