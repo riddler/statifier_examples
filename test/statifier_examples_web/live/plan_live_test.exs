@@ -1,5 +1,8 @@
 defmodule StatifierExamplesWeb.PlanLiveTest do
-  use StatifierExamplesWeb.ConnCase, async: true
+  # Not async: this file drives pages that write `StatifierExamples.Documents`,
+  # which is one named Agent shared process-wide, and `ConnCase` resets that
+  # store in `setup` - two async cases clear it under each other mid-test.
+  use StatifierExamplesWeb.ConnCase
 
   import Phoenix.LiveViewTest
 
