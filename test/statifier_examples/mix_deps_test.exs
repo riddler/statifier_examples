@@ -275,12 +275,42 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.25.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.26.0 entry against the mutated expectation.
   # Reverted from a copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
+  #
+  # `se-7p1`: the arm is a GIT PIN again, at the commit below, so what this
+  # asserts is the pin rather than a Hex requirement. It is not a weakening
+  # of the check: a pin is exact where a Hex requirement is a range, and
+  # `mix.lock` recording the same commit is what proves the tree is on the
+  # code the pin names rather than on whatever `main` has become since.
+  #
+  # What the pin buys is `sb-ykkl`'s promotion of
+  # `StatifierBlocks.Editor.ConfigForm.config_form/1` to a call a host
+  # composes - the `event` attr, the omittable `target`, and the hidden
+  # `block-id` input the form posts - which is what
+  # `StatifierExamplesWeb.PlanLive` draws its field surface through now and
+  # what let it delete the read-only/editable pair it wrote around
+  # `Editor.Field.field/1`. It is not reachable from 0.26.0.
+  #
+  # `se-t73` advances the pin and `se-9nn` puts the Hex arm and this test's
+  # Hex spelling back together after the operator publishes 0.27.0. The
+  # ledger entry `se-7p1-statifier_blocks-sb-ykkl` is what carries it.
+  @statifier_blocks_ref "6d54afe13ca96196431c674231e24e50e3803b2f"
+
+  # Sabotage: pointed the attribute above at a real-but-wrong commit of
+  # `statifier_blocks` main and left `mix.lock` alone; this went red
+  # reporting the pinned ref against the mutated expectation, which is the
+  # half that matters - the dep spelling and the lock have to agree on one
+  # commit or the tree is not on the code the pin names. Reverted from a
+  # copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.26"} in deps
+    assert {:statifier_blocks,
+            [
+              git: "https://github.com/riddler/statifier_blocks.git",
+              ref: @statifier_blocks_ref
+            ]} in deps
 
     lock_line =
       "mix.lock"
@@ -289,30 +319,40 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.26.)
-    refute lock_line =~ ":git,"
+    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
+    assert lock_line =~ @statifier_blocks_ref
+    refute lock_line =~ ":hex,"
   end
 
-  # The other half of the retired pin, and the half a version number alone
-  # cannot state: that the release the arm now names really carries what
-  # the tree was on the pin FOR. `se-1q8` advanced the pin for `sb-q183`'s
-  # pass-through slots, and these are the three functions that arrived with
-  # them - the mapping resolved to the minted id, the shared refusal both
-  # composite kinds answer, and the data kind's own `slots/2`. None is
-  # reachable from 0.25.0, so a re-pin to a published release that did not
-  # carry them would go red here rather than in the six cases that read
-  # them.
+  # The other half of a pin, and the half a SHA alone cannot state: what the
+  # tree is on the pin FOR.
+  #
+  # `sb-q183`'s pass-through slots are the first three - the mapping
+  # resolved to the minted id, the shared refusal both composite kinds
+  # answer, and the data kind's own `slots/2`. They arrived before 0.26.0
+  # and the published release carries them; they stay named here because a
+  # re-pin or a re-arm that lost them would go red here rather than in the
+  # six cases that read them.
+  #
+  # `sb-ykkl`'s `config_form/1` is the fourth and is what `se-7p1` took this
+  # pin FOR: the component `StatifierExamplesWeb.PlanLive` draws its whole
+  # field surface through. It is not reachable from 0.26.0, so this is the
+  # case that says the pinned tree really carries it rather than trusting
+  # the SHA.
   #
   # `function_exported?/3` needs the module loaded, which under a release
   # build it is not - hence the `ensure_loaded` around each.
   #
   # Sabotage: pointed the arity of `pass_through` at 3; this went red naming
-  # it, and nothing else in the file moved. Reverted from a copy.
-  test "the published statifier_blocks carries the pass-through seam the pin was for" do
+  # it, and nothing else in the file moved. Reverted from a copy. A second,
+  # for the row `se-7p1` added: pointed `config_form` at arity 2, which went
+  # red naming it alone. Reverted from a copy.
+  test "the pinned statifier_blocks carries the seams the pin is for" do
     for {module, function, arity} <- [
           {StatifierBlocks.Composite, :pass_through, 2},
           {StatifierBlocks.Composite, :mapping_errors, 2},
-          {StatifierBlocks.Composite.Data, :slots, 2}
+          {StatifierBlocks.Composite.Data, :slots, 2},
+          {StatifierBlocks.Editor.ConfigForm, :config_form, 1}
         ] do
       assert Code.ensure_loaded?(module)
 

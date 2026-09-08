@@ -896,13 +896,36 @@ defmodule StatifierExamples.MixProject do
   # answers its declared pass-through slots rather than always `[]`, which
   # is the seam `GuardedSection` was already written over on the pin.
   # 0.26.0 is a minor and no compiled chart bytes move.
+  #
+  # `se-7p1`: the arm is a GIT PIN again, at
+  # `6d54afe13ca96196431c674231e24e50e3803b2f`, and the ledger entry
+  # `se-7p1-statifier_blocks-sb-ykkl` is what carries it. What it buys is
+  # `sb-ykkl`: `StatifierBlocks.Editor.ConfigForm.config_form/1` promoted to
+  # a call a host composes - an `event` attr naming what the form posts
+  # under, an omittable `target`, and the hidden `block-id` input the form
+  # posts so a host reads the block out of its own params.
+  # `StatifierExamplesWeb.PlanLive` draws its field surface through it and
+  # has deleted the read-only/editable pair it wrote around
+  # `Editor.Field.field/1`, which is the one fragment the README's
+  # measurement still named as the thing every embedder writes identically.
+  # None of it is reachable from 0.26.0.
+  #
+  # A pin is exact where a Hex requirement is a range, and `mix.lock`
+  # recording the same commit is what proves the tree is on the code the pin
+  # names rather than on whatever `main` has become since;
+  # `StatifierExamples.MixDepsTest` asserts both halves.
+  # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout is
+  # unaffected either way. `se-t73` advances this pin and `se-9nn` puts the
+  # Hex arm back once the operator publishes 0.27.0.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.26"}
+        {:statifier_blocks,
+         git: "https://github.com/riddler/statifier_blocks.git",
+         ref: "6d54afe13ca96196431c674231e24e50e3803b2f"}
     end
   end
 

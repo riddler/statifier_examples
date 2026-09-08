@@ -74,6 +74,32 @@ document, which is what the store above is for.
 
 ## What the Plan view copied, measured
 
+Re-measured 2026-09-08 (`se-7p1`), on the `statifier_blocks` commit
+`6d54afe13ca96196431c674231e24e50e3803b2f` (`6d54afe`), which is where
+`mix.exs` is pinned - a git pin again, taken for `sb-ykkl` and retired by
+`se-9nn` once 0.27.0 is published. What that pin bought is the last row
+this table still named as a copy: `sb-ykkl` promoted
+`StatifierBlocks.Editor.ConfigForm.config_form/1` to a call a host
+composes, with an `event` attr and an omittable `target`, and the Plan
+view's read-only/editable pair around `Editor.Field.field/1` - the twenty
+seven lines of markup **every** embedder wrote identically - is one
+component call now. The unrouted-findings paragraph above the form went
+with it, because `config_form/1` draws that bucket at the form's head
+itself, and `unrouted_findings/1` went with the paragraph.
+
+The honest half of the entry: this file did not get shorter. It is 860
+lines against 877 before the uptake, and against the 842 the measurement
+below read - `se-ezz` added the insert picker's recipe rows in between.
+The markup column is what moved, from 284 lines to 266; the twenty seven
+that went were replaced by seven, and the rest of the difference is the
+moduledoc growing by the paragraphs recording what this page now composes
+rather than draws. A promotion buys a page fewer decisions, not fewer
+lines, and the count that matters is that there is no field-surface
+fragment left here for a second embedder to copy.
+
+Every span in the table below was re-run in this pass by the method the
+paragraph under it names.
+
 Re-measured 2026-09-07 (`se-6jn`), on the `statifier_blocks` commit
 `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd` (`eb64d4c`), which is where
 `mix.exs` was pinned when the measurement was taken. The pin advanced once
@@ -101,21 +127,21 @@ page deleted its copies of them.
 That is what this table now measures: not what a second embedder *would*
 have to copy, but what one still does.
 
-`StatifierExamplesWeb.PlanLive` is 842 lines
+`StatifierExamplesWeb.PlanLive` is 860 lines
 (`wc -l lib/statifier_examples_web/live/plan_live.ex`); each row's count
 below is `sed -n '<first>,<last>p' lib/statifier_examples_web/live/plan_live.ex | wc -l`
-over the span named in the row. Of those 842, **0 lines are verbatim
+over the span named in the row. Of those 860, **0 lines are verbatim
 copies** of the package editor's private helpers, **9 are near-verbatim**,
-and **833 are the host's own** - 115 of them the moduledoc and 284 of them
-this page's markup. The spans named in the table cover 818 of the 842; the
+and **851 are the host's own** - 129 of them the moduledoc and 266 of them
+this page's markup. The spans named in the table cover 836 of the 860; the
 other 24 are `defmodule`, the closing `end`, and the blank line between one
 span and the next, and they are the host's own by default.
 `lib/statifier_examples/documents.ex`, the store both pages share, is a
 further 81 lines with no package counterpart at all.
 
 The three numbers to read against `ea2fdee`'s 35 / 183 / 649 are 0 / 9 /
-833, where the pass before this one read 0 / 57. What is left of the
-near-verbatim column is
+851, where the pass before this one read 0 / 9 / 833 and the one before
+that 0 / 57. What is left of the near-verbatim column is
 `to_index/1` and nothing else, and it is left on purpose: the two functions
 disagree about what an unparseable index means, and this page means the
 other thing. There is no fragment of this file a second embedder has to
@@ -152,37 +178,37 @@ fragments left are the ones nobody else has to write.
 
 | Fragment (span in `plan_live.ex`) | Lines | What it mirrors at `3a210a9` | Kind | Note |
 |---|---|---|---|---|
-| Moduledoc, including the public-API table (L2-116) | 115 | - | host-original | The table is fifteen rows of public API, and the paragraph under it says which copies went |
-| `use`, the aliases, `@default_theme` (L118-135) | 18 | - | host-original | Page wiring |
-| `mount/3`, `handle_params/3`, `select-document`, `select-row` (L137-172) | 36 | - | host-original | Page wiring. `sb-gbxt` made `selected_id` a host-written input assign on `StatifierBlocks.Editor`; this page mounts no editor, so there is nothing here for it to drive - the assign it writes is its own |
-| Read-only write guard, the `handle_event/3` catch-all (L174-198) | 25 | nothing; `read_only?` is a `StatifierBlocks.Editor` profile key and this page mounts no editor | host-original | `se-4v1` asked for this to go. It stays: `docs/profiles.md` says `read_only?` "is not an authorization boundary". 20 of the 25 lines are that argument written down |
-| `config-change`, `discard-draft`, `field-list-add`, `field-list-remove` (L200-228) | 29 | `lib/statifier_blocks/editor.ex:handle_event/3`, the four same-named clauses | host-original shape, package calls | A `phx-` binding belongs to the page that draws the control; what each one calls is now `Edit.Session`'s |
-| `insert-open`, `insert-close`, `insert` (L230-253) | 24 | `editor.ex:handle_event/3`, `palette-open` / `palette-close` / `palette-pick` | host-original shape, package calls | `Palette.new_block/2` and `Session.commit/2` |
-| `move`, `remove` (L255-276) | 22 | `editor.ex:handle_event/3`, `"remove"`; there is still no move clause - the canvas moves by drop | host-original | Two buttons are a list's answer to a gesture the canvas needs a pointer for |
-| `undo`, `redo` (L278-284) | 7 | `editor.ex:handle_event/3`, `"undo"` and `"redo"` | host-original shape, package call | Both are `Session.step/2` now; the host's own `step/2` is gone |
-| `render/1`, the page chrome (L286-399) | 114 | - | host-original | A page layout, which is exactly what does not promote |
-| `row/1`, one outline entry (L401-570) | 170 | composes `lib/statifier_blocks/editor/field.ex:field/1` unchanged; the surrounding markup is new | host-original | Still the one place a `config_form/1` component would land: L489-506 is the read-only/editable pair around `Field.field/1` that every embedder writes identically. Not promoted in SF037 or SF038 |
-| `refused_fields/1`, `unrouted_findings/1` (L572-592) | 21 | - | host-original | New on `se-f4a`. What a refused draft is *about*, as words on the page: the field labels in the pending sentence, and the findings that route to no field above the form. Both read fields `ViewModel.overlay_findings/2` wrote |
-| Param and path helpers, `load_document/2` (L594-649) | 56 | - | host-original | `load_document/2` builds the `Edit.Session` the page holds |
-| `apply_session/2` (L651-663) | 13 | - | host-original | What replaced the host's `commit/2`, `change_config/3` and `step/2` - 55 lines of near-verbatim down to 13 of "assign it, store it if the document moved". The gate, the undo stack, the draft treatment and the refusal vocabulary are all `Edit.Session`'s |
-| `update_list/3` (L665-681) | 17 | `lib/statifier_blocks/edit/session.ex:update_list/4` | host-original | Only the key-to-field lookup is left - the crafted-payload guard. The rows, the `value_path/1` write and the commit are the package's |
-| `to_index/1` (L683-691) | 9 | `editor.ex:to_index/1` | near-verbatim - returns `-1` where the package returns `0` | Keep host-side: the two disagree about what an unparseable index means, and that disagreement is deliberate here. The whole of the near-verbatim column, as of `se-6jn` |
-| `store/1` (L693-697) | 5 | - | host-original | This app's document store |
-| `rebuild/1` (L699-725) | 27 | `editor.ex:rebuild/1` | host-original - same name, different projection: three outline buckets, no run, marks or fit | The `positions` line is `ViewModel.positions/1`; the 53-line host walk is gone. It destructures `draft_findings` off the session now, which is the whole of what `sb-8fa8` cost this function |
-| `overlay_draft/3` (L727-757) | 31 | wraps `ViewModel.overlay_draft/2` and `ViewModel.overlay_findings/2` | host-original | An outline entry is a `{node, depth, kind}` triple and both package functions take a node, so this is the unwrap and nothing else - 17 of the 31 lines are the comment recording which copies went and why. `route_findings/3` (29) and `draft_findings/3` (19) were here until `se-6jn`; the 21-line value-overlay copy and the 10-line `drafted_field/2` went before them |
-| `assign_insertable/1`, `insertable/2` (L759-791) | 33 | `editor.ex:accepted_types/3` | host-original shape, package call | The 38-line copy with its own `fits?/5` probe is gone: `Edit.Targets.accepted_types/4` answers with a `MapSet` of type names and this filters the entry list by membership, so the two views can no longer answer the fit question differently. `Assignability.context/1` replaced the verbatim host clause pair |
-| `position/2` (L793-795) | 3 | - | host-original | A lookup in the `ViewModel.positions/1` map |
-| `gap_target/2`, `first_body_target/2` (L797-824) | 28 | `ViewModel.effective_parent/3` and `end_of_list_target/3` answer the same question for a host that flattens containers | host-original | Where the "+" under a row inserts is this page's question about its own control. `sb-6xkf` promoted the readers for a flattened outline; this page draws every container, so it keeps `position + 1` and takes a test instead - with an empty type list the package's reader and this page's `positions` map agree, for every block of every fixture |
-| `fields_for/2` (L826-830) | 5 | `ViewModel.fields_for/2` | host-original | One line: the socket-to-view-model unwrap. The 7-line copy and the 8-line `find_node/2` under it are gone |
-| `error_sentence/1` (L832-841) | 10 | - | host-original | The refusal reasons are the package's, the wording is the host's |
+| Moduledoc, including the public-API table (L2-130) | 129 | - | host-original | The table is fifteen rows of public API, and the paragraph under it says which copies went |
+| `use`, the aliases, `@default_theme` (L132-147) | 16 | - | host-original | Page wiring |
+| `mount/3`, `handle_params/3`, `select-document`, `select-row` (L149-184) | 36 | - | host-original | Page wiring. `sb-gbxt` made `selected_id` a host-written input assign on `StatifierBlocks.Editor`; this page mounts no editor, so there is nothing here for it to drive - the assign it writes is its own |
+| Read-only write guard, the `handle_event/3` catch-all (L186-210) | 25 | nothing; `read_only?` is a `StatifierBlocks.Editor` profile key and this page mounts no editor | host-original | `se-4v1` asked for this to go. It stays: `docs/profiles.md` says `read_only?` "is not an authorization boundary". 20 of the 25 lines are that argument written down |
+| `config-change`, `discard-draft`, `field-list-add`, `field-list-remove` (L212-240) | 29 | `lib/statifier_blocks/editor.ex:handle_event/3`, the four same-named clauses | host-original shape, package calls | A `phx-` binding belongs to the page that draws the control; what each one calls is now `Edit.Session`'s |
+| `insert-open`, `insert-close`, `insert` (L242-288) | 47 | `editor.ex:handle_event/3`, `palette-open` / `palette-close` / `palette-pick` | host-original shape, package calls | `Palette.new_block/2` and `Session.commit/2` |
+| `move`, `remove` (L290-311) | 22 | `editor.ex:handle_event/3`, `"remove"`; there is still no move clause - the canvas moves by drop | host-original | Two buttons are a list's answer to a gesture the canvas needs a pointer for |
+| `undo`, `redo` (L313-319) | 7 | `editor.ex:handle_event/3`, `"undo"` and `"redo"` | host-original shape, package call | Both are `Session.step/2` now; the host's own `step/2` is gone |
+| `render/1`, the page chrome (L321-434) | 114 | - | host-original | A page layout, which is exactly what does not promote |
+| `row/1`, one outline entry (L436-587) | 152 | composes `lib/statifier_blocks/editor/config_form.ex:config_form/1` unchanged; the surrounding markup is new | host-original | **The pair is gone.** L489-506 was the read-only/editable pair around `Field.field/1` that every embedder wrote identically; `sb-ykkl` promoted `config_form/1` with an `event` attr, an omittable `target` and the hidden `block-id` input, and `se-7p1` replaced the twenty seven lines with the seven-line call at L516-522. The unrouted-findings paragraph above it went too: the component draws that bucket itself |
+| `refused_fields/1` (L589-601) | 13 | - | host-original | New on `se-f4a`. What a refused draft is *about*, as words on the page: the field labels in the pending sentence. `unrouted_findings/1` was the other half until `se-7p1`, and it went with the paragraph that drew it - `config_form/1` renders `form.unrouted` at the head of the form. Both read fields `ViewModel.overlay_findings/2` wrote |
+| Param and path helpers, `load_document/2` (L603-658) | 56 | - | host-original | `load_document/2` builds the `Edit.Session` the page holds |
+| `apply_session/2` (L660-672) | 13 | - | host-original | What replaced the host's `commit/2`, `change_config/3` and `step/2` - 55 lines of near-verbatim down to 13 of "assign it, store it if the document moved". The gate, the undo stack, the draft treatment and the refusal vocabulary are all `Edit.Session`'s |
+| `update_list/3` (L674-690) | 17 | `lib/statifier_blocks/edit/session.ex:update_list/4` | host-original | Only the key-to-field lookup is left - the crafted-payload guard. The rows, the `value_path/1` write and the commit are the package's |
+| `to_index/1` (L692-700) | 9 | `editor.ex:to_index/1` | near-verbatim - returns `-1` where the package returns `0` | Keep host-side: the two disagree about what an unparseable index means, and that disagreement is deliberate here. The whole of the near-verbatim column, as of `se-6jn` |
+| `store/1` (L702-706) | 5 | - | host-original | This app's document store |
+| `rebuild/1` (L708-734) | 27 | `editor.ex:rebuild/1` | host-original - same name, different projection: three outline buckets, no run, marks or fit | The `positions` line is `ViewModel.positions/1`; the 53-line host walk is gone. It destructures `draft_findings` off the session now, which is the whole of what `sb-8fa8` cost this function |
+| `overlay_draft/3` (L736-766) | 31 | wraps `ViewModel.overlay_draft/2` and `ViewModel.overlay_findings/2` | host-original | An outline entry is a `{node, depth, kind}` triple and both package functions take a node, so this is the unwrap and nothing else - 17 of the 31 lines are the comment recording which copies went and why. `route_findings/3` (29) and `draft_findings/3` (19) were here until `se-6jn`; the 21-line value-overlay copy and the 10-line `drafted_field/2` went before them |
+| `assign_insertable/1`, `insertable/2` (L768-809) | 42 | `editor.ex:accepted_types/3` | host-original shape, package call | The 38-line copy with its own `fits?/5` probe is gone: `Edit.Targets.accepted_types/4` answers with a `MapSet` of type names and this filters the entry list by membership, so the two views can no longer answer the fit question differently. `Assignability.context/1` replaced the verbatim host clause pair |
+| `position/2` (L811-813) | 3 | - | host-original | A lookup in the `ViewModel.positions/1` map |
+| `gap_target/2`, `first_body_target/2` (L815-842) | 28 | `ViewModel.effective_parent/3` and `end_of_list_target/3` answer the same question for a host that flattens containers | host-original | Where the "+" under a row inserts is this page's question about its own control. `sb-6xkf` promoted the readers for a flattened outline; this page draws every container, so it keeps `position + 1` and takes a test instead - with an empty type list the package's reader and this page's `positions` map agree, for every block of every fixture |
+| `fields_for/2` (L844-848) | 5 | `ViewModel.fields_for/2` | host-original | One line: the socket-to-view-model unwrap. The 7-line copy and the 8-line `find_node/2` under it are gone |
+| `error_sentence/1` (L850-859) | 10 | - | host-original | The refusal reasons are the package's, the wording is the host's |
 
 ### What went, and what it cost the package
 
 Fourteen fragments the first measurement recommended promoting are gone
-from this file, and two more went on `se-6jn`. The package answers each of
-them now:
+from this file, two more went on `se-6jn`, and the field-surface pair went
+on `se-7p1`. The package answers each of them now:
 
-| What this page held | What it calls at `eb64d4c` |
+| What this page held | What it calls at `6d54afe` |
 |---|---|
 | `sentence/1` (9) | `ViewModel.sentence/1` |
 | `shown_fields/1` (9) | `ViewModel.shown_fields/1` |
@@ -199,6 +225,7 @@ them now:
 | `update_list/3` (23) and `apply_gesture/2` (3) | `Edit.Session.update_list/4` |
 | `insertable/2` + `fits?/5` (38) and `assignability_context/1` (6) | `Edit.Targets.accepted_types/4` + `Assignability.context/1` |
 | `route_findings/3` (29) and `draft_findings/3` (19), added on `se-f4a` and deleted on `se-6jn` | `ViewModel.overlay_findings/2`, over `Edit.Session`'s `draft_findings` (`sb-8fa8`) |
+| the read-only/editable field pair (27) and `unrouted_findings/1` (7), deleted on `se-7p1` | `Editor.ConfigForm.config_form/1`, with `event`, `target` and `read_only` (`sb-ykkl`) |
 
 Three of the promoted shapes are not the shapes this page had, and the
 difference is the package's decision rather than a mismatch to work
@@ -228,11 +255,16 @@ config the package had validated microseconds earlier. `sb-8fa8` is a
 That is the whole argument for measuring this file: the number named the
 bead, and the bead moved the number.
 
-So the next pass has no fragment to point at. What it can point at is the
-one shape still written by hand here that another embedder would also write
-by hand: `row/1`'s L489-506, the read-only/editable pair around
-`Field.field/1`. That is a component, not a layout, so D16 admits it - and
-it is a `config_form/1` in the package, not a promotion out of this file.
+That pass ended by pointing at the one shape still written by hand here
+that another embedder would also write by hand: `row/1`'s L489-506, the
+read-only/editable pair around `Field.field/1`. It said the shape was a
+component, not a layout, so D16 admits it - and that it belonged in the
+package as a `config_form/1` rather than as a promotion out of this file.
+That is what `sb-ykkl` did and what `se-7p1` took up, which is the same
+argument closing a second time: the measurement named the shape, and the
+package grew the component rather than this file shrinking around a copy.
+
+So this pass has no fragment to point at either, and none in reserve.
 
 Everything else in the file is this page: its layout, its parameters, its
 store, its write gate, and the words it uses for a refusal. That is the

@@ -199,7 +199,7 @@ defmodule StatifierExamples.CompositesTest do
       for {key, id, module, _sentence} <- @composites do
         {:ok, fixture} = Charts.fixture(key)
 
-        {members, _param_map} = Composite.expand(block(key, id), module)
+        {:ok, {members, _param_map}} = Composite.expand(block(key, id), module)
 
         assert {:ok, composed} = compile(fixture.document)
         assert composed.warnings == [], "#{key} does not compile clean"
@@ -260,7 +260,7 @@ defmodule StatifierExamples.CompositesTest do
     # with nobody listening; this went red here and took three more cases
     # with it. Reverted from a copy.
     test "the card-processing composite is the group, the deadline, three lanes and the interrupt" do
-      {members, _param_map} =
+      {:ok, {members, _param_map}} =
         Composite.expand(
           block("card_processing_composite", "blk_cpx_authz"),
           AuthorizeWithDeadline
@@ -292,7 +292,7 @@ defmodule StatifierExamples.CompositesTest do
     # went red here and alone, and the fixture's own `datamodel` key then
     # declared three roots nothing wrote. Reverted from a copy.
     test "each lane records at the root its name spells" do
-      {members, _param_map} =
+      {:ok, {members, _param_map}} =
         Composite.expand(
           block("card_processing_composite", "blk_cpx_authz"),
           AuthorizeWithDeadline
@@ -317,7 +317,7 @@ defmodule StatifierExamples.CompositesTest do
     # in a slot `core.invoke` does not declare is a structural refusal rather
     # than a second step. Reverted from a copy.
     test "the signup composite is a call with a notification on its error path" do
-      {members, param_map} =
+      {:ok, {members, param_map}} =
         Composite.expand(block("signup_guarded_step", "blk_gs_step"), GuardedStep)
 
       assert [%Block{type: "core.invoke", id: "blk_gs_step_call"} = call] = members
@@ -350,7 +350,7 @@ defmodule StatifierExamples.CompositesTest do
     # six more with it - the chart's own state ids, both outline pins and both
     # plan-page rows. Reverted from a copy.
     test "the child lands in the mapped inner slot, id unchanged" do
-      {members, _param_map} = Composite.expand(section_block(), GuardedSection)
+      {:ok, {members, _param_map}} = Composite.expand(section_block(), GuardedSection)
 
       assert [
                %Block{type: "core.invoke", id: "blk_gx_section_call"},
@@ -399,7 +399,7 @@ defmodule StatifierExamples.CompositesTest do
     # that says the index and the attribution are one fact. Reverted from a
     # copy and recompiled.
     test "the param map names the minted members and no spliced child" do
-      {_members, param_map} = Composite.expand(section_block(), GuardedSection)
+      {:ok, {_members, param_map}} = Composite.expand(section_block(), GuardedSection)
 
       assert param_map == %{
                "blk_gx_section_call" => "invoke_type",
@@ -560,7 +560,7 @@ defmodule StatifierExamples.CompositesTest do
       state = section_state()
       palette = Charts.palette([{"myapp.guarded_section", {Data, state}}])
       document = fixture_document(@section_key)
-      {members, _param_map} = Composite.expand(section_block(), {Data, state})
+      {:ok, {members, _param_map}} = Composite.expand(section_block(), {Data, state})
 
       assert {:ok, composed} =
                Compiler.compile(document, palette, known_invoke_types: known())
