@@ -17,7 +17,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   | picks a row's fields | `ViewModel.shown_fields/1`, `ViewModel.fields_for/2` |
   | finds a block, and where it sits | `ViewModel.find_node/2`, `ViewModel.positions/1` |
   | reads a block's config | `StatifierBlocks.Document.committed_config/2`, `effective_config/3` |
-  | draws a field | `StatifierBlocks.Editor.Field.field/1` |
+  | draws a block's form | `StatifierBlocks.Editor.ConfigForm.config_form/1` |
   | reads a form back | `StatifierBlocks.Editor.ConfigForm.decode/3` |
   | writes to the document | `StatifierBlocks.Edit.Session.commit/2`, `change_config/3` |
   | edits a list field | `Edit.Session.update_list/4` |
@@ -68,11 +68,20 @@ defmodule StatifierExamplesWeb.PlanLive do
   ## Editing
 
   A row is selected by clicking it, and a selected row expands to its
-  config fields - the ones `sb-21gm` did not flag `hidden?`, drawn with the
-  package's own `Editor.Field.field/1` so the control an author types into
-  here is the control they type into on the canvas. `target={nil}` is what
-  points the form's events at this LiveView instead of at a component that
-  is not on the page.
+  config fields - the ones `sb-21gm` did not flag `hidden?`, drawn by the
+  package's own `Editor.ConfigForm.config_form/1` so the control an author
+  types into here is the control they type into on the canvas. Two of that
+  component's attrs are what make it a call a host composes rather than the
+  editor's private markup: `event` names what the form posts under, and
+  `target={nil}` points those events at this LiveView instead of at a
+  component that is not on the page. The block the params are about arrives
+  without being asked for - the form posts it as a hidden `block-id` input,
+  which is what `handle_event("config-change", ...)` below reads it out of.
+
+  `se-7p1` is where the read-only/editable pair around `Field.field/1` that
+  this page used to write itself went. `sb-ykkl` promoted it, and the page
+  now passes what it used to spell out: the node, the event, no target,
+  whether this mount edits, and its own layout class.
 
   A refused value is held as a **draft**: the author's bytes stay on
   screen, the document keeps what it had, and `Discard edits` is the way
@@ -85,8 +94,8 @@ defmodule StatifierExamplesWeb.PlanLive do
   the findings beside them through `ViewModel.overlay_findings/2`: the
   first puts the author's bytes back on the fields, the second routes the
   refusal's own per-field findings onto them, with anything routing
-  nowhere drawn above the form. A refused draft names the field it was
-  about.
+  nowhere drawn at the head of the form by `config_form/1` itself. A
+  refused draft names the field it was about.
 
   `se-f4a` derived those findings here instead, by re-running
   `BlockType.validate_config/1` over the draft, because the funnel
@@ -101,10 +110,13 @@ defmodule StatifierExamplesWeb.PlanLive do
   `?readonly=1` renders values and no controls. It is one parameter rather
   than a second page because it is the same view: the rows, the sentences,
   the sections and the indentation are all unchanged, and what goes away is
-  every gesture. Fields render through the same `Editor.Field.field/1` with
-  the field's own `readonly?` flag raised, which is `sb-21gm`'s second flag
-  used as a host would use it - the package draws the value, and this page
-  does not grow a second field renderer to draw one.
+  every gesture. The fields render through the same
+  `Editor.ConfigForm.config_form/1` with `read_only={true}`, which is that
+  component's own read-only branch: a `<div>` of the same fields with their
+  `readonly?` raised - label and value, no control, nothing that posts.
+  Raising the flag field by field was this page's job until `se-7p1`; it is
+  one attr now, and the page does not grow a second field renderer either
+  way.
 
   `se-4v1` asked whether the package's own `read_only?` profile
   (`statifier_blocks` 0.24.0) replaces this. It does not, for two reasons
@@ -127,8 +139,6 @@ defmodule StatifierExamplesWeb.PlanLive do
   alias StatifierBlocks.Edit.Session
   alias StatifierBlocks.Edit.Targets
   alias StatifierBlocks.Editor.ConfigForm
-  alias StatifierBlocks.Editor.Field
-  alias StatifierBlocks.Finding
   alias StatifierBlocks.Palette
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
@@ -186,9 +196,9 @@ defmodule StatifierExamplesWeb.PlanLive do
   # where you handle the write, not by trusting a rendering." A profile is
   # also an assign on the `StatifierBlocks.Editor` live component, and this
   # page mounts no editor - it draws its own rows around
-  # `Editor.Field.field/1` - so there is no profile for it to pass. What
-  # the package's read-only treatment does own here is the FIELD: each one
-  # is drawn with its own `readonly?` raised, which is the same
+  # `Editor.ConfigForm.config_form/1` - so there is no profile for it to
+  # pass. What the package's read-only treatment does own here is the FORM:
+  # `read_only={@readonly?}` draws every field as a value, which is the same
   # value-not-control rendering clause 3 of that guide describes. Two
   # answers to "may this write" would be one too many if both were
   # renderings; one of these is a write gate and the other is a drawing,
@@ -503,32 +513,13 @@ defmodule StatifierExamplesWeb.PlanLive do
           </button>
         </p>
 
-        <p
-          :for={finding <- unrouted_findings(@node)}
-          class="myapp-plan__pending"
-          data-plan-unrouted="true"
-        >
-          {finding.message}
-        </p>
-
-        <div :if={@readonly?} class="myapp-plan__fields">
-          <Field.field
-            :for={field <- ViewModel.shown_fields(@node)}
-            field={%{field | readonly?: true}}
-            target={nil}
-          />
-        </div>
-
-        <form
-          :if={not @readonly?}
-          id={"plan-form-" <> @node.block_id}
+        <ConfigForm.config_form
+          node={@node}
+          event="config-change"
+          target={nil}
+          read_only={@readonly?}
           class="myapp-plan__fields"
-          phx-change="config-change"
-          phx-submit="config-change"
-        >
-          <input type="hidden" name="block-id" value={@node.block_id} />
-          <Field.field :for={field <- ViewModel.shown_fields(@node)} field={field} target={nil} />
-        </form>
+        />
 
         <span :if={not @readonly?} class="myapp-plan__controls">
           <button
@@ -608,14 +599,6 @@ defmodule StatifierExamplesWeb.PlanLive do
   end
 
   defp refused_fields(%ViewModel.Node{}), do: ""
-
-  # The draft's findings that name no field of this form. The view model's
-  # own routing table puts them in `form.unrouted` for a committed config
-  # and this page draws the same place for a drafted one, because a
-  # refusal a surface routes nowhere is a refusal the author never reads.
-  @spec unrouted_findings(ViewModel.Node.t()) :: [Finding.t()]
-  defp unrouted_findings(%ViewModel.Node{form: %ViewModel.Form{unrouted: unrouted}}), do: unrouted
-  defp unrouted_findings(%ViewModel.Node{}), do: []
 
   # ------------------------------------------------------------- parameters
 

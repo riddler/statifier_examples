@@ -190,8 +190,8 @@ defmodule StatifierExamples.CollapseWalkTest do
     # `"invoke"`, which is the suffix the minting rule produces; the id
     # lists became equal and the `refute` went red. Reverted from a copy.
     test "the data twin expands to the same arrangement, under the minted ids" do
-      {module_members, _param_map} = Composite.expand(composite_block(), GuardedStep)
-      {data_members, _param_map} = Composite.expand(composite_block(@saved), saved_ref())
+      {:ok, {module_members, _param_map}} = Composite.expand(composite_block(), GuardedStep)
+      {:ok, {data_members, _param_map}} = Composite.expand(composite_block(@saved), saved_ref())
 
       module_blocks = Composite.flatten(module_members)
       data_blocks = Composite.flatten(data_members)
@@ -223,7 +223,7 @@ defmodule StatifierExamples.CollapseWalkTest do
     test "a document holding the data twin compiles to the same bytes as its expansion" do
       palette = saved_palette()
       block = composite_block(@saved)
-      {members, _param_map} = Composite.expand(block, saved_ref())
+      {:ok, {members, _param_map}} = Composite.expand(block, saved_ref())
 
       assert {:ok, composed} = compile(document([block]), palette)
       assert composed.warnings == [], "the saved composite does not compile clean"
@@ -386,7 +386,7 @@ defmodule StatifierExamples.CollapseWalkTest do
   # this walk is looking at when they take "Save as a step".
   @spec expanded_document() :: Document.t()
   defp expanded_document do
-    {members, _param_map} = Composite.expand(composite_block(), GuardedStep)
+    {:ok, {members, _param_map}} = Composite.expand(composite_block(), GuardedStep)
 
     document(members)
   end

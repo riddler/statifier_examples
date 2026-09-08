@@ -369,7 +369,7 @@ defmodule StatifierExamples.ViewModelPinTest do
         # is followed here rather than gone red on for the wrong reason.
         assert ids == [root_id(key), block_id | authored_children(key, block_id, module)]
 
-        {members, _params} =
+        {:ok, {members, _params}} =
           Composite.expand(block_in(key, block_id), module)
 
         # `expand/2` answers the SPLICED tree, so the author's own children are

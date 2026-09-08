@@ -165,7 +165,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       select(plan, @block_id)
 
       plan
-      |> element("#plan-form-#{@block_id}")
+      |> element("#sb-form-#{@block_id}")
       |> render_change(%{"config" => %{"label" => "Say hello to the new workspace"}})
 
       assert render(plan) =~ "Say hello to the new workspace"
@@ -265,7 +265,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       html =
         plan
-        |> element("#plan-form-#{@block_id}")
+        |> element("#sb-form-#{@block_id}")
         |> render_change(%{"config" => %{"invoke_type" => ""}})
 
       assert html =~ "Nothing is stored yet"
@@ -323,7 +323,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       html =
         plan
-        |> element("#plan-form-#{@block_id}")
+        |> element("#sb-form-#{@block_id}")
         |> render_change(%{"config" => %{"template" => ""}})
 
       # The sentence names the field, and the finding is drawn under it.
@@ -371,7 +371,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
         assert occurrences(html, ~s(data-block-id="#{block_id}")) == 1
         assert html =~ escaped(sentence)
 
-        {members, _params} = Composite.expand(block_in(key, block_id), module)
+        {:ok, {members, _params}} = Composite.expand(block_in(key, block_id), module)
 
         # `expand/2` answers the SPLICED tree, so the author's own children are
         # in it - and they are the one thing in it the page is right to draw.
@@ -456,6 +456,56 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
         assert plan |> select(block_id) |> field_keys() == shown,
                "#{key}: the form under the composite row is not its params"
+      end
+    end
+
+    # `se-7p1`: the surface those fields sit on is the PACKAGE's form, not a
+    # pair of host templates around `Field.field/1`. `sb-ykkl` promoted
+    # `Editor.ConfigForm.config_form/1` to a call a host composes, and this
+    # is what says the page composes it - the form the package draws, under
+    # this page's own row, posting this page's own event and carrying the
+    # hidden `block-id` this page reads back out of its params.
+    #
+    # Both mounts are asserted, because the pair that went was two
+    # templates: the editable `<form>` and the read-only `<div>` of raised
+    # fields. `read_only={@readonly?}` is the one attr that now chooses
+    # between them, so a case that read only one of the two would not notice
+    # the attr being dropped.
+    #
+    # The two composite fixtures are the rows asked, for the reason the case
+    # above asks them: they are the rows whose form is guaranteed to have
+    # fields on it.
+    #
+    # Sabotage: dropped `read_only={@readonly?}` from the `config_form/1`
+    # call, so the read-only mount drew the editable form; the read-only half
+    # of this case went red naming `card_processing_composite`, and the two
+    # read-only cases below went red with it, while every write-guard case
+    # stayed green - which is the point, a rendering is not the write gate.
+    # Reverted from a copy.
+    test "a selected composite's field surface is the package's own form", %{conn: conn} do
+      for {key, block_id, _module, _sentence} <- @composites do
+        {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: key]}")
+
+        editable = plan |> select(block_id) |> row_markup(block_id)
+
+        assert editable =~ ~s(id="sb-form-#{block_id}"),
+               "#{key}: the row's form is not the package's"
+
+        assert editable =~ ~s(class="sb-form myapp-plan__fields")
+        assert editable =~ ~s(phx-change="config-change")
+        assert editable =~ ~s(name="block-id" value="#{block_id}")
+        refute editable =~ "plan-form-#{block_id}"
+
+        {:ok, readonly, _html} = live(conn, ~p"/plan?#{[doc: key, readonly: "1"]}")
+
+        read = readonly |> select(block_id) |> row_markup(block_id)
+
+        assert read =~ ~s(class="sb-form sb-form--readonly"),
+               "#{key}: the read-only row is not the package's read-only form"
+
+        assert read =~ ~s(data-read-only="true")
+        refute read =~ ~s(id="sb-form-#{block_id}")
+        refute read =~ "phx-change="
       end
     end
   end
@@ -550,7 +600,8 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       assert selected =~ ~s(data-field-readonly="true")
       assert selected =~ @block_label
-      refute selected =~ "plan-form-#{@block_id}"
+      refute selected =~ ~s(id="sb-form-#{@block_id}")
+      assert selected =~ ~s(data-read-only="true")
     end
 
     # The controls are gone from the markup, so the only thing that could
@@ -883,6 +934,17 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     [_before, rest] = String.split(html, ~s(data-block-id="#{block_id}"), parts: 2)
 
     hd(String.split(rest, ">", parts: 2))
+  end
+
+  # The markup of one row's body: from its `data-block-id` to the start of
+  # the next row, so a case can ask what a single row draws rather than what
+  # the page draws. The row's own `<li>` carries that attribute first, which
+  # is why the split is on the first occurrence even though the form the row
+  # expands to carries it too.
+  defp row_markup(html, block_id) do
+    [_before, rest] = String.split(html, ~s(data-block-id="#{block_id}"), parts: 2)
+
+    hd(String.split(rest, "<li"))
   end
 
   # The ids of the blocks the author placed in a composite's declared
