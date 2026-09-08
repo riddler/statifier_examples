@@ -34,6 +34,15 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   @plan_block "blk_cp_intake"
   @plan_slot "body"
 
+  # The same fixture's authorization group, and the block sitting at the head
+  # of its body. The gap under that block is inside a `core.group`, which is
+  # what the core `"deadline"` recipe's landing rule asks for; the gap under
+  # `@plan_block` is inside the root `core.sequence`, which is what it
+  # refuses. Two positions in one document, so the picker's recipe filter can
+  # be read as a filter rather than as an on/off switch.
+  @plan_group "blk_cp_authz"
+  @group_member "blk_cp_authz_deadline"
+
   # The three composites this app ships, as `{fixture key, block id, module,
   # sentence}`. Each is read on a fixture of its own that holds its root, the
   # composite and nothing else the author did not put inside the composite -
@@ -610,6 +619,120 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     end
   end
 
+  describe "the picker's recipe rows" do
+    # `se-ezz`. A palette has two namespaces and this picker used to draw one
+    # of them, on the grounds that inserting a recipe is more than one
+    # command. It is, and the extra command is the package's to compose.
+    #
+    # What decides whether a RECIPE belongs at a gap is not a set of type
+    # names - a recipe is not a block type, so no such set answers for it.
+    # The package asks it with its own function, `Targets.accepted_recipes/4`,
+    # over the full `{parent_id, slot, index}` position rather than the
+    # `{parent_id, slot}` pair the type filter takes.
+    #
+    # The core `"deadline"` recipe is the subject because its landing rule is
+    # a real one and this fixture puts both sides of it in reach: the pair
+    # only means anything on a block carrying an `interrupts` rail, so it
+    # lands in the authorization group's body and is refused in the root
+    # sequence's. That both answers come off one document in one case is what
+    # makes this a filter rather than a blanket.
+    #
+    # Sabotage: made `insertable/2` keep the old `entry.kind == :type` test;
+    # this case went red on the group's gap having no "Deadline" row, and the
+    # next one went red with no row to click, while every type assertion held.
+    # Reverted from a copy.
+    test "a recipe is offered where it lands and left out where it is not", %{conn: conn} do
+      {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: @plan_doc]}")
+
+      # Inside the group: the recipe row is drawn beside the type rows.
+      open_picker(plan, @group_member)
+      assert has_element?(plan, picker_button(@group_member), "Deadline")
+      assert has_element?(plan, picker_button(@group_member), "Notify")
+
+      # In the root's body, over the same palette and the same document: the
+      # type rows are still there and the recipe row is gone.
+      open_picker(plan, @plan_block)
+      refute has_element?(plan, picker_button(@plan_block), "Deadline")
+      assert has_element?(plan, picker_button(@plan_block), "Notify")
+    end
+
+    # Choosing the row commits the arrangement rather than a block:
+    # `{:compound, commands}` through the same funnel a type row's
+    # `{:insert, ...}` goes through, so both halves land and the history
+    # holds one entry for them.
+    #
+    # The halves are asserted where the recipe says it writes them - the send
+    # at the head of the group's body, the handler at the end of that group's
+    # interrupts rail, both naming one event - because "the document holds
+    # the inserted blocks" is a claim about placement, and a compound that
+    # wrote them anywhere would still have written two blocks.
+    #
+    # Sabotage: made the recipe clause commit `hd(commands)` instead of the
+    # compound; the rail assertion went red on a rail that had not grown.
+    # Reverted from a copy.
+    test "choosing a recipe row commits the compound", %{conn: conn} do
+      {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: @plan_doc]}")
+
+      before_body = slot_ids(@plan_group, "body")
+      before_rail = slot_ids(@plan_group, "interrupts")
+
+      open_picker(plan, @group_member)
+
+      plan
+      |> element(picker_button(@group_member), "Deadline")
+      |> render_click()
+
+      body = blocks_in(@plan_group, "body")
+      rail = blocks_in(@plan_group, "interrupts")
+
+      assert length(body) == length(before_body) + 1
+      assert length(rail) == length(before_rail) + 1
+
+      timer = hd(body)
+      handler = List.last(rail)
+
+      assert timer.type == "core.send"
+      assert handler.type == "core.on_event"
+      assert timer.config["event"] == handler.config["event"]
+      assert timer.config["delay"] not in [nil, ""]
+
+      # One gesture, one history entry: Undo takes the whole arrangement out.
+      plan |> element("button", "Undo") |> render_click()
+
+      assert slot_ids(@plan_group, "body") == before_body
+      assert slot_ids(@plan_group, "interrupts") == before_rail
+    end
+
+    # The picker paints the package's filter and the write re-runs it, so a
+    # crafted payload naming a recipe that does not land here is refused by
+    # the same function that kept the row off the list - not by a second
+    # landing rule written on this page.
+    test "a crafted recipe payload is refused where the recipe does not land", %{conn: conn} do
+      {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: @plan_doc]}")
+
+      before = document(@plan_doc)
+
+      # The right recipe at the wrong position.
+      render_hook(plan, "insert", %{
+        "block-id" => @plan_block,
+        "kind" => "recipe",
+        "type" => "deadline"
+      })
+
+      assert document(@plan_doc) == before
+
+      # A recipe name the palette does not carry, at the position that would
+      # have taken the one it does.
+      render_hook(plan, "insert", %{
+        "block-id" => @group_member,
+        "kind" => "recipe",
+        "type" => "no.such.recipe"
+      })
+
+      assert document(@plan_doc) == before
+    end
+  end
+
   describe "the transparent-container readers" do
     # `se-6jn`. `sb-6xkf` promoted the three readers a host that FLATTENS
     # containers out of its own outline needs - `ViewModel.transparent?/2`,
@@ -795,6 +918,32 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   # The field keys a node puts on the surface, in order: the same call the
   # row template renders from, so the expectation and the page cannot drift.
   defp shown_keys(node), do: node |> ViewModel.shown_fields() |> Enum.map(& &1.key)
+
+  # The picker, armed under `block_id`. The "+" only draws while the picker
+  # is closed, and the page holds one armed gap at a time, so arming a
+  # second one closes the first - which is the page's own behaviour, not a
+  # test convenience.
+  defp open_picker(view, block_id) do
+    view
+    |> element(~s(li[data-block-id="#{block_id}"] button.myapp-plan__add))
+    |> render_click()
+  end
+
+  defp picker_button(block_id),
+    do: ~s(li[data-block-id="#{block_id}"] [data-plan-picker="open"] button)
+
+  # A block's slot as the STORE holds it, which is where a command has to
+  # land for the gesture to have meant anything.
+  defp blocks_in(block_id, slot) do
+    @plan_doc
+    |> document()
+    |> Document.blocks()
+    |> Enum.find(&(&1.id == block_id))
+    |> Map.fetch!(:slots)
+    |> Map.get(slot, [])
+  end
+
+  defp slot_ids(block_id, slot), do: blocks_in(block_id, slot) |> Enum.map(& &1.id)
 
   defp index_of(ids, id), do: Enum.find_index(ids, &(&1 == id))
 

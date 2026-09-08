@@ -24,6 +24,8 @@ defmodule StatifierExamplesWeb.PlanLive do
   | steps back and forward | `Edit.Session.step/2` |
   | shows a refused draft | `ViewModel.overlay_draft/2`, `ViewModel.overlay_findings/2` |
   | says which types fit a gap | `StatifierBlocks.Edit.Targets.accepted_types/4` |
+  | says which recipes land at a gap | `Edit.Targets.accepted_recipes/4` |
+  | builds a recipe's commands | `Edit.Targets.recipe_inserts/4` |
   | names the data-flow context | `StatifierBlocks.Assignability.context/1` |
   | builds an inserted block | `StatifierBlocks.Palette.new_block/2` |
 
@@ -236,6 +238,29 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   def handle_event("insert-close", _params, socket) do
     {:noreply, socket |> assign(:inserting, nil) |> assign_insertable()}
+  end
+
+  # A recipe row. The package answers what the arrangement IS at this
+  # position - `Targets.recipe_inserts/4` runs `Recipe.insert/2` and the
+  # reach bound behind it - and this page commits the `{:compound,
+  # commands}` it hands back through the same funnel a type row commits
+  # its `{:insert, ...}` through. It runs no landing rule of its own: the
+  # refusal that keeps a recipe out of the picker (`accepted_recipes/4`)
+  # and the refusal at the write are the same function, so a crafted
+  # payload naming a recipe that does not land here is refused here too,
+  # by the package rather than by a second copy of its rule.
+  def handle_event("insert", %{"block-id" => id, "kind" => "recipe", "type" => name}, socket) do
+    %Session{document: document, palette: palette} = socket.assigns.session
+
+    with {_parent_id, _slot, _index} = target <- gap_target(socket, id),
+         {:ok, commands} <- Targets.recipe_inserts(document, palette, name, target) do
+      {:noreply,
+       socket
+       |> assign(:inserting, nil)
+       |> apply_session(Session.commit(socket.assigns.session, {:compound, commands}))}
+    else
+      _no_gap_or_refused_recipe -> {:noreply, assign(socket, :inserting, nil)}
+    end
   end
 
   def handle_event("insert", %{"block-id" => id, "type" => type}, socket) do
@@ -556,6 +581,7 @@ defmodule StatifierExamplesWeb.PlanLive do
             type="button"
             phx-click="insert"
             phx-value-block-id={@node.block_id}
+            phx-value-kind={entry.kind}
             phx-value-type={entry.name}
           >
             {entry.entry.label}
@@ -756,13 +782,23 @@ defmodule StatifierExamplesWeb.PlanLive do
     end
   end
 
-  # The palette entries the armed gap accepts, asked of the package's one
-  # answer to the question: `Targets.accepted_types/4` probes every type in
-  # the palette with the entry's own `default_config` merged in and answers
-  # with the type NAMES that fit, and this filters the entry list the page
-  # is already drawing by membership. Recipes are not offered - a recipe is
-  # the palette's other namespace and inserting one is more than one
-  # command, which is a seam this page does not need.
+  # The palette entries the armed gap accepts, asked of the package's own
+  # answers rather than of a filter written here. A palette has two
+  # namespaces and each has its own question: `Targets.accepted_types/4`
+  # probes every type with the entry's `default_config` merged in and
+  # answers the type NAMES that fit the `{parent_id, slot}` pair, and
+  # `Targets.accepted_recipes/4` answers the recipe NAMES whose
+  # arrangement lands at the full `{parent_id, slot, index}` position - a
+  # recipe's fit has only the one way of being asked, because no set of
+  # type names answers for it. This filters the entry list the page is
+  # already drawing by membership in whichever set the entry's `kind`
+  # names; `{kind, name}` is what identifies an entry, so both halves of
+  # the pair are carried through to the click.
+  #
+  # `se-ezz`: recipes used to be left out here on the grounds that
+  # inserting one is more than one command. It is, and the extra command
+  # is the package's to compose (`recipe_inserts/4`) rather than a reason
+  # for a host to offer less of the palette than the palette holds.
   @spec assign_insertable(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp assign_insertable(%{assigns: %{inserting: nil}} = socket),
     do: assign(socket, :insertable, [])
@@ -774,20 +810,19 @@ defmodule StatifierExamplesWeb.PlanLive do
   @spec insertable(Phoenix.LiveView.Socket.t(), Edit.target() | nil) :: [map()]
   defp insertable(_socket, nil), do: []
 
-  defp insertable(socket, {parent_id, slot, _index}) do
+  defp insertable(socket, {parent_id, slot, _index} = target) do
     %Session{document: document, palette: palette} = socket.assigns.session
+    ctx = Assignability.context(socket.assigns.fixture)
 
-    accepted =
-      Targets.accepted_types(
-        document,
-        palette,
-        {parent_id, slot},
-        Assignability.context(socket.assigns.fixture)
-      )
+    types = Targets.accepted_types(document, palette, {parent_id, slot}, ctx)
+    recipes = Targets.accepted_recipes(document, palette, target, ctx)
 
     socket.assigns.view_model.palette_groups
     |> Enum.flat_map(& &1.entries)
-    |> Enum.filter(&(&1.kind == :type and MapSet.member?(accepted, &1.name)))
+    |> Enum.filter(fn
+      %{kind: :type, name: name} -> MapSet.member?(types, name)
+      %{kind: :recipe, name: name} -> MapSet.member?(recipes, name)
+    end)
   end
 
   @spec position(Phoenix.LiveView.Socket.t(), Block.id() | nil) :: Edit.target() | nil
