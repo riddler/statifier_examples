@@ -897,8 +897,7 @@ defmodule StatifierExamples.MixProject do
   # is the seam `GuardedSection` was already written over on the pin.
   # 0.26.0 is a minor and no compiled chart bytes move.
   #
-  # `se-7p1`: the arm is a GIT PIN again, at
-  # `6d54afe13ca96196431c674231e24e50e3803b2f`, and the ledger entry
+  # `se-7p1`: the arm is a GIT PIN again, and the ledger entry
   # `se-7p1-statifier_blocks-sb-ykkl` is what carries it. What it buys is
   # `sb-ykkl`: `StatifierBlocks.Editor.ConfigForm.config_form/1` promoted to
   # a call a host composes - an `event` attr naming what the form posts
@@ -915,8 +914,22 @@ defmodule StatifierExamples.MixProject do
   # names rather than on whatever `main` has become since;
   # `StatifierExamples.MixDepsTest` asserts both halves.
   # `STATIFIER_BLOCKS_PATH` still wins over the pin, so a local checkout is
-  # unaffected either way. `se-t73` advances this pin and `se-9nn` puts the
-  # Hex arm back once the operator publishes 0.27.0.
+  # unaffected either way.
+  #
+  # `se-t73` ADVANCES the same pin - the same ledger entry, not a second one -
+  # to `6fa6a2a6d437521cfe3f8dda2b8eb31e268ead3e`, the
+  # `main` commit carrying both card-face beads. `sb-hwlr` raised the summary
+  # chip cap to 32, draws an over-cap chip clipped with an ellipsis instead of
+  # dropping it, keeps the presentation-cap finding in the drawer's Findings
+  # tab rather than on the card face, and makes a face finding a child of the
+  # card that owns it. `sb-59rt` withholds the "Save as a step" control and
+  # the tray it opens when a mount passes no `on_collapse`, and reserves the
+  # control strip beside the title as a grid column so the title wraps beside
+  # it and nothing truncates. This app mounts the editor with `on_collapse`
+  # (`StatifierExamplesWeb.EditorLive`) and the Plan view without it, so it
+  # exercises both halves of the withholding rule; neither bead changes an
+  # API this app calls. `se-9nn` puts the Hex arm back once the operator
+  # publishes 0.27.0.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
@@ -925,7 +938,7 @@ defmodule StatifierExamples.MixProject do
       _ ->
         {:statifier_blocks,
          git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "6d54afe13ca96196431c674231e24e50e3803b2f"}
+         ref: "6fa6a2a6d437521cfe3f8dda2b8eb31e268ead3e"}
     end
   end
 

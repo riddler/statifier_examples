@@ -290,10 +290,22 @@ defmodule StatifierExamples.MixDepsTest do
   # what let it delete the read-only/editable pair it wrote around
   # `Editor.Field.field/1`. It is not reachable from 0.26.0.
   #
-  # `se-t73` advances the pin and `se-9nn` puts the Hex arm and this test's
-  # Hex spelling back together after the operator publishes 0.27.0. The
-  # ledger entry `se-7p1-statifier_blocks-sb-ykkl` is what carries it.
-  @statifier_blocks_ref "6d54afe13ca96196431c674231e24e50e3803b2f"
+  # `se-t73` ADVANCES the same pin - the same ledger entry
+  # `se-7p1-statifier_blocks-sb-ykkl`, updated rather than doubled - to the
+  # `main` commit below, which carries both card-face beads. `sb-hwlr` raised
+  # the summary chip cap to 32, clips an over-cap chip with an ellipsis
+  # instead of dropping it, keeps a presentation-cap finding in the drawer's
+  # Findings tab rather than on the card face, and makes a face finding a
+  # child of the card that owns it. `sb-59rt` withholds the "Save as a step"
+  # control and the tray it opens from a mount that passes no `on_collapse`,
+  # and reserves the control strip beside the title as its own grid column so
+  # the title wraps beside it and nothing truncates. Neither is reachable
+  # from 0.26.0, and neither changes an API this app calls: what the advance
+  # buys is the drawn result, which `se-t73` captures rather than asserts.
+  #
+  # `se-9nn` puts the Hex arm and this test's Hex spelling back together
+  # after the operator publishes 0.27.0.
+  @statifier_blocks_ref "6fa6a2a6d437521cfe3f8dda2b8eb31e268ead3e"
 
   # Sabotage: pointed the attribute above at a real-but-wrong commit of
   # `statifier_blocks` main and left `mix.lock` alone; this went red
