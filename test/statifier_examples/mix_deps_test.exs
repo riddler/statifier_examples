@@ -303,26 +303,30 @@ defmodule StatifierExamples.MixDepsTest do
   # from 0.26.0, and neither changes an API this app calls: what the advance
   # buys is the drawn result, which `se-t73` captures rather than asserts.
   #
-  # `se-9nn` puts the Hex arm and this test's Hex spelling back together
-  # after the operator publishes 0.27.0.
-  @statifier_blocks_ref "6fa6a2a6d437521cfe3f8dda2b8eb31e268ead3e"
-
-  # Sabotage: pointed the attribute above at a real-but-wrong commit of
-  # `statifier_blocks` main and left `mix.lock` alone; this went red
-  # reporting the pinned ref against the mutated expectation, which is the
-  # half that matters - the dep spelling and the lock have to agree on one
-  # commit or the tree is not on the code the pin names. Reverted from a
-  # copy.
-  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the git pin" do
+  # `se-9nn`: 0.27.0 is published and both commits the pin named - `6d54afe`
+  # and the advance `6fa6a2a` - are ancestors of `v0.27.0` (`4c63b1a`), so
+  # the arm is a Hex requirement again and this test asserts the Hex
+  # spelling. Nothing the pin was taken or advanced for is missing from the
+  # release, and the ledger entry `se-7p1-statifier_blocks-sb-ykkl`
+  # resolves here.
+  #
+  # What the release adds on top of the advanced pin is seventeen commits,
+  # and exactly one of them reaches this app's own code:
+  # `Composite.Collapse.replacement/4` gives the composite it inserts the
+  # collapsed arrangement's block id rather than a minted UXID, which
+  # `StatifierExamples.CollapseWalkTest` now asserts rather than reads off
+  # the document. The rest are additive here.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.26.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.27.0 entry against the mutated expectation.
+  # Reverted from a copy.
+  test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks,
-            [
-              git: "https://github.com/riddler/statifier_blocks.git",
-              ref: @statifier_blocks_ref
-            ]} in deps
+    assert {:statifier_blocks, "~> 0.27"} in deps
 
     lock_line =
       "mix.lock"
@@ -331,9 +335,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:git, "https://github.com/riddler/statifier_blocks.git")
-    assert lock_line =~ @statifier_blocks_ref
-    refute lock_line =~ ":hex,"
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.27.)
+    refute lock_line =~ ":git,"
   end
 
   # The other half of a pin, and the half a SHA alone cannot state: what the
@@ -346,11 +349,12 @@ defmodule StatifierExamples.MixDepsTest do
   # re-pin or a re-arm that lost them would go red here rather than in the
   # six cases that read them.
   #
-  # `sb-ykkl`'s `config_form/1` is the fourth and is what `se-7p1` took this
+  # `sb-ykkl`'s `config_form/1` is the fourth and is what `se-7p1` took the
   # pin FOR: the component `StatifierExamplesWeb.PlanLive` draws its whole
   # field surface through. It is not reachable from 0.26.0, so this is the
-  # case that says the pinned tree really carries it rather than trusting
-  # the SHA.
+  # case that says the release the arm now names really carries it rather
+  # than trusting the version number - a re-arm to a release that had lost
+  # it would go red here rather than in the page's own cases.
   #
   # `function_exported?/3` needs the module loaded, which under a release
   # build it is not - hence the `ensure_loaded` around each.
@@ -359,7 +363,7 @@ defmodule StatifierExamples.MixDepsTest do
   # it, and nothing else in the file moved. Reverted from a copy. A second,
   # for the row `se-7p1` added: pointed `config_form` at arity 2, which went
   # red naming it alone. Reverted from a copy.
-  test "the pinned statifier_blocks carries the seams the pin is for" do
+  test "the published statifier_blocks carries the seams the pin was for" do
     for {module, function, arity} <- [
           {StatifierBlocks.Composite, :pass_through, 2},
           {StatifierBlocks.Composite, :mapping_errors, 2},
@@ -536,6 +540,19 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.8.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.9.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # The lock moves to 0.10.1 as of `se-9nn`, and the arm stays `~> 0.10`
+  # because a patch is inside the requirement already. 0.10.1 writes the
+  # debounce the `statifier_blocks` `expression_component` seam hands
+  # `StatifierUI.Live.ExpressionInput.expression_input/1` onto the controls
+  # it draws, so a host's debounce reaches the expression field instead of
+  # stopping at it. This app overrides that seam nowhere and names no
+  # `StatifierUI` module at all - it takes the package as the load-path
+  # presence that turns the editor's expression fields into picklists, plus
+  # the `StatifierUIHooks` export `assets/js/app.js` registers - so the fix
+  # reaches it only through what the editor renders. No surface and no
+  # dependency changed, and the trace wire format is untouched, so the lock
+  # line is the whole of the move here.
   test "the statifier_ui dep is a direct Hex requirement" do
     deps = Mix.Project.config()[:deps]
 

@@ -274,13 +274,17 @@ defmodule StatifierExamples.CollapseWalkTest do
     # with it. What this walks is the host's half, through the same
     # `Edit.Session.commit/2` every other editor gesture goes through.
     #
-    # The chart comparison substitutes ONE id. `replacement/4` builds its
-    # block with `Block.new/2`, which mints a fresh document id, and a
-    # document id is arbitrary by the same rule that makes the collapse mint
-    # suffixes from types rather than from ids. With that one substitution
-    # the pre-Expand chart comes back exactly - which is the round trip:
-    # expand an authored composite, collapse the arrangement, register it,
-    # commit the replacement, and the chart is where it started.
+    # The chart comparison substitutes ONE id, and as of `statifier_blocks`
+    # 0.27.0 (`sb-kuwc`) that id is predictable rather than minted:
+    # `replacement/4` gives its block the COLLAPSED ROOT's own id, which the
+    # `{:remove, root_id}` ahead of it in the compound has just freed. The
+    # composite therefore comes back as `blk_gs_step_call`, the id the
+    # arrangement stood under, and the case asserts that rather than reading
+    # it off the document - a minted id would make every state id under the
+    # composite a function of the millisecond the commit happened. With that
+    # one substitution the pre-Expand chart comes back exactly - which is the
+    # round trip: expand an authored composite, collapse the arrangement,
+    # register it, commit the replacement, and the chart is where it started.
     #
     # Sabotage: in `deps/statifier_blocks`, `Collapse.replacement/4` was made
     # to insert one index PAST the arrangement's own target rather than at
@@ -312,6 +316,7 @@ defmodule StatifierExamples.CollapseWalkTest do
       assert [root, composite] = Document.blocks(moved.document)
       assert root.id == "blk_gs_root"
       assert composite.type == @authored
+      assert composite.id == "blk_gs_step_call"
 
       # One remove with one insert is one compound, so the author sees one
       # gesture: one press of Undo puts the arrangement back.
@@ -319,7 +324,7 @@ defmodule StatifierExamples.CollapseWalkTest do
       assert Document.to_json(stepped.document) == Document.to_json(expanded)
 
       # And the chart is the one the walk started from, under the id the
-      # replacement minted.
+      # replacement reused.
       assert {:ok, before_expand} = compile(fixture_document(), Charts.palette())
       assert {:ok, after_commit} = compile(moved.document, palette)
 

@@ -928,17 +928,53 @@ defmodule StatifierExamples.MixProject do
   # it and nothing truncates. This app mounts the editor with `on_collapse`
   # (`StatifierExamplesWeb.EditorLive`) and the Plan view without it, so it
   # exercises both halves of the withholding rule; neither bead changes an
-  # API this app calls. `se-9nn` puts the Hex arm back once the operator
-  # publishes 0.27.0.
+  # API this app calls.
+  #
+  # `se-9nn`: 0.27.0 is published, so the arm is a Hex requirement again -
+  # `~> 0.27` - and the ledger entry `se-7p1-statifier_blocks-sb-ykkl`
+  # resolves here. Both commits the pin named, `6d54afe` and `6fa6a2a`, are
+  # ancestors of `v0.27.0` (`4c63b1a`), so nothing the pin was taken or
+  # advanced for is missing from the release: `config_form/1`'s promotion,
+  # the chip cap of 32 with its ellipsis, the withheld Save gesture and the
+  # reserved control strip are all in it.
+  #
+  # 0.27.0 is a minor with two breaking changes, and this app is already
+  # written over both because the pin carried them. `Composite.expand/2`
+  # answers `{:ok, {blocks, params}} | {:error, reason}` and no longer
+  # raises, with `expand!/2` the raising spelling the compiler's Resolve and
+  # the editor call; this app's thirteen call sites destructure the tuple as
+  # of `se-7p1`. And a group's two interrupt transitions and the `<raise>`
+  # of the interrupt pair inside its rail carry the group's own emitted
+  # state id, so the compiled chart of any document holding an interruptible
+  # group moved - `StatifierExamples.CardAuth.AuthorizeWithDeadline` builds
+  # such a group, and its charts moved at the pin rather than here. The
+  # authored spelling and the pair a host block type raises are unchanged.
+  #
+  # What the release adds ON TOP of the advanced pin is seventeen commits,
+  # and one of them reaches this app's own tests:
+  # `Composite.Collapse.replacement/4` gives the composite it inserts the
+  # collapsed arrangement's own block id rather than a minted UXID, so the
+  # id `StatifierExamples.CollapseWalkTest` substitutes in its round trip is
+  # `blk_gs_step_call` rather than whatever the millisecond produced, and
+  # that case asserts it now. The rest are additive here: a data composite
+  # drawing summary chips, an edit gate refusing a non-arm type expression,
+  # a malformed findings answer named by type, a read-only mount marking an
+  # empty arm and refusing Expand, an expansion compiled at each member
+  # type's current version, a param collision blamed on the first param
+  # declared, a refused gesture drawn under the editor's toolbar, an unknown
+  # `use` option refused, the `expression_component` seam handed the host's
+  # own candidates and the field's debounce, a caller able to refuse an
+  # untyped read, and a minted writer named by the composite that placed it.
+  # This app overrides no `expression_component`, mounts the editor
+  # read-write, and passes `use StatifierBlocks.Composite` no option it did
+  # not already pass.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks,
-         git: "https://github.com/riddler/statifier_blocks.git",
-         ref: "6fa6a2a6d437521cfe3f8dda2b8eb31e268ead3e"}
+        {:statifier_blocks, "~> 0.27"}
     end
   end
 

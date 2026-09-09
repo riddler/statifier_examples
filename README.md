@@ -75,13 +75,14 @@ document, which is what the store above is for.
 ## What the Plan view copied, measured
 
 Re-measured 2026-09-08 (`se-7p1`), on the `statifier_blocks` commit
-`6d54afe13ca96196431c674231e24e50e3803b2f` (`6d54afe`) - a git pin again,
-taken for `sb-ykkl` and retired by `se-9nn` once 0.27.0 is published.
-`se-t73` has since advanced the same pin to
+`6d54afe13ca96196431c674231e24e50e3803b2f` (`6d54afe`), which `mix.exs` was
+pinned at when the measurement was taken; `se-t73` advanced the same pin to
 `6fa6a2a6d437521cfe3f8dda2b8eb31e268ead3e` (`6fa6a2a`) for `sb-hwlr` and
-`sb-59rt`. Both are card-face changes: `plan_live.ex` is byte-identical
-across the advance and the whole suite reads the same at both pins, so
-every count and every row below still reads at the pin `mix.exs` holds.
+`sb-59rt`, both card-face changes across which `plan_live.ex` is
+byte-identical. `se-9nn` has since retired the pin for the Hex requirement
+`~> 0.27`: both commits are ancestors of `v0.27.0` (`4c63b1a`), so the
+release carries the tree every count below was read on, and the whole suite
+reads the same at the pin and at the release.
 
 What the `se-7p1` pin bought is the last row this table still named as a
 copy: `sb-ykkl` promoted
@@ -214,7 +215,7 @@ Fourteen fragments the first measurement recommended promoting are gone
 from this file, two more went on `se-6jn`, and the field-surface pair went
 on `se-7p1`. The package answers each of them now:
 
-| What this page held | What it calls at `6d54afe` |
+| What this page held | What it calls at 0.27.0 |
 |---|---|
 | `sentence/1` (9) | `ViewModel.sentence/1` |
 | `shown_fields/1` (9) | `ViewModel.shown_fields/1` |
