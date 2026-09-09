@@ -75,10 +75,16 @@ document, which is what the store above is for.
 ## What the Plan view copied, measured
 
 Re-measured 2026-09-08 (`se-7p1`), on the `statifier_blocks` commit
-`6d54afe13ca96196431c674231e24e50e3803b2f` (`6d54afe`), which is where
-`mix.exs` is pinned - a git pin again, taken for `sb-ykkl` and retired by
-`se-9nn` once 0.27.0 is published. What that pin bought is the last row
-this table still named as a copy: `sb-ykkl` promoted
+`6d54afe13ca96196431c674231e24e50e3803b2f` (`6d54afe`) - a git pin again,
+taken for `sb-ykkl` and retired by `se-9nn` once 0.27.0 is published.
+`se-t73` has since advanced the same pin to
+`6fa6a2a6d437521cfe3f8dda2b8eb31e268ead3e` (`6fa6a2a`) for `sb-hwlr` and
+`sb-59rt`. Both are card-face changes: `plan_live.ex` is byte-identical
+across the advance and the whole suite reads the same at both pins, so
+every count and every row below still reads at the pin `mix.exs` holds.
+
+What the `se-7p1` pin bought is the last row this table still named as a
+copy: `sb-ykkl` promoted
 `StatifierBlocks.Editor.ConfigForm.config_form/1` to a call a host
 composes, with an `event` attr and an omittable `target`, and the Plan
 view's read-only/editable pair around `Editor.Field.field/1` - the twenty
