@@ -134,8 +134,10 @@ defmodule StatifierExamples.Signup.Screens do
   @doc """
   Substitutes `{{ path }}` slots in `text` from `datamodel`.
 
-  The two-line stand-in for the templating subset. An unresolved path
-  becomes the empty string.
+  The two-line stand-in for the templating subset. An unresolved path becomes
+  the empty string, and so does one naming something with no sensible string
+  of its own - a map or a list, as `{{ answers }}` would be. Raising inside a
+  paragraph is not a behaviour a screen can recover from.
 
   ## Examples
 
@@ -147,7 +149,7 @@ defmodule StatifierExamples.Signup.Screens do
   """
   @spec fill_slots(String.t(), map()) :: String.t()
   def fill_slots(text, datamodel) when is_binary(text) and is_map(datamodel) do
-    Regex.replace(@slot, text, fn _whole, path -> to_string(lookup(datamodel, path)) end)
+    Regex.replace(@slot, text, fn _whole, path -> stringify(lookup(datamodel, path)) end)
   end
 
   @doc """
@@ -190,6 +192,14 @@ defmodule StatifierExamples.Signup.Screens do
   end
 
   defp fill_node(node_doc, _datamodel), do: node_doc
+
+  # `to_string/1` has no implementation for a map or a list of mixed terms,
+  # and a slot naming a whole subtree is a document mistake rather than a
+  # reason to raise while rendering a paragraph.
+  @spec stringify(term()) :: String.t()
+  defp stringify(value) when is_binary(value), do: value
+  defp stringify(value) when is_number(value) or is_atom(value), do: to_string(value)
+  defp stringify(_not_a_scalar), do: ""
 
   @spec lookup(map(), String.t()) :: term()
   defp lookup(datamodel, path) do
