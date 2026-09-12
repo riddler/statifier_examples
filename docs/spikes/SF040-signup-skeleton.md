@@ -14,6 +14,30 @@ built small enough to argue with.
 This file is created by k1 and completed by k4. Each bead appends its own
 section; nothing rewrites an earlier one.
 
+## Vocabulary
+
+Written into this file by k4, after the skeleton was built. The operator's
+R10d amendment of 2026-09-12 (carried into campaign SF040 as consent
+amendment A2) settles the words this spike was groping for:
+
+- a **question** owns its `answer_options` - the things a select or a
+  checkbox group chooses among;
+- a visitor's **Journey** owns `responses`, and the datamodel root a screen
+  writes is `responses.<element_key>`, not `answers.<element_key>`;
+- the **host-supplied** root is `context`, not `request`, so a `responses`
+  root never reads as the reply half of a request/response pair.
+
+The k4 section at the foot of this file is written in that vocabulary. The
+k1, k2 and k3 sections above it, and all of the code and fixtures the
+skeleton shipped, still say `answers`: they were written before the ruling
+and this file's rule is that nothing rewrites an earlier section. The rename
+in this app is `se-ah4`, scheduled after the k1..k3 stack lands. Until it
+does, read `answers.<element_key>` in the sections above, in
+`priv/fixtures/signup_path.json`'s datamodel envelope, and in every module
+under `lib/statifier_examples/signup/` as the thing now called
+`responses.<element_key>`. Where k4 quotes code, a fixture or a test
+verbatim, it is quoted as it stands.
+
 ## k1 findings - what the four types needed that a JSON document did not say
 
 `priv/fixtures/signup_screens.json` holds three screens built from four
@@ -587,3 +611,423 @@ also the only evidence for something a test asserts differently.
 | `se-7wt-plan-screen-draft.png` | `5` typed into the seat count and nothing submitted: the business button has appeared, the personal one has not, and the hint reads "More than one seat puts you on the business plan, Ada." - a condition on a **draft** answer and a text slot filled from an answer the **chart** holds, on one screen. That is `resolve/2` and the k1 renderer doing two different jobs at once. |
 | `se-7wt-confirm-screen.png` | After pressing the business plan. The page was showing the between-screens state while the company-details job ran, and redrew **on its own** when the job answered - nothing was clicked between the two. The referral question is on the screen because the seat count is five. |
 | `se-7wt-run-finished.png` | Finish pressed: the run is `done` and the collected block holds all five answers the chart gathered. The server log for the same run carries `myapp:signup created the account for "ada@example.com"` - the create-account call, handed the answers. |
+
+## k4 - what the skeleton settled, and what it only found out it did not know
+
+k1, k2 and k3 each recorded what their own bead met. This section is the
+whole of it read back against the rulings the spike was built to test, plus
+the asks, each with the bead that now carries it. Nothing above is rewritten;
+where k4 disagrees with an earlier section it says so here.
+
+Every cite below was read on branch `se-ocz-signup-findings` at `f81e92a`,
+the head of the k1 -> k2 -> k3 stack, and the file paths are as of that
+commit.
+
+### R10a, the nouns, as built
+
+R10a says a Path is a `statifier_blocks` document plus the element documents
+its screens reference; a Journey is a durable run plus its datamodel; a Guide
+is the durable stepper composed with an element resolver and an answer
+validator **as effect executors**. Two of the three came out as ruled. The
+third did not, and the reason is the most useful thing this spike has to say
+about the mapping.
+
+| Noun | Built as | Verdict |
+|---|---|---|
+| **Path** | `priv/fixtures/signup_path.json` (the block half) plus `priv/fixtures/signup_screens.json` (the element half), joined by each `myapp.screen` block's `screen` param | holds, unchanged |
+| **Journey** | one `StatifierExamples.Charts.Durable` run over `statifier_persistence`, its datamodel read back from storage by run id | holds, unchanged |
+| **Guide** | `StatifierExamples.Signup.Journey` - a plain module the page calls, which resolves and validates **before** it tells the chart anything | diverges, and has to |
+
+**The validator cannot be an effect executor on this shape.** A failed
+validation must leave the run exactly where it was: the reader sees the same
+screen with findings on it, and nothing is written. An effect executor runs
+inside a step the chart has *already taken*, so by the time one could refuse,
+the event has been raised, the capture has fired, and the position has moved.
+`Journey.submit/3` (`lib/statifier_examples/signup/journey.ex:201`) therefore
+runs `Validation.validate/2` first and answers `{:invalid, view}` without
+touching storage at all. The same argument applies, more weakly, to the
+resolver: `Screens.resolve/2` has to run on the way *out* to a reader, which
+is not a step the chart takes either.
+
+This does not contradict R10c so much as complete it. R10c gives the chart
+"capture and consequence", and capture is genuinely the chart's - the
+`core.on_event` capture map is what writes a screen's responses. Consequence
+is not, or not all of it: the failure consequence (re-present with findings)
+happens entirely on the host side of the seam, before any event exists, and
+the success consequence (raise the outcome) is the host deciding to speak.
+What the chart owns is what happens *after* it is spoken to.
+
+So the mapping worth carrying forward is: a Guide is the durable stepper plus
+a **host-side** pair of pure functions that stand between a reader and the
+run. That is a smaller claim than R10a's and it is the one the code can
+defend.
+
+#### The file map
+
+| File | What it is | Bead |
+|---|---|---|
+| `priv/fixtures/signup_screens.json` | the element half: three screens, four element types, conditions, one text slot, per-button `payload` and `writes` | k1, +k2, +k3 |
+| `priv/fixtures/signup_path.json` | the block half: three `myapp.screen` blocks, a `core.branch`, a reminder timer, a closing `core.invoke` | k2, +k3 |
+| `lib/statifier_examples/signup/screens.ex` | the element resolver - conditions, text slots, the key and outcome lists | k1 |
+| `lib/statifier_examples_web/components/signup_elements.ex` | one function component per element type, plus `screen/1` | k1 |
+| `lib/statifier_examples/signup/screen.ex` | `myapp.screen`: the Composite, its params, its subtree, `park_block_id/1` | k2, +k3 |
+| `lib/statifier_examples/signup/path.ex` | the Path, and `validate/1` - the host-side uniqueness check | k2 |
+| `lib/statifier_examples/signup/validation.ex` | the pure check standing in for R10c's elements package | k3 |
+| `lib/statifier_examples/signup/journey.ex` | the loop: `start`, `current`, `resolve`, `submit`, `payload` | k3 |
+| `lib/statifier_examples_web/live/signup_screens_live.ex` | `/signup-screens` - the renderer with no chart behind it | k1 |
+| `lib/statifier_examples_web/live/signup_journey_live.ex` | `/signup-journey` - the page over a durable run | k3 |
+| `lib/statifier_examples/charts/durable.ex` | gained the payload argument on `send_event` | k3 |
+| `lib/statifier_examples/signup/handlers.ex` | gained the `myapp:signup` clause that answers a create-account receipt | k3 |
+| `lib/statifier_examples/signup.ex`, `lib/statifier_examples_web/router.ex` | the document registration, the block type, two routes | k1, k2 |
+
+Six test modules and four pinned enumerations moved with them; k2's finding 9
+records what the pinning convention costs a bead that adds a document.
+
+The split worth keeping is the one k1 named and k3 did not break: the
+resolver holds no markup, the renderer holds no datamodel, and `Journey`
+holds no chart internals. A page cannot reach past `Journey` into the run,
+which is why the presentation contract below is a contract rather than a
+description.
+
+### R10b, what the screen Composite could not be asked to do
+
+R10b asks for a screen block whose slots are "one outcome per call to action
+the document declares plus `timed_out`". The package cannot express that, and
+k2 proved it three ways rather than asserting it once.
+
+1. A composite's outcomes are its **expansion root's** and nothing deeper
+   (`Composite.derived_outcomes/2` reads the head member). The arrangement a
+   screen needs - a group whose body presents and parks and whose
+   `interrupts` hold one handler per button - is rooted at `core.group`,
+   which declares the default single `done`. Three buttons, one outcome.
+2. **`StatifierBlocks.Composite.Data` is not a way around it.** The bead
+   asked for this to be tried rather than assumed; it was.
+   `Data.outcomes/2` delegates to the same `Composite.derived_outcomes/2`,
+   so a declaration held as data answers the root's outcomes exactly as the
+   `use` form does. A data declaration can change *what the root is*, and
+   nothing else about this. That is the verdict, and it is a clean no.
+3. `timed_out` is reachable only by giving up the arrangement: `core.await`
+   declares it, so an await-rooted composite surfaces it - and then has
+   nowhere to hang a button handler, because the only slots admitting an
+   interrupt handler are the `interrupts` of `core.group` and
+   `core.resumable_group`. The two halves of R10b's request are individually
+   expressible and jointly are not.
+
+k3 then ran it, and the runtime half is worse than the compile-time half. The
+deadline works - the stored Oban job fires and the feed carries `timed_out on
+blk_sp_account_park` - but what the *Path* sees is `done`, the same word a
+button produces, because the composite has no other outcome to give it. A
+timed-out screen and an answered one are distinguishable downstream only by
+what was captured, and a timeout captures nothing while an unanswered submit
+captures `:undefined`. Those are two different states that look the same one
+level up.
+
+**The Composite is still the right first shape.** Nothing here argues for
+promoting `myapp.screen` to a native BlockType, which R10b reserves for "the
+pilot hits something a Composite cannot express". This is that, twice over -
+but both limits are in `derived_outcomes/2` and in the `core.*` vocabulary,
+not in the Composite mechanism, so a native block type would inherit them
+rather than fix them. The asks below are the fix.
+
+### R10c, where validation ran and what it needed
+
+`StatifierExamples.Signup.Validation` is a pure function
+(`lib/statifier_examples/signup/validation.ex:76`), called by
+`Journey.submit/3` before anything reaches the chart. It stands in for
+R10c's `riddler_elements`. Three things it needed that no document said:
+
+1. **A named format check, invented here.** `required` is the element
+   document's own boolean and it was already there. `format` was not, so
+   `"format": "email"` was added to the account screen's address question and
+   the module implements exactly one name (`validation.ex:100`, one regex,
+   not RFC 5322). A format name it does not implement **raises**
+   (`:108`) rather than passing, on the rule that a document asking for a
+   check nobody runs is a document that silently accepts anything. Both
+   halves - the vocabulary of names, and what an unknown name does - are the
+   elements package's to rule.
+2. **Rules run over *resolved* nodes, not declared ones.** The confirm
+   screen's referral question only exists for a business plan. A check over
+   the raw document would refuse a personal signup for not answering a
+   question it never saw. So `validate/2` is handed what `Screens.resolve/2`
+   left on the screen, and whichever package owns the rules owns this too:
+   they are rules about a screen **as drawn**.
+3. **A per-button opt-out, tried and withdrawn.** A Back button must not
+   refuse to leave an unfinished screen. k3 shipped a `"validate": false`
+   field for it and then removed it: the one screen with a second button
+   asks for nothing required, so no press of Back can be refused, and the
+   field could not be sabotaged into failing any test. It is recorded as an
+   ask rather than shipped, because a field no screen can exercise is a field
+   no test can defend. That is the honest state - the need is real and the
+   evidence for the shape is not.
+
+One more, which is R10c's seam rather than its vocabulary: **a hidden button
+is not a button anyone pressed.** `submit/3` looks for the named outcome
+among the *resolved* nodes, so pressing the business plan without a seat
+count is `{:unknown_outcome, _}`. Nothing in either document says whether a
+condition on a button hides it from the reader alone or from the chart as
+well; the skeleton chose both and nothing forced the choice.
+
+### R10d and Q17, the responses layout used, and what Back did
+
+**Layout: flat.** One root, `responses.<element_key>` (spelled `answers` in
+the shipped bytes; see the Vocabulary note), declared once in the Path
+document's datamodel envelope alongside `created`, which the closing
+`core.invoke` writes its receipt to. No per-screen namespacing was tried,
+because nothing in three screens needed it, and the flat form is what makes
+k2's uniqueness check meaningful at all: a key is a datamodel path, so two
+screens claiming one key are two screens claiming one cell.
+
+**Uniqueness is a host check, and a narrower one than R10d's sentence.**
+`Path.validate/1` (`lib/statifier_examples/signup/path.ex:102`) reads
+`Screens.answer_keys/1`, which reads `text_question` nodes only, so what is
+held unique is the keys that actually carry a response - hence the
+`:duplicate_answer_key` tag. Two screens sharing a `heading` or `button` key
+are not reported. Building it turned up that the commonest instance is not
+two screens sharing a key but **one screen shown twice**, so the finding names
+the blocks that reach a repeated name rather than the screens. And the check
+is necessarily the host's: the element document is not a block document, the
+compiler never reads it, and nothing upstream can see two screens claiming
+one key.
+
+**Back navigation was not built and cannot be built on this shape.** This is
+the part of R10d the spike was meant to exercise and could not. The plan
+screen declares a Back button (`priv/fixtures/signup_screens.json:102-104`,
+key `plan_back`, outcome `went_back`), and because a composite answers only
+`done` (R10b above), `went_back` reaches no outcome slot and the Path has no
+way to tell it from `Continue`. **Pressing Back moves the Path forward.**
+Two consequences follow, and both are findings about the ruling rather than
+about this app:
+
+- R10d's "back navigation and re-asks overwrite" is **untested here**. The
+  skeleton has no back navigation to test it with. A linear Path never
+  returns to a screen, which is also why k3's sabotage of the renderer's
+  stored-response attribute reddened nothing: no input is ever redrawn over a
+  response the chart holds.
+- The overwrite that *does* happen is the destructive one nobody asked for.
+  Every question on a screen is in every button's capture map, so whichever
+  button ends the screen writes all of that screen's response paths - filling
+  the unanswered ones in as `:undefined`. Press Back on the plan screen
+  without typing a seat count and `responses.seats` is written `:undefined`
+  rather than left absent. Nothing downstream can tell "not answered" from
+  "answered with nothing", and a guard reading such a path gets a value
+  instead of a missing one.
+
+So Q17's open half - flat versus namespaced, and how back navigation and
+re-asks overwrite - gets one input from this spike and it is not the one the
+question expects: **before the layout question can be answered, a Path needs a
+way to go backwards at all.** That is R10b's outcome limit again, met from the
+other side.
+
+`context` - A2's host-supplied root - does not exist in the skeleton. The
+Path declares `answers` and `created` and nothing else; no value enters a run
+from the host except through a button's event payload. A Path that needed to
+read who the visitor is, or what plan the marketing page offered them, has
+nowhere to put it today.
+
+### R10e and Q13, the resolve/submit pair, and the third state
+
+The contract, as it came out (k3's table, repeated here because it is the
+deliverable R10e asked for):
+
+| Function | Takes | Answers |
+|---|---|---|
+| `Journey.current/1` | a run id | the screen the run is parked on, its resolved nodes, the responses so far, the status |
+| `Journey.submit/3` | a run id, the outcome a button named, the form's responses | `{:ok, next view}`, `{:invalid, same view with findings}`, or `{:error, reason}` |
+| `Journey.resolve/2` | a view and a **draft** | the same view re-resolved over responses the reader has typed and not sent |
+
+Four properties are the contract rather than the implementation:
+
+1. **Neither of the first two takes a run.** Both take an *id* and load from
+   storage (`journey.ex:156`, `:201`). No process, no session, nothing in a
+   socket that the next press depends on - which is what makes a Journey
+   survive a deploy and `submit/3` callable from a controller, a job or a
+   test as readily as from a page.
+2. **Neither returns a chart.** A screen, some nodes, the responses and a
+   status. A transport built on this pair cannot reach into the run.
+3. **`resolve/2` is not optional.** A first draft of any such contract leaves
+   it out, and this document breaks it: the plan screen's two plan buttons are
+   conditional on a seat count typed two lines above them, so a surface that
+   resolved only against stored responses would draw a screen with no way off
+   it. The draft is never persisted and never sent.
+4. **There is a third resting state, and a two-state contract has nowhere to
+   put it.** The Path's business arm runs `myapp:signup` as an Oban job, so
+   between the plan screen and the confirm screen the run rests with **no
+   screen at all**: a live invocation, a persisted position, nothing holding
+   it. `current/1` answers `screen: nil` and the page says so. This is not
+   exotic - any step a host runs asynchronously produces it - and a contract
+   offering only "here is a screen" and "the journey is over" is wrong about
+   every Path that calls anything.
+
+Point 4 is also the one input this spike has for Q13's streaming half. The
+page learned the job had answered because it subscribes to the run's topic
+and redrew on a `:run_advanced` broadcast, with nothing clicked between the
+two frames (`se-7wt-confirm-screen.png`). A transport whose only verb is a
+request cannot express that frame; whether the answer is a subscription, a
+poll, or a contract that simply blocks is Q13's, but the state exists whether
+or not the transport admits it.
+
+The spike has **no** input on Q13's other two halves: auth and tenant scoping
+never entered the picture (see Q16 below), and field-level shape is a
+GraphQL question this app never posed.
+
+### Q16, how a Journey was keyed before an account existed
+
+`Journey.start/0` mints the run id with `Durable.new_run_id/0` -
+`16 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)`
+(`lib/statifier_examples/charts/durable.ex:538`) - and that id is the entire
+identity. It goes in the page's URL as `?run=<id>`
+(`lib/statifier_examples_web/live/signup_journey_live.ex:63`), and
+`handle_params/3` loads whatever run the query string names. There is no
+cookie, no signed token, no host session, and nothing in the socket the next
+press depends on.
+
+Three things that gives Q16 to work with:
+
+- **An unguessable id is the whole of the authorization.** Anyone holding the
+  id holds the Journey and can read every response in it. For a spike over
+  fictional data that is fine and it is deliberate - the id is 128 bits of
+  entropy, not a counter - but it is a decision, not an absence of one, and
+  it is the decision Q16 has to either adopt or replace. Note what it costs
+  if adopted: the id travels in a URL, so it lands in browser history, in a
+  `Referer`, and in any log that records paths.
+- **The handoff is not built.** The account is created by the *last* block of
+  the Path (`blk_sp_create_account`, a `core.invoke` sending
+  `answers=answers` and writing its receipt to `created`), after every
+  response is already collected. Nothing then associates the run with the
+  account it just created; `created` holds a receipt and the run holds the
+  responses, and the join between them exists only in the log line the stub
+  handler writes. A real Guide needs that join to be a thing a host can query
+  from either end, and the skeleton has no opinion on which end owns it.
+- **"What the host may read before the account exists" is, today,
+  everything.** The responses are in the run's datamodel from the first
+  submit, readable by run id alone through `Journey.current/1`, with no
+  account, no tenant and no scope anywhere in the call. Personal data
+  collected by screens is meant to live in the encrypted datamodel (statifier
+  D12); this skeleton stores it plainly, because encryption was out of the
+  bead's scope. That gap is worth stating loudly in a spike whose fixture
+  collects a name and an email address, even though every value in it is
+  fiction.
+
+### What the authoring half (q2) adds to this
+
+The element-editor spike (`se-aud`, notes under
+`.claude/fleet/pending/SF040-spikes/se-aud-authoring-notes.md`) re-authored
+k1's fixture in the blocks editor over an element palette. Its headline
+matters to the asks below: the editor was not the obstacle - the per-node
+authoring cost is flat - but the `element.*` vocabulary carried only 39 of
+the fixture's 64 fields, with the Findings pane at 0 for every loss. What it
+could not express is the same list this document keeps arriving at from the
+running side: a key on a non-question node, a condition, a `writes` map, a
+payload, a `format`, and a screen container. Two spikes approaching the
+element document format from opposite ends found the same holes, which is
+the strongest evidence either of them produced.
+
+### Upstream asks, with the beads that carry them
+
+These were discovered by k2, k3 and the sd spike (t1) and **filed by the
+campaign conductor** under consent clause 8, unscheduled, at P4, labelled
+`campaign-SF040` and `sf041-candidate`. Listed here by id so a reader of this
+document can follow each one.
+
+| Bead | Repo | Ask | From |
+|---|---|---|---|
+| `sb-5ee4` | `statifier_blocks` | A composite cannot declare its own outcomes: `derived_outcomes/2` reads the expansion root only | k2 findings 1-3 |
+| `sb-5imu` | `statifier_blocks` | A `core.on_event` capture **destination** is always typed `:unknown`, even where the handler declares a payload that would type it | k2 finding 5 |
+| `sb-m6ru` | `statifier_blocks` | A capture map cannot express a **constant**, so no event source can record its own identity | k2 finding 6 |
+| `sb-oy84` | `statifier_blocks` | No park-until-interrupted-with-a-deadline primitive: `core.await` requires an event | k2 finding 4 |
+| `sb-j0cz` | `statifier_blocks` | A capture pair whose source is absent from the payload should leave its destination unwritten | k3 finding 2 |
+| `sb-jc3x` | `statifier_blocks` | A composite (or the ViewModel) answers which member a position is resting in, so a host need not reconstruct member ids | k3 finding 4 |
+| `sb-czla` | `statifier_blocks` | A reads-before-writes check over the typed environment walk | the sd spike (t1) |
+
+Two of those are load-bearing for this skeleton rather than nice to have.
+`sb-5ee4` is why Back moves the Path forward and why `timed_out` is invisible
+one level up; `sb-m6ru` is why a Path's branch rests on a host contract that
+neither document states and nothing can check.
+
+Residue in this app, filed by the conductor and open here:
+
+| Bead | What |
+|---|---|
+| `se-3nf` | two sabotage notes in `screens_test.exs` overclaim their discriminating mutation (k1) |
+| `se-zq7` | the coverage floor sits at 70 while the tree measures 82.2% (k1) |
+| `se-kbq` | three prose stragglers after the k2 cure, one of which is this file's "What k2 shipped" row calling `validate/1` the R10d uniqueness check (k2) |
+| `se-3e4` | the two capture tests assert at config level, not the compiled emission (k2) |
+| `se-w4i` | `Charts.Durable.resume/1` discards the `MachineState` it built, so `current/1` walks storage twice per view (k3) |
+| `se-u9a` | pass-2 residue on the Journey: a stale doc row, an unguarded `resolve/2` call, a hand-duplicated status union, two prose imprecisions (k3) |
+| `se-ah4` | the rename this document's Vocabulary note describes: `answers` -> `responses`, `answer_options` on questions, `context` as the host root |
+
+`se-kbq` is deliberately not fixed here even though its third straggler is in
+this file: this section adds, it does not rewrite, and a docs-only PR that
+edited a merged sibling's prose would make the two changes indistinguishable
+in review.
+
+### Riddler asks
+
+These belong to the product's own decision record, not to any fleet tracker,
+so they are written here rather than filed:
+
+- **The element document format needs a validation vocabulary** (R10c). Three
+  parts, all met above: the set of named `format` checks and what an unknown
+  name does; the rule that checks run over resolved nodes rather than
+  declared ones; and a way for a button to say it does not validate.
+- **A node needs a way to declare what pressing it records, as a literal**
+  (R10b/R10d). `capture` is path-to-path by construction, so a button cannot
+  record its own identity - the one thing a multi-button screen most
+  obviously needs. Either the element document format grows the notion or
+  `capture` grows a literal arm (`sb-m6ru`); the two owners should agree
+  which. Until then a Path carries an unstated host contract that nothing can
+  check.
+- **The presentation contract needs a third answer** (R10e). "No screen, the
+  run is working", as above.
+- **An element document format needs a written rule for an undecidable
+  condition, and for a malformed one** (k1 findings 1 and 8). The skeleton
+  hides a node on `false`, on `:undefined`, on an absent root **and** on a
+  parse error, which folds an author's typo in with an unanswered question.
+  The opposite rule - unknown means show - is just as defensible for a screen
+  that explains itself before it is filled in, and a malformed condition is
+  closer to an unknown element type (which raises) than to an unanswered one.
+  Two screens taking this differently is a Path that behaves differently
+  depending on which renderer drew it.
+- **R10a's Guide clause should say host-side pure functions, not effect
+  executors**, for the reason in the R10a section above. This is the only ask
+  here that proposes changing a ruling's words rather than filling a gap in
+  one.
+- **`statifier_examples` should declare `predicator` directly** when the
+  skeleton leaves spike status (k1's second ask; this repo's, on the bead that
+  promotes it). The call is transitive through `statifier` today, which is a
+  spike's licence and not a shape to keep.
+
+### What this spike did not prove
+
+A spike that only reports what it proved is more useful than one that implies
+it proved everything. These are the gaps, each one a place where a later bead
+should not read this document as evidence:
+
+- **Back navigation, and therefore R10d's overwrite rule.** No Path here goes
+  backwards; see the R10d section.
+- **A response redrawn into an input.** The renderer takes a stored-response
+  map for exactly that and it is unobservable on a linear Path - deleting the
+  attribute's value reddened nothing in either suite.
+- **That a capture value can never be a literal.** The claim is true and it
+  is the ground under `sb-m6ru`, but the two tests pinning it assert at config
+  level, so both would stay green if the package grew a literal arm. `se-3e4`
+  carries the case that would close it.
+- **Three submits and one timeout in one run.** They cannot share a run on
+  this Path: three screens, and a timed-out screen is by definition one that
+  was not submitted. Two runs assert the two halves; the divergence is k3's
+  and is recorded in its own section rather than papered over.
+- **Anything about encryption, auth, tenancy or scale.** None entered the
+  bead. The datamodel is stored plainly and the run id is the only credential.
+- **That the Composite arrangement is the best one.** k2 identified
+  `core.resumable_group` as the better root for the park - its stated purpose
+  is re-entering a group after an interrupt - and the skeleton reached for
+  `core.group` first and never went back. Trying the resumable root is real
+  work nobody has done.
+
+### Reviewer qualifications
+
+Left for the cold docs review of this bead. Consent clause 6 gives a spike
+findings document no cure: a QUALIFIED verdict is recorded here, in the
+reviewer's terms, and the document merges with the qualification standing.
+
+_No qualifications recorded._
