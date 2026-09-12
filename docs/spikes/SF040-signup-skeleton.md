@@ -645,7 +645,9 @@ inside a step the chart has *already taken*, so by the time one could refuse,
 the event has been raised, the capture has fired, and the position has moved.
 `Journey.submit/3` (`lib/statifier_examples/signup/journey.ex:201`) therefore
 runs `Validation.validate/2` first and answers `{:invalid, view}` without
-touching storage at all. The same argument applies, more weakly, to the
+writing anything: it reads the run and the datamodel to know what screen to
+re-present, and then never reaches `pressed/5`, so no event is raised and the
+position does not move. The same argument applies, more weakly, to the
 resolver: `Screens.resolve/2` has to run on the way *out* to a reader, which
 is not a step the chart takes either.
 
