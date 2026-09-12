@@ -29,6 +29,14 @@ defmodule StatifierExamples.Signup do
   vocabulary, which is the division of labour this app exists to
   demonstrate: a host adds the steps its product has, and nothing else.
 
+  `myapp.screen` is the fifth, and the newest: a composite standing for one
+  **screen** of the wizard - present it, park with a deadline, and let one
+  `core.on_event` per declared button capture what was submitted and end the
+  screen. It is the block half of a Path (Riddler R10a), the element half
+  being `StatifierExamples.Signup.Screens`, and `signup_path` is the
+  document that reads it. `StatifierExamples.Signup.Path` is the check the
+  two halves agree.
+
   `signup_onboarding` is the smallest of the three and exists for one
   reading: a parent chart that embeds the wizard as a `core.subchart` and
   routes on the outcome it finished with. The child really runs - it
@@ -42,7 +50,7 @@ defmodule StatifierExamples.Signup do
 
   alias StatifierBlocks.{Block, Decode, Document, Edit}
   alias StatifierExamples.Charts.Fixture
-  alias StatifierExamples.Signup.{GuardedSection, GuardedStep, Provision, SignupStep}
+  alias StatifierExamples.Signup.{GuardedSection, GuardedStep, Provision, Screen, SignupStep}
 
   @typedoc """
   One example document, as `StatifierExamples.Charts.fixtures/0` lists it.
@@ -87,7 +95,8 @@ defmodule StatifierExamples.Signup do
     {"signup_bulk_invites_strict", "signup_bulk_invites_strict.json", []},
     {"signup_invite_chunk", "signup_invite_chunk.json", []},
     {"signup_guarded_step", "signup_guarded_step.json", []},
-    {"signup_guarded_section", "signup_guarded_section.json", []}
+    {"signup_guarded_section", "signup_guarded_section.json", []},
+    {"signup_path", "signup_path.json", []}
   ]
 
   # The `core.send` whose delay is host configuration rather than a fact
@@ -108,7 +117,8 @@ defmodule StatifierExamples.Signup do
       "myapp.signup_step" => SignupStep,
       "myapp.provision" => Provision,
       "myapp.guarded_step" => GuardedStep,
-      "myapp.guarded_section" => GuardedSection
+      "myapp.guarded_section" => GuardedSection,
+      "myapp.screen" => Screen
     }
 
   @doc """

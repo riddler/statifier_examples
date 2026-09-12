@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_signup_path",
+  "revision": 1,
+  "metadata": {
+    "name": "Signup path",
+    "description": "The three signup screens as a Path: each screen is one myapp.screen block over priv/fixtures/signup_screens.json, the plan the second screen recorded decides what the third one is preceded by, and a reminder timer runs alongside. The element half is the screens document; this is the block half.",
+    "domain": "signup"
+  },
+  "datamodel": [
+    {
+      "id": "answers",
+      "description": "What the screens collected, keyed by element key (Riddler R10d). Each myapp.screen writes answers.<element_key> from the firing button's capture map, and the plan buttons additionally record answers.plan."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_sp_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.send",
+          "id": "blk_sp_reminder",
+          "type_version": 1,
+          "config": {
+            "event": "signup.path.reminder",
+            "delay": "2d"
+          }
+        },
+        {
+          "type": "myapp.screen",
+          "id": "blk_sp_account",
+          "type_version": 1,
+          "config": {
+            "screen": "account",
+            "timeout": "1d"
+          }
+        },
+        {
+          "type": "myapp.screen",
+          "id": "blk_sp_plan",
+          "type_version": 1,
+          "config": {
+            "screen": "plan",
+            "timeout": "1d"
+          }
+        },
+        {
+          "type": "core.branch",
+          "id": "blk_sp_plan_branch",
+          "type_version": 1,
+          "config": {
+            "arms": [
+              {
+                "slot": "arm_business",
+                "cond": "answers.plan == 'business'"
+              },
+              {
+                "slot": "arm_personal",
+                "cond": "answers.plan == 'personal'"
+              }
+            ]
+          },
+          "slots": {
+            "arm_business": [
+              {
+                "type": "myapp.signup_step",
+                "id": "blk_sp_company",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:signup",
+                  "step": "company_details",
+                  "label": "Collect the company details",
+                  "assign_to": ""
+                }
+              }
+            ],
+            "arm_personal": [
+              {
+                "type": "myapp.signup_step",
+                "id": "blk_sp_preferences",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:signup",
+                  "step": "preferences",
+                  "label": "Ask about preferences",
+                  "assign_to": ""
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "myapp.screen",
+          "id": "blk_sp_confirm",
+          "type_version": 1,
+          "config": {
+            "screen": "confirm",
+            "timeout": "1d"
+          }
+        }
+      ]
+    }
+  }
+}

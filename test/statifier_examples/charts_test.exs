@@ -39,6 +39,7 @@ defmodule StatifierExamples.ChartsTest do
              "myapp.receipt",
              "myapp.resolve_review",
              "myapp.risk_rating",
+             "myapp.screen",
              "myapp.signup_step",
              "myapp.three_ds_challenge"
            ]
@@ -176,7 +177,8 @@ defmodule StatifierExamples.ChartsTest do
              %{key: "signup_bulk_invites_strict"},
              %{key: "signup_invite_chunk"},
              %{key: "signup_guarded_step"},
-             %{key: "signup_guarded_section"}
+             %{key: "signup_guarded_section"},
+             %{key: "signup_path"}
            ] = Charts.fixtures()
   end
 

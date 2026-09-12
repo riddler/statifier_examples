@@ -114,7 +114,15 @@ defmodule StatifierExamples.ViewModelPinTest do
     # declares a pass-through slot, so the block the AUTHOR put in it is a row
     # of its own beneath the composite's. The expansion's own members are
     # still not rows.
-    "signup_guarded_section" => {3, %{step: 3}}
+    "signup_guarded_section" => {3, %{step: 3}},
+
+    # `se-19h`: the root, the timer, the three screens and the branch are the
+    # six steps; the branch's two arms are the other two rows. Each
+    # `myapp.screen` is ONE row - a composite's expansion members are not
+    # rows, the same reading the two guarded fixtures above get, and the
+    # three-block arrangement each screen stands for is why that matters
+    # here more than it did there.
+    "signup_path" => {8, %{step: 6, arm: 2}}
   }
 
   # The two fixtures whose prose is pinned as well as counted, as
@@ -246,7 +254,7 @@ defmodule StatifierExamples.ViewModelPinTest do
     # here and took the row-count case above with it, which is the pairing
     # that makes an unwalked fixture impossible rather than merely unlikely.
     # Reverted from a copy.
-    test "the eleven fixtures are the eleven fixtures" do
+    test "the twelve fixtures are the twelve fixtures" do
       assert Charts.fixtures() |> Enum.map(& &1.key) |> Enum.sort() ==
                @outlines |> Map.keys() |> Enum.sort()
     end

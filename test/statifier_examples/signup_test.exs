@@ -19,14 +19,15 @@ defmodule StatifierExamples.SignupTest do
              "myapp.signup_step" => SignupStep,
              "myapp.provision" => Provision,
              "myapp.guarded_step" => StatifierExamples.Signup.GuardedStep,
-             "myapp.guarded_section" => StatifierExamples.Signup.GuardedSection
+             "myapp.guarded_section" => StatifierExamples.Signup.GuardedSection,
+             "myapp.screen" => StatifierExamples.Signup.Screen
            }
   end
 
   # Sabotage: swapped the first two entries in @documents; this went red,
   # then reverted.
   test "fixtures/0 lists the domain's documents, keyed and named from the documents themselves" do
-    assert [wizard, invitations, onboarding, bulk, strict, chunk, guarded, section] =
+    assert [wizard, invitations, onboarding, bulk, strict, chunk, guarded, section, path] =
              Signup.fixtures()
 
     assert %{key: "signup_wizard", name: "Signup wizard"} = wizard
@@ -45,6 +46,10 @@ defmodule StatifierExamples.SignupTest do
     # `se-1q8`: the document the domain's PASS-THROUGH composite is read on -
     # the same guarded call, with a section after it that the author fills.
     assert %{key: "signup_guarded_section", name: "Guarded section"} = section
+
+    # `se-19h`: the block half of a Path - three `myapp.screen` blocks over
+    # the element document, and a branch on what the second one recorded.
+    assert %{key: "signup_path", name: "Signup path"} = path
   end
 
   # Sabotage: pointed load/1 at a file that does not exist; this went red,
