@@ -113,7 +113,7 @@ defmodule StatifierExamples.Signup.Journey do
           nodes: [Screens.node_doc()],
           datamodel: map(),
           answers: %{optional(String.t()) => term()},
-          status: Run.t() | atom(),
+          status: :running | :done | :failed | :cancelled | :budget_exhausted,
           findings: [Validation.finding()]
         }
 
