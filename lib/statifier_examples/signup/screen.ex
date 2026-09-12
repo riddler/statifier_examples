@@ -134,6 +134,22 @@ defmodule StatifierExamples.Signup.Screen do
   def outcome_event(outcome) when is_binary(outcome), do: "signup." <> outcome
 
   @doc """
+  The id the park carries in the compiled document, for a `myapp.screen`
+  block whose own id is `block_id`.
+
+  `StatifierBlocks.Composite.expand/2` mints each member's id from the
+  composite block's id and the local id `subtree/1` gave it, so the park of
+  `blk_sp_account` is `blk_sp_account_park`. That is the one place this
+  app can ask **which screen a parked run is sitting on**: the reading's
+  active block ids are the run's position, and the park is the block a
+  waiting screen is resting in. `StatifierExamples.Signup.Journey` is the
+  caller, and the minting rule lives here rather than there because
+  `subtree/1` above is what names the member.
+  """
+  @spec park_block_id(String.t()) :: String.t()
+  def park_block_id(block_id) when is_binary(block_id), do: block_id <> "_park"
+
+  @doc """
   The event the body parks on for `screen_key`. See the moduledoc on the
   park: the host sends it only to re-present a screen it already showed.
   """

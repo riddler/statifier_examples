@@ -8,7 +8,7 @@ built small enough to argue with.
 |---|---|
 | `se-e68` (k1) | the element document, four element types, and the renderer |
 | `se-19h` (k2) | the screen Composite and a three-screen Path |
-| k3 | a durable run of that Path |
+| `se-7wt` (k3) | a durable run of that Path, and the page that drives it |
 | `k4` | the findings this document collects |
 
 This file is created by k1 and completed by k4. Each bead appends its own
@@ -370,3 +370,220 @@ No ADR is amended in SF040 (consent clause 9), so these are recorded here:
 
 `priv/fixtures/signup_screens.json` gained two lines - the `writes` map on
 each plan button (finding 6). Nothing else of k1's was rewritten.
+
+## k3 findings - what a Path costs to actually run
+
+k2 built the Path and compiled it. k3 ran one: `StatifierExamples.Signup.Journey`
+over `StatifierExamples.Charts.Durable`, with
+`StatifierExamplesWeb.SignupJourneyLive` at `/signup-journey` drawing whatever
+screen the run is parked on. Three submits take a run from the first screen to
+a created account; a screen nobody answers times out and the Path goes on
+without it. What follows is what that turned up.
+
+### The presentation contract, as it came out (Riddler R10e)
+
+The brief asked for the resolve/submit function pair recorded. It is two
+functions and a third that a linear-Path assumption would have missed:
+
+| Function | Takes | Answers |
+|---|---|---|
+| `Journey.current/1` | a run id | the screen the run is parked on, its resolved nodes, the answers so far, the status |
+| `Journey.submit/3` | a run id, the outcome a button named, the form's answers | `{:ok, next view}`, `{:invalid, same view with findings}`, or `{:error, reason}` |
+| `Journey.resolve/2` | a view and a **draft** | the same view re-resolved over answers the reader has typed and not sent |
+
+Two properties are worth naming as part of the contract rather than as
+implementation. **Neither of the first two takes a run** - both take an id and
+load from storage, so there is no process, no session and nothing in a socket
+that the next press depends on. And **neither returns a chart**: a page built
+on this pair cannot reach into the run, so it cannot start depending on the
+chart's shape.
+
+`resolve/2` is the one a first draft leaves out. An element's condition may
+read an answer given on the screen it is on - the plan screen's two plan
+buttons are conditional on the seat count typed two lines above them - so a
+page that resolved only against what the chart has stored would draw a screen
+with no way off it. The draft is never persisted and never sent.
+
+1. **The host contract k2 predicted is real, and this page is the host.**
+   k2's finding 6 says a `capture` value is a path inside `_event.data` and
+   never a literal, so what lands at `answers.plan` is whatever the host put
+   in the payload. Running it makes that concrete: the payload
+   `Journey.submit/3` sends is *the form's answers, keyed by element key,
+   merged with the firing button's own `payload` map*, and the two plan
+   buttons carry `"payload": {"plan": "business"}` and `{"plan": "personal"}`
+   for the branch to read. `Journey.payload/2` is public for that reason - a
+   contract nothing can read is a contract nobody can check. Without the
+   button half, `answers.plan` is `:undefined`, the branch takes neither arm
+   and the run reaches the confirm screen having chosen nothing. That is
+   asserted, both ways, in `JourneyTest`.
+
+2. **A capture writes its destination whether or not the payload carries the
+   source.** Press Back on the plan screen without typing a seat count and
+   `answers.seats` is written as `:undefined` rather than left absent. Every
+   question on a screen is in every button's capture map, so a screen's
+   answers are written by whichever button ends it, in full, with the
+   unanswered ones filled in as `:undefined`. Nothing downstream can tell
+   "not answered" from "answered with nothing", and a guard reading such a
+   path gets a value rather than a missing one.
+
+3. **`timed_out` is unreachable from the Path, exactly as k2 said.** The
+   deadline works: each screen's `core.await` arms a stored Oban job through
+   `StatifierExamples.Charts.Timers`, draining the queue fires it, and the
+   feed shows `timed_out on blk_sp_account_park`. What the *Path* sees is
+   nothing at all - the group completes and the next block runs, the same as
+   for any button - because the composite's only outcome is `done`
+   (k2's finding 1). So a timed-out screen and an answered one are
+   distinguishable only by what was captured, which is finding 2's problem
+   with the word "only" removed: a timeout captures nothing, and an
+   unanswered submit captures `:undefined`, and those are two different
+   things that look the same one level up.
+
+4. **A parked run has no way to say which screen it is on except a block
+   id.** `Journey` finds the current screen by looking for
+   `Screen.park_block_id/1` - the composite block's id with `_park` appended
+   - among the reading's active blocks. That works because
+   `StatifierBlocks.Composite.expand/2` mints member ids from the composite's
+   own, but it is a host reading a package's id-minting rule, and it is the
+   single thing the whole loop rests on: breaking it reddened eighteen cases.
+   A composite that could answer "what is this position waiting for" would
+   put the knowledge where it belongs.
+
+5. **A durable run has a third resting state, and a presentation contract has
+   to admit it.** The Path's business arm is `myapp:signup` on the
+   `company_details` step, which this app runs as an Oban job
+   (`StatifierExamples.Charts.AsyncCalls`), so between the plan screen and
+   the confirm screen the run rests with **no screen at all**: a live
+   invocation, a persisted position, and nothing holding it. `current/1`
+   answers `screen: nil` and the page says so. A contract with only "here is
+   a screen" and "the journey is over" has nowhere to put that, and it is not
+   an exotic case - any step a host runs asynchronously produces it.
+
+6. **The element document needs a validation vocabulary, and had one field's
+   worth of it invented here.** `required` is the document's; `format` is not.
+   `StatifierExamples.Signup.Validation` stands in for Riddler R10c's
+   elements package, and to have anything to check it added
+   `"format": "email"` to the account screen's address question. The rule it
+   implements is one regex, not RFC 5322, and a format name it does not
+   implement raises rather than passing - a document asking for a check
+   nobody runs is a document that silently accepts anything.
+
+7. **Validation is over *resolved* nodes, and that is not a detail.** The
+   confirm screen's referral question only appears for a business plan. A
+   check over the raw document would refuse a personal signup for not
+   answering a question it never saw, so the check has to run over what
+   `Screens.resolve/2` left on the screen. Whichever package owns the rules
+   owns that too: they are rules about a screen as drawn, not about a screen
+   as written.
+
+8. **Every button validates, and one of them should not.** A Back button must
+   not refuse to leave a screen because the screen is incomplete. This app
+   shipped a `"validate": false` field for it, then removed it: the plan
+   screen - the one screen with a second button - asks for nothing required,
+   so no press of Back can be refused, and the field could not be sabotaged
+   into failing any test. A field no shipped screen can exercise is a field
+   no test can defend. It is recorded as an ask instead.
+
+9. **A hidden button is not a button anyone pressed.** `submit/3` looks for
+   the outcome among the *resolved* nodes, so pressing the business plan
+   without a seat count is `{:unknown_outcome, _}` rather than a press. That
+   is a host's call today; nothing in either document says whether a
+   condition on a button hides it from the reader alone or from the chart as
+   well.
+
+10. **No shipped screen can demonstrate an input drawn over a stored answer.**
+    The renderer takes an `answers` map for exactly that, and on this Path it
+    is unobservable: a linear Path never returns to a screen, so no input is
+    ever redrawn over an answer the chart holds. Deleting the attribute's
+    value reddened nothing in either suite. It stays correct because the next
+    Path will not be linear; it is recorded because a spike that only reports
+    what it proved is more useful than one that implies it proved everything.
+
+11. **A chart with captures cannot be driven by an event with no payload.**
+    `Charts.Durable.send_event/3` had no way to carry one - nothing in this
+    app had needed `_event.data` before - so k3 widened it to `/4`. Worth
+    saying only because it is the seam a host meets first and it was missing:
+    every door into a run (`send_event`, `deliver/2`,
+    `complete_invocation/3`) is about *which* event, and a screen's answers
+    ride on the one thing none of them took.
+
+### The acceptance line k3 could not meet literally
+
+`se-7wt` asks for "an end-to-end test [that] drives three submits and one
+timeout through the durable run". Three submits and one timeout cannot share a
+run on this Path: it has three screens, a timed-out screen is by definition
+one that was **not** submitted, and a run that took all three buttons has
+finished before any deadline can elapse. The obligation is met by two runs in
+`StatifierExamples.Signup.JourneyTest` - "three submits drive the run from the
+first screen to the created account", and "a screen nobody answers times out,
+takes the timed_out slot, and the Path goes on" - and the divergence is
+recorded here rather than papered over by a test that drives both in one
+function and calls itself one run.
+
+### Asks this k3 does not act on
+
+No ADR is amended in SF040 (consent clause 9), so these are recorded here.
+They are additional to k2's four, which all stand.
+
+- **A capture should be able to leave a destination alone when the payload
+  does not carry its source.** Finding 2. Writing `:undefined` makes "not
+  answered" indistinguishable from "answered with nothing" at every path a
+  screen touches, and it is the capture map that decides, not the host.
+  Owner: `statifier_blocks`.
+- **A composite should be able to answer what a position inside it is waiting
+  for.** Finding 4. A host presenting a screen has to know which screen, and
+  the only handle today is the composite's own id-minting rule read from
+  outside. Owner: `statifier_blocks`.
+- **The element document format needs a validation vocabulary.** Findings 6,
+  7 and 8: a named `format` check per question, the rule that checks run over
+  resolved nodes rather than declared ones, and a way for a button to say it
+  does not validate. Owner: the element document format (Riddler R10c).
+- **A presentation contract needs a third answer.** Finding 5: "no screen,
+  the run is working" is a state any asynchronous step produces, and a
+  contract with only a screen and an ending has nowhere to put it. Owner:
+  Riddler R10e.
+
+### Residue in this app, for the campaign to file
+
+- `Charts.Durable.resume/1` loads a run's position and discards the
+  `Statifier.MachineState` it built, so `Journey.current/1` walks storage
+  twice per view - once through `resume/1` for the reading and once through
+  `machine_state/1` for the datamodel. Answering both from one load is a
+  small change to this app's own module and it is not k3's to make.
+
+### What k3 shipped
+
+| File | What it is |
+|---|---|
+| `lib/statifier_examples/signup/journey.ex` | the loop: `start`, `current`, `resolve`, `submit`, `payload` |
+| `lib/statifier_examples/signup/validation.ex` | the pure check standing in for R10c's elements package |
+| `lib/statifier_examples_web/live/signup_journey_live.ex` | `/signup-journey`: the page, holding only the draft |
+| `test/statifier_examples/signup/journey_test.exs` | three submits, the timeout, the park, the refusals |
+| `test/statifier_examples/signup/validation_test.exs` | the two rules, and what a third would cost |
+| `test/statifier_examples_web/live/signup_journey_live_test.exs` | drawn, pressed, and reloaded into a second process |
+
+Five files of k1's and k2's moved, each forced by the bead:
+`priv/fixtures/signup_path.json` gained the `core.invoke` the finished Path
+ends on (`myapp:signup` with `params: "answers=answers"`, writing to a
+`created` root it also declares); `priv/fixtures/signup_screens.json` gained
+the `format` on the address question and the `payload` map on each plan
+button; `lib/statifier_examples/signup/screen.ex` gained
+`park_block_id/1`; `lib/statifier_examples/charts/durable.ex` gained the
+payload argument on `send_event`; `lib/statifier_examples/signup/handlers.ex`
+gained the `myapp:signup` clause that answers a create-account receipt for
+the answers it is handed. `test/statifier_examples/view_model_pin_test.exs`
+moved to the measured value, 9 rows for `signup_path` rather than 8, because
+the Path gained a block.
+
+### What the k3 captures show
+
+Four, in `.claude/fleet/pending/SF040-spikes/`, taken against the dev server
+on 8645 driving one real durable run end to end. The bead's acceptance line
+is "the page works in `mix phx.server`"; these are that, and each one is
+also the only evidence for something a test asserts differently.
+
+| Capture | What it is evidence of |
+|---|---|
+| `se-7wt-validation-findings.png` | Continue pressed with a blank name and `ada-at-example` in the address: both findings drawn, the screen still the account screen, the run not moved. Finding 6's two rules, as a reader meets them. |
+| `se-7wt-plan-screen-draft.png` | `5` typed into the seat count and nothing submitted: the business button has appeared, the personal one has not, and the hint reads "More than one seat puts you on the business plan, Ada." - a condition on a **draft** answer and a text slot filled from an answer the **chart** holds, on one screen. That is `resolve/2` and the k1 renderer doing two different jobs at once. |
+| `se-7wt-confirm-screen.png` | After pressing the business plan. The page was showing the between-screens state while the company-details job ran, and redrew **on its own** when the job answered - nothing was clicked between the two. The referral question is on the screen because the seat count is five. |
+| `se-7wt-run-finished.png` | Finish pressed: the run is `done` and the collected block holds all five answers the chart gathered. The server log for the same run carries `myapp:signup created the account for "ada@example.com"` - the create-account call, handed the answers. |

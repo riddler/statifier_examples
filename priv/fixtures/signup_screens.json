@@ -34,7 +34,8 @@
           "key": "email",
           "label": "Work email",
           "placeholder": "ada@example.com",
-          "required": true
+          "required": true,
+          "format": "email"
         },
         {
           "type": "text",
@@ -82,6 +83,7 @@
           "type": "button",
           "key": "plan_personal",
           "writes": { "answers.plan": "plan" },
+          "payload": { "plan": "personal" },
           "condition": "answers.seats <= 1",
           "label": "Take the personal plan",
           "outcome": "personal_chosen"
@@ -90,6 +92,7 @@
           "type": "button",
           "key": "plan_business",
           "writes": { "answers.plan": "plan" },
+          "payload": { "plan": "business" },
           "condition": "answers.seats > 1",
           "label": "Take the business plan",
           "outcome": "business_chosen"

@@ -116,13 +116,14 @@ defmodule StatifierExamples.ViewModelPinTest do
     # still not rows.
     "signup_guarded_section" => {3, %{step: 3}},
 
-    # `se-19h`: the root, the timer, the three screens and the branch are the
-    # six steps; the branch's two arms are the other two rows. Each
-    # `myapp.screen` is ONE row - a composite's expansion members are not
-    # rows, the same reading the two guarded fixtures above get, and the
-    # three-block arrangement each screen stands for is why that matters
-    # here more than it did there.
-    "signup_path" => {8, %{step: 6, arm: 2}}
+    # `se-19h`: the root, the timer, the three screens and the branch are six
+    # steps; the branch's two arms are two more. Each `myapp.screen` is ONE
+    # row - a composite's expansion members are not rows, the same reading the
+    # two guarded fixtures above get, and the three-block arrangement each
+    # screen stands for is why that matters here more than it did there.
+    # `se-7wt` added the seventh step: the `core.invoke` the finished Path
+    # ends on, which hands the collected answers to `myapp:signup`.
+    "signup_path" => {9, %{step: 7, arm: 2}}
   }
 
   # The two fixtures whose prose is pinned as well as counted, as
