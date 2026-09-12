@@ -40,9 +40,10 @@ defmodule StatifierExamples.Signup.ValidationTest do
       assert Validation.validate([question(%{"required" => true})], %{"q" => "Ada"}) == []
     end
 
-    # Answers reach this module as a form posts them, but a re-validated
-    # screen is validated against what `Journey.submit/3` coerced, so a
-    # number has to count as answered.
+    # `Journey.submit/3` validates the form's strings and coerces afterwards,
+    # so this case is about the OTHER caller: `validate/2` is public, and a
+    # host handing it answers it has already typed must not meet a crash in
+    # `blank?/1`.
     test "a numeric answer is not blank" do
       assert Validation.validate([question(%{"required" => true})], %{"q" => 5}) == []
     end

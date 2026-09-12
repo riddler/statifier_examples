@@ -3,31 +3,40 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   `/signup-journey` - the walking skeleton with the chart underneath it: one
   durable run of the signup Path, one screen at a time.
 
-  `StatifierExamplesWeb.SignupScreensLive` is this page's predecessor and
-  they are worth reading together. That one draws the same element
-  documents with the answers in its own socket and an outcome it only
-  displays; this one holds **no run state at all**. Every press goes to
-  `StatifierExamples.Signup.Journey`, which loads the run from storage,
-  raises the outcome as an event carrying what the form collected, and
-  answers with the screen the run moved to. Reload the page, kill the
-  server, open the same URL on another machine: the run is where it was,
-  because the only thing this page kept was the id in `?run=`.
+  `StatifierExamplesWeb.SignupScreensLive` is this page's predecessor and they
+  are worth reading together. That one draws the same element documents with
+  the answers in its own socket and an outcome it only displays; this one
+  holds **no authoritative run state**. Every press goes to
+  `StatifierExamples.Signup.Journey` with a run id and nothing else, and
+  `Journey` loads the run from storage, raises the outcome as an event
+  carrying what the form collected, and answers with the screen the run moved
+  to. Reload the page, kill the server, open the same URL on another machine:
+  the run is where it was, because the only thing that had to survive was the
+  id in `?run=`.
 
-  ## What the socket does hold, and why it is not the run
+  ## What the socket holds, and why none of it is the run
 
-  The **draft**: what a reader has typed and not sent. It is not in the
-  chart because it has not been submitted, and a page that persisted every
-  keystroke would be writing a run's datamodel on behalf of a reader who
-  may still press Back. It matters for more than the input values -
-  `Journey.resolve/2` re-resolves the screen against it, which is what
-  makes the plan screen's two plan buttons appear as the seat count is
-  typed.
+  Two things, and neither is decided from.
+
+  The **view** `Journey` last answered with - a screen, its resolved nodes,
+  the datamodel, the answers, a status. That is a copy of run state and it
+  can be stale between redraws, which is why every press re-reads: the only
+  thing `handle_event("outcome", ...)` takes out of it is `run_id`, so a
+  second person pressing the same run is refused by `Journey` against the
+  stored position rather than raced here.
+
+  The **draft**: what a reader has typed and not sent. It is not in the chart
+  because it has not been submitted, and a page that persisted every keystroke
+  would be writing a run's datamodel on behalf of a reader who may still press
+  Back. It matters for more than the input values - `Journey.resolve/2`
+  re-resolves the screen against it, which is what makes the plan screen's two
+  plan buttons appear as the seat count is typed.
 
   ## Why it subscribes
 
   A durable run moves without a press. The Path's business arm rests on the
   asynchronous company-details call and an Oban job answers it; the
-  reminder and each screen's deadline are stored jobs too. `Durable` 
+  reminder and each screen's deadline are stored jobs too. `Durable`
   broadcasts every out-of-band advance on `Durable.topic/1`, so the page
   redraws when the run moves rather than showing a screen the run has left.
   """

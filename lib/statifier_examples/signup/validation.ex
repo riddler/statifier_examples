@@ -110,10 +110,17 @@ defmodule StatifierExamples.Signup.Validation do
           "no check for format #{inspect(format)} (question #{inspect(key)})"
   end
 
-  # A number is never blank; a string of spaces always is. Answers arrive
-  # from a form as strings, but `StatifierExamples.Signup.Journey` reads a
-  # digits-only answer as an integer before a chart ever sees it, and a
-  # re-validated screen is validated against what it sent.
+  # A number is never blank; a string of spaces always is.
+  #
+  # `StatifierExamples.Signup.Journey.submit/3` hands this module the form's
+  # own strings and coerces afterwards, which is the right way round: a
+  # digits-only answer becomes an integer for the payload and for re-resolving
+  # the screen, but `required` and `format` are rules about what was **typed**
+  # and a check that saw `5` where the reader wrote `5` has learned nothing
+  # extra. So the string clauses are the ones `Journey` exercises. The
+  # non-binary clause is for the other caller: `validate/2` is public, its
+  # rules are about a screen rather than about a form, and a host holding
+  # already-typed answers must not meet a crash here.
   @spec blank?(term()) :: boolean()
   defp blank?(answer) when is_binary(answer), do: String.trim(answer) == ""
   defp blank?(nil), do: true
