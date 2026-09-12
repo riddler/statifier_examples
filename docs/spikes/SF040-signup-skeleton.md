@@ -1032,4 +1032,63 @@ Left for the cold docs review of this bead. Consent clause 6 gives a spike
 findings document no cure: a QUALIFIED verdict is recorded here, in the
 reviewer's terms, and the document merges with the qualification standing.
 
-_No qualifications recorded._
+The cold docs review of 2026-09-12 returned **QUALIFIED**, 4 findings, 0
+blocking, on pass 1. Consent clause 6 gives a spike findings document no
+cure, so the four qualifications are recorded here rather than fixed, and the
+document merges with them standing. Each was re-verified against the code
+before being written down; all four are true.
+
+1. **"the Path has no way to tell it from `Continue`"** (the R10d section,
+   on the plan screen's Back button) names the wrong comparator. The plan
+   screen declares no `Continue`; `Continue` is `account_continue` on the
+   **account** screen, a different composite. What `went_back` is
+   indistinguishable from is the plan screen's own two outcomes,
+   `personal_chosen` and `business_chosen`. The load-bearing claim - pressing
+   Back moves the Path forward, because a `core.group`-rooted composite takes
+   the default single `done` - is verified and stands.
+
+2. **"Six test modules ... moved with them"** (the R10a file map) is off by
+   one. The stack adds **seven**: `screens_test.exs`, `screen_test.exs`,
+   `path_test.exs`, `journey_test.exs` and `validation_test.exs` under
+   `test/statifier_examples/signup/`, plus `signup_screens_live_test.exs` and
+   `signup_journey_live_test.exs` under `test/statifier_examples_web/live/`.
+   The other half of the sentence is right: exactly four pre-existing test
+   files carrying pinned enumerations were modified.
+
+3. **The q2 notes path does not resolve inside this repository.**
+   `.claude/fleet/pending/SF040-spikes/se-aud-authoring-notes.md` lives in the
+   private working set that coordinates the campaign, which is never
+   published, so a reader of this repository alone follows that path to
+   nothing. The cited content checks out exactly. This is a pattern k3's
+   capture table established rather than something k4 introduced, and the
+   right fix is one decision about where spike evidence lives, taken for the
+   whole file at once.
+
+4. **The account of `Path.validate/1` is narrower than the function.** The k4
+   section describes the `:duplicate_answer_key` half and says two screens
+   sharing a `heading` or `button` key are not reported, which is true of
+   that check. `validate/1` also runs a second duplicate check,
+   `:duplicate_outcome` over `Screens.outcomes/1`, so two screens sharing a
+   button **outcome** are reported. k2's section discloses that half, so the
+   file as a whole is not wrong; k4's summary of it is incomplete.
+
+One finding the review raised as blocking is not listed above because it was
+corrected before the verdict landed, in this branch's second commit: the R10a
+section had said a refused `submit/3` answers "without touching storage at
+all", which is false - it reads the run and the datamodel twice before it can
+refuse. It now says what is true, which is that it writes nothing and never
+reaches `pressed/5`. The correction came from the author's own check against
+`journey.ex`, and the reviewer confirmed the replacement wording against the
+code.
+
+What the review verified and found sound, for a later reader's benefit: every
+anchored cite in this section resolves to the named content at the named
+line; all four of the load-bearing new arguments hold against the code
+(including the `Composite.Data` "clean no" at `composite/data.ex:572` and the
+`interrupts`-only slot claim at `core/group.ex:59` and
+`core/resumable_group.ex:74`); all fourteen bead ids resolve, with the seven
+`sb-` ones at P4 carrying both campaign labels and every one-line description
+a faithful compression of the bead's real title; `git diff origin/main...HEAD`
+over this file shows zero removed lines, so k1, k2 and k3 are untouched; and
+the file is plain ASCII throughout and carries no employer or product
+terminology.
