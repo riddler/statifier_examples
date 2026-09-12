@@ -19,22 +19,26 @@ section; nothing rewrites an earlier one.
 `priv/fixtures/signup_screens.json` holds three screens built from four
 element types - `heading`, `text`, `text_question`, `button`. Writing the
 resolver (`StatifierExamples.Signup.Screens`) and the renderer
-(`StatifierExamplesWeb.SignupElements`) against it turned up seven questions
+(`StatifierExamplesWeb.SignupElements`) against it turned up eight questions
 the document does not answer. They are written down rather than fixed,
-because six of the seven are the element document format's to answer and this
-app only gets to discover them.
+because seven of the eight are the element document format's to answer and
+this app only gets to discover them.
 
 1. **A condition has three outcomes, not two.** A node carries `condition` as
    predicator source. Against this app's datamodel the same expression
    answers three different ways: `{:ok, true}`, `{:ok, false}`, and - for a
    path the datamodel does not hold - `{:ok, :undefined}` when the root is
    present but the leaf is not, or `{:error, %UndefinedVariableError{}}` when
-   the root itself is absent. The first screen is always rendered against the
-   error shape, because before anything is answered there is no `answers`
-   root at all. The skeleton rules that only `{:ok, true}` shows a node, so
-   an unanswered question hides what depends on it. Nothing in the document
-   says that, and the opposite rule - unknown means show - is just as
-   defensible for a screen that explains itself before it is filled in.
+   the root itself is absent. `Screens.shown?/2` hides on all three, so only
+   `{:ok, true}` puts a node on a screen and an unanswered question hides
+   what depends on it. Which shape a caller actually meets is the caller's
+   choice, not the document's: `StatifierExamplesWeb.SignupScreensLive`
+   always hands over an `answers` root, so every screen it draws - the first
+   one included - sees `:undefined` and never the error; a caller passing a
+   bare `%{}` gets the error instead. Nothing in the element document says
+   either that the two shapes mean the same thing or that a renderer owes
+   the resolver a root, and the opposite rule - unknown means show - is just
+   as defensible for a screen that explains itself before it is filled in.
 
 2. **Hiding a node says nothing about its answer.** A `text_question` whose
    condition stops holding disappears from the screen. Whether the answer it
@@ -50,7 +54,10 @@ app only gets to discover them.
    implementation. What that stand-in had to invent is the missing case: an
    unresolved path renders as the empty string, so a half-written sentence is
    what a reader sees. An error, a literal passthrough, and a default written
-   beside the slot are all reasonable and all unspecified.
+   beside the slot are all reasonable and all unspecified. So is a path that
+   resolves to a map or a list - `{{ answers }}` names something real and
+   has no sensible string - which the stand-in renders as the empty string
+   for the same reason, rather than raising inside a template.
 
 4. **One `key` field carries two meanings.** Answers are keyed by element key
    (Riddler R10d), so a `text_question`'s key is also its datamodel path. For
@@ -78,6 +85,20 @@ app only gets to discover them.
    form edge. A chart-backed Path (k2) hands typed values over and will not
    need it - which is worth saying out loud, because a datamodel whose types
    depend on which page wrote it is a bug waiting for k3.
+
+8. **A condition that does not parse is a broken document, and the
+   skeleton hides it anyway.** `Screens.shown?/2` keeps a node only on
+   `{:ok, true}`, which folds a `%Predicator.Errors.ParseError{}` - source
+   the author mistyped - in with the ordinary "not yet" cases. That is not
+   the rule the renderer beside it uses: `SignupElements.element/1` raises on
+   an element type it does not know, because a silently dropped element is a
+   screen that lies about the document. The two are inconsistent on purpose
+   only in the sense that nothing said which was right. A condition that does
+   not parse is closer to the unknown type than to the unanswered question,
+   and a later bead that makes it raise would be tightening this rather than
+   changing its mind. Recorded here because the element document format, not
+   this app, should say whether a malformed condition hides a node or breaks
+   the screen.
 
 ### Asks this k1 does not act on
 

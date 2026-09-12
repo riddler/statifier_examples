@@ -41,10 +41,11 @@ defmodule StatifierExamplesWeb.SignupScreensLiveTest do
     test "a button reports the outcome it declares", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-screens")
 
-      html = live |> element("#account_continue") |> render_click()
+      refute has_element?(live, "#last-outcome")
 
-      assert html =~ "account_submitted"
-      assert has_element?(live, "#last-outcome")
+      live |> element("#account_continue") |> render_click()
+
+      assert has_element?(live, "#last-outcome code", "account_submitted")
     end
   end
 

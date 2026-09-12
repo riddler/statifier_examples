@@ -27,9 +27,10 @@ defmodule StatifierExamples.Signup.ScreensTest do
   end
 
   describe "resolve/2 per element type" do
-    # Sabotage: dropping the `level` key from the fixture's heading node
-    # leaves `@node["level"]` nil, the `<h1>` arm stops matching, and this
-    # goes red on the level assertion.
+    # Sabotage: `fill_node/2` falling through for "heading" (dropping the
+    # type from its `when type in [...]` guard) leaves the node untouched,
+    # and this goes red on any heading whose text carries a slot. Run as part
+    # of the `fill_node/2` mutation below, which covers both arms.
     test "a heading keeps its level and its text" do
       node = resolved_node("account", @answered, "account_heading")
 
@@ -38,8 +39,9 @@ defmodule StatifierExamples.Signup.ScreensTest do
       assert node["text"] == "Create your account"
     end
 
-    # Sabotage: making `fill_node/2` fall through for "text" leaves the raw
-    # `{{ answers.first_name }}` in place and this assertion fails.
+    # Sabotage: replacing `fill_node/2`'s `Map.update!(node_doc, "text",
+    # ...)` with a bare `node_doc` leaves the raw `{{ answers.first_name }}`
+    # in place and this assertion fails. Confirmed red, then reverted.
     test "a text node has its slot filled from the datamodel" do
       node = resolved_node("account", @answered, "account_greeting")
 
@@ -47,7 +49,11 @@ defmodule StatifierExamples.Signup.ScreensTest do
       refute node["text"] =~ "{{"
     end
 
-    # Sabotage: renaming the fixture's `label` key makes this nil.
+    # Sabotage: `resolve/2` dropping its `Enum.map(&fill_node/2)` returns
+    # the document's nodes unresolved; this case still reads `label` off a
+    # node the filter kept, so it is the `shown?/2` mutation below that this
+    # case goes red under. Kept for the type's shape rather than its
+    # resolution.
     test "a text_question carries its label, placeholder and required flag" do
       node = resolved_node("account", @answered, "first_name")
 
@@ -56,8 +62,12 @@ defmodule StatifierExamples.Signup.ScreensTest do
       assert node["required"] == true
     end
 
-    # Sabotage: emptying `outcomes/1`'s comprehension filter returns every
-    # node's outcome (nil for three of them) and the match fails.
+    # Sabotage: widening `outcomes/1`'s comprehension to every node and its
+    # `Map.fetch!` to `Map.get` returns `[nil, nil, nil, nil, nil,
+    # "account_submitted"]` and the match fails. Leaving `Map.fetch!` in
+    # place instead raises `KeyError` on the first heading, which is red for
+    # a different reason - either way this case discriminates. Confirmed red,
+    # then reverted.
     test "a button declares an outcome name" do
       node = resolved_node("account", @answered, "account_continue")
 
@@ -84,8 +94,9 @@ defmodule StatifierExamples.Signup.ScreensTest do
     # Predicator answers a missing path two different ways, and both have to
     # hide: a datamodel holding `answers` but not `seats` evaluates to
     # `{:ok, :undefined}`, while one with no `answers` root at all is an
-    # `{:error, %UndefinedVariableError{}}`. The first screen is rendered
-    # against the second shape before anything is answered.
+    # `{:error, %UndefinedVariableError{}}`. `SignupScreensLive` always
+    # supplies the root, so the page only ever meets the first; a caller
+    # handing over a bare map meets the second.
     test "an unanswered path hides rather than raises, in both shapes" do
       node = %{"condition" => "answers.seats > 1"}
 
@@ -119,6 +130,14 @@ defmodule StatifierExamples.Signup.ScreensTest do
 
     test "a non-string value is stringified" do
       assert Screens.fill_slots("{{ answers.seats }}", %{"answers" => %{"seats" => 4}}) == "4"
+    end
+
+    # Sabotage: `stringify/1`'s catch-all clause calling `to_string/1`
+    # instead of returning "" raises `Protocol.UndefinedError` here.
+    # Confirmed red, then reverted.
+    test "a slot naming a whole subtree renders as the empty string" do
+      assert Screens.fill_slots("[{{ answers }}]", @answered) == "[]"
+      assert Screens.fill_slots("[{{ answers.tags }}]", %{"answers" => %{"tags" => []}}) == "[]"
     end
 
     test "text with no slot is returned unchanged" do
