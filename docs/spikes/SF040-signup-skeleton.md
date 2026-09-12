@@ -152,3 +152,161 @@ one frame rather than argued for:
   is finding 1 with a face on it - a document author would have written
   `<= 1` meaning "the default", and the skeleton's rule reads it as "not
   yet".
+
+## k2 findings - what the screen Composite could not be asked to do
+
+`se-19h` turned the element document into a chart. `myapp.screen`
+(`StatifierExamples.Signup.Screen`) is a composite standing for one screen,
+`priv/fixtures/signup_path.json` is three of them with a branch and a timer,
+and `StatifierExamples.Signup.Path` is the check the two halves agree.
+
+The bead asked for a specific shape - one outcome slot per declared button,
+plus `timed_out` - and the interesting result is that the package cannot
+express it. Everything below was measured against `statifier_blocks` 0.27.0,
+the version this app pins, and each claim has a test that goes red if it
+stops being true.
+
+1. **A composite's outcomes are its expansion root's, and nothing deeper.**
+   `StatifierBlocks.Composite.derived_outcomes/2` expands the subtree and
+   asks the **head member** for its outcomes (`composite.ex:680-683` calling
+   `outcomes_over/3` at `:729-733`, which binds `[root | _rest]` and reads
+   that one). The arrangement a screen needs is a `core.group` - a `body`
+   that presents and parks, `interrupts` holding one handler per button - and
+   `core.group` declares no `outcomes/1`, so it takes the default single
+   `done`. The plan screen has three buttons; none of them reaches the
+   composite's outcome list. `StatifierExamples.Signup.ScreenTest` asserts
+   `[{"done", "Done"}]` against `Screens.outcomes/1`'s three, so the two
+   numbers sit beside each other in one case.
+
+2. **`StatifierBlocks.Composite.Data` is not a way around it.** The bead
+   asked for this to be tried rather than assumed. It was, and it is not:
+   `Data.outcomes/2` delegates to the same `Composite.derived_outcomes/2`
+   (`composite/data.ex:572`), so a declaration held as data answers the root's
+   outcomes exactly as the `use` form does. A data declaration can change
+   *what the root is*, and nothing else about this.
+
+3. **`timed_out` is reachable, but only by giving up the arrangement.**
+   `core.await` is the one core type that declares the name D13 wants
+   (`core/await.ex:123`, `[{"received", ...}, {"timed_out", ...}]`, and the
+   list does not follow `timeout` - an await with no deadline still declares
+   both). So a composite **rooted** at `core.await` surfaces `timed_out`
+   properly, which the test asserts against a data twin. What it cannot then
+   have is the group, and without the group there is nowhere to hang a
+   button handler: `core.on_event` is `kinds: [:interrupt_handler]`
+   (`core/on_event.ex:574`) and `core.group`'s `interrupts` slot is the only
+   thing that admits one. The two halves of the bead's request are
+   individually expressible and jointly are not.
+
+4. **The await has to name an event it will never receive.** There is no
+   "wait here until something interrupts you, with a deadline" in the `core.*`
+   vocabulary. `core.await` is the only block that carries a `timeout`, and
+   it requires an `event` (`config_schema/1` marks it `required?: true`). So
+   the screen's body parks on `signup.screen.<key>.resumed`, an event the
+   host sends only to re-present a screen it already showed, and the park's
+   real job is to be somewhere a run can *sit* with a deadline on it. Every
+   ordinary exit from a screen is a button, and a button is an interrupt. The
+   arrangement works and reads slightly dishonestly, which is worth one line
+   in a spike rather than a workaround.
+
+5. **The environment walk sees `answers.*`, and types every one of them
+   `:unknown`.** This is the question the bead left open, and it has a
+   definite answer in both directions. The paths **are** there - all four,
+   and only after the screens that write them; `Environment.at/3` at the
+   confirm screen's position answers `answers.email`, `answers.first_name`,
+   `answers.plan`, `answers.seats`, and at the first position answers `%{}`.
+   Every value is `:unknown`. That is not an accident of this document:
+   `StatifierBlocks.Environment`'s moduledoc says a `capture` map "writes
+   `:unknown` at each of its keys, one per pair" (`environment.ex:78`) and
+   `capture_writes/1` (`:1250-1255`) builds that `:unknown` unconditionally.
+   Nothing declarable on this side improves it - in particular the handler's
+   optional `payload` does not, because what `payload` buys is
+   `payload_capture_findings/2`, a refusal on a capture **source** that reads
+   a member the payload does not carry. The source is checked; the
+   destination stays untyped.
+
+6. **A button needed a second field, because a press records something a
+   form does not collect.** The Path branches on `answers.plan`, and no
+   question asks for a plan - the choice *is* which button was pressed. So a
+   button may now declare `writes`, a `capture` map of its own, and the two
+   plan buttons declare `{"answers.plan": "plan"}`. This is k1's finding 4
+   one turn further along: `key` already carried two meanings, and a button's
+   `outcome` now carries a third thing that is not either of them. A format
+   that let a node say "pressing me records this" once would collapse all
+   three.
+
+7. **A composite that reads a second document widens what "pure" means.**
+   `subtree/1` is required to be pure, and this one is - the same params
+   answer the same blocks - but it reaches `Screens.screen/1` to get there,
+   so it is a pure function of the params *and a file*. That is the right
+   trade for a Path (the buttons are declared once, in the element document,
+   and a composite that made an author restate them here would be a second
+   place for them to drift), and it is a wider notion of purity than
+   `StatifierExamples.Signup.GuardedStep`'s. The cost shows up as
+   totality: a `screen` param naming nothing expands to the group and the
+   park with no handlers rather than raising, because `subtree/1` runs behind
+   `outcomes/1` and `io/1`, which the editor calls against config that is
+   still being typed.
+
+8. **Element-key uniqueness is a Path-wide property no compiler can check.**
+   R10d keys answers by element key, so the key is not a per-screen
+   identifier. The element document is not a block document and the compiler
+   never reads it, so nothing upstream can see two screens claiming one key.
+   `StatifierExamples.Signup.Path.validate/1` is that check, on the host side,
+   which is the class `statifier_blocks`' own `docs/host-validators.md`
+   describes. Building it turned up that the commonest instance is not two
+   screens sharing a key but **one screen shown twice** - a Path that revisits
+   a screen reaches its keys twice, and the second visit overwrites what the
+   first collected. So the finding names the *blocks* that reach a repeated
+   name rather than the screens, which is the only way the two cases report
+   the same. The same check covers outcome names, because
+   `Screen.outcome_event/1` deliberately leaves the screen out of an event
+   name and distinctness is what makes that safe.
+
+9. **Registering one document moved five pinned enumerations.** Adding
+   `signup_path` to `Signup.@documents` and `myapp.screen` to
+   `block_types/0` turned seven cases red across `ChartsTest`, `SignupTest`,
+   `StepLabelTest` and `ViewModelPinTest` - the palette list, the fixture
+   list, the label counts, the outline row counts and the fixture-list pin.
+   Every one of them is a deliberate "tell me when this changes" pin and
+   every one was updated rather than relaxed. Recorded because it is the
+   honest cost of this app's pinning convention and a later bead adding a
+   document should budget for it.
+
+### Asks this k2 does not act on
+
+No ADR is amended in SF040 (consent clause 9), so these are recorded here:
+
+- **A composite should be able to declare its outcomes.** Findings 1-3
+  together: the root-only rule means the outcome surface of a composite is
+  whatever its head member happens to declare, which for every structural
+  root (`core.group`, `core.sequence`, `core.branch`) is the default `done`.
+  A composite is the unit a host puts in front of an author, and it is
+  currently the one block type that cannot say how it finished. A declared
+  `outcomes` key on the composite declaration - checked against what the
+  subtree can actually raise - would be the shape. Owner: `statifier_blocks`.
+- **A `capture` destination could be typed where the handler declares a
+  `payload`.** Finding 5. The payload declaration already carries the member
+  types the capture sources are checked against, so the type of each
+  destination is in hand at exactly the moment `capture_writes/1` discards
+  it. Typing them would make a Path's `answers.*` readable by the environment
+  walk, which is what a downstream branch guard wants. Owner:
+  `statifier_blocks`.
+- **A "park until interrupted, with a deadline" primitive.** Finding 4.
+  Today the shape is `core.await` on an event nobody sends. Owner:
+  `statifier_blocks`.
+- **The element document format should let a node declare what pressing it
+  records.** Finding 6, and k1's finding 4 under it. Owner: the element
+  document format, wherever it comes to rest.
+
+### What k2 shipped
+
+| File | What it is |
+|---|---|
+| `lib/statifier_examples/signup/screen.ex` | `myapp.screen`: the composite, its params and its subtree |
+| `lib/statifier_examples/signup/path.ex` | the Path, and `validate/1` - the R10d uniqueness check |
+| `priv/fixtures/signup_path.json` | three screens, a branch on `answers.plan`, a reminder timer |
+| `test/statifier_examples/signup/screen_test.exs` | the expansion, and the two limits above asserted as facts |
+| `test/statifier_examples/signup/path_test.exs` | the compile, the distinct events, the environment walk, the validator |
+
+`priv/fixtures/signup_screens.json` gained two lines - the `writes` map on
+each plan button (finding 6). Nothing else of k1's was rewritten.

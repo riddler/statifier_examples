@@ -81,6 +81,7 @@
         {
           "type": "button",
           "key": "plan_personal",
+          "writes": { "answers.plan": "plan" },
           "condition": "answers.seats <= 1",
           "label": "Take the personal plan",
           "outcome": "personal_chosen"
@@ -88,6 +89,7 @@
         {
           "type": "button",
           "key": "plan_business",
+          "writes": { "answers.plan": "plan" },
           "condition": "answers.seats > 1",
           "label": "Take the business plan",
           "outcome": "business_chosen"
