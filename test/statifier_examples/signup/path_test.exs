@@ -46,7 +46,7 @@ defmodule StatifierExamples.Signup.PathTest do
       assert Enum.count(types, &(&1 == "core.send")) == 1
     end
 
-    test "the branch reads what the plan screen's buttons record" do
+    test "the branch reads the path the plan screen's buttons write" do
       %Block{config: config} =
         Enum.find(Document.blocks(document()), &(&1.id == "blk_sp_plan_branch"))
 
@@ -129,14 +129,18 @@ defmodule StatifierExamples.Signup.PathTest do
     end
 
     # R10d, and the reason the finding names blocks rather than screens: one
-    # screen shown twice reaches its element keys twice, and the second visit
-    # overwrites what the first one collected.
+    # screen shown twice reaches its answer keys twice, and the second visit
+    # overwrites what the first one collected. Note what is NOT reported:
+    # the account screen's `account_heading`, `account_intro`,
+    # `account_greeting` and `account_continue` keys are duplicated just as
+    # really, and `answer_keys/1` reads `text_question` nodes only. That gap
+    # is the moduledoc's last paragraph and finding 8 of the spike document.
     test "a screen shown twice duplicates its element keys and its outcomes" do
       document = repoint("blk_sp_confirm", "account")
 
       assert Path.validate(document) == [
-               {:duplicate_element_key, "email", ["blk_sp_account", "blk_sp_confirm"]},
-               {:duplicate_element_key, "first_name", ["blk_sp_account", "blk_sp_confirm"]},
+               {:duplicate_answer_key, "email", ["blk_sp_account", "blk_sp_confirm"]},
+               {:duplicate_answer_key, "first_name", ["blk_sp_account", "blk_sp_confirm"]},
                {:duplicate_outcome, "account_submitted", ["blk_sp_account", "blk_sp_confirm"]}
              ]
     end

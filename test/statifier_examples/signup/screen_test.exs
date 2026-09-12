@@ -141,6 +141,32 @@ defmodule StatifierExamples.Signup.ScreenTest do
     end
   end
 
+  describe "what a button's `writes` map can and cannot do" do
+    # The blocking finding of the cold review on PR #98, pinned so the prose
+    # cannot drift back. A `capture` value is a path inside `_event.data`,
+    # never a literal (`core/on_event.ex` builds each pair as
+    # `{"expr", "_event.data." <> source}`), so `writes` CANNOT record which
+    # button was pressed: both plan buttons declare the same pair and both
+    # compile to the same assign. What reaches `answers.plan` is whatever the
+    # host put in the payload - an unstated contract the spike document
+    # records as an ask.
+    test "both plan buttons capture answers.plan identically, so the press says nothing" do
+      [personal, business, _back] = expansion(@plan).slots["interrupts"]
+
+      assert personal.config["capture"]["answers.plan"] == "plan"
+      assert business.config["capture"]["answers.plan"] == "plan"
+      assert personal.config["capture"] == business.config["capture"]
+    end
+
+    # What the field DOES buy, and the only thing it buys: which buttons
+    # write the path at all.
+    test "a button declaring no writes leaves answers.plan alone" do
+      [_personal, _business, back] = expansion(@plan).slots["interrupts"]
+
+      refute Map.has_key?(back.config["capture"], "answers.plan")
+    end
+  end
+
   describe "the two limits the spike found" do
     # THE BEAD ASKED FOR: one outcome slot per declared button, plus
     # `timed_out` (D13). WHAT THE PACKAGE ANSWERS: `done`, and only `done`.
@@ -161,12 +187,31 @@ defmodule StatifierExamples.Signup.ScreenTest do
     # `Composite.derived_outcomes/2`, so the data shape is not a way around
     # the root-only rule. An await-rooted twin is, and it is here to show
     # what the arrangement would have to be given up to get `timed_out`.
+    #
+    # The group-rooted twin carries a real `core.await` in its `body` - the
+    # member whose `timed_out` the bead wanted surfaced. That is what makes
+    # this case able to fail: an empty group would answer `done` under the
+    # root-only rule AND under any deeper walk, so it would assert nothing.
+    # With the await beneath it, `done` is evidence that the derivation did
+    # not descend.
     test "a data-declared twin answers the root's outcomes too" do
       assert outcomes_of(%{
                "type" => "core.group",
                "id_suffix" => "screen",
                "config" => %{},
-               "slots" => %{}
+               "slots" => %{
+                 "body" => [
+                   %{
+                     "type" => "core.await",
+                     "id_suffix" => "park",
+                     "config" => %{
+                       "event" => "signup.screen.plan.resumed",
+                       "timeout" => "1d"
+                     },
+                     "slots" => %{}
+                   }
+                 ]
+               }
              }) == [{"done", "Done"}]
 
       assert outcomes_of(%{
