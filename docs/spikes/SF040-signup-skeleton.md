@@ -191,11 +191,21 @@ stops being true.
    list does not follow `timeout` - an await with no deadline still declares
    both). So a composite **rooted** at `core.await` surfaces `timed_out`
    properly, which the test asserts against a data twin. What it cannot then
-   have is the group, and without the group there is nowhere to hang a
-   button handler: `core.on_event` is `kinds: [:interrupt_handler]`
-   (`core/on_event.ex:574`) and `core.group`'s `interrupts` slot is the only
-   thing that admits one. The two halves of the bead's request are
-   individually expressible and jointly are not.
+   have is a group, and without one there is nowhere to hang a button
+   handler: `core.on_event` is `kinds: [:interrupt_handler]`
+   (`core/on_event.ex:574`), and the only slots that admit that kind are the
+   `interrupts` of `core.group` (`core/group.ex:59`) and of
+   `core.resumable_group` (`core/resumable_group.ex:74`) - which declare the
+   identical `slot_accepts`. Either can root the composite and both answer
+   `done`, so the choice between them does not affect finding 1; what it
+   does affect is finding 4, and `core.resumable_group` is the better root
+   there. Its whole stated purpose is re-entering a group after an interrupt
+   and returning to where it left off, which is exactly the re-present the
+   park was invented for. This skeleton did not use it - `core.group` was
+   reached for first and the difference only became visible once the park
+   was written - and trying the resumable root is work for k3 rather than a
+   defect here. The two halves of the bead's request are individually
+   expressible and jointly are not.
 
 4. **The await has to name an event it will never receive.** There is no
    "wait here until something interrupts you, with a deadline" in the `core.*`
@@ -224,15 +234,36 @@ stops being true.
    a member the payload does not carry. The source is checked; the
    destination stays untyped.
 
-6. **A button needed a second field, because a press records something a
-   form does not collect.** The Path branches on `answers.plan`, and no
-   question asks for a plan - the choice *is* which button was pressed. So a
-   button may now declare `writes`, a `capture` map of its own, and the two
-   plan buttons declare `{"answers.plan": "plan"}`. This is k1's finding 4
-   one turn further along: `key` already carried two meanings, and a button's
-   `outcome` now carries a third thing that is not either of them. A format
-   that let a node say "pressing me records this" once would collapse all
-   three.
+6. **A `capture` map cannot express a constant, so nothing lets a button
+   record its own identity.** This is the finding the skeleton went looking
+   for a field to solve and found it could not. The Path branches on
+   `answers.plan`, and no question asks for a plan - the choice *is* which
+   button was pressed. The obvious move is to let a button say what its
+   press records, so a button may now declare `writes`, a `capture` map of
+   its own, and both plan buttons declare `{"answers.plan": "plan"}`.
+
+   **That does not do what it looks like it does.** A `capture` value is a
+   path inside `_event.data`, never a literal: `core/on_event.ex:806-820`
+   builds each pair as `{"expr", "_event.data." <> source}`. Both plan
+   buttons therefore compile to the byte-identical
+   `<assign location="answers.plan" expr="_event.data.plan"/>`, and what
+   reaches `answers.plan` is entirely whatever the **host** put in the
+   payload. The press contributes nothing.
+
+   Two things follow, and both are the point. First, the field still earns
+   its place, for a smaller reason than the one it was added for: it decides
+   which buttons write the path **at all**, and `Back` declaring no `writes`
+   is why pressing it leaves `answers.plan` alone instead of overwriting it.
+   Second, the Path's branch rests on a **host contract that neither
+   document states** - an event raised for a button that declares `writes`
+   must carry those source fields in its payload - and there is nowhere in
+   either document to write that contract down. That is the gap, rather than
+   the missing field.
+
+   It is also k1's finding 4 one turn further along: `key` already carried
+   two meanings, and `outcome` now carries a third thing that is neither. A
+   format that let a node say "pressing me records **this literal**" once
+   would collapse all three and remove the unstated contract with them.
 
 7. **A composite that reads a second document widens what "pure" means.**
    `subtree/1` is required to be pure, and this one is - the same params
@@ -247,9 +278,18 @@ stops being true.
    `outcomes/1` and `io/1`, which the editor calls against config that is
    still being typed.
 
-8. **Element-key uniqueness is a Path-wide property no compiler can check.**
+8. **Answer-key uniqueness is a Path-wide property no compiler can check.**
    R10d keys answers by element key, so the key is not a per-screen
-   identifier. The element document is not a block document and the compiler
+   identifier. The check shipped here is deliberately narrower than R10d's
+   whole surface: `Screens.answer_keys/1` reads `text_question` nodes only,
+   so what `validate/1` holds unique is the keys that actually **carry an
+   answer**, and the finding is tagged `:duplicate_answer_key` to say so.
+   Two screens sharing a `heading` or `button` key are not reported. That is
+   a real remaining gap rather than a decision - a duplicated button key is
+   as much a collision as a duplicated question key, it just collides in a
+   namespace nothing reads yet - and widening the read is the obvious next
+   move. It is left narrow here so the tag does not promise more than the
+   code does. The element document is not a block document and the compiler
    never reads it, so nothing upstream can see two screens claiming one key.
    `StatifierExamples.Signup.Path.validate/1` is that check, on the host side,
    which is the class `statifier_blocks`' own `docs/host-validators.md`
@@ -271,6 +311,18 @@ stops being true.
    every one was updated rather than relaxed. Recorded because it is the
    honest cost of this app's pinning convention and a later bead adding a
    document should budget for it.
+
+### A sentence of k1's that k2 falsified
+
+This file's rule is that each bead appends its own section and nothing
+rewrites an earlier one, so k1's finding 5 is left as written - but it is
+wrong now and a reader meets both statements. It says a button declares
+`outcome` "and the screen Composite (k2) turns those into outcome slots".
+k2 could not: finding 1 above is that a composite's outcomes are its
+expansion root's, so the buttons reach no outcome slot at all. Everything
+else in k1's finding 5 stands, including the reason `Screens.outcomes/1`
+exists - k2 does read the list off the screen rather than restate it, and
+uses it to derive one handler and one event name per button instead.
 
 ### Asks this k2 does not act on
 
@@ -294,9 +346,17 @@ No ADR is amended in SF040 (consent clause 9), so these are recorded here:
 - **A "park until interrupted, with a deadline" primitive.** Finding 4.
   Today the shape is `core.await` on an event nobody sends. Owner:
   `statifier_blocks`.
-- **The element document format should let a node declare what pressing it
-  records.** Finding 6, and k1's finding 4 under it. Owner: the element
-  document format, wherever it comes to rest.
+- **A node needs a way to declare what pressing it records, as a literal.**
+  Finding 6, and k1's finding 4 under it. `capture` is path-to-path by
+  construction (`core/on_event.ex:806-820`), so a constant is not expressible
+  in it and a button cannot record its own identity - the one thing a
+  multi-button screen most obviously needs. Either the element document
+  format grows the notion, or `capture` grows a literal arm; the two owners
+  should agree which. **Until then a Path carries an unstated host
+  contract**: an event raised for a button declaring `writes` must carry
+  those source fields in its payload, and nothing in either document says
+  so or can check it. Owner: the element document format, with
+  `statifier_blocks` on the `capture` half.
 
 ### What k2 shipped
 

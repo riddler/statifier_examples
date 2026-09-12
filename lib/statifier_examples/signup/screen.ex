@@ -36,10 +36,23 @@ defmodule StatifierExamples.Signup.Screen do
   `capture` map"). So a screen's `text_question` keyed `first_name` writes
   `answers.first_name`, and the document never says so twice.
 
-  A button may also declare `writes`, a `capture` map of its own, for what
-  the *press* records rather than what the form collected -
-  `answers.plan` on the two plan buttons, which is what the Path branches
-  on. See `docs/spikes/SF040-signup-skeleton.md` on why that field exists.
+  A button may also declare `writes`, a `capture` map of its own, merged
+  into the handler's - `answers.plan` on the two plan buttons, which is what
+  the Path branches on.
+
+  **`writes` does not record which button was pressed, and cannot.** A
+  `capture` value is a path inside `_event.data`, never a literal: the pair
+  compiles to `expr="_event.data.<source>"`. Both plan buttons declare the
+  same pair, so both compile to the byte-identical assign, and what lands in
+  `answers.plan` is whatever the **host** put in the event payload. What the
+  field actually buys is which buttons write the path **at all** - `Back`
+  declares no `writes`, so pressing it leaves `answers.plan` alone rather
+  than overwriting it - and a place to say that this screen's press carries
+  a `plan` field. The host contract that makes the Path's branch work is
+  therefore unstated in both documents: an event named by
+  `outcome_event/1` for a button that declares `writes` must carry those
+  source fields in its payload. `docs/spikes/SF040-signup-skeleton.md`
+  records that as the finding, and the ask under it.
 
   ## The park, and what it costs
 
@@ -51,6 +64,22 @@ defmodule StatifierExamples.Signup.Screen do
   "wait indefinitely, with a timeout" primitive in the `core.*` vocabulary
   today; the park is this app's way of not having one, and it is recorded
   as a finding rather than hidden here.
+
+  ## What the deadline actually does, which is less than it sounds
+
+  It abandons **the group**, not the run. The `timed_out` final is emitted
+  at the end of the group's `body`, so a screen that times out completes
+  exactly as a screen a button abandoned does: the Path advances to the
+  next block and nothing downstream can tell the two apart - which is what
+  `StatifierBlocks.Core.Await`'s own moduledoc says about two abandons on
+  one rail. The difference is only in what was captured, and a timeout
+  captures nothing. The param is labelled "Abandon after" because that is
+  what it does to the group; read it as "stop waiting after", not as
+  "end the signup". The same reading applies to a `Back` button: it
+  abandons the group like any other, so it moves the Path *forward*.
+  Giving a screen a real back edge, or a run a real give-up, needs the
+  outcome surface finding 1 of the spike document says a composite does
+  not have.
 
   ## Its outcomes are `core.group`'s, and that is not what was wanted
 

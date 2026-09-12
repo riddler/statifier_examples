@@ -8,7 +8,7 @@ defmodule StatifierExamples.Signup.Path do
   disagree. This module is the check that they do not, and it exists
   because one of the disagreements is silent.
 
-  ## Element keys are unique across a Path (R10d)
+  ## Answer keys are unique across a Path (R10d)
 
   An answer lands at `answers.<element_key>`. The key is therefore not a
   per-screen identifier but a **Path-wide name**, and two screens on the
@@ -20,7 +20,14 @@ defmodule StatifierExamples.Signup.Path do
   side, which is exactly the class of check `statifier_blocks`' own
   `docs/host-validators.md` is about.
 
-  `validate/1` reports it, with both screens named.
+  `validate/1` reports it, with both blocks named.
+
+  **Answer keys, not every element key.** The read is
+  `StatifierExamples.Signup.Screens.answer_keys/1`, which is `text_question`
+  nodes and nothing else, so what this holds unique is the keys that carry
+  an answer - hence `:duplicate_answer_key` rather than a tag claiming the
+  whole of R10d. Two screens sharing a `heading` or `button` key are not
+  reported. That is a gap and not a decision; the spike document records it.
 
   ## Outcome names are unique across a Path
 
@@ -37,9 +44,10 @@ defmodule StatifierExamples.Signup.Path do
 
   Whether a key is *spelled* the way a datamodel document declares it -
   that is `statifier_datamodel`'s question and not this skeleton's - and
-  whether a screen the block document names exists at all, which
-  `screens/1` answers as a separate finding rather than folding into
-  either uniqueness rule.
+  element keys that carry no answer, which the moduledoc's last paragraph
+  is about. A screen the block document names but the element document does
+  not declare is answered as a separate `:unknown_screen` finding rather
+  than folded into either uniqueness rule.
   """
 
   alias StatifierBlocks.{Block, Document}
@@ -51,7 +59,8 @@ defmodule StatifierExamples.Signup.Path do
   One thing wrong with a Path.
 
   `:unknown_screen` names a `myapp.screen` block whose `screen` param is
-  not a key in the element document. `:duplicate_element_key` and
+  not a key in the element document. `:duplicate_answer_key` (a
+  `text_question` key, not every element key - see the moduledoc) and
   `:duplicate_outcome` each name the repeated name and every **block** that
   reaches it, in the order the Path visits them.
 
@@ -64,7 +73,7 @@ defmodule StatifierExamples.Signup.Path do
   """
   @type finding ::
           {:unknown_screen, block_id :: String.t(), screen_key :: String.t()}
-          | {:duplicate_element_key, key :: String.t(), block_ids :: [String.t()]}
+          | {:duplicate_answer_key, key :: String.t(), block_ids :: [String.t()]}
           | {:duplicate_outcome, outcome :: String.t(), block_ids :: [String.t()]}
 
   @doc """
@@ -95,7 +104,7 @@ defmodule StatifierExamples.Signup.Path do
     {known, unknown} = Enum.split_with(refs, fn {_id, key} -> Screens.screen(key) end)
 
     Enum.map(unknown, fn {id, key} -> {:unknown_screen, id, key} end) ++
-      duplicates(known, :duplicate_element_key, &Screens.answer_keys/1) ++
+      duplicates(known, :duplicate_answer_key, &Screens.answer_keys/1) ++
       duplicates(known, :duplicate_outcome, &Screens.outcomes/1)
   end
 
