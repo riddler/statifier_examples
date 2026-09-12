@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "id": "edoc_signup_screens",
+  "metadata": {
+    "name": "Signup screens",
+    "description": "The three screens the signup wizard shows: collect a name and email, choose a plan, confirm. An element document, not a block document - the chart that drives it is priv/fixtures/signup_wizard.json.",
+    "domain": "signup"
+  },
+  "screens": [
+    {
+      "key": "account",
+      "title": "Create your account",
+      "nodes": [
+        {
+          "type": "heading",
+          "key": "account_heading",
+          "level": 1,
+          "text": "Create your account"
+        },
+        {
+          "type": "text",
+          "key": "account_intro",
+          "text": "Two questions and you are in. We never share an address with anyone."
+        },
+        {
+          "type": "text_question",
+          "key": "first_name",
+          "label": "First name",
+          "placeholder": "Ada",
+          "required": true
+        },
+        {
+          "type": "text_question",
+          "key": "email",
+          "label": "Work email",
+          "placeholder": "ada@example.com",
+          "required": true
+        },
+        {
+          "type": "text",
+          "key": "account_greeting",
+          "condition": "answers.first_name != ''",
+          "text": "Nice to meet you, {{ answers.first_name }}."
+        },
+        {
+          "type": "button",
+          "key": "account_continue",
+          "label": "Continue",
+          "outcome": "account_submitted"
+        }
+      ]
+    },
+    {
+      "key": "plan",
+      "title": "Pick a plan",
+      "nodes": [
+        {
+          "type": "heading",
+          "key": "plan_heading",
+          "level": 1,
+          "text": "Pick a plan"
+        },
+        {
+          "type": "text",
+          "key": "plan_intro",
+          "text": "You can change this later. Nothing is charged today."
+        },
+        {
+          "type": "text_question",
+          "key": "seats",
+          "label": "How many seats?",
+          "placeholder": "1",
+          "required": false
+        },
+        {
+          "type": "text",
+          "key": "plan_business_hint",
+          "condition": "answers.seats > 1",
+          "text": "More than one seat puts you on the business plan, {{ answers.first_name }}."
+        },
+        {
+          "type": "button",
+          "key": "plan_personal",
+          "condition": "answers.seats <= 1",
+          "label": "Take the personal plan",
+          "outcome": "personal_chosen"
+        },
+        {
+          "type": "button",
+          "key": "plan_business",
+          "condition": "answers.seats > 1",
+          "label": "Take the business plan",
+          "outcome": "business_chosen"
+        },
+        {
+          "type": "button",
+          "key": "plan_back",
+          "label": "Back",
+          "outcome": "went_back"
+        }
+      ]
+    },
+    {
+      "key": "confirm",
+      "title": "Confirm and finish",
+      "nodes": [
+        {
+          "type": "heading",
+          "key": "confirm_heading",
+          "level": 1,
+          "text": "Confirm and finish"
+        },
+        {
+          "type": "text",
+          "key": "confirm_summary",
+          "text": "We will send a verification link to {{ answers.email }}. Open it within a day and the account is live."
+        },
+        {
+          "type": "heading",
+          "key": "confirm_referral_heading",
+          "condition": "answers.seats > 1",
+          "level": 2,
+          "text": "One more thing"
+        },
+        {
+          "type": "text_question",
+          "key": "referral",
+          "condition": "answers.seats > 1",
+          "label": "Who told you about us?",
+          "placeholder": "A colleague",
+          "required": false
+        },
+        {
+          "type": "button",
+          "key": "confirm_finish",
+          "label": "Finish",
+          "outcome": "signup_confirmed"
+        }
+      ]
+    }
+  ]
+}

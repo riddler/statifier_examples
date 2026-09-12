@@ -20,6 +20,7 @@ defmodule StatifierExamplesWeb.Router do
     get "/", PageController, :home
     live "/editor", EditorLive
     live "/plan", PlanLive
+    live "/signup-screens", SignupScreensLive
   end
 
   # Other scopes may use custom stacks.
