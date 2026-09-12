@@ -11,6 +11,10 @@
     {
       "id": "answers",
       "description": "What the screens collected, keyed by element key (Riddler R10d). Each myapp.screen writes answers.<element_key> from the firing button's capture map, and the plan buttons additionally record answers.plan."
+    },
+    {
+      "id": "created",
+      "description": "What the create-account call at the end of the Path answered. Declared here because a core.invoke writing to a root nothing declared raises error.execution rather than writing it."
     }
   ],
   "root": {
@@ -98,6 +102,16 @@
           "config": {
             "screen": "confirm",
             "timeout": "1d"
+          }
+        },
+        {
+          "type": "core.invoke",
+          "id": "blk_sp_create_account",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:signup",
+            "assign_to": "created",
+            "params": "answers=answers"
           }
         }
       ]

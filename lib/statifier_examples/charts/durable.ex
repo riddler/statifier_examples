@@ -440,10 +440,29 @@ defmodule StatifierExamples.Charts.Durable do
   This is the only place the stamp is applied, and it covers the cold
   re-entry doors too: `deliver/2` and `complete_invocation/3` both drive
   the run back through here.
+
+  ## `data` is the event's payload, and one chart cannot be driven without it
+
+  `_event.data`, in the datamodel the chart reads it out of. It defaults to
+  `:undefined`, which is what every caller here wanted until a chart carried
+  a `core.on_event` with a `capture` map: a capture pair compiles to
+  `expr="_event.data.<source>"`, so what a screen collected reaches the
+  chart only if the host raising the outcome put it in the payload. The
+  signup Path is that chart and `StatifierExamples.Signup.Journey` is that
+  host.
+
+  Nothing is coerced or filtered on the way through - the map the caller
+  hands over is the map the chart reads - because deciding what belongs in
+  it is exactly the host contract `docs/spikes/SF040-signup-skeleton.md`
+  records as unstated in both documents.
   """
-  @spec send_event(t(), Run.t(), String.t()) :: {:ok, driven()} | {:error, term()}
-  def send_event(%__MODULE__{} = durable, %Run{} = run, name) when is_binary(name) do
-    event = Event.external(name, caller_context: Tracing.caller_context())
+  @spec send_event(t(), Run.t(), String.t(), map() | :undefined) ::
+          {:ok, driven()} | {:error, term()}
+  def send_event(durable, run, name, data \\ :undefined)
+
+  def send_event(%__MODULE__{} = durable, %Run{} = run, name, data)
+      when is_binary(name) and (is_map(data) or data == :undefined) do
+    event = Event.external(name, data: data, caller_context: Tracing.caller_context())
 
     settle(durable, run, Driver.send_event(driver(durable), durable.run_id, event))
   end

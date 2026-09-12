@@ -21,6 +21,7 @@ defmodule StatifierExamplesWeb.Router do
     live "/editor", EditorLive
     live "/plan", PlanLive
     live "/signup-screens", SignupScreensLive
+    live "/signup-journey", SignupJourneyLive
   end
 
   # Other scopes may use custom stacks.
