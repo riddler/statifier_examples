@@ -113,9 +113,11 @@ defmodule StatifierExamples.Signup.Validation do
   # A number is never blank; a string of spaces always is.
   #
   # `StatifierExamples.Signup.Journey.submit/3` hands this module the form's
-  # own strings and coerces afterwards, which is the right way round: a
-  # digits-only response becomes an integer for the payload and for re-resolving
-  # the screen, but `required` and `format` are rules about what was **typed**
+  # own strings, which is the right way round. A digits-only response does
+  # become an integer elsewhere - `resolve/2` coerces its draft on the way to
+  # the nodes this check is then handed, and `pressed/5` coerces again for the
+  # payload - but neither coercion reaches the `responses` argument here, and
+  # that is deliberate: `required` and `format` are rules about what was **typed**
   # and a check that saw `5` where the reader wrote `5` has learned nothing
   # extra. So the string clauses are the ones `Journey` exercises. The
   # non-binary clause is for the other caller: `validate/2` is public, its

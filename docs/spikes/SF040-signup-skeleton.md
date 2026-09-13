@@ -588,7 +588,7 @@ They are additional to k2's four, which all stand.
 |---|---|
 | `lib/statifier_examples/signup/journey.ex` | the loop: `start`, `current`, `resolve`, `submit`, `payload` |
 | `lib/statifier_examples/signup/validation.ex` | the pure check standing in for R10c's elements package |
-| `lib/statifier_examples_web/live/signup_journey_live.ex` | `/signup-journey`: the page, holding only the draft |
+| `lib/statifier_examples_web/live/signup_journey_live.ex` | `/signup-journey`: the page, holding the last view it was answered with and the reader's unsent draft, neither of them authoritative |
 | `test/statifier_examples/signup/journey_test.exs` | three submits, the timeout, the park, the refusals |
 | `test/statifier_examples/signup/validation_test.exs` | the two rules, and what a third would cost |
 | `test/statifier_examples_web/live/signup_journey_live_test.exs` | drawn, pressed, and reloaded into a second process |

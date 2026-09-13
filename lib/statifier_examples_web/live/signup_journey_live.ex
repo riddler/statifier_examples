@@ -7,8 +7,9 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   are worth reading together. That one draws the same element documents with
   the responses in its own socket and an outcome it only displays; this one
   holds **no authoritative run state**. Every press goes to
-  `StatifierExamples.Signup.Journey` with a run id and nothing else, and
-  `Journey` loads the run from storage, raises the outcome as an event
+  `StatifierExamples.Signup.Journey` carrying no run state but the id - the
+  outcome pressed and the draft typed travel with it, and nothing else does -
+  and `Journey` loads the run from storage, raises the outcome as an event
   carrying what the form collected, and answers with the screen the run moved
   to. Reload the page, kill the server, open the same URL on another machine:
   the run is where it was, because the only thing that had to survive was the
@@ -16,14 +17,19 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
   ## What the socket holds, and why none of it is the run
 
-  Two things, and neither is decided from.
+  Two things, and neither of them moves a run.
 
   The **view** `Journey` last answered with - a screen, its resolved nodes,
   the datamodel, the responses, a status. That is a copy of run state and it
   can be stale between redraws, which is why every press re-reads: the only
   thing `handle_event("outcome", ...)` takes out of it is `execution_id`, so a
   second person pressing the same run is refused by `Journey` against the
-  stored position rather than raced here.
+  stored position rather than raced here. The stale copy is read for one
+  other purpose, and it is a presentational one:
+  `handle_event("response", ...)` re-resolves the screen it holds against the
+  draft, so what a keystroke redraws is decided from the view. Nothing is
+  sent, nothing is stored, and the next press corrects the drawing from
+  storage anyway.
 
   The **draft**: what a reader has typed and not sent. It is not in the chart
   because it has not been submitted, and a page that persisted every keystroke
@@ -66,6 +72,15 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
       {:error, reason} ->
         {:noreply, assign(socket, error: reason)}
     end
+  end
+
+  # A keystroke with no view to re-resolve. The form renders only under
+  # `:if={@view}`, so no reader reaches this - but `Journey.resolve/2` takes a
+  # view and both its clauses want a map with a `:screen`, so an event arriving
+  # from a page whose run has since been refused would raise rather than
+  # refuse. It takes the refusal the rest of the page already uses.
+  def handle_event("response", _params, %{assigns: %{view: nil}} = socket) do
+    {:noreply, assign(socket, error: :no_execution)}
   end
 
   def handle_event("response", %{"responses" => responses}, socket) do
