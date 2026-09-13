@@ -149,14 +149,21 @@ defmodule StatifierExamples.Signup.Journey do
   record - so a caller that has only an id out of a URL is a caller in full
   possession of the execution.
 
+  One load answers both halves of the view. The reading says where the
+  execution is sitting and the datamodel says what it is holding, and both
+  come out of the one `Durable.resume/1`: the position that resume loaded
+  is on the driver it hands back, so the datamodel is read off it rather
+  than fetched again through `Durable.machine_state/1`. Every page render
+  paid for that second storage walk until se-w4i.
+
   `{:error, :execution_not_found}` for an id nobody stored, and the storage
   layer's own refusals otherwise.
   """
   @spec current(String.t()) :: {:ok, view()} | {:error, term()}
   def current(execution_id) when is_binary(execution_id) do
-    with {:ok, {{_durable, run}, _document}} <- Durable.resume(execution_id),
-         {:ok, datamodel} <- datamodel(execution_id) do
-      {:ok, view(execution_id, run, datamodel)}
+    with {:ok, {{%Durable{machine_state: state}, run}, _document}} <-
+           Durable.resume(execution_id) do
+      {:ok, view(execution_id, run, state.datamodel)}
     end
   end
 

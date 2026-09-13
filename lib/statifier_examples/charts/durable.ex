@@ -176,11 +176,24 @@ defmodule StatifierExamples.Charts.Durable do
   @type t :: %__MODULE__{
           execution_id: String.t(),
           store: Storage.t(),
-          machine: Machine.t()
+          machine: Machine.t(),
+          machine_state: Statifier.MachineState.t() | nil
         }
 
+  # `machine_state` is the position this driver last saw: the one a resume
+  # loaded, or the one the storage layer handed back when a drive settled.
+  # It is carried rather than discarded because the caller that resumed an
+  # execution to paint it wants the datamodel too, and reading it off the
+  # driver is one storage walk where asking `machine_state/1` for it again
+  # is a second one (se-w4i).
+  #
+  # It is not enforced: a driver exists from the moment its store and
+  # machine do, which is before anything has been read out of storage, and
+  # `nil` is that driver honestly saying it has not looked yet. It is
+  # refreshed on every settle, so it is never a position the driver has
+  # already stepped past.
   @enforce_keys [:execution_id, :store, :machine]
-  defstruct [:execution_id, :store, :machine]
+  defstruct [:execution_id, :store, :machine, machine_state: nil]
 
   @typedoc "A driver and the reading it produced, threaded together."
   @type driven :: {t(), Execution.t()}
@@ -268,7 +281,12 @@ defmodule StatifierExamples.Charts.Durable do
          {:ok, store} <- store(),
          {:ok, record} <- Storage.fetch_execution(store, execution_id),
          {:ok, machine_state} <- Storage.load_execution_position(store, execution_id, machine) do
-      durable = %__MODULE__{execution_id: execution_id, store: store, machine: machine}
+      durable = %__MODULE__{
+        execution_id: execution_id,
+        store: store,
+        machine: machine,
+        machine_state: machine_state
+      }
 
       run =
         machine
@@ -408,6 +426,11 @@ defmodule StatifierExamples.Charts.Durable do
   emitted bytes, and the position loaded against the machine those bytes
   produce - answering the state itself rather than an `Execution` a page can
   paint.
+
+  It is for the caller that holds an execution id and nothing else. A caller
+  that has just resumed one is already holding the answer: `resume/3` carries
+  the position it loaded on the driver's own `machine_state`, and asking here
+  for it again is the same walk a second time (se-w4i).
 
   It is public because a fan-out needs it and nothing else can supply it.
   `core.map` carries its `items` into the invocation as a **path**
@@ -764,8 +787,8 @@ defmodule StatifierExamples.Charts.Durable do
   # filled it.
   @spec settle_answer(t(), Execution.t(), Driver.result()) ::
           {:ok, driven()} | {:discarded, term()} | {:error, term()}
-  defp settle_answer(durable, run, {:ok, record, _machine_state}),
-    do: rest(durable, run, record.status)
+  defp settle_answer(durable, run, {:ok, record, machine_state}),
+    do: rest(%{durable | machine_state: machine_state}, run, record.status)
 
   defp settle_answer(durable, _run, {:discarded, record}) do
     _discarded = drain(durable.execution_id, [])
@@ -968,7 +991,11 @@ defmodule StatifierExamples.Charts.Durable do
   # part way through has still filled it, so leaving it would let a later
   # drive in this process narrate an execution that is over.
   @spec settle(t(), Execution.t(), Driver.result()) :: {:ok, driven()} | {:error, term()}
-  defp settle(durable, run, {:ok, record, _machine_state}), do: rest(durable, run, record.status)
+  defp settle(durable, run, {:ok, record, machine_state}),
+    do: rest(%{durable | machine_state: machine_state}, run, record.status)
+
+  # A discarded drive never decoded a position, so the driver keeps the one
+  # it already held: it is still what storage holds.
   defp settle(durable, run, {:discarded, record}), do: rest(durable, run, record.status)
 
   defp settle(durable, _run, {:error, reason}) do
