@@ -53,23 +53,29 @@ defmodule StatifierExamples.Signup.Journey do
 
   ## The payload is this host's contract, and nothing checks it
 
-  `StatifierExamples.Signup.Screen`'s moduledoc has the finding: a
-  `capture` map's value is a path inside `_event.data`, never a literal, so
-  what lands at `responses.<key>` is whatever **the host** put in the event's
-  payload. This module is that host, so the contract is stated here in
-  code:
+  A `capture` map's value whose shape is a **string** is a path inside
+  `_event.data`, so what lands at `responses.<key>` for such a pair is
+  whatever **the host** put in the event's payload. This module is that
+  host, so the contract is stated here in code:
 
       payload = the form's responses, keyed by element key,
                 merged with the firing button's own `payload` map
 
   The first half feeds every question's capture pair (destination
-  `responses.<key>`, source `<key>`). The second is how a press says
-  something about *itself* - the plan buttons declare
-  `"payload": {"plan": "business"}` and `{"plan": "personal"}`, which is
-  what the Path's `core.branch` on `responses.plan` reads, and without it
-  both buttons would write the same nothing. Neither document states this
-  and neither can check it; `docs/spikes/SF040-signup-skeleton.md` carries
-  it as the ask.
+  `responses.<key>`, source `<key>`), and that half is the whole of the
+  contract this app still leans on. Neither document states it and neither
+  can check it; `docs/spikes/SF040-signup-skeleton.md` carries it as the ask.
+
+  The second half is how a press could say something about *itself*, and no
+  screen this app ships uses it any more. The plan buttons did, declaring
+  `"payload": {"plan": "business"}` and `{"plan": "personal"}` for a
+  `writes` pair whose string source read them back out. Since 2026-09-13
+  (RQ-RF046-4) those buttons declare the literal capture form instead -
+  `{"responses.plan": ["const", "business"]}` - which the compiled chart
+  writes out of the **document**, so the press records itself with nothing
+  in the payload at all. `StatifierExamples.Signup.Screen`'s moduledoc has
+  the shape rule and the history; `payload/2` keeps the merge because the
+  contract is a host's to offer, not a screen's to have used once.
 
   ## Every button validates, and one of them should not
 

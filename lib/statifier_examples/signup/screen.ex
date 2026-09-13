@@ -40,19 +40,39 @@ defmodule StatifierExamples.Signup.Screen do
   into the handler's - `responses.plan` on the two plan buttons, which is what
   the Path branches on.
 
-  **`writes` does not record which button was pressed, and cannot.** A
-  `capture` value is a path inside `_event.data`, never a literal: the pair
-  compiles to `expr="_event.data.<source>"`. Both plan buttons declare the
-  same pair, so both compile to the byte-identical assign, and what lands in
-  `responses.plan` is whatever the **host** put in the event payload. What the
-  field actually buys is which buttons write the path **at all** - `Back`
-  declares no `writes`, so pressing it leaves `responses.plan` alone rather
-  than overwriting it - and a place to say that this screen's press carries
-  a `plan` field. The host contract that makes the Path's branch work is
-  therefore unstated in both documents: an event named by
-  `outcome_event/1` for a button that declares `writes` must carry those
-  source fields in its payload. `docs/spikes/SF040-signup-skeleton.md`
-  records that as the finding, and the ask under it.
+  ## `writes` records which button was pressed (2026-09-13, RQ-RF046-4)
+
+  A `capture` value is told apart by its **shape**, and that is the package's
+  rule rather than this app's: `StatifierBlocks.Core.OnEvent` (sb ADR-0002's
+  Note of 2026-09-12, `N1`) reads a **string** as a path inside `_event.data`,
+  compiling it to `expr="_event.data.<source>"`, and a **two-element
+  `["const", value]` list** as a literal read out of the document itself,
+  compiling it to `value` spelled as a predicator literal expression.
+
+  This app takes the literal form on its two plan buttons. `plan_personal`
+  declares `{"responses.plan": ["const", "personal"]}` and `plan_business`
+  declares `["const", "business"]`, so the two buttons no longer compile to
+  the same assign and what lands in `responses.plan` is the press itself -
+  which is what the Path's `core.branch` reads. `Back` declares no `writes`
+  at all, so pressing it still leaves `responses.plan` alone rather than
+  overwriting it.
+
+  **What this replaced, and what was true of it.** Until this date both plan
+  buttons declared the same string source, `{"responses.plan": "plan"}`, and
+  the app also carried a `payload` map on each of them putting `"personal"`
+  or `"business"` into the pressed event. Of *that* declaration the claim
+  this section used to make held: two identical string pairs compile to the
+  byte-identical assign, so the press said nothing, and what reached
+  `responses.plan` was whatever the **host** put in the payload - an unstated
+  host contract without which the Path's branch took neither arm. The claim
+  was written in the general form "a `capture` value is a path inside
+  `_event.data`, never a literal", and in that form it stopped being true of
+  the package at `statifier_blocks` 0.28.0, which is why it is confined here
+  to the declaration it was ever about. The literal form closes the contract
+  for these two buttons: no event the host sends has to carry a `plan` field
+  any more, and the plan buttons declare no `payload`.
+  `docs/spikes/SF040-signup-skeleton.md` carries the finding and this answer
+  to it.
 
   ## The park, and what it costs
 
@@ -245,10 +265,17 @@ defmodule StatifierExamples.Signup.Screen do
 
   # A button's own additional capture pairs, if it declares `writes`. Absent
   # on most buttons; the two plan buttons declare `responses.plan`, which is
-  # what the Path branches on - not a record of which button fired (the
-  # moduledoc's "`writes` does not record which button was pressed" explains
-  # why it cannot be).
-  @spec writes(Screens.node_doc()) :: %{optional(String.t()) => String.t()}
+  # what the Path branches on, and each declares it as its own literal - so
+  # the pair IS a record of which button fired (the moduledoc's
+  # "`writes` records which button was pressed" block states the rule).
+  #
+  # The map passes through as it stands, and there is no arm to add for the
+  # literal form: `StatifierBlocks.Core.OnEvent` tells a source apart by
+  # SHAPE (`N1`), so a string and a two-element `["const", value]` list are
+  # both sources it admits. The value type is what says so - `String.t()` is
+  # a path inside `_event.data`, and `[String.t()]` is the `["const", value]`
+  # pair as this app's JSON documents hold it.
+  @spec writes(Screens.node_doc()) :: %{optional(String.t()) => String.t() | [String.t()]}
   defp writes(button) do
     case Map.get(button, "writes") do
       %{} = pairs -> pairs

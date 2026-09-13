@@ -145,12 +145,23 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # answered with. The seat count decides the branch: one seat is the
     # personal arm, which this app answers synchronously.
     #
-    # Sabotage: made `pressed/5` send the outcome event with no payload
-    # (`Durable.send_event/4`'s default). Five cases went red, this one at
-    # its first assertion about `responses`: no capture wrote anything at all,
-    # so the branch on `responses.plan` took neither arm and three cases that
-    # only wanted an execution somewhere down the business arm fell over too.
-    # Reverted from a copy.
+    # se-luu (RQ-RF046-4, 2026-09-13): the plan press below carries the typed
+    # seat count and NOTHING ELSE - no `plan` field, and `plan_personal`
+    # declares no `payload` map for one to be merged in from. `responses.plan`
+    # still comes back `"personal"`, because the button's capture pair is the
+    # literal `["const", "personal"]` and the compiled assign writes it out of
+    # the document. That is the acceptance this case carries.
+    #
+    # Sabotage, re-run at se-luu: made `pressed/5` send the outcome event with
+    # no payload at all (`Durable.send_event/4`'s default). THREE cases went
+    # red - this one at its first assertion about `responses`, where the
+    # account screen's two questions came back `%{}` - because the QUESTION
+    # pairs are still string sources and nothing the form collected was
+    # written. The note here used to record FIVE; the two it no longer reaches
+    # were the ones the old note described as only wanting an execution
+    # somewhere down the business arm, and the reason is that the plan branch
+    # now survives the mutation - which is exactly what the literal form
+    # bought. Reverted from a copy.
     test "drive the run from the first screen to the created account", %{
       execution_id: execution_id
     } do
@@ -205,10 +216,15 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # The execution rests durably in the middle of the call - no screen, no
     # process, a live invocation - and the job's answer is what moves it on.
     #
-    # Sabotage: made `payload/2` ignore the button's `payload` map. Five
-    # cases went red, this one on the `screen: nil` rest: `responses.plan` was
-    # never written, the branch took neither arm, and no call was ever
-    # made. Reverted from a copy.
+    # Sabotage (se-luu, 2026-09-13): reverted `plan_business`'s `writes` pair
+    # in `priv/fixtures/signup_screens.json` to the string form
+    # `{"responses.plan": "plan"}` from a copy. This case went red on the
+    # `screen: nil` rest: with no `payload` map on the button and no path in
+    # the pressed event to read, `responses.plan` was never written, the
+    # branch took neither arm, and no call was ever made. Reverted from the
+    # copy. (The sabotage this note used to carry - making `payload/2` ignore
+    # the button's `payload` map - no longer discriminates here, because no
+    # shipped button declares one; `payload/2` is covered directly below.)
     test "the business arm rests durably on an asynchronous call", %{execution_id: execution_id} do
       {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
 
@@ -441,20 +457,40 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   describe "payload/2, the host contract" do
     # The contract stated in code because neither document states it and
-    # neither can check it (`docs/spikes/SF040-signup-skeleton.md`). A
-    # button's `payload` is the only way a press says anything about itself:
-    # a capture value is a path inside `_event.data`, never a literal, so
-    # both plan buttons compile to the same assign.
+    # neither can check it (`docs/spikes/SF040-signup-skeleton.md`). The half
+    # this app still leans on is the form's responses: every question's
+    # capture pair is a string source, so a press that omits a typed answer
+    # writes nothing at that destination.
+    #
+    # The other half - a button's own `payload` map, the only way a press
+    # could once say anything about itself - is offered and unused since
+    # se-luu (RQ-RF046-4, 2026-09-13): the plan buttons record which of them
+    # fired through the `["const", value]` capture form, out of the document,
+    # so they declare no `payload`. The merge stays because the contract is
+    # the host's to offer; this case covers it against a button held as data
+    # rather than a shipped one.
     #
     # A pure case; the sabotage for the behaviour is on the business arm
     # above.
     test "is the form's responses plus the button's own literals" do
-      [personal, business, back] =
-        for %{"type" => "button"} = node <- Screens.screen("plan").nodes, do: node
+      declared = %{"type" => "button", "key" => "x", "outcome" => "x", "payload" => %{"k" => "v"}}
 
-      assert Journey.payload(personal, %{"seats" => 1}) == %{"seats" => 1, "plan" => "personal"}
-      assert Journey.payload(business, %{"seats" => 5}) == %{"seats" => 5, "plan" => "business"}
-      assert Journey.payload(back, %{"seats" => 5}) == %{"seats" => 5}
+      assert Journey.payload(declared, %{"seats" => 1}) == %{"seats" => 1, "k" => "v"}
+      assert Journey.payload(Map.delete(declared, "payload"), %{"seats" => 5}) == %{"seats" => 5}
+    end
+
+    # se-luu: the fact the two end-to-end cases above rest on. No button this
+    # app ships declares a `payload` map any more, so nothing the host sends
+    # carries the plan - `responses.plan` is written out of the document.
+    #
+    # Sabotage: put `"payload": {"plan": "personal"}` back on `plan_personal`
+    # in `priv/fixtures/signup_screens.json` from a copy; this case went red
+    # and no other did, which is the point of it. Reverted from the copy.
+    test "no shipped button declares a payload map" do
+      for screen <- ["account", "plan", "confirm"],
+          %{"type" => "button"} = button <- Screens.screen(screen).nodes do
+        refute Map.has_key?(button, "payload")
+      end
     end
   end
 end

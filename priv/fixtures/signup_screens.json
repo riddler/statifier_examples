@@ -82,8 +82,7 @@
         {
           "type": "button",
           "key": "plan_personal",
-          "writes": { "responses.plan": "plan" },
-          "payload": { "plan": "personal" },
+          "writes": { "responses.plan": ["const", "personal"] },
           "condition": "responses.seats <= 1",
           "label": "Take the personal plan",
           "outcome": "personal_chosen"
@@ -91,8 +90,7 @@
         {
           "type": "button",
           "key": "plan_business",
-          "writes": { "responses.plan": "plan" },
-          "payload": { "plan": "business" },
+          "writes": { "responses.plan": ["const", "business"] },
           "condition": "responses.seats > 1",
           "label": "Take the business plan",
           "outcome": "business_chosen"

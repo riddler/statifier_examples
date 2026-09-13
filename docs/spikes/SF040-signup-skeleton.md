@@ -390,6 +390,23 @@ No ADR is amended in SF040 (consent clause 9), so these are recorded here:
   so or can check it. Owner: the element document format, with
   `statifier_blocks` on the `capture` half.
 
+  **Closed for this app 2026-09-13 (`se-luu`, RQ-RF046-4).** `capture` grew
+  the literal arm on the `statifier_blocks` side - at 0.28.0 a source is told
+  apart by SHAPE, a string being a path inside `_event.data` and a
+  two-element `["const", value]` list a literal read out of the document (sb
+  ADR-0002's Note of 2026-09-12, `N1`). This app takes it: the two plan
+  buttons in `priv/fixtures/signup_screens.json` now declare
+  `{"responses.plan": ["const", "personal"]}` and `["const", "business"]`,
+  they compile to different assigns, and they declare no `payload` map. So a
+  button does record its own identity, and the unstated host contract this
+  ask names is closed **for the pairs that carry it** - no event this Path
+  raises has to carry a `plan` field for the branch to work. What the ask
+  still covers is the other half: every question's capture pair is still a
+  string source read out of `_event.data`, so the payload contract for
+  `responses.<element_key>` is unstated exactly as before, and the element
+  document format still has no way to *say* which form a node's pair takes.
+  `StatifierExamples.Signup.Screen`'s moduledoc carries the shape rule.
+
 ### What k2 shipped
 
 | File | What it is |
