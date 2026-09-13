@@ -1,5 +1,10 @@
 # statifier_examples
 
+> **Pre-1.0.** The statifier packages this app embeds are below v1.0 and
+> their public surfaces may change between minor releases, sometimes
+> drastically; this app tracks their current releases and changes with them,
+> so a checkout from before a rename may not build against today's packages.
+
 A Phoenix application that hosts the statifier family's two canonical example
 domains - credit-card processing and a signup wizard with A/B testing - as the
 reference embedder for the
