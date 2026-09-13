@@ -745,23 +745,35 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.8.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.9.0 entry against the mutated expectation.
   # Reverted from a backup copy.
-  # `se-20j` INVERTS this case for one release. The execution rename is on
-  # `statifier_persistence` `main` and unpublished, so the arm is a
-  # committed git pin and the assertion is the pin rather than the absence
-  # of one: the SHA is what the campaign's linkage ledger records, and
-  # reading it out of `mix.lock` is how a re-resolve that quietly moved the
-  # pin goes red here rather than in the durable cases. `se-h6v` restores
-  # the Hex spelling of this case - `{:statifier_persistence, "~> 0.12"}`,
-  # a `{:hex, ...}` lock line and `refute lock_line =~ ":git,"` - once the
-  # operator has published 0.12.0.
-  @statifier_persistence_pin "71537dc7bd5a44bd905d7361ea92dbe821449f6e"
-
-  test "the statifier_persistence dep is the committed git pin se-20j took" do
+  # `se-20j` INVERTED this case for one release. The execution rename was
+  # on `statifier_persistence` `main` and unpublished, so the arm was a
+  # committed git pin and the assertion was the pin rather than the absence
+  # of one.
+  #
+  # `se-h6v` restores the Hex spelling now that the operator has published
+  # 0.12.0, and the `refute` below is what says the pin did not come back.
+  # The requirement moves to the 0.12 line, and the floor is REQUIRED
+  # rather than tidy: 0.12.0 is the release carrying sp-ADR-0011's
+  # execution rename - `StatifierPersistence.Execution`, `.Executions`,
+  # the seven `insert_execution/2`..`list_execution_states_by_metadata/2`
+  # adapter callbacks, `Serialization.with_execution/3`, the
+  # `[:statifier_persistence, :execution, ...]` telemetry prefix, the
+  # `statifier_persistence:execution_status` donedata key and the
+  # `statifier_executions` table. On the 0.11 line none of those names
+  # exist under that spelling, so this app's adapter implementation does
+  # not compile against it.
+  #
+  # A bare two-tuple with no `override: true` is also the assertion: a
+  # Hex requirement is what satisfies the requirements `statifier_oban`
+  # and `statifier_blocks` state on this package, which no git ref does.
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.11.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.12.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
+  test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence,
-            git: "https://github.com/riddler/statifier_persistence.git",
-            ref: @statifier_persistence_pin} in deps
+    assert {:statifier_persistence, "~> 0.12"} in deps
 
     lock_line =
       "mix.lock"
@@ -770,8 +782,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ":git,"
-    assert lock_line =~ @statifier_persistence_pin
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.12.)
+    refute lock_line =~ ":git,"
   end
 
   # The durable-timer package. An earlier
@@ -887,19 +899,30 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.3.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.4.0 entry against the mutated expectation.
   # Reverted from a backup copy.
-  # `se-20j` inverts this case too, and for the same release: the bridge
+  # `se-20j` inverted this case too, and for the same release: the bridge
   # moves in lockstep with `statifier_persistence` because the telemetry
   # prefix changed with no dual emit, so a Hex bridge against a pinned
-  # persistence would subscribe to events nobody emits. `se-h6v` restores
-  # the Hex spelling once 0.6.0 is published.
-  @opentelemetry_statifier_pin "e0204e9c8db739bd21e844436e5dcada1ebd4bf0"
-
-  test "the opentelemetry_statifier dep is the committed git pin se-20j took" do
+  # persistence would subscribe to events nobody emits.
+  #
+  # `se-h6v` restores the Hex spelling now that 0.6.0 is published, in the
+  # same commit that restores the persistence arm - the lockstep is the
+  # point, and asserting both as Hex two-tuples in the same run is what
+  # would catch one half being retired without the other. The 0.6 floor is
+  # REQUIRED: 0.6.0 is the release that subscribes to the renamed
+  # `[:statifier_persistence, :execution, ...]` prefix and emits the
+  # `statifier_persistence.execution.step` span with the
+  # `statifier_persistence.execution_id`, `.parent_execution_id` and
+  # `.child_execution_id` attributes this app's trace assertions read. On
+  # the 0.5 line the bridge listens for events 0.12.0 no longer emits and
+  # the trace graph is empty.
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.5.`) and left `mix.lock` alone; it went red
+  # reporting the resolved 0.6.0 entry against the mutated expectation.
+  # Reverted from a backup copy.
+  test "the opentelemetry_statifier dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:opentelemetry_statifier,
-            git: "https://github.com/riddler/opentelemetry_statifier.git",
-            ref: @opentelemetry_statifier_pin} in deps
+    assert {:opentelemetry_statifier, "~> 0.6"} in deps
 
     lock_line =
       "mix.lock"
@@ -908,8 +931,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "opentelemetry_statifier": )))
 
     assert lock_line, "opentelemetry_statifier has no mix.lock entry"
-    assert lock_line =~ ":git,"
-    assert lock_line =~ @opentelemetry_statifier_pin
+    assert lock_line =~ ~s({:hex, :opentelemetry_statifier, "0.6.)
+    refute lock_line =~ ":git,"
   end
 
   # The SDK behind the bridge. `opentelemetry_statifier` depends only on

@@ -288,8 +288,9 @@ defmodule StatifierExamples.MixProject do
       # `Ecto.Migrations.up/1` and `down/1`, so the version it is on is the
       # one the package wrote.
       #
-      # se-20j takes a COMMITTED GIT PIN here rather than a Hex
-      # requirement. `execution` is the durable noun as of sp-ADR-0011:
+      # The requirement moves to the 0.12 line, and back to a bare Hex
+      # two-tuple. se-20j held a COMMITTED GIT PIN here for one release
+      # because `execution` became the durable noun as of sp-ADR-0011 -
       # the modules (`StatifierPersistence.Execution`, `.Executions`,
       # `.Execution.Linkage`), the seven adapter callbacks
       # (`insert_execution/2` through `list_execution_states_by_metadata/2`),
@@ -297,14 +298,18 @@ defmodule StatifierExamples.MixProject do
       # prefix `[:statifier_persistence, :execution, ...]`, the donedata
       # key `statifier_persistence:execution_status` and the
       # `statifier_executions` table all moved in one release, and this
-      # app is the largest consumer of every one of them. The rename is
-      # on `main` and unpublished, so the pin is what lets the reference
-      # embedder be written against it before 0.12.0 exists; `se-h6v`
-      # re-pins to `~> 0.12` once the operator publishes. The ref is the
-      # commit that carried the V06 table rename.
-      {:statifier_persistence,
-       git: "https://github.com/riddler/statifier_persistence.git",
-       ref: "71537dc7bd5a44bd905d7361ea92dbe821449f6e"},
+      # app is the largest consumer of every one of them - and that rename
+      # was on `main` and unpublished, so only a pin let the reference
+      # embedder be written against it. 0.12.0 is published and carries
+      # exactly what the pin took, so `se-h6v` retires the pin and the
+      # `refute` in the deps test is what says it did not come back.
+      #
+      # The 0.12 floor is REQUIRED rather than tidy: on the 0.11 line
+      # none of the names above exist under their execution spelling, so
+      # this app's `Storage.Adapter` implementation, its `Charts.Execution`
+      # and `execution_lock` callers and its telemetry assertions do not
+      # compile against it, let alone pass.
+      {:statifier_persistence, "~> 0.12"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -423,19 +428,19 @@ defmodule StatifierExamples.MixProject do
       # trace at all. The `statifier_oban` requirement 0.5.0 states is
       # test-only and reaches nothing here.
       #
-      # se-20j pins this one by COMMITTED GIT REF too, for the same
-      # reason and in lockstep with `statifier_persistence`: the bridge
-      # names the persistence span `statifier_persistence.execution.step`
-      # and carries the `statifier_persistence.execution_id`,
-      # `.parent_execution_id` and `.child_execution_id` attributes, and
-      # this app's trace assertions read exactly those keys. Renaming the
-      # telemetry prefix with no dual emit (sp-ADR-0011 decision 5) means
-      # a bridge one release behind subscribes to events nobody emits, so
-      # the two pins move together or neither does. `se-h6v` re-pins to
-      # `~> 0.6` once the operator publishes.
-      {:opentelemetry_statifier,
-       git: "https://github.com/riddler/opentelemetry_statifier.git",
-       ref: "e0204e9c8db739bd21e844436e5dcada1ebd4bf0"},
+      # It moves to the 0.6 line, and back to a bare Hex two-tuple.
+      # se-20j pinned this one by COMMITTED GIT REF too, in lockstep with
+      # `statifier_persistence`: the bridge names the persistence span
+      # `statifier_persistence.execution.step` and carries the
+      # `statifier_persistence.execution_id`, `.parent_execution_id` and
+      # `.child_execution_id` attributes, and this app's trace assertions
+      # read exactly those keys. Renaming the telemetry prefix with no
+      # dual emit (sp-ADR-0011 decision 5) means a bridge one release
+      # behind subscribes to events nobody emits, so the two arms move
+      # together or neither does - and they do here: 0.6.0 is published
+      # against the published 0.12 persistence, so `se-h6v` retires this
+      # pin in the same commit as that one.
+      {:opentelemetry_statifier, "~> 0.6"},
 
       # The SDK behind that bridge. `opentelemetry_statifier` depends only
       # on `opentelemetry_api` on purpose - a bridge that dragged an SDK
