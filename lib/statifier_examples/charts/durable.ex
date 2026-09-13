@@ -279,8 +279,22 @@ defmodule StatifierExamples.Charts.Durable do
       when is_binary(execution_id) do
     with {:ok, machine} <- Statifier.compile(compiled.scxml),
          {:ok, store} <- store(),
-         {:ok, record} <- Storage.fetch_execution(store, execution_id),
-         {:ok, machine_state} <- Storage.load_execution_position(store, execution_id, machine) do
+         {:ok, record} <- Storage.fetch_execution(store, execution_id) do
+      resume_fetched(compiled, document, execution_id, machine, store, record)
+    end
+  end
+
+  # `resume/3` past the record: the caller that already holds the execution row
+  # hands it in rather than reading it again. `resume/1` fetches the row to pick
+  # the chart, and the status the reading opens on is on that same row, so a
+  # resume by id asked storage for it twice. Splitting the fetch off here is what
+  # makes one resume one read; `resume/3`'s own arity is untouched, because every
+  # caller that has a compiled chart and an id and nothing else still needs the
+  # fetch done for it.
+  @spec resume_fetched(Compiled.t(), Document.t(), String.t(), term(), term(), map()) ::
+          {:ok, driven()} | {:error, term()}
+  defp resume_fetched(compiled, document, execution_id, machine, store, record) do
+    with {:ok, machine_state} <- Storage.load_execution_position(store, execution_id, machine) do
       durable = %__MODULE__{
         execution_id: execution_id,
         store: store,
@@ -329,7 +343,9 @@ defmodule StatifierExamples.Charts.Durable do
     with {:ok, store} <- store(),
          {:ok, record} <- Storage.fetch_execution(store, execution_id),
          {:ok, {compiled, document}} <- chart_for(record),
-         {:ok, driven} <- resume(compiled, document, execution_id) do
+         {:ok, machine} <- Statifier.compile(compiled.scxml),
+         {:ok, driven} <-
+           resume_fetched(compiled, document, execution_id, machine, store, record) do
       {:ok, {driven, document}}
     else
       :error -> {:error, :chart_unknown}
