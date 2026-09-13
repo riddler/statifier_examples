@@ -45,6 +45,26 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       assert has_element?(live, "#journey-responses")
       assert has_element?(live, "#account_continue")
     end
+
+    # No reader reaches this: the form is drawn only inside the `:if={@view}`
+    # block, so there is no element to change and the event has to be sent to
+    # the view directly. It is still worth refusing, because
+    # `Journey.resolve/2` wants a view with a `:screen` and a page with no
+    # run has no view at all.
+    #
+    # Sabotage: removed the `view: nil` clause from
+    # `handle_event("response", ...)`. This case went red - the event raised
+    # a FunctionClauseError on `Journey.resolve/2` and took the view down
+    # with it. Reverted from a copy.
+    test "and a keystroke with no run refuses rather than raising", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/signup-journey")
+
+      html = render_change(live, "response", %{"responses" => %{"first_name" => "Ada"}})
+
+      assert html =~ "no_execution"
+      assert has_element?(live, "#journey-error")
+      refute has_element?(live, "#journey-responses")
+    end
   end
 
   describe "the screen it draws" do
@@ -170,24 +190,20 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       refute has_element?(live, "#journey-responses")
     end
 
-    # No reader can reach this: the form is rendered only under `:if={@view}`,
-    # so `render_change/2` on the element is not available and the event has
-    # to be sent to the view directly. It is still worth holding, because
-    # `Journey.resolve/2` wants a view with a `:screen` and a page whose run
-    # has just been refused has none.
+    # And a keystroke that arrives anyway keeps that refusal rather than
+    # replacing it with the vaguer one, which is the only reason the clause
+    # reads the assign instead of writing over it.
     #
-    # Sabotage: removed the `view: nil` clause from
-    # `handle_event("response", ...)`. This case went red - the event raised
-    # a FunctionClauseError on `Journey.resolve/2` and took the view down
-    # with it. Reverted from a copy.
-    test "and a keystroke with no run refuses rather than raising", %{conn: conn} do
+    # Sabotage: made the clause assign `:no_execution` unconditionally. This
+    # case went red - the page drew "no_execution" and the reader lost the
+    # reason. Reverted from a copy.
+    test "and a keystroke on a refused run keeps the refusal it has", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-a-run")
 
       html = render_change(live, "response", %{"responses" => %{"first_name" => "Ada"}})
 
-      assert html =~ "no_execution"
-      assert has_element?(live, "#journey-error")
-      refute has_element?(live, "#journey-responses")
+      assert html =~ "execution_not_found"
+      refute html =~ "no_execution"
     end
   end
 end

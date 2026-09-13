@@ -17,7 +17,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
   ## What the socket holds, and why none of it is the run
 
-  Two things, and neither of them moves a run.
+  Two things, and neither of them is authoritative run state.
 
   The **view** `Journey` last answered with - a screen, its resolved nodes,
   the datamodel, the responses, a status. That is a copy of run state and it
@@ -74,13 +74,15 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     end
   end
 
-  # A keystroke with no view to re-resolve. The form renders only under
-  # `:if={@view}`, so no reader reaches this - but `Journey.resolve/2` takes a
-  # view and both its clauses want a map with a `:screen`, so an event arriving
-  # from a page whose run has since been refused would raise rather than
-  # refuse. It takes the refusal the rest of the page already uses.
+  # A keystroke with no view to re-resolve. The form is drawn only inside the
+  # `:if={@view}` block and only under `:if={@view.screen}`, so no reader
+  # reaches this - but `Journey.resolve/2` takes a view and both its clauses
+  # want a map with a `:screen`, so an event arriving from a page whose run
+  # has since been refused would raise rather than refuse. It takes the
+  # refusal the rest of the page already uses, and a refusal already on
+  # screen is the more informative one, so it stays.
   def handle_event("response", _params, %{assigns: %{view: nil}} = socket) do
-    {:noreply, assign(socket, error: :no_execution)}
+    {:noreply, assign(socket, error: socket.assigns.error || :no_execution)}
   end
 
   def handle_event("response", %{"responses" => responses}, socket) do
