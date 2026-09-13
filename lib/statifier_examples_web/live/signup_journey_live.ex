@@ -91,6 +91,16 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     {:noreply, assign(socket, draft: draft, view: Journey.resolve(socket.assigns.view, draft))}
   end
 
+  # The same refusal, for the same reason: the outcome buttons are drawn inside
+  # the `:if={@view}` block, so no reader reaches this - but this clause reads
+  # `assigns.view.execution_id`, and an event arriving from a page whose
+  # execution has since been refused would raise on a nil view rather than
+  # refuse. It takes the refusal the rest of the page already uses, and a
+  # refusal already on screen is the more informative one, so it stays.
+  def handle_event("outcome", _params, %{assigns: %{view: nil}} = socket) do
+    {:noreply, assign(socket, error: socket.assigns.error || :no_execution)}
+  end
+
   def handle_event("outcome", %{"outcome" => outcome}, %{assigns: assigns} = socket) do
     case Journey.submit(assigns.view.execution_id, outcome, assigns.draft) do
       {:ok, view} -> {:noreply, assign(socket, view: view, draft: %{}, error: nil)}

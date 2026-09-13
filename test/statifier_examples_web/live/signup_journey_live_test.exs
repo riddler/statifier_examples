@@ -65,6 +65,26 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       assert has_element?(live, "#journey-error")
       refute has_element?(live, "#journey-responses")
     end
+
+    # The same shape one press further along. The outcome buttons are drawn
+    # inside the `:if={@view}` block too, so the event has to be sent to the
+    # view directly - and the clause behind them reads
+    # `assigns.view.execution_id`, which a page with no execution cannot
+    # answer.
+    #
+    # Sabotage: removed the `view: nil` clause from
+    # `handle_event("outcome", ...)`. This case went red - the event raised
+    # reading `execution_id` out of nil and took the view down with it.
+    # Reverted from a copy.
+    test "and an outcome press with no run refuses rather than raising", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/signup-journey")
+
+      html = render_click(live, "outcome", %{"outcome" => "continue"})
+
+      assert html =~ "no_execution"
+      assert has_element?(live, "#journey-error")
+      refute has_element?(live, "#journey-responses")
+    end
   end
 
   describe "the screen it draws" do
@@ -201,6 +221,18 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-a-run")
 
       html = render_change(live, "response", %{"responses" => %{"first_name" => "Ada"}})
+
+      assert html =~ "execution_not_found"
+      refute html =~ "no_execution"
+    end
+
+    # Sabotage: made the outcome clause assign `:no_execution` unconditionally.
+    # This case went red - the page drew "no_execution" and the reader lost
+    # the reason. Reverted from a copy.
+    test "and an outcome press on a refused run keeps the refusal it has", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-a-run")
+
+      html = render_click(live, "outcome", %{"outcome" => "continue"})
 
       assert html =~ "execution_not_found"
       refute html =~ "no_execution"
