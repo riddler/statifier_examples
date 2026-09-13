@@ -57,7 +57,8 @@ defmodule StatifierExamples.Charts do
   A handler says which it needs by matching on it, and gets the clause for
   "not this driver" otherwise.
   """
-  @type call_context :: Statifier.Invoke.SyncHandler.ctx() | %{optional(:run_id) => String.t()}
+  @type call_context ::
+          Statifier.Invoke.SyncHandler.ctx() | %{optional(:execution_id) => String.t()}
 
   @doc """
   The palette the editor is given: `statifier_blocks`' `core.*` structural

@@ -43,10 +43,10 @@ defmodule StatifierExamples.Application do
       Statifier.Supervisor,
       # The per-run exclusion durable runs step inside. It has to be this
       # app's own: `StatifierExamples.Persistence` declines the optional
-      # `lock_run/3` that `StatifierPersistence.Runs`' default strategy
+      # `lock_execution/3` that `StatifierPersistence.Executions`' default strategy
       # asks for, so without a strategy the host supplies, every durable
-      # step refuses. See `StatifierExamples.Charts.RunLock`.
-      StatifierExamples.Charts.RunLock,
+      # step refuses. See `StatifierExamples.Charts.ExecutionLock`.
+      StatifierExamples.Charts.ExecutionLock,
       # The host's own Oban instance. `statifier_oban` never starts one
       # (its ADR-0002) and this app is the only thing that could, so the
       # wizard's abandonment reminder has a scheduler to be stored in.

@@ -10,7 +10,7 @@ defmodule StatifierExamples.PersistenceConformanceTest do
   discovered by a run that quietly does the wrong thing.
 
   The suite generates no per-run lock cases here, because the adapter
-  does not export `lock_run/3`. That is the point rather than a gap: the
+  does not export `lock_execution/3`. That is the point rather than a gap: the
   moduledoc on `StatifierExamples.Persistence` says why SQLite cannot
   honour that callback, and this run is what holds it to every part of
   the contract it does claim.

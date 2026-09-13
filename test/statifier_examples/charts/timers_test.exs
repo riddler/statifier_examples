@@ -5,7 +5,7 @@ defmodule StatifierExamples.Charts.TimersTest do
   that has never seen it.
 
   Not async: durable runs step through the application's named
-  `StatifierExamples.Charts.RunLock`, and the jobs are rows.
+  `StatifierExamples.Charts.ExecutionLock`, and the jobs are rows.
   """
 
   use ExUnit.Case, async: false
@@ -15,7 +15,7 @@ defmodule StatifierExamples.Charts.TimersTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run, Timers}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, Timers}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup
   alias StatifierPersistence.Storage
@@ -37,7 +37,7 @@ defmodule StatifierExamples.Charts.TimersTest do
   setup do
     :ok = Sandbox.checkout(Repo)
 
-    %{run_id: "timer-#{System.unique_integer([:positive])}"}
+    %{execution_id: "timer-#{System.unique_integer([:positive])}"}
   end
 
   defp wizard do
@@ -47,18 +47,18 @@ defmodule StatifierExamples.Charts.TimersTest do
     {compiled, fixture.document, fixture.key}
   end
 
-  defp start!(run_id) do
+  defp start!(execution_id) do
     {compiled, document, key} = wizard()
-    {:ok, driven} = Durable.start(compiled, document, run_id, key)
+    {:ok, driven} = Durable.start(compiled, document, execution_id, key)
 
     driven
   end
 
-  defp reminder_jobs(run_id) do
-    Enum.filter(jobs(run_id), &(&1.args["event"] == @reminder))
+  defp reminder_jobs(execution_id) do
+    Enum.filter(jobs(execution_id), &(&1.args["event"] == @reminder))
   end
 
-  defp jobs(run_id) do
+  defp jobs(execution_id) do
     Repo.all(
       from(job in "oban_jobs",
         where: job.worker == ^@timer_worker,
@@ -71,7 +71,7 @@ defmodule StatifierExamples.Charts.TimersTest do
       )
     )
     |> Enum.map(&decode_args/1)
-    |> Enum.filter(&(&1.args["scope"] == run_id))
+    |> Enum.filter(&(&1.args["scope"] == execution_id))
   end
 
   defp decode_args(%{args: args} = job) when is_binary(args),
@@ -102,9 +102,9 @@ defmodule StatifierExamples.Charts.TimersTest do
     end
   end
 
-  defp record!(run_id) do
+  defp record!(execution_id) do
     {:ok, store} = Storage.new(StatifierExamples.Persistence, [])
-    {:ok, record} = Storage.fetch_run(store, run_id)
+    {:ok, record} = Storage.fetch_execution(store, execution_id)
 
     record
   end
@@ -116,10 +116,10 @@ defmodule StatifierExamples.Charts.TimersTest do
   # Sabotage: made `Timers.consume/2`'s `SendDelayed` clause fall through to
   # the catch-all `:ok`; this went red with no job, then reverted.
   test "parking in the verification window arms the reminder as a stored job",
-       %{run_id: run_id} do
-    start!(run_id)
+       %{execution_id: execution_id} do
+    start!(execution_id)
 
-    assert [job] = reminder_jobs(run_id)
+    assert [job] = reminder_jobs(execution_id)
     assert job.state == "scheduled"
     assert job.args["event"] == "signup.reminder_due"
   end
@@ -131,10 +131,12 @@ defmodule StatifierExamples.Charts.TimersTest do
   # Sabotage: made `Signup.apply_reminder_delay/1` answer its argument
   # unchanged; the job came back scheduled 2 days out and this went red,
   # then reverted.
-  test "the reminder is armed at the delay application config names", %{run_id: run_id} do
-    start!(run_id)
+  test "the reminder is armed at the delay application config names", %{
+    execution_id: execution_id
+  } do
+    start!(execution_id)
 
-    [job] = reminder_jobs(run_id)
+    [job] = reminder_jobs(execution_id)
 
     assert Signup.reminder_delay() == "45s"
 
@@ -150,12 +152,14 @@ defmodule StatifierExamples.Charts.TimersTest do
   # Sabotage: made `Timers.consume/2`'s `Cancel` clause fall through to the
   # catch-all `:ok`; the job stayed `scheduled` and this went red, then
   # reverted.
-  test "moving past the verification window cancels the stored reminder", %{run_id: run_id} do
-    {durable, run} = start!(run_id)
+  test "moving past the verification window cancels the stored reminder", %{
+    execution_id: execution_id
+  } do
+    {durable, run} = start!(execution_id)
 
     {:ok, _driven} = Durable.send_event(durable, run, @wait)
 
-    assert [job] = reminder_jobs(run_id)
+    assert [job] = reminder_jobs(execution_id)
     assert job.state == "cancelled"
   end
 
@@ -172,10 +176,10 @@ defmodule StatifierExamples.Charts.TimersTest do
   # Sabotage: made `Durable.deliver/2` skip its `broadcast/2` call; the
   # `assert_receive` timed out and this went red, then reverted.
   test "a fired reminder drives the stored run, notifies, and reaches the feed",
-       %{run_id: run_id} do
-    start!(run_id)
+       %{execution_id: execution_id} do
+    start!(execution_id)
 
-    :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(run_id))
+    :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(execution_id))
 
     # Two drains, and se-d74 is why both counts moved.
     #
@@ -198,20 +202,21 @@ defmodule StatifierExamples.Charts.TimersTest do
       end)
 
     assert log =~ "myapp:notify"
-    assert record!(run_id).status == :completed
+    assert record!(execution_id).status == :completed
 
     # Two broadcasts now, one per drive, and they carry different readings:
     # the fired timer's drive is the one that reaches `myapp:notify` and
     # rests on the asynchronous call, and the job's answer opens its own
     # reading from the resumed position and finishes. Both are asserted
     # because a page showing this run redraws on each.
-    assert_receive {:run_advanced, ^run_id, {%Durable{}, %Run{status: :running} = nudged}}
+    assert_receive {:execution_advanced, ^execution_id,
+                    {%Durable{}, %Execution{status: :running} = nudged}}
 
-    assert Enum.any?(Run.entries(nudged), fn entry ->
+    assert Enum.any?(Execution.entries(nudged), fn entry ->
              is_binary(entry.detail) and entry.detail =~ "myapp:notify"
            end)
 
-    assert_receive {:run_advanced, ^run_id, {%Durable{}, %Run{status: :done}}}
+    assert_receive {:execution_advanced, ^execution_id, {%Durable{}, %Execution{status: :done}}}
   end
 
   # Spec 6.2's discard, enforced at the delivery seam st-ADR-0054 decision 4
@@ -222,8 +227,8 @@ defmodule StatifierExamples.Charts.TimersTest do
   # Sabotage: deleted `deliver/2`'s `:active <- record.status` clause; the
   # job drained as a success against a finished run and this went red on
   # the cancelled count, then reverted.
-  test "a reminder that fires after the run finished is discarded", %{run_id: run_id} do
-    {durable, run} = start!(run_id)
+  test "a reminder that fires after the run finished is discarded", %{execution_id: execution_id} do
+    {durable, run} = start!(execution_id)
     {:ok, _driven} = Durable.send_event(durable, run, @wait)
 
     # The wait leaves the run resting on se-d74's asynchronous
@@ -232,12 +237,12 @@ defmodule StatifierExamples.Charts.TimersTest do
     # is untouched by this drain.
     assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
 
-    assert record!(run_id).status == :completed
+    assert record!(execution_id).status == :completed
 
     # Asked directly, because the race this guards is one a cancel cannot
     # win: a job already executing when its scope exited reaches delivery
     # with the run finished behind it.
-    assert Durable.deliver(run_id, @reminder) == {:discarded, :completed}
+    assert Durable.deliver(execution_id, @reminder) == {:discarded, :completed}
   end
 
   # A run this app can no longer name a chart for is a discard too, with
@@ -247,11 +252,11 @@ defmodule StatifierExamples.Charts.TimersTest do
   # Sabotage: made `deliver/2` answer `:delivered` for a `:chart_unknown`
   # fixture lookup; it raised on the missing fixture instead of cancelling
   # and this went red, then reverted.
-  test "a reminder for a run with no chart to rebuild is discarded", %{run_id: run_id} do
+  test "a reminder for a run with no chart to rebuild is discarded", %{execution_id: execution_id} do
     {compiled, document, _key} = wizard()
-    {:ok, _driven} = Durable.start(compiled, document, run_id)
+    {:ok, _driven} = Durable.start(compiled, document, execution_id)
 
-    assert Durable.deliver(run_id, "signup.reminder_due") == {:discarded, :chart_unknown}
+    assert Durable.deliver(execution_id, "signup.reminder_due") == {:discarded, :chart_unknown}
   end
 
   # The metadata a fired timer reads is written once, at create, and has to
@@ -261,13 +266,13 @@ defmodule StatifierExamples.Charts.TimersTest do
   #
   # Sabotage: made `Durable.metadata/1` answer `%{}` for a binary key; this
   # went red on the fetch, then reverted.
-  test "the fixture the run is a run of survives a step", %{run_id: run_id} do
-    {durable, run} = start!(run_id)
+  test "the fixture the run is a run of survives a step", %{execution_id: execution_id} do
+    {durable, run} = start!(execution_id)
 
-    assert record!(run_id).metadata == %{"fixture" => "signup_wizard"}
+    assert record!(execution_id).metadata == %{"fixture" => "signup_wizard"}
 
     {:ok, _driven} = Durable.send_event(durable, run, @wait)
 
-    assert record!(run_id).metadata == %{"fixture" => "signup_wizard"}
+    assert record!(execution_id).metadata == %{"fixture" => "signup_wizard"}
   end
 end

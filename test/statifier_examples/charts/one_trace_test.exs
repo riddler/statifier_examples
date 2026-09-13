@@ -50,21 +50,24 @@ defmodule StatifierExamples.Charts.OneTraceTest do
   alias StatifierExamples.Charts.{AsyncCalls, Durable, Subchart, Timers, Tracing}
   alias StatifierExamples.Repo
   alias StatifierExamples.TraceCollector
-  alias StatifierPersistence.Run.Linkage
+  alias StatifierPersistence.Execution.Linkage
   alias StatifierPersistence.Storage
 
   setup do
     :ok = Sandbox.checkout(Repo)
     :ok = TraceCollector.attach()
 
-    run_id = "trace-#{System.unique_integer([:positive])}"
+    execution_id = "trace-#{System.unique_integer([:positive])}"
 
-    %{run_id: run_id, child_id: Linkage.child_run_id(run_id, "blk_so_wizard", 0)}
+    %{
+      execution_id: execution_id,
+      child_id: Linkage.child_execution_id(execution_id, "blk_so_wizard", 0)
+    }
   end
 
   describe "the arc" do
-    setup %{run_id: run_id} do
-      %{spans: arc!(run_id)}
+    setup %{execution_id: execution_id} do
+      %{spans: arc!(execution_id)}
     end
 
     # The arc reached its end at all. Asserted first and separately,
@@ -76,9 +79,9 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # the child still `:active`, which is also the clearest statement of
     # what the drain does - with no button pressed anywhere, a fired timer
     # is the only thing that advances either run. Reverted.
-    test "runs to both terminal statuses", %{run_id: run_id, child_id: child_id} do
+    test "runs to both terminal statuses", %{execution_id: execution_id, child_id: child_id} do
       assert record!(child_id).status == :completed
-      assert record!(run_id).status == :completed
+      assert record!(execution_id).status == :completed
     end
 
     # Stage 2 and stage 4 of the arc, and the nesting the bridge does
@@ -93,10 +96,10 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # span id, which is the nesting this test is about. Reverted.
     test "the child's first step nests inside the parent's step", %{
       spans: spans,
-      run_id: run_id,
+      execution_id: execution_id,
       child_id: child_id
     } do
-      parent_step = step_for!(spans, run_id)
+      parent_step = step_for!(spans, execution_id)
       child_step = step_for!(spans, child_id)
 
       assert child_step.parent_span_id == parent_step.span_id
@@ -108,17 +111,17 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # carrying both ends of the link - which is what makes it navigable
     # from the parent alone.
     #
-    # Sabotage: asserted the child_run_id was the parent's run id; this
+    # Sabotage: asserted the child_execution_id was the parent's run id; this
     # went red reporting the real child id. Reverted.
     test "the child-start edge names both runs", %{
       spans: spans,
-      run_id: run_id,
+      execution_id: execution_id,
       child_id: child_id
     } do
       {_name, attributes} = event!(spans, "statifier_persistence.child.started")
 
-      assert attributes["statifier_persistence.parent_run_id"] == run_id
-      assert attributes["statifier_persistence.child_run_id"] == child_id
+      assert attributes["statifier_persistence.parent_execution_id"] == execution_id
+      assert attributes["statifier_persistence.child_execution_id"] == child_id
       assert attributes["statifier_persistence.invoke_id"] == "blk_so_wizard"
     end
 
@@ -132,7 +135,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # span event on the step span open in the emitting process, rather
     # than rooting a trace of its own. This app arms every one of these
     # inside `StatifierExamples.Charts.Durable`'s step, so all three land
-    # on `statifier_persistence.run.step`. The 0.4.0 behaviour - one bare
+    # on `statifier_persistence.execution.step`. The 0.4.0 behaviour - one bare
     # `timer.scheduled` root per arming, joined to the run by nothing but
     # the aliased scope - is what that release calls the defect, and the
     # arc reads better without it: the arming is now on the very span a
@@ -175,12 +178,12 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # red reporting `"blk_so_wizard"`. Reverted.
     test "the completion re-entry edge names the same triple", %{
       spans: spans,
-      run_id: run_id,
+      execution_id: execution_id,
       child_id: child_id
     } do
       assert [span] = named(spans, "statifier_persistence.child.answered")
-      assert span.attributes["statifier_persistence.parent_run_id"] == run_id
-      assert span.attributes["statifier_persistence.child_run_id"] == child_id
+      assert span.attributes["statifier_persistence.parent_execution_id"] == execution_id
+      assert span.attributes["statifier_persistence.child_execution_id"] == child_id
       assert span.attributes["statifier_persistence.invoke_id"] == "blk_so_wizard"
     end
 
@@ -207,12 +210,12 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # nothing else joins a fired timer to the run it belongs to. Reverted.
     test "every stage is reachable from the parent's first step", %{
       spans: spans,
-      run_id: run_id
+      execution_id: execution_id
     } do
-      reachable = reachable_from_first_step(spans, run_id)
+      reachable = reachable_from_first_step(spans, execution_id)
 
       for name <- [
-            "statifier_persistence.run.step",
+            "statifier_persistence.execution.step",
             "statifier_persistence.child.answered",
             "statifier_oban.timer.fired"
           ] do
@@ -234,16 +237,16 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # restated once more. Reverted.
     test "the timer-arming stage is reachable and names the child", %{
       spans: spans,
-      run_id: run_id,
+      execution_id: execution_id,
       child_id: child_id
     } do
-      reachable = reachable_from_first_step(spans, run_id)
+      reachable = reachable_from_first_step(spans, execution_id)
       armed = events(spans, "statifier_oban.timer.scheduled")
 
       assert armed != []
 
       for {span, attributes} <- armed do
-        assert span.name == "statifier_persistence.run.step"
+        assert span.name == "statifier_persistence.execution.step"
         assert attributes["statifier.session_id"] == child_id
 
         assert MapSet.member?(reachable, span.span_id),
@@ -296,18 +299,23 @@ defmodule StatifierExamples.Charts.OneTraceTest do
   # context on purpose - and exist so the work under them has a trace
   # context to stamp into `caller_context`, which is what a Phoenix or
   # Oban span would be in production.
-  defp arc!(run_id) do
+  defp arc!(execution_id) do
     {:ok, parent} = Charts.fixture("signup_onboarding")
     {:ok, compiled} = Durable.compile(parent.document, parent.declare)
 
     # Stages 1-4: the parent's session starts, its first durable step
     # runs, it reaches `core.subchart`, and the child is created as its
     # own persisted run inside that very step.
-    Tracing.drive("statifier_examples.start", %{"statifier_examples.run_id" => run_id}, fn ->
-      {:ok, _driven} = Durable.start(compiled, parent.document, run_id, "signup_onboarding")
-    end)
+    Tracing.drive(
+      "statifier_examples.start",
+      %{"statifier_examples.execution_id" => execution_id},
+      fn ->
+        {:ok, _driven} =
+          Durable.start(compiled, parent.document, execution_id, "signup_onboarding")
+      end
+    )
 
-    child_id = Linkage.child_run_id(run_id, "blk_so_wizard", 0)
+    child_id = Linkage.child_execution_id(execution_id, "blk_so_wizard", 0)
     {:ok, child} = Charts.fixture("signup_wizard")
     {:ok, child_compiled} = Subchart.child_compile(child.document)
 
@@ -342,9 +350,9 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     TraceCollector.drain()
   end
 
-  defp record!(run_id) do
+  defp record!(execution_id) do
     {:ok, store} = Storage.new(StatifierExamples.Persistence, [])
-    {:ok, record} = Storage.fetch_run(store, run_id)
+    {:ok, record} = Storage.fetch_execution(store, execution_id)
 
     record
   end
@@ -363,19 +371,19 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     end
   end
 
-  defp reachable_from_first_step(spans, run_id) do
-    first = step_for!(spans, run_id)
+  defp reachable_from_first_step(spans, execution_id) do
+    first = step_for!(spans, execution_id)
 
     TraceCollector.reachable(spans, &(&1.span_id == first.span_id))
   end
 
   # The first step span for a run, which is the one a reader starts from.
-  defp step_for!(spans, run_id) do
+  defp step_for!(spans, execution_id) do
     spans
-    |> named("statifier_persistence.run.step")
-    |> Enum.filter(&(&1.attributes["statifier_persistence.run_id"] == run_id))
+    |> named("statifier_persistence.execution.step")
+    |> Enum.filter(&(&1.attributes["statifier_persistence.execution_id"] == execution_id))
     |> List.first() ||
-      flunk("no statifier_persistence.run.step span for #{run_id}")
+      flunk("no statifier_persistence.execution.step span for #{execution_id}")
   end
 
   defp event!(spans, name) do

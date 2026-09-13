@@ -18,10 +18,10 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
   @account %{"first_name" => "Ada", "email" => "ada@example.com"}
 
   defp started(conn) do
-    {:ok, run_id} = Journey.start("page-#{System.unique_integer([:positive])}")
-    {:ok, live, html} = live(conn, ~p"/signup-journey?run=#{run_id}")
+    {:ok, execution_id} = Journey.start("page-#{System.unique_integer([:positive])}")
+    {:ok, live, html} = live(conn, ~p"/signup-journey?execution=#{execution_id}")
 
-    %{live: live, html: html, run_id: run_id}
+    %{live: live, html: html, execution_id: execution_id}
   end
 
   describe "with no run" do
@@ -146,12 +146,12 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # address it reads back: with no answers the confirm summary's text slot
     # renders empty and the collected block is bare. Reverted from a copy.
     test "and a second mount opens where it was", %{conn: conn} do
-      %{live: live, run_id: run_id} = started(conn)
+      %{live: live, execution_id: execution_id} = started(conn)
 
       live |> form("#journey-answers", answers: @account) |> render_change()
       live |> element("#account_continue") |> render_click()
 
-      {:ok, second, html} = live(conn, ~p"/signup-journey?run=#{run_id}")
+      {:ok, second, html} = live(conn, ~p"/signup-journey?execution=#{execution_id}")
 
       assert html =~ "Pick a plan"
       assert has_element?(second, "#seats")
@@ -163,9 +163,9 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     end
 
     test "and a run id nobody stored shows the refusal", %{conn: conn} do
-      {:ok, live, html} = live(conn, ~p"/signup-journey?run=not-a-run")
+      {:ok, live, html} = live(conn, ~p"/signup-journey?execution=not-a-run")
 
-      assert html =~ "run_not_found"
+      assert html =~ "execution_not_found"
       assert has_element?(live, "#journey-error")
       refute has_element?(live, "#journey-answers")
     end

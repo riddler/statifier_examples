@@ -1,4 +1,4 @@
-defmodule StatifierExamples.Charts.RunTest do
+defmodule StatifierExamples.Charts.ExecutionTest do
   # Async: nothing here starts a process or writes a row. `Run` is a fold
   # over effects, so every derivation it makes is testable by handing it
   # the effects rather than by driving a chart into producing them - and
@@ -11,7 +11,7 @@ defmodule StatifierExamples.Charts.RunTest do
   alias Statifier.{Event, Machine}
   alias StatifierBlocks.Compiler
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.Run
+  alias StatifierExamples.Charts.Execution
 
   # The wizard compiled exactly as the editor page compiles it - the
   # fixture's own `declare:` and the page's `terminate: true` - because the
@@ -28,7 +28,7 @@ defmodule StatifierExamples.Charts.RunTest do
 
     {:ok, machine} = Statifier.compile(compiled.scxml)
 
-    Run.reading(machine, compiled, fixture.document, "run-b2f")
+    Execution.reading(machine, compiled, fixture.document, "run-b2f")
   end
 
   defp state_index(run, state_id) do
@@ -36,9 +36,9 @@ defmodule StatifierExamples.Charts.RunTest do
     index
   end
 
-  defp details(run), do: run |> Run.entries() |> Enum.map(& &1.detail)
+  defp details(run), do: run |> Execution.entries() |> Enum.map(& &1.detail)
 
-  defp kinds(run), do: run |> Run.entries() |> Enum.map(& &1.kind)
+  defp kinds(run), do: run |> Execution.entries() |> Enum.map(& &1.kind)
 
   defp dequeued(name) do
     {:effect,
@@ -71,7 +71,7 @@ defmodule StatifierExamples.Charts.RunTest do
       round: 1
     }
 
-    marked = Run.absorb(run, {:effect, {:invoke, invoke}})
+    marked = Execution.absorb(run, {:effect, {:invoke, invoke}})
 
     assert marked.invoke == "blk_su_account"
     assert "myapp:signup on Collect email and password" in details(marked)
@@ -85,7 +85,7 @@ defmodule StatifierExamples.Charts.RunTest do
   # Sabotage: made `outcome_mark/3` set `run.invoke` to the block id alone;
   # this went red on the tuple match. Reverted.
   test "the outcome event marks the block with what the call came back with" do
-    run = Run.absorb(reading(), dequeued("done.outcome.s_blk_su_account__o_done.done"))
+    run = Execution.absorb(reading(), dequeued("done.outcome.s_blk_su_account__o_done.done"))
 
     assert run.invoke == {"blk_su_account", "done"}
     assert "done on Collect email and password" in details(run)
@@ -108,10 +108,10 @@ defmodule StatifierExamples.Charts.RunTest do
           "done.outcome.s_blk_su_account__o_done.done"
         ],
         reading(),
-        &Run.absorb(&2, dequeued(&1))
+        &Execution.absorb(&2, dequeued(&1))
       )
 
-    events = for %{kind: :event} = entry <- Run.entries(run), do: entry.detail
+    events = for %{kind: :event} = entry <- Execution.entries(run), do: entry.detail
 
     assert events == ["signup.email_verified"]
   end
@@ -133,7 +133,7 @@ defmodule StatifierExamples.Charts.RunTest do
       ])
 
     marked =
-      Run.absorb(
+      Execution.absorb(
         run,
         {:effect,
          {:trace,
@@ -163,7 +163,7 @@ defmodule StatifierExamples.Charts.RunTest do
     ]
 
     entered =
-      Run.absorb(
+      Execution.absorb(
         run,
         {:effect,
          {:trace,
@@ -187,8 +187,8 @@ defmodule StatifierExamples.Charts.RunTest do
   test "a halted run takes the status, clears the mark, and says so" do
     run =
       reading()
-      |> Run.absorb(dequeued("done.outcome.s_blk_su_account__o_done.done"))
-      |> Run.absorb({:halted, :done})
+      |> Execution.absorb(dequeued("done.outcome.s_blk_su_account__o_done.done"))
+      |> Execution.absorb({:halted, :done})
 
     assert run.status == :done
     assert run.invoke == nil
@@ -205,7 +205,7 @@ defmodule StatifierExamples.Charts.RunTest do
   test "the external events are read off the document's own interrupt blocks" do
     {:ok, fixture} = Charts.fixture("signup_wizard")
 
-    assert Run.event_names(fixture.document) ==
+    assert Execution.event_names(fixture.document) ==
              ["signup.abandoned", "signup.email_verified", "signup.reminder_due"]
   end
 
@@ -217,7 +217,7 @@ defmodule StatifierExamples.Charts.RunTest do
   test "the feed names a block by its label, and by its id when it has none" do
     run = reading()
 
-    assert Run.name(run, "blk_su_account") == "Collect email and password"
-    assert Run.name(run, "blk_su_root") == "blk_su_root"
+    assert Execution.name(run, "blk_su_account") == "Collect email and password"
+    assert Execution.name(run, "blk_su_root") == "blk_su_root"
   end
 end

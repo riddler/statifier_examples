@@ -12,7 +12,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   carrying what the form collected, and answers with the screen the run moved
   to. Reload the page, kill the server, open the same URL on another machine:
   the run is where it was, because the only thing that had to survive was the
-  id in `?run=`.
+  id in `?execution=`.
 
   ## What the socket holds, and why none of it is the run
 
@@ -21,7 +21,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   The **view** `Journey` last answered with - a screen, its resolved nodes,
   the datamodel, the answers, a status. That is a copy of run state and it
   can be stale between redraws, which is why every press re-reads: the only
-  thing `handle_event("outcome", ...)` takes out of it is `run_id`, so a
+  thing `handle_event("outcome", ...)` takes out of it is `execution_id`, so a
   second person pressing the same run is refused by `Journey` against the
   stored position rather than raced here.
 
@@ -54,14 +54,17 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
   @impl Phoenix.LiveView
   def handle_params(params, _uri, socket) do
-    {:noreply, load(socket, params["run"])}
+    {:noreply, load(socket, params["execution"])}
   end
 
   @impl Phoenix.LiveView
   def handle_event("start", _params, socket) do
     case Journey.start() do
-      {:ok, run_id} -> {:noreply, push_patch(socket, to: ~p"/signup-journey?run=#{run_id}")}
-      {:error, reason} -> {:noreply, assign(socket, error: reason)}
+      {:ok, execution_id} ->
+        {:noreply, push_patch(socket, to: ~p"/signup-journey?execution=#{execution_id}")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error: reason)}
     end
   end
 
@@ -72,7 +75,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   end
 
   def handle_event("outcome", %{"outcome" => outcome}, %{assigns: assigns} = socket) do
-    case Journey.submit(assigns.view.run_id, outcome, assigns.draft) do
+    case Journey.submit(assigns.view.execution_id, outcome, assigns.draft) do
       {:ok, view} -> {:noreply, assign(socket, view: view, draft: %{}, error: nil)}
       {:invalid, view} -> {:noreply, assign(socket, view: view, error: nil)}
       {:error, reason} -> {:noreply, assign(socket, error: reason)}
@@ -84,8 +87,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   # deliberately does not use it - it re-resolves from storage instead, so
   # what it draws is the position rather than someone else's view of it.
   @impl Phoenix.LiveView
-  def handle_info({:run_advanced, run_id, _driven}, socket) do
-    {:noreply, load(socket, run_id)}
+  def handle_info({:execution_advanced, execution_id, _driven}, socket) do
+    {:noreply, load(socket, execution_id)}
   end
 
   @impl Phoenix.LiveView
@@ -110,7 +113,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
         <div :if={@view} class="flex flex-col gap-6">
           <p id="run-id" class="font-mono text-xs opacity-60">
-            run {@view.run_id} - {@view.status}
+            run {@view.execution_id} - {@view.status}
           </p>
 
           <ul
@@ -150,9 +153,9 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   # `StatifierExamplesWeb.EditorLive`'s reason: a page that quietly showed
   # nothing would be hiding the storage guard doing its job.
   @spec load(Phoenix.LiveView.Socket.t(), String.t() | nil) :: Phoenix.LiveView.Socket.t()
-  defp load(socket, run_id) when is_binary(run_id) do
-    case Journey.current(run_id) do
-      {:ok, view} -> socket |> watch(run_id) |> assign(view: view, draft: %{}, error: nil)
+  defp load(socket, execution_id) when is_binary(execution_id) do
+    case Journey.current(execution_id) do
+      {:ok, view} -> socket |> watch(execution_id) |> assign(view: view, draft: %{}, error: nil)
       {:error, reason} -> assign(socket, view: nil, error: reason)
     end
   end
@@ -160,8 +163,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   defp load(socket, _absent), do: socket
 
   @spec watch(Phoenix.LiveView.Socket.t(), String.t()) :: Phoenix.LiveView.Socket.t()
-  defp watch(socket, run_id) do
-    topic = Durable.topic(run_id)
+  defp watch(socket, execution_id) do
+    topic = Durable.topic(execution_id)
 
     cond do
       socket.assigns.topic == topic ->

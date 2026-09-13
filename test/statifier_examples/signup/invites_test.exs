@@ -49,7 +49,7 @@ defmodule StatifierExamples.Signup.InvitesTest do
 
     assert Enum.count(promoted, &is_binary/1) == 1
     assert Invites.promoted_email("su-c07") == "invitee-su-c07-3@example.com"
-    assert Invites.promoted_run_id("su-c07") == "promoted-su-c07"
+    assert Invites.promoted_execution_id("su-c07") == "promoted-su-c07"
   end
 
   # The at-least-once property, measured rather than argued: the same
@@ -81,8 +81,8 @@ defmodule StatifierExamples.Signup.InvitesTest do
     assert [promoted] = Invites.promoted()
     assert promoted.email == "invitee-su-c07-3@example.com"
     assert promoted.status == "promoted"
-    assert promoted.promoted_run_id == "promoted-su-c07"
-    assert promoted.run_id == "run-7"
+    assert promoted.promoted_execution_id == "promoted-su-c07"
+    assert promoted.execution_id == "run-7"
 
     assert Enum.count(rows, &(&1.status == "provisioned")) == 24
   end

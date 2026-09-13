@@ -110,7 +110,7 @@ defmodule StatifierExamples.Charts.Replay do
   alias StatifierBlocks.Compiled
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.Durable
-  alias StatifierPersistence.Runs
+  alias StatifierPersistence.Executions
   alias StatifierPersistence.Storage
   alias StatifierUI.Live.State
   alias StatifierUI.Trace.Replay, as: TraceReplay
@@ -125,7 +125,7 @@ defmodule StatifierExamples.Charts.Replay do
       closed itself with a marker at that ordinal (decision 6). The
       prefix before it is real, and drawing it as a whole run would be
       the one dishonest reading available here.
-    * `{:no_session_id, run_id}` - the stored position carries no
+    * `{:no_session_id, execution_id}` - the stored position carries no
       `_sessionid`, so no message envelope can be stamped.
     * `{:unmapped_door, door, input}` - a row at a door decision 8's
       table has no mapping for. Refused rather than guessed at: a run
@@ -145,7 +145,7 @@ defmodule StatifierExamples.Charts.Replay do
           | term()
 
   @doc """
-  The read model `statifier_blocks`' Run pane takes, built from `run_id`'s
+  The read model `statifier_blocks`' Run pane takes, built from `execution_id`'s
   stored input log over `compiled`'s chart.
 
   `compiled` is this app's own `StatifierBlocks.Compiled` - the
@@ -163,15 +163,15 @@ defmodule StatifierExamples.Charts.Replay do
   its own send controls on the page header.
   """
   @spec state(String.t(), Compiled.t()) :: {:ok, State.t()} | {:error, refusal()}
-  def state(run_id, %Compiled{} = compiled) when is_binary(run_id) do
+  def state(execution_id, %Compiled{} = compiled) when is_binary(execution_id) do
     with {:ok, machine} <- Statifier.compile(compiled.scxml),
-         {:ok, messages} <- messages(run_id, machine) do
+         {:ok, messages} <- messages(execution_id, machine) do
       {:ok, State.new(machine, messages: messages)}
     end
   end
 
   @doc """
-  The wire-format v1 message stream for `run_id`, over an already compiled
+  The wire-format v1 message stream for `execution_id`, over an already compiled
   `machine`.
 
   `state/2`'s middle step, exposed for the same reason
@@ -181,11 +181,11 @@ defmodule StatifierExamples.Charts.Replay do
   """
   @spec messages(String.t(), Statifier.Machine.t()) ::
           {:ok, [StatifierUI.Trace.Message.t()]} | {:error, refusal()}
-  def messages(run_id, machine) when is_binary(run_id) do
+  def messages(execution_id, machine) when is_binary(execution_id) do
     with {:ok, store} <- store(),
-         {:ok, inputs} <- inputs(store, run_id),
+         {:ok, inputs} <- inputs(store, execution_id),
          {:ok, entries} <- entries(inputs),
-         {:ok, session_id} <- session_id(run_id) do
+         {:ok, session_id} <- session_id(execution_id) do
       TraceReplay.from_events(machine, initialize_opts(session_id), entries)
     end
   end
@@ -217,8 +217,8 @@ defmodule StatifierExamples.Charts.Replay do
   end
 
   @spec inputs(Storage.t(), String.t()) :: {:ok, [Storage.input()]} | {:error, refusal()}
-  defp inputs(store, run_id) do
-    case Runs.inputs(store, run_id) do
+  defp inputs(store, execution_id) do
+    case Executions.inputs(store, execution_id) do
       {:ok, inputs} -> {:ok, inputs}
       :not_supported -> {:error, :input_log_unsupported}
       {:error, reason} -> {:error, reason}
@@ -308,11 +308,11 @@ defmodule StatifierExamples.Charts.Replay do
   # ADR-0010 decision 8 states as one of its two limits and
   # `Durable.machine_state/1` is already the door to.
   @spec session_id(String.t()) :: {:ok, String.t()} | {:error, refusal()}
-  defp session_id(run_id) do
-    with {:ok, %MachineState{datamodel: datamodel}} <- Durable.machine_state(run_id) do
+  defp session_id(execution_id) do
+    with {:ok, %MachineState{datamodel: datamodel}} <- Durable.machine_state(execution_id) do
       case Map.get(datamodel, "_sessionid") do
         session_id when is_binary(session_id) -> {:ok, session_id}
-        _absent -> {:error, {:no_session_id, run_id}}
+        _absent -> {:error, {:no_session_id, execution_id}}
       end
     end
   end

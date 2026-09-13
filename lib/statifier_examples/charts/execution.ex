@@ -1,4 +1,4 @@
-defmodule StatifierExamples.Charts.Run do
+defmodule StatifierExamples.Charts.Execution do
   @moduledoc """
   The reading of one run of one compiled document: the marks the editor
   paints, and the feed of what happened.
@@ -94,6 +94,20 @@ defmodule StatifierExamples.Charts.Run do
           source: String.t() | nil
         }
 
+  @typedoc """
+  Where a reading has got to.
+
+  This app's own vocabulary, deliberately wider than
+  `t:StatifierPersistence.Storage.Adapter.execution_status/0`: the stored
+  execution knows `:active | :completed | :failed | :cancelled`, while a
+  reading also has to be able to say that a drive stopped because it ran
+  out of turns (`:budget_exhausted`), which is a fact about this app's
+  drive loop rather than about the stored row. It is named here so the
+  one page type that mirrors it - `t:StatifierExamples.Signup.Journey.view/0`
+  - can reference it instead of duplicating the union by hand.
+  """
+  @type status :: :running | :done | :failed | :cancelled | :budget_exhausted
+
   @type t :: %__MODULE__{
           session_id: String.t(),
           machine: Machine.t(),
@@ -104,7 +118,7 @@ defmodule StatifierExamples.Charts.Run do
           seq: non_neg_integer(),
           active: [String.t()],
           invoke: nil | String.t() | {String.t(), String.t()},
-          status: :running | :done | :failed | :cancelled | :budget_exhausted
+          status: status()
         }
 
   # Every key here is a fact the reading cannot be built without, so every
@@ -138,7 +152,7 @@ defmodule StatifierExamples.Charts.Run do
   @narrated_prefixes ["done.invoke.", "done.outcome.", "done.state."]
 
   @doc """
-  The reading of a run, identified by `run_id`.
+  The reading of a run, identified by `execution_id`.
 
   The durable driver's constructor, and the only one. It takes the
   `machine` explicitly rather than compiling one, because the machine a
@@ -150,10 +164,10 @@ defmodule StatifierExamples.Charts.Run do
   words, and which of the two this is belongs to the driver that knows.
   """
   @spec reading(Machine.t(), Compiled.t(), Document.t(), String.t()) :: t()
-  def reading(%Machine{} = machine, %Compiled{} = compiled, %Document{} = document, run_id)
-      when is_binary(run_id) do
+  def reading(%Machine{} = machine, %Compiled{} = compiled, %Document{} = document, execution_id)
+      when is_binary(execution_id) do
     %__MODULE__{
-      session_id: run_id,
+      session_id: execution_id,
       machine: machine,
       provenance: compiled.provenance,
       labels: labels(document),

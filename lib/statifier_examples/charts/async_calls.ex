@@ -216,15 +216,15 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   end
 
   @doc """
-  Consumes one effect on behalf of the run named by `run_id`.
+  Consumes one effect on behalf of the run named by `execution_id`.
 
   Two effects are this module's, and every other one passes through
   untouched:
 
     * `{:invoke, %Invoke{}}` for a call `async?/2` claims - one stored
-      job, keyed on `{run_id, invoke_id, macrostep}`.
+      job, keyed on `{execution_id, invoke_id, macrostep}`.
     * `{:cancel_invoke, %CancelInvoke{}}` - every stored job under
-      `{run_id, invoke_id}`, whatever its macrostep. The interpreter emits
+      `{execution_id, invoke_id}`, whatever its macrostep. The interpreter emits
       one per live invocation when the invoking state exits, and this app
       hands them all to the package: a cancel matching nothing is a no-op
       by the base's own contract, which is what makes it safe to pass
@@ -236,34 +236,35 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   error.
   """
   @spec consume(String.t(), Statifier.Effect.t()) :: :ok
-  def consume(run_id, {:invoke, %Invoke{} = invoke}) when is_binary(run_id) do
+  def consume(execution_id, {:invoke, %Invoke{} = invoke}) when is_binary(execution_id) do
     if async?(invoke.type, params(invoke.params)) do
-      start!(run_id, invoke)
+      start!(execution_id, invoke)
     else
       :ok
     end
   end
 
-  def consume(run_id, {:cancel_invoke, %CancelInvoke{} = effect}) when is_binary(run_id) do
-    case Handler.perform_cancel(__MODULE__, effect.invoke_id, ctx(run_id)) do
+  def consume(execution_id, {:cancel_invoke, %CancelInvoke{} = effect})
+      when is_binary(execution_id) do
+    case Handler.perform_cancel(__MODULE__, effect.invoke_id, ctx(execution_id)) do
       :ok ->
         :ok
 
       {:error, reason} ->
-        raise "could not cancel #{effect.invoke_id} for #{run_id}: #{inspect(reason)}"
+        raise "could not cancel #{effect.invoke_id} for #{execution_id}: #{inspect(reason)}"
     end
   end
 
-  def consume(run_id, _other) when is_binary(run_id), do: :ok
+  def consume(execution_id, _other) when is_binary(execution_id), do: :ok
 
   @spec start!(String.t(), Invoke.t()) :: :ok
-  defp start!(run_id, %Invoke{} = invoke) do
-    case Handler.perform_start(__MODULE__, invoke, ctx(run_id)) do
+  defp start!(execution_id, %Invoke{} = invoke) do
+    case Handler.perform_start(__MODULE__, invoke, ctx(execution_id)) do
       :ok ->
         :ok
 
       {:error, reason} ->
-        raise "could not start #{invoke.invoke_id} for #{run_id}: #{inspect(reason)}"
+        raise "could not start #{invoke.invoke_id} for #{execution_id}: #{inspect(reason)}"
     end
   end
 
@@ -276,8 +277,8 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   # is built rather than a bare map so the value still satisfies
   # `t:Statifier.Invoke.Handler.ctx/0`.
   @spec ctx(String.t()) :: Statifier.Invoke.Handler.ctx()
-  defp ctx(run_id) do
-    %{session_id: run_id, invoke_types: Types.new(types: []), invoke_handlers: %{}}
+  defp ctx(execution_id) do
+    %{session_id: execution_id, invoke_types: Types.new(types: []), invoke_handlers: %{}}
   end
 
   @spec params(term()) :: map()

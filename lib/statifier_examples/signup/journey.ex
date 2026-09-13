@@ -94,7 +94,7 @@ defmodule StatifierExamples.Signup.Journey do
   """
 
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Durable, Run}
+  alias StatifierExamples.Charts.{Durable, Execution}
   alias StatifierExamples.Signup.{Screen, Screens, Validation}
 
   @fixture "signup_path"
@@ -108,12 +108,12 @@ defmodule StatifierExamples.Signup.Journey do
   `{:invalid, view}` a refused `submit/3` answers with.
   """
   @type view :: %{
-          run_id: String.t(),
+          execution_id: String.t(),
           screen: Screens.screen() | nil,
           nodes: [Screens.node_doc()],
           datamodel: map(),
           answers: %{optional(String.t()) => term()},
-          status: :running | :done | :failed | :cancelled | :budget_exhausted,
+          status: Execution.status(),
           findings: [Validation.finding()]
         }
 
@@ -124,18 +124,18 @@ defmodule StatifierExamples.Signup.Journey do
   the only handle anything here takes.
   """
   @spec start() :: {:ok, String.t()} | {:error, term()}
-  def start, do: start(Durable.new_run_id())
+  def start, do: start(Durable.new_execution_id())
 
   @doc """
   `start/0` with the run id supplied, which is what a test wants.
   """
   @spec start(String.t()) :: {:ok, String.t()} | {:error, term()}
-  def start(run_id) when is_binary(run_id) do
+  def start(execution_id) when is_binary(execution_id) do
     with {:ok, fixture} <- Charts.fixture(@fixture),
          {:ok, compiled} <-
            Durable.compile(fixture.document, fixture.declare, fixture.datamodel),
-         {:ok, _driven} <- Durable.start(compiled, fixture.document, run_id, fixture.key) do
-      {:ok, run_id}
+         {:ok, _driven} <- Durable.start(compiled, fixture.document, execution_id, fixture.key) do
+      {:ok, execution_id}
     else
       :error -> {:error, :no_such_fixture}
       {:error, _reason} = error -> error
@@ -143,20 +143,20 @@ defmodule StatifierExamples.Signup.Journey do
   end
 
   @doc """
-  The resolve half: what the run keyed `run_id` is showing right now.
+  The resolve half: what the run keyed `execution_id` is showing right now.
 
   Loads the run cold - the position out of storage, the chart out of the
   record - so a caller that has only an id out of a URL is a caller in full
   possession of the run.
 
-  `{:error, :run_not_found}` for an id nobody stored, and the storage
+  `{:error, :execution_not_found}` for an id nobody stored, and the storage
   layer's own refusals otherwise.
   """
   @spec current(String.t()) :: {:ok, view()} | {:error, term()}
-  def current(run_id) when is_binary(run_id) do
-    with {:ok, {{_durable, run}, _document}} <- Durable.resume(run_id),
-         {:ok, datamodel} <- datamodel(run_id) do
-      {:ok, view(run_id, run, datamodel)}
+  def current(execution_id) when is_binary(execution_id) do
+    with {:ok, {{_durable, run}, _document}} <- Durable.resume(execution_id),
+         {:ok, datamodel} <- datamodel(execution_id) do
+      {:ok, view(execution_id, run, datamodel)}
     end
   end
 
@@ -198,14 +198,14 @@ defmodule StatifierExamples.Signup.Journey do
   """
   @spec submit(String.t(), String.t(), %{optional(String.t()) => term()}) ::
           {:ok, view()} | {:invalid, view()} | {:error, term()}
-  def submit(run_id, outcome, answers)
-      when is_binary(run_id) and is_binary(outcome) and is_map(answers) do
-    with {:ok, {{durable, run}, _document}} <- Durable.resume(run_id),
-         {:ok, datamodel} <- datamodel(run_id),
-         {:ok, drafted} <- parked_on(resolve(view(run_id, run, datamodel), answers)),
+  def submit(execution_id, outcome, answers)
+      when is_binary(execution_id) and is_binary(outcome) and is_map(answers) do
+    with {:ok, {{durable, run}, _document}} <- Durable.resume(execution_id),
+         {:ok, datamodel} <- datamodel(execution_id),
+         {:ok, drafted} <- parked_on(resolve(view(execution_id, run, datamodel), answers)),
          {:ok, button} <- button(drafted.nodes, outcome) do
       case Validation.validate(drafted.nodes, answers) do
-        [] -> pressed(durable, run, run_id, button, coerce(answers))
+        [] -> pressed(durable, run, execution_id, button, coerce(answers))
         findings -> {:invalid, %{drafted | findings: findings}}
       end
     end
@@ -229,25 +229,25 @@ defmodule StatifierExamples.Signup.Journey do
   # The press itself. `Screen.outcome_event/1` is the event the compiled
   # `core.on_event` for this button is listening for, and the payload is
   # what its `capture` map reads out of.
-  @spec pressed(Durable.t(), Run.t(), String.t(), Screens.node_doc(), map()) ::
+  @spec pressed(Durable.t(), Execution.t(), String.t(), Screens.node_doc(), map()) ::
           {:ok, view()} | {:error, term()}
-  defp pressed(durable, run, run_id, button, typed) do
+  defp pressed(durable, run, execution_id, button, typed) do
     event = Screen.outcome_event(Map.fetch!(button, "outcome"))
 
     with {:ok, {_durable, moved}} <-
            Durable.send_event(durable, run, event, payload(button, typed)),
-         {:ok, datamodel} <- datamodel(run_id) do
-      {:ok, view(run_id, moved, datamodel)}
+         {:ok, datamodel} <- datamodel(execution_id) do
+      {:ok, view(execution_id, moved, datamodel)}
     end
   end
 
-  @spec view(String.t(), Run.t(), map()) :: view()
-  defp view(run_id, run, datamodel) do
+  @spec view(String.t(), Execution.t(), map()) :: view()
+  defp view(execution_id, run, datamodel) do
     screen = screen_at(run)
     answers = Map.get(datamodel, "answers") || %{}
 
     %{
-      run_id: run_id,
+      execution_id: execution_id,
       screen: screen,
       nodes: if(screen, do: Screens.resolve(screen, datamodel), else: []),
       datamodel: datamodel,
@@ -267,8 +267,8 @@ defmodule StatifierExamples.Signup.Journey do
   # Which screen a position is resting in. The park block of each
   # `myapp.screen` the Path names, looked for in the reading's active
   # blocks; `nil` when the run is resting anywhere else.
-  @spec screen_at(Run.t()) :: Screens.screen() | nil
-  defp screen_at(%Run{active: active}) do
+  @spec screen_at(Execution.t()) :: Screens.screen() | nil
+  defp screen_at(%Execution{active: active}) do
     parks = MapSet.new(active)
 
     Enum.find_value(StatifierExamples.Signup.Path.screen_refs(document()), fn {id, key} ->
@@ -299,8 +299,8 @@ defmodule StatifierExamples.Signup.Journey do
   # The run's own persisted datamodel, which is where the answers a screen
   # resolves against live once a chart is holding them.
   @spec datamodel(String.t()) :: {:ok, map()} | {:error, term()}
-  defp datamodel(run_id) do
-    with {:ok, state} <- Durable.machine_state(run_id) do
+  defp datamodel(execution_id) do
+    with {:ok, state} <- Durable.machine_state(execution_id) do
       {:ok, state.datamodel}
     end
   end

@@ -60,8 +60,8 @@ defmodule StatifierExamplesWeb.EditorLive do
   alias StatifierBlocks.Shell
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.Durable
+  alias StatifierExamples.Charts.Execution
   alias StatifierExamples.Charts.Replay
-  alias StatifierExamples.Charts.Run
   alias StatifierExamples.Documents
   alias StatifierExamplesWeb.Icons
 
@@ -79,7 +79,7 @@ defmodule StatifierExamplesWeb.EditorLive do
        drawer_height: nil,
        run: nil,
        durable: nil,
-       run_topic: nil,
+       execution_topic: nil,
        run_error: nil,
        proposed_step: nil,
        on_change: fn document -> send(parent, {:document_changed, document}) end,
@@ -95,7 +95,7 @@ defmodule StatifierExamplesWeb.EditorLive do
       |> assign(:theme, theme_param(params))
       |> load_document(document_param(socket, params))
       |> compile()
-      |> restore_run(params["run"])
+      |> restore_execution(params["execution"])
       |> push_run()
 
     {:noreply, socket}
@@ -124,7 +124,7 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   def handle_event("select-theme", %{"theme" => theme}, socket) do
     {:noreply,
-     push_patch(socket, to: editor_path(socket.assigns.fixture.key, theme, run_id(socket)))}
+     push_patch(socket, to: editor_path(socket.assigns.fixture.key, theme, execution_id(socket)))}
   end
 
   def handle_event("compile", _params, socket) do
@@ -178,8 +178,11 @@ defmodule StatifierExamplesWeb.EditorLive do
   # The id check is not paranoia. A page that patched to a different run
   # between the broadcast and its delivery is still subscribed for one
   # more message.
-  def handle_info({:run_advanced, run_id, {%Durable{} = durable, %Run{} = run}}, socket) do
-    if run_id(socket) == run_id do
+  def handle_info(
+        {:execution_advanced, execution_id, {%Durable{} = durable, %Execution{} = run}},
+        socket
+      ) do
+    if execution_id(socket) == execution_id do
       {:noreply, socket |> adopt({:ok, {durable, run}}) |> push_run()}
     else
       {:noreply, socket}
@@ -263,7 +266,7 @@ defmodule StatifierExamplesWeb.EditorLive do
             </button>
 
             <button
-              :for={event <- Run.event_names(@document)}
+              :for={event <- Execution.event_names(@document)}
               class="myapp-header__button myapp-header__button--event"
               type="button"
               disabled={is_nil(@run) or @run.status != :running}
@@ -323,8 +326,8 @@ defmodule StatifierExamplesWeb.EditorLive do
   @spec editor_path(String.t(), atom() | String.t(), String.t() | nil) :: String.t()
   defp editor_path(key, theme, nil), do: ~p"/editor?#{[doc: key, theme: to_string(theme)]}"
 
-  defp editor_path(key, theme, run_id),
-    do: ~p"/editor?#{[doc: key, theme: to_string(theme), run: run_id]}"
+  defp editor_path(key, theme, execution_id),
+    do: ~p"/editor?#{[doc: key, theme: to_string(theme), execution: execution_id]}"
 
   # ---------------------------------------------------------------- editing
 
@@ -372,14 +375,14 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   defp start_run(socket) do
     socket = forget_run(socket)
-    run_id = Durable.new_run_id()
+    execution_id = Durable.new_execution_id()
 
     adopt(
       socket,
       Durable.start(
         socket.assigns.compiled,
         socket.assigns.document,
-        run_id,
+        execution_id,
         socket.assigns.fixture.key
       )
     )
@@ -417,9 +420,9 @@ defmodule StatifierExamplesWeb.EditorLive do
   # behind and no page ever receives another run's advances.
   @spec watch_run(Phoenix.LiveView.Socket.t(), String.t() | nil) ::
           Phoenix.LiveView.Socket.t()
-  defp watch_run(socket, run_id) do
-    current = socket.assigns[:run_topic]
-    next = run_id && Durable.topic(run_id)
+  defp watch_run(socket, execution_id) do
+    current = socket.assigns[:execution_topic]
+    next = execution_id && Durable.topic(execution_id)
 
     if current == next do
       socket
@@ -430,13 +433,14 @@ defmodule StatifierExamplesWeb.EditorLive do
         Phoenix.PubSub.subscribe(StatifierExamples.PubSub, next)
       end
 
-      assign(socket, :run_topic, next)
+      assign(socket, :execution_topic, next)
     end
   end
 
   @spec send_run_event(Phoenix.LiveView.Socket.t(), String.t()) :: Phoenix.LiveView.Socket.t()
   defp send_run_event(
-         %{assigns: %{durable: %Durable{} = durable, run: %Run{status: :running} = run}} = socket,
+         %{assigns: %{durable: %Durable{} = durable, run: %Execution{status: :running} = run}} =
+           socket,
          event
        ) do
     adopt(socket, Durable.send_event(durable, run, event))
@@ -457,26 +461,26 @@ defmodule StatifierExamplesWeb.EditorLive do
   # compile of the same document, so resuming with this page's own would be
   # refused on identity - correctly and uselessly. Which recipe a stored run
   # wants is a fact about the record, and `Durable.resume/1` reads it there.
-  @spec restore_run(Phoenix.LiveView.Socket.t(), String.t() | nil) ::
+  @spec restore_execution(Phoenix.LiveView.Socket.t(), String.t() | nil) ::
           Phoenix.LiveView.Socket.t()
-  defp restore_run(socket, run_id) when is_binary(run_id) do
+  defp restore_execution(socket, execution_id) when is_binary(execution_id) do
     cond do
-      run_id(socket) == run_id ->
+      execution_id(socket) == execution_id ->
         socket
 
       is_nil(socket.assigns.compiled) ->
         socket
 
       true ->
-        adopt(socket, resumed(run_id))
+        adopt(socket, resumed(execution_id))
     end
   end
 
-  defp restore_run(socket, _absent), do: socket
+  defp restore_execution(socket, _absent), do: socket
 
   @spec resumed(String.t()) :: {:ok, Durable.driven()} | {:error, term()}
-  defp resumed(run_id) do
-    case Durable.resume(run_id) do
+  defp resumed(execution_id) do
+    case Durable.resume(execution_id) do
       {:ok, {driven, _document}} -> {:ok, driven}
       {:error, _reason} = error -> error
     end
@@ -490,7 +494,7 @@ defmodule StatifierExamplesWeb.EditorLive do
           Phoenix.LiveView.Socket.t()
   defp adopt(socket, {:ok, {durable, run}}) do
     socket
-    |> watch_run(durable.run_id)
+    |> watch_run(durable.execution_id)
     |> assign(:durable, durable)
     |> assign(:run, run)
     |> assign(:run_error, nil)
@@ -502,9 +506,11 @@ defmodule StatifierExamplesWeb.EditorLive do
     |> assign(:run_error, "run refused: #{inspect(reason)}")
   end
 
-  @spec run_id(Phoenix.LiveView.Socket.t()) :: String.t() | nil
-  defp run_id(%{assigns: %{durable: %Durable{run_id: run_id}}}), do: run_id
-  defp run_id(_socket), do: nil
+  @spec execution_id(Phoenix.LiveView.Socket.t()) :: String.t() | nil
+  defp execution_id(%{assigns: %{durable: %Durable{execution_id: execution_id}}}),
+    do: execution_id
+
+  defp execution_id(_socket), do: nil
 
   # The URL is where the run id lives, so every press that changes which
   # run the page is showing ends in a patch. Pressing Run and then reading
@@ -512,7 +518,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   @spec patch_to_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp patch_to_run(socket) do
     push_patch(socket,
-      to: editor_path(socket.assigns.fixture.key, socket.assigns.theme, run_id(socket))
+      to: editor_path(socket.assigns.fixture.key, socket.assigns.theme, execution_id(socket))
     )
   end
 
@@ -525,7 +531,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   # This used to be three assigns and a drawer tab, and what replaced them
   # is one reading rather than a smaller version of the same idea. The page
   # painted `active_marks` and `invoke_mark` from its own in-memory
-  # `StatifierExamples.Charts.Run`, which knew only what the current
+  # `StatifierExamples.Charts.Execution`, which knew only what the current
   # process had watched happen; and it rendered its own event feed into a
   # host drawer tab, which a resumed run opened with a single row saying it
   # had been resumed, because effects are not stored. Seating the run
@@ -571,7 +577,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   defp replayed(%{assigns: %{compiled: nil}}), do: :none
 
   defp replayed(socket) do
-    Replay.state(run_id(socket), socket.assigns.compiled)
+    Replay.state(execution_id(socket), socket.assigns.compiled)
   end
 
   # The rest of the option list this page compiles with, for the editor's

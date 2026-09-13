@@ -51,12 +51,12 @@ defmodule StatifierExamples.Signup.Accounts do
   @type outcome :: {:created, User.t()} | {:existing, User.t()}
 
   @doc """
-  Provisions the account for `run_id`, or returns the one already
+  Provisions the account for `execution_id`, or returns the one already
   provisioned for it.
   """
   @spec provision(String.t()) :: outcome()
-  def provision(run_id) when is_binary(run_id) do
-    email = email_for(run_id)
+  def provision(execution_id) when is_binary(execution_id) do
+    email = email_for(execution_id)
     now = DateTime.utc_now()
 
     {written, _returning} =
@@ -71,13 +71,14 @@ defmodule StatifierExamples.Signup.Accounts do
   end
 
   @doc """
-  The fictional address `run_id`'s account is provisioned under.
+  The fictional address `execution_id`'s account is provisioned under.
 
   Public because it is the key: a test asserting that two deliveries wrote
   one row needs the same derivation the writer used, not a copy of it.
   """
   @spec email_for(String.t()) :: String.t()
-  def email_for(run_id) when is_binary(run_id), do: "signup-#{run_id}@example.com"
+  def email_for(execution_id) when is_binary(execution_id),
+    do: "signup-#{execution_id}@example.com"
 
   # `insert_all/3` under `on_conflict: :nothing` answers with the number of
   # rows it actually wrote, and that count is the only place the difference

@@ -40,9 +40,9 @@ defmodule StatifierExamples.Signup.Invites do
   on a person, which is exactly the condition the boundary rule names -
   and that row gets a run of its own rather than being processed as data.
   Which invitee is a fact about the descriptor, so `promoted_email/1`
-  answers it and `promoted_run_id/1` names the run it is given, both
+  answers it and `promoted_execution_id/1` names the run it is given, both
   deterministically: a redelivered chunk asks for the same run id and the
-  storage layer's atomic `:run_exists` refusal is what makes the second
+  storage layer's atomic `:execution_exists` refusal is what makes the second
   ask a no-op rather than a second run.
   """
 
@@ -107,23 +107,23 @@ defmodule StatifierExamples.Signup.Invites do
   The run id a promoted invitee's own run is started under.
 
   Derived from the descriptor, so a redelivered chunk asks for the same
-  run and gets the storage layer's `:run_exists` refusal rather than a
+  run and gets the storage layer's `:execution_exists` refusal rather than a
   second one.
   """
-  @spec promoted_run_id(String.t()) :: String.t()
-  def promoted_run_id(chunk_id) when is_binary(chunk_id), do: "promoted-#{chunk_id}"
+  @spec promoted_execution_id(String.t()) :: String.t()
+  def promoted_execution_id(chunk_id) when is_binary(chunk_id), do: "promoted-#{chunk_id}"
 
   @doc """
-  Records every row of `chunk_id` as processed by the run `run_id`, with
-  `promoted_run_id` on the one row that got a run of its own.
+  Records every row of `chunk_id` as processed by the run `execution_id`, with
+  `promoted_execution_id` on the one row that got a run of its own.
 
   Answers how many rows the chunk stands for, which is the same number on
   a first delivery and on a replay. `:error` for an unrecognised
   descriptor, which is what a refused chunk answers the chart with.
   """
   @spec record(String.t(), String.t(), String.t() | nil) :: {:ok, non_neg_integer()} | :error
-  def record(chunk_id, run_id, promoted_run_id)
-      when is_binary(chunk_id) and is_binary(run_id) do
+  def record(chunk_id, execution_id, promoted_execution_id)
+      when is_binary(chunk_id) and is_binary(execution_id) do
     with {:ok, emails} <- rows_for(chunk_id) do
       promoted = promoted_email(chunk_id)
       now = DateTime.utc_now()
@@ -134,8 +134,8 @@ defmodule StatifierExamples.Signup.Invites do
             chunk_id: chunk_id,
             email: email,
             status: status(email, promoted),
-            run_id: run_id,
-            promoted_run_id: promoted_for(email, promoted, promoted_run_id),
+            execution_id: execution_id,
+            promoted_execution_id: promoted_for(email, promoted, promoted_execution_id),
             inserted_at: now,
             updated_at: now
           }
@@ -159,7 +159,9 @@ defmodule StatifierExamples.Signup.Invites do
   @doc "Every recorded row that was given a run of its own."
   @spec promoted() :: [InviteOutcome.t()]
   def promoted do
-    Repo.all(from(o in InviteOutcome, where: not is_nil(o.promoted_run_id), order_by: o.email))
+    Repo.all(
+      from(o in InviteOutcome, where: not is_nil(o.promoted_execution_id), order_by: o.email)
+    )
   end
 
   @doc "How many rows have been recorded, across every chunk."
@@ -171,6 +173,6 @@ defmodule StatifierExamples.Signup.Invites do
   defp status(_email, _promoted), do: "provisioned"
 
   @spec promoted_for(String.t(), String.t() | nil, String.t() | nil) :: String.t() | nil
-  defp promoted_for(email, email, promoted_run_id), do: promoted_run_id
-  defp promoted_for(_email, _promoted, _promoted_run_id), do: nil
+  defp promoted_for(email, email, promoted_execution_id), do: promoted_execution_id
+  defp promoted_for(_email, _promoted, _promoted_execution_id), do: nil
 end

@@ -1,6 +1,6 @@
 defmodule StatifierExamples.Charts.DurableTest do
   # Not async: durable runs step through the application's own
-  # `StatifierExamples.Charts.RunLock`, which is named, shared state, and
+  # `StatifierExamples.Charts.ExecutionLock`, which is named, shared state, and
   # they write to the repo.
   use ExUnit.Case, async: false
 
@@ -10,11 +10,11 @@ defmodule StatifierExamples.Charts.DurableTest do
   alias Statifier.Machine.Identity
   alias StatifierBlocks.{Compiled, Compiler, Decode}
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run, Subchart}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, Subchart}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Accounts, User}
-  alias StatifierPersistence.Run.Linkage
-  alias StatifierPersistence.{Runs, Storage}
+  alias StatifierPersistence.Execution.Linkage
+  alias StatifierPersistence.{Executions, Storage}
 
   # Where the signup wizard parks itself: its verification group is waiting
   # on the 24-hour `core.wait`, with every interrupt armed - the group's own
@@ -31,7 +31,7 @@ defmodule StatifierExamples.Charts.DurableTest do
   setup do
     :ok = Sandbox.checkout(Repo)
 
-    %{run_id: "run-#{System.unique_integer([:positive])}"}
+    %{execution_id: "run-#{System.unique_integer([:positive])}"}
   end
 
   # `terminate: true`, exactly as the editor page compiles it: it is what
@@ -113,51 +113,57 @@ defmodule StatifierExamples.Charts.DurableTest do
     store
   end
 
-  defp record!(run_id) do
-    {:ok, record} = Storage.fetch_run(store!(), run_id)
+  defp record!(execution_id) do
+    {:ok, record} = Storage.fetch_execution(store!(), execution_id)
 
     record
   end
 
-  defp kinds(run), do: run |> Run.entries() |> Enum.map(& &1.kind)
+  defp kinds(run), do: run |> Execution.entries() |> Enum.map(& &1.kind)
 
-  defp details(run), do: run |> Run.entries() |> Enum.map(& &1.detail)
+  defp details(run), do: run |> Execution.entries() |> Enum.map(& &1.detail)
 
-  defp accounts(run_id) do
-    email = Accounts.email_for(run_id)
+  defp accounts(execution_id) do
+    email = Accounts.email_for(execution_id)
 
     Repo.one!(from(u in User, where: u.email == ^email, select: count()))
   end
 
   # The constraint this whole module is shaped around, asserted rather than
-  # described: `StatifierExamples.Persistence` declines `lock_run/3`, so
-  # `StatifierPersistence.Runs`' default serialization refuses before a run
+  # described: `StatifierExamples.Persistence` declines `lock_execution/3`, so
+  # `StatifierPersistence.Executions`' default serialization refuses before a run
   # can start. Every entry point in `Durable` passes a strategy for exactly
   # this reason, and if the default ever started working here that is a
   # thing to find out from a test rather than from a silent change.
   #
-  # Sabotage: made `StatifierExamples.Persistence` delegate `lock_run/3` to
+  # Sabotage: made `StatifierExamples.Persistence` delegate `lock_execution/3` to
   # the Ecto adapter; this went red - with `no such function:
   # hashtextextended` out of SQLite - then reverted.
-  test "the default serialization strategy refuses over this adapter", %{run_id: run_id} do
+  test "the default serialization strategy refuses over this adapter", %{
+    execution_id: execution_id
+  } do
     {compiled, _document} = signup()
     {:ok, machine} = Statifier.compile(compiled.scxml)
 
     assert {:error, {:serialization, :not_supported}} =
-             Runs.create(store!(), run_id, machine, executor: fn _effect, _ctx -> :ok end)
+             Executions.create(store!(), execution_id, machine,
+               executor: fn _effect, _ctx -> :ok end
+             )
   end
 
   # Sabotage: made `Durable.start/3` create the run without its
   # `initialize: [trace: true]`, so no trace effect reached the reading;
   # this went red on the marks, then reverted.
-  test "a started run is durable: a record, a position, and a status", %{run_id: run_id} do
+  test "a started run is durable: a record, a position, and a status", %{
+    execution_id: execution_id
+  } do
     {compiled, document} = signup()
 
-    assert {:ok, {_durable, run}} = Durable.start(compiled, document, run_id)
+    assert {:ok, {_durable, run}} = Durable.start(compiled, document, execution_id)
     assert run.status == :running
     assert run.active == @waiting
 
-    record = record!(run_id)
+    record = record!(execution_id)
 
     assert record.status == :active
     assert is_binary(record.position_blob)
@@ -172,16 +178,17 @@ defmodule StatifierExamples.Charts.DurableTest do
   # Sabotage: made `resume/3` skip its `MacrostepStable` fold, so the
   # loaded position was never read into the marks; this went red on
   # `resumed.active`, then reverted.
-  test "a stored run resumes with the configuration it was left on", %{run_id: run_id} do
+  test "a stored run resumes with the configuration it was left on", %{execution_id: execution_id} do
     {compiled, document} = signup()
 
-    {:ok, {_durable, run}} = Durable.start(compiled, document, run_id)
+    {:ok, {_durable, run}} = Durable.start(compiled, document, execution_id)
 
-    assert {:ok, {_driver, resumed}} = Durable.resume(recompile!(document), document, run_id)
+    assert {:ok, {_driver, resumed}} =
+             Durable.resume(recompile!(document), document, execution_id)
 
     assert resumed.active == run.active
     assert resumed.status == :running
-    assert [%{kind: :started, label: "Run resumed from storage"}] = Run.entries(resumed)
+    assert [%{kind: :started, label: "Run resumed from storage"}] = Execution.entries(resumed)
   end
 
   # And it keeps going: a resumed run steps on the next press exactly as
@@ -194,12 +201,12 @@ defmodule StatifierExamples.Charts.DurableTest do
   # beside it, which is exactly the pair a run resting mid-call sits on.
   #
   # Sabotage: made `resume/3` build its `Durable` struct with a freshly
-  # generated run id; this went red - `:run_not_found` out of the step -
+  # generated run id; this went red - `:execution_not_found` out of the step -
   # then reverted.
-  test "a resumed run continues from storage", %{run_id: run_id} do
+  test "a resumed run continues from storage", %{execution_id: execution_id} do
     {compiled, document} = signup()
-    {:ok, {_durable, _run}} = Durable.start(compiled, document, run_id)
-    {:ok, {durable, run}} = Durable.resume(recompile!(document), document, run_id)
+    {:ok, {_durable, _run}} = Durable.start(compiled, document, execution_id)
+    {:ok, {durable, run}} = Durable.resume(recompile!(document), document, execution_id)
 
     assert {:ok, {_driver, stepped}} =
              Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
@@ -209,47 +216,50 @@ defmodule StatifierExamples.Charts.DurableTest do
   end
 
   # A run id nobody stored is an answer, not a crash - the page shows it.
-  test "resuming a run that was never stored is refused", %{run_id: run_id} do
+  test "resuming a run that was never stored is refused", %{execution_id: execution_id} do
     {_compiled, document} = signup()
 
-    assert {:error, :run_not_found} = Durable.resume(recompile!(document), document, run_id)
+    assert {:error, :execution_not_found} =
+             Durable.resume(recompile!(document), document, execution_id)
   end
 
-  # Sabotage: made `abandon/1` call `Runs.fail/4` with the default
+  # Sabotage: made `abandon/1` call `Executions.fail/4` with the default
   # serialization; this went red - `{:serialization, :not_supported}` left
   # the record `:active` - then reverted.
-  test "abandoning a run marks the record failed and keeps its position", %{run_id: run_id} do
+  test "abandoning a run marks the record failed and keeps its position", %{
+    execution_id: execution_id
+  } do
     {compiled, document} = signup()
-    {:ok, {durable, _run}} = Durable.start(compiled, document, run_id)
-    stored = record!(run_id)
+    {:ok, {durable, _run}} = Durable.start(compiled, document, execution_id)
+    stored = record!(execution_id)
 
     assert :ok = Durable.abandon(durable)
 
-    record = record!(run_id)
+    record = record!(execution_id)
 
     assert record.status == :failed
     assert record.failure == "host:stopped"
     assert record.position_blob == stored.position_blob
   end
 
-  # Sabotage: dropped the `%{run_id: run_id}` context from the driver's
+  # Sabotage: dropped the `%{execution_id: execution_id}` context from the driver's
   # dispatch, so the handler took its run-less clause; this went red on the
   # row count, then reverted.
-  test "myapp:provision writes the account row for the run", %{run_id: run_id} do
+  test "myapp:provision writes the account row for the run", %{execution_id: execution_id} do
     {compiled, document} = provisioning()
 
-    assert {:ok, {_durable, run}} = Durable.start(compiled, document, run_id)
+    assert {:ok, {_durable, run}} = Durable.start(compiled, document, execution_id)
 
-    assert accounts(run_id) == 1
+    assert accounts(execution_id) == 1
 
     # se-k4a: the chart reaches its root outcome and FINISHES. `compile!/2`
     # passes `terminate: true`, so the emission carries a top-level
     # `<final>` per root outcome, the interpreter reaches `:done`, and
-    # `StatifierPersistence.Runs` has a `:completed` to write. Before that
+    # `StatifierPersistence.Executions` has a `:completed` to write. Before that
     # option the same run rested at `blk_po_root` with its record `:active`
     # forever, which is the defect this bead closed.
     assert run.status == :done
-    assert record!(run_id).status == :completed
+    assert record!(execution_id).status == :completed
   end
 
   # The feed is where a reader learns the write happened and which way it
@@ -257,15 +267,15 @@ defmodule StatifierExamples.Charts.DurableTest do
   #
   # Sabotage: made the driver's `performed/2` print only the invoke type;
   # this went red, then reverted.
-  test "the run feed says what the provisioning call did", %{run_id: run_id} do
+  test "the run feed says what the provisioning call did", %{execution_id: execution_id} do
     {compiled, document} = provisioning()
-    {:ok, {_durable, run}} = Durable.start(compiled, document, run_id)
+    {:ok, {_durable, run}} = Durable.start(compiled, document, execution_id)
 
     assert :performed in kinds(run)
 
     assert Enum.any?(details(run), fn detail ->
              is_binary(detail) and detail =~ "myapp:provision" and detail =~ "created" and
-               detail =~ Accounts.email_for(run_id)
+               detail =~ Accounts.email_for(execution_id)
            end)
   end
 
@@ -276,14 +286,14 @@ defmodule StatifierExamples.Charts.DurableTest do
   #
   # Sabotage: made `Accounts.provision/1` insert without `on_conflict`;
   # this went red with an `Exqlite.Error`, then reverted.
-  test "a replayed provisioning call does not write a second row", %{run_id: run_id} do
+  test "a replayed provisioning call does not write a second row", %{execution_id: execution_id} do
     {compiled, document} = provisioning()
-    {:ok, {_durable, _run}} = Durable.start(compiled, document, run_id)
+    {:ok, {_durable, _run}} = Durable.start(compiled, document, execution_id)
 
     assert {:ok, %{"provisioned" => "existing"}} =
-             Charts.dispatch("myapp:provision", %{}, %{run_id: run_id})
+             Charts.dispatch("myapp:provision", %{}, %{execution_id: execution_id})
 
-    assert accounts(run_id) == 1
+    assert accounts(execution_id) == 1
   end
 
   # se-4dt.3, and what the uptake put at risk. The app used to fold the
@@ -309,9 +319,9 @@ defmodule StatifierExamples.Charts.DurableTest do
   # `Enum.reverse/1`; this went red, along with the three other tests in
   # this file that read a reading built from that buffer - then reverted.
   test "one drive's feed reads in the order things happened, across every turn",
-       %{run_id: run_id} do
+       %{execution_id: execution_id} do
     {compiled, document} = signup()
-    {:ok, {durable, run}} = Durable.start(compiled, document, run_id)
+    {:ok, {durable, run}} = Durable.start(compiled, document, execution_id)
 
     {:ok, {_driver, stepped}} =
       Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
@@ -338,17 +348,17 @@ defmodule StatifierExamples.Charts.DurableTest do
   # been edited underneath it, and the guard is the storage layer's rather
   # than this app's - this asserts the app surfaces it instead of eating it.
   #
-  # Sabotage: made `resume/3` skip `load_run_position/3` and build the
+  # Sabotage: made `resume/3` skip `load_execution_position/3` and build the
   # reading from the record alone; this went red - the mismatch was never
   # noticed - then reverted.
-  test "resuming onto a different document is refused", %{run_id: run_id} do
+  test "resuming onto a different document is refused", %{execution_id: execution_id} do
     {compiled, document} = signup()
-    {:ok, {_durable, _run}} = Durable.start(compiled, document, run_id)
+    {:ok, {_durable, _run}} = Durable.start(compiled, document, execution_id)
 
     {other_compiled, other_document} = provisioning()
 
     assert {:error, {:identity_mismatch, _stored, _supplied}} =
-             Durable.resume(other_compiled, other_document, run_id)
+             Durable.resume(other_compiled, other_document, execution_id)
   end
 
   # se-5ep, and the only test here that runs the SHIPPED wizard as far as it
@@ -381,20 +391,20 @@ defmodule StatifierExamples.Charts.DurableTest do
   # the chart. What the test says is unchanged: the shipped wizard, driven
   # the way the demo drives it, reaches `myapp:provision` and finishes.
   test "the wizard shipped in priv/fixtures provisions once its plan branch is taken",
-       %{run_id: run_id} do
+       %{execution_id: execution_id} do
     {compiled, document} = signup()
-    {:ok, {durable, run}} = Durable.start(compiled, document, run_id, "signup_wizard")
+    {:ok, {durable, run}} = Durable.start(compiled, document, execution_id, "signup_wizard")
 
     assert {:ok, {_driver, stepped}} =
              Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
 
     assert stepped.status == :running
-    assert accounts(run_id) == 0
+    assert accounts(execution_id) == 0
 
     assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
 
-    assert accounts(run_id) == 1
-    assert record!(run_id).status == :completed
+    assert accounts(execution_id) == 1
+    assert record!(execution_id).status == :completed
   end
 
   # The other half of the same fix, and the one that says why it works: a
@@ -410,9 +420,9 @@ defmodule StatifierExamples.Charts.DurableTest do
   # `%{}` for the account step, so the assign wrote an empty map and the
   # declared root held nothing the guards could read; both guards raised and
   # this went red on the second `refute`. Reverted.
-  test "no guard in the shipped wizard raises error.execution", %{run_id: run_id} do
+  test "no guard in the shipped wizard raises error.execution", %{execution_id: execution_id} do
     {compiled, document} = signup()
-    {:ok, {durable, run}} = Durable.start(compiled, document, run_id)
+    {:ok, {durable, run}} = Durable.start(compiled, document, execution_id)
 
     refute "error.execution" in details(run)
 
@@ -436,9 +446,11 @@ defmodule StatifierExamples.Charts.DurableTest do
   # Sabotage: changed `answers/1`'s account clause to `"plan" => "personal"`;
   # the run took the personal arm, and this went red on both the company-details
   # assertion and the plan detail. Reverted.
-  test "the wizard's plan branch guards on what myapp:signup answered", %{run_id: run_id} do
+  test "the wizard's plan branch guards on what myapp:signup answered", %{
+    execution_id: execution_id
+  } do
     {compiled, document} = signup()
-    {:ok, {durable, run}} = Durable.start(compiled, document, run_id)
+    {:ok, {durable, run}} = Durable.start(compiled, document, execution_id)
 
     assert {:ok, {_driver, stepped}} =
              Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait")
@@ -468,7 +480,9 @@ defmodule StatifierExamples.Charts.DurableTest do
   #
   # Sabotage: made `metadata/2` drop the subcharts key when a fixture key
   # was present; this went red on the pin. Reverted from a backup copy.
-  test "a run of a chart with a subchart pins the child it resolved to", %{run_id: run_id} do
+  test "a run of a chart with a subchart pins the child it resolved to", %{
+    execution_id: execution_id
+  } do
     {:ok, parent} = Charts.fixture("signup_onboarding")
     {:ok, child} = Charts.fixture("signup_wizard")
 
@@ -481,9 +495,9 @@ defmodule StatifierExamples.Charts.DurableTest do
     {:ok, compiled} = Durable.compile(parent.document, parent.declare)
 
     assert {:ok, {_durable, _run}} =
-             Durable.start(compiled, parent.document, run_id, "signup_onboarding")
+             Durable.start(compiled, parent.document, execution_id, "signup_onboarding")
 
-    assert record!(run_id).metadata == %{
+    assert record!(execution_id).metadata == %{
              "fixture" => "signup_onboarding",
              "subcharts" => %{"bdoc_signup_demo" => Identity.of_source(child_scxml).content_hash}
            }
@@ -495,11 +509,13 @@ defmodule StatifierExamples.Charts.DurableTest do
   # Sabotage: made `subcharts/1` answer `%{}` rather than `nil` for a
   # document with no subchart, so the key was written empty; this went red.
   # Reverted from a backup copy.
-  test "a run of a chart that names no child records no pin", %{run_id: run_id} do
+  test "a run of a chart that names no child records no pin", %{execution_id: execution_id} do
     {compiled, document} = signup()
 
-    assert {:ok, {_durable, _run}} = Durable.start(compiled, document, run_id, "signup_wizard")
-    assert record!(run_id).metadata == %{"fixture" => "signup_wizard"}
+    assert {:ok, {_durable, _run}} =
+             Durable.start(compiled, document, execution_id, "signup_wizard")
+
+    assert record!(execution_id).metadata == %{"fixture" => "signup_wizard"}
   end
 
   # --------------------------------------------------- durable subcharts
@@ -517,11 +533,11 @@ defmodule StatifierExamples.Charts.DurableTest do
   # not that it could.
 
   # The parent, started and left resting on its live child invocation.
-  defp onboarding!(run_id) do
+  defp onboarding!(execution_id) do
     {:ok, parent} = Charts.fixture("signup_onboarding")
     {:ok, compiled} = Durable.compile(parent.document, parent.declare)
 
-    {:ok, driven} = Durable.start(compiled, parent.document, run_id, "signup_onboarding")
+    {:ok, driven} = Durable.start(compiled, parent.document, execution_id, "signup_onboarding")
 
     driven
   end
@@ -538,10 +554,10 @@ defmodule StatifierExamples.Charts.DurableTest do
     {compiled, child.document}
   end
 
-  defp child_id(run_id), do: Linkage.child_run_id(run_id, "blk_so_wizard", 0)
+  defp child_id(execution_id), do: Linkage.child_execution_id(execution_id, "blk_so_wizard", 0)
 
   # The whole of the first acceptance criterion: the child is a row in
-  # `statifier_runs` of its own, under a deterministic id that extends the
+  # `statifier_executions` of its own, under a deterministic id that extends the
   # parent's, carrying the package's reserved linkage key - the parent run,
   # the invocation, the index, and the child's own content hash.
   #
@@ -550,21 +566,21 @@ defmodule StatifierExamples.Charts.DurableTest do
   #
   # Sabotage: made `Durable`'s dispatch fun fall through to `perform/5` for
   # the subchart type instead of routing it to `start_child/5`; this went
-  # red - no child record at all, `:run_not_found` - then reverted.
-  test "a durable subchart runs the child as its own persisted run", %{run_id: run_id} do
+  # red - no child record at all, `:execution_not_found` - then reverted.
+  test "a durable subchart runs the child as its own persisted run", %{execution_id: execution_id} do
     {child_compiled, _document} = child_compiled!()
     child_hash = Identity.of_source(child_compiled.scxml).content_hash
 
-    {_durable, _run} = onboarding!(run_id)
+    {_durable, _run} = onboarding!(execution_id)
 
-    child = record!(child_id(run_id))
+    child = record!(child_id(execution_id))
 
-    assert child.run_id == run_id <> "/blk_so_wizard/0"
+    assert child.execution_id == execution_id <> "/blk_so_wizard/0"
     assert child.content_hash == child_hash
 
     assert child.metadata == %{
              "statifier_persistence" => %{
-               "parent_run_id" => run_id,
+               "parent_execution_id" => execution_id,
                "invoke_id" => "blk_so_wizard",
                "child_index" => 0,
                "content_hash" => child_hash
@@ -586,13 +602,15 @@ defmodule StatifierExamples.Charts.DurableTest do
   # Sabotage: made `start_child/5` answer `{:error, [reason: "no"]}` instead
   # of returning the instruction; this went red - the parent completed down
   # `on_error` and the child row was missing - then reverted.
-  test "the parent rests on the live child rather than answering it", %{run_id: run_id} do
-    {_durable, run} = onboarding!(run_id)
+  test "the parent rests on the live child rather than answering it", %{
+    execution_id: execution_id
+  } do
+    {_durable, run} = onboarding!(execution_id)
 
     details = Enum.filter(details(run), &is_binary/1)
 
-    assert record!(run_id).status == :active
-    assert Enum.any?(details, &(&1 =~ "bdoc_signup_demo as run #{child_id(run_id)}"))
+    assert record!(execution_id).status == :active
+    assert Enum.any?(details, &(&1 =~ "bdoc_signup_demo as run #{child_id(execution_id)}"))
     refute Enum.any?(details, &(&1 =~ "Tell the owner the child chart refused"))
   end
 
@@ -612,18 +630,18 @@ defmodule StatifierExamples.Charts.DurableTest do
   # with no fixture key; this went red with the same `:identity_mismatch`
   # the first assertion pins. Reverted.
   test "a child is resumable by run id where the page's own compile is refused", %{
-    run_id: run_id
+    execution_id: execution_id
   } do
-    {_durable, _run} = onboarding!(run_id)
+    {_durable, _run} = onboarding!(execution_id)
     {:ok, child} = Charts.fixture("signup_wizard")
     {:ok, page_compile} = Durable.compile(child.document, child.declare)
 
     assert {:error, {:identity_mismatch, _stored, _supplied}} =
-             Durable.resume(page_compile, child.document, child_id(run_id))
+             Durable.resume(page_compile, child.document, child_id(execution_id))
 
-    assert {:ok, {{durable, run}, document}} = Durable.resume(child_id(run_id))
+    assert {:ok, {{durable, run}, document}} = Durable.resume(child_id(execution_id))
 
-    assert durable.run_id == child_id(run_id)
+    assert durable.execution_id == child_id(execution_id)
     assert document.id == "bdoc_signup_demo"
     assert run.status == :running
   end
@@ -644,12 +662,12 @@ defmodule StatifierExamples.Charts.DurableTest do
   #
   # Sabotage: dropped `chart_resolver:` from `driver/1`; this went red - the
   # child completed but the parent stayed `:active` forever. Reverted.
-  test "the child resumes cold, finishes, and answers its parent", %{run_id: run_id} do
-    {_durable, _run} = onboarding!(run_id)
+  test "the child resumes cold, finishes, and answers its parent", %{execution_id: execution_id} do
+    {_durable, _run} = onboarding!(execution_id)
     {child_compiled, child_document} = child_compiled!()
 
     assert {:ok, {child_durable, child_run}} =
-             Durable.resume(child_compiled, child_document, child_id(run_id))
+             Durable.resume(child_compiled, child_document, child_id(execution_id))
 
     assert {:ok, {_driver, stepped}} =
              Durable.send_event(
@@ -661,8 +679,8 @@ defmodule StatifierExamples.Charts.DurableTest do
     assert stepped.status == :running
     assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
 
-    assert record!(child_id(run_id)).status == :completed
-    assert record!(run_id).status == :completed
+    assert record!(child_id(execution_id)).status == :completed
+    assert record!(execution_id).status == :completed
   end
 
   # The one that a browser capture found and no test had asked for. A child
@@ -675,17 +693,17 @@ defmodule StatifierExamples.Charts.DurableTest do
   # its way to resting: its 24-hour `core.wait` and its abandonment
   # reminder. Stored against the parent's run id they fire into a chart with
   # no such event, and the child waits forever for a clock nobody is holding
-  # for it. The fix is to key on `context.run_id`, which is the run the
+  # for it. The fix is to key on `context.execution_id`, which is the run the
   # effect actually belongs to, and this asserts it where it is visible: the
   # scope on the stored job rows.
   #
-  # Sabotage: put the closed-over `run_id` back in `executor/1`'s two
+  # Sabotage: put the closed-over `execution_id` back in `executor/1`'s two
   # `consume/2` calls; this went red - every stored job carried the parent's
   # id and the child's list was empty. Reverted.
   test "the child's own durable timers are scoped to the child, not the parent", %{
-    run_id: run_id
+    execution_id: execution_id
   } do
-    {_durable, _run} = onboarding!(run_id)
+    {_durable, _run} = onboarding!(execution_id)
 
     scopes =
       Repo.all(from(j in "oban_jobs", select: j.args))
@@ -693,8 +711,8 @@ defmodule StatifierExamples.Charts.DurableTest do
       |> Enum.map(&Map.get(&1, "scope"))
       |> Enum.uniq()
 
-    assert scopes == [child_id(run_id)]
-    refute run_id in scopes
+    assert scopes == [child_id(execution_id)]
+    refute execution_id in scopes
   end
 
   # The cancel half. A parent stopped by its host while a child is live
@@ -713,15 +731,15 @@ defmodule StatifierExamples.Charts.DurableTest do
   #
   # Sabotage: removed the `cascade/1` call from `abandon/1`; this went red -
   # the child stayed `:active` - then reverted.
-  test "abandoning the parent cascades into its live child", %{run_id: run_id} do
-    {durable, _run} = onboarding!(run_id)
-    stored = record!(child_id(run_id))
+  test "abandoning the parent cascades into its live child", %{execution_id: execution_id} do
+    {durable, _run} = onboarding!(execution_id)
+    stored = record!(child_id(execution_id))
 
     assert stored.status == :active
     assert :ok = Durable.abandon(durable)
 
-    parent = record!(run_id)
-    child = record!(child_id(run_id))
+    parent = record!(execution_id)
+    child = record!(child_id(execution_id))
 
     assert parent.status == :failed
     assert parent.failure == "host:stopped"
@@ -741,14 +759,14 @@ defmodule StatifierExamples.Charts.DurableTest do
   #
   # Sabotage: deleted the `:cancelled` clause from `finish/2`; this went red
   # with the FunctionClauseError this test exists to keep out. Reverted.
-  test "a cancelled child is still a run the app can read back", %{run_id: run_id} do
-    {durable, _run} = onboarding!(run_id)
+  test "a cancelled child is still a run the app can read back", %{execution_id: execution_id} do
+    {durable, _run} = onboarding!(execution_id)
     :ok = Durable.abandon(durable)
 
-    assert record!(child_id(run_id)).status == :cancelled
-    assert {:ok, {{_durable, run}, _document}} = Durable.resume(child_id(run_id))
+    assert record!(child_id(execution_id)).status == :cancelled
+    assert {:ok, {{_durable, run}, _document}} = Durable.resume(child_id(execution_id))
 
     assert run.status == :cancelled
-    assert "Run finished" in Enum.map(Run.entries(run), & &1.label)
+    assert "Run finished" in Enum.map(Execution.entries(run), & &1.label)
   end
 end
