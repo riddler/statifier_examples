@@ -15,10 +15,10 @@ defmodule StatifierExamples.Signup.ScreenTest do
 
   use ExUnit.Case, async: true
 
-  alias StatifierBlocks.{Block, BlockType, Composite, Palette}
+  alias StatifierBlocks.{Block, BlockType, Compiled, Compiler, Composite, Palette}
   alias StatifierBlocks.Composite.Data
   alias StatifierExamples.Charts
-  alias StatifierExamples.Signup.{Screen, Screens}
+  alias StatifierExamples.Signup.{Path, Screen, Screens}
 
   @plan %{"screen" => "plan", "timeout" => "1d"}
 
@@ -143,19 +143,68 @@ defmodule StatifierExamples.Signup.ScreenTest do
 
   describe "what a button's `writes` map can and cannot do" do
     # The blocking finding of the cold review on PR #98, pinned so the prose
-    # cannot drift back. A `capture` value is a path inside `_event.data`,
-    # never a literal (`core/on_event.ex` builds each pair as
-    # `{"expr", "_event.data." <> source}`), so `writes` CANNOT record which
-    # button was pressed: both plan buttons declare the same pair and both
-    # compile to the same assign. What reaches `responses.plan` is whatever the
-    # host put in the payload - an unstated contract the spike document
-    # records as an ask.
+    # cannot drift back - and the general form it was written in HAS drifted.
+    # At `statifier_blocks` 0.28.0 a `capture` source is told apart by SHAPE
+    # (ADR-0002's Note of 2026-09-12, `N1`): a string is a path inside
+    # `_event.data`, and a `["const", value]` pair is a literal read from the
+    # document. `core/on_event.ex`'s own moduledoc calls the literal form
+    # "what lets two handlers on one screen record which of them fired". So
+    # "a capture value can never be a literal" is no longer true of the
+    # package, and no case here should be read as pinning it.
+    #
+    # What is still true, and is what these two cases pin, is the claim about
+    # THIS app: `Screen`'s `writes/1` passes a button's `writes` map through
+    # as it stands, every source the element document declares is a plain
+    # string, so both plan buttons declare the same pair and both compile to
+    # the same assign. What reaches `responses.plan` is whatever the host put
+    # in the payload - an unstated contract the spike document records as an
+    # ask. Whether this app should take the literal form up is a design
+    # question the skeleton has not answered, not a defect hidden here.
     test "both plan buttons capture responses.plan identically, so the press says nothing" do
       [personal, business, _back] = expansion(@plan).slots["interrupts"]
 
       assert personal.config["capture"]["responses.plan"] == "plan"
       assert business.config["capture"]["responses.plan"] == "plan"
       assert personal.config["capture"] == business.config["capture"]
+    end
+
+    # The case above reads `capture` at CONFIG level, where a source is the
+    # string this app wrote. What that string MEANS is the package's to
+    # decide, and `N1` has just been decided: a plain string still compiles
+    # to a path, but it is now one shape among two. A future note that moved
+    # the string arm would leave every config-level assertion here green
+    # while the sentence they protect went false. This case reads the
+    # COMPILED bytes instead, so what is pinned is the emission itself -
+    # `expr="_event.data.plan"`, the form `StatifierExamples.Charts.Durable`
+    # states in its "`data` is the event's payload" section.
+    #
+    # Sabotage: in `statifier_blocks`' `core/on_event.ex`,
+    # `defp source_expr(source) when is_binary(source)` returning
+    # `literal(source)` instead of `"_event.data." <> source` - the string
+    # arm read as a literal, which is exactly the drift this case exists to
+    # catch. THIS CASE WENT RED and both config-level cases above stayed
+    # GREEN, which is the whole reason this one is here. The dependency was
+    # recompiled with `MIX_ENV=test mix deps.compile statifier_blocks
+    # --force` before and after, and reverted from a copy.
+    test "the compiled emission reads responses.plan out of _event.data, never a literal" do
+      {:ok, %Compiled{scxml: scxml}} = Compiler.compile(Path.document(), Charts.palette())
+
+      exprs =
+        Regex.scan(~r{<assign expr="([^"]*)" location="responses\.plan"/>}, scxml,
+          capture: :all_but_first
+        )
+
+      # One per plan button, and each is the path, not the payload value.
+      assert exprs == [["_event.data.plan"], ["_event.data.plan"]]
+
+      # And not only this pair: every assign the whole Path compiles to
+      # reads out of `_event.data`. (`'personal'` and `'business'` DO
+      # appear in the compiled bytes, as the plan branch's `cond` arms -
+      # the path read back, never a value written to it.)
+      all_exprs = Regex.scan(~r{<assign expr="([^"]*)"}, scxml, capture: :all_but_first)
+
+      refute all_exprs == []
+      assert Enum.all?(all_exprs, fn [expr] -> String.starts_with?(expr, "_event.data") end)
     end
 
     # What the field DOES buy, and the only thing it buys: which buttons
