@@ -1,12 +1,12 @@
 defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
   @moduledoc """
-  How a parent's reading of a run says anything about a durable child of
+  How a parent's reading of an execution says anything about a durable child of
   it - the question `se-0ay` asked of the deleted feed, asked again of the
   Run pane the editor page took over in `se-dh0`.
 
   The answer changed shape rather than being lost, and where it now comes
   from is `statifier_persistence`'s ADR-0010 decision 7. A durable
-  subchart's child is an ordinary run with an input log of its own, and
+  subchart's child is an ordinary execution with an input log of its own, and
   nothing merges the two logs. What crosses between them is the child's
   ANSWER: it reaches the parent through `Driver.answer_parent/3`, which
   re-enters the parent through its own `done_invocation` door, so the
@@ -20,7 +20,7 @@ defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
   panel drew beside a row, and the `data-run-source` attribute the
   stylesheet keyed on. The pane's log renders wire-format messages, and a
   message about an invocation answer carries the `invoke_id` rather than
-  the child's run id, so there is nothing for a chip to say. The
+  the child's execution id, so there is nothing for a chip to say. The
   `entry.source` field `se-0ay` added to `StatifierExamples.Charts.Execution`
   stays where it is and stays covered here: the driver still writes it,
   and it is still what a reader of a `%Execution{}` reads.
@@ -44,7 +44,7 @@ defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
   end
 
   describe "the reading" do
-    # Sabotage: dropped the `source` key from `Run`'s appended entry map;
+    # Sabotage: dropped the `source` key from `Execution`'s appended entry map;
     # this went red with a KeyError on the first row read. Reverted from a
     # backup copy.
     test "a row carries the child run it is about, and the parent's own carry none" do
@@ -52,11 +52,11 @@ defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
 
       run =
         run
-        |> Execution.note(:started, "Run started", "run_parent")
+        |> Execution.note(:started, "Execution started", "run_parent")
         |> Execution.note(
           :performed,
           "Child chart started",
-          "bdoc_child as run run_parent-c0",
+          "bdoc_child as execution run_parent-c0",
           "run_parent-c0"
         )
 
@@ -73,7 +73,7 @@ defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
     # inputs and nothing else.
     #
     # The assertion is on the ANSWER event rather than on a count of
-    # entries, because the count is the parent's whole run and the answer is
+    # entries, because the count is the parent's whole execution and the answer is
     # the one entry that could only have come from the child. Its name
     # carries the invocation the child was started for, which is the join a
     # reader has: `blk_so_wizard` is the subchart block on the parent's
@@ -114,7 +114,7 @@ defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
     # The other half of decision 7, and the half that makes the first one
     # mean something: the parent's log holds the child's answer and NOT the
     # child's own inputs. A reader who wants those reads the child's log,
-    # which is its own run's.
+    # which is its own execution's.
     #
     # Sabotage: none available - this asserts an absence the seam produces
     # rather than a value this app computes. It is here as the statement of
@@ -140,7 +140,7 @@ defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
     # criterion's wording suggests.
     #
     # A `core.map` fan-out is ONE invocation of the parent's, not ten. Ten
-    # children run, each as its own persisted run with its own log, and the
+    # children run, each as its own persisted execution with its own log, and the
     # package's settlement assembles their outcomes and answers the parent's
     # single invocation once, at the `answer_parent` door. So what the
     # parent's replayed log narrates is `done.invoke.blk_bi_chunks` - the
@@ -175,7 +175,7 @@ defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
   end
 
   # Drives the child of `execution_id` to its own end, cold, the way
-  # `DurableTest` does: the child is an ordinary run, so it resumes by id
+  # `DurableTest` does: the child is an ordinary execution, so it resumes by id
   # and answers its parent through the driver rather than through anything
   # this test calls.
   defp finish_child!(execution_id) do

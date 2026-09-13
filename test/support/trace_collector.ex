@@ -12,7 +12,7 @@ defmodule StatifierExamples.TraceCollector do
   ## Why this renders a graph rather than a tree
 
   The family's design puts a root boundary at every seam that could
-  outlive a request - macrostep, child run, fired timer - and joins the
+  outlive a request - macrostep, child execution, fired timer - and joins the
   roots with links and with `statifier.session_id` instead
   (`StatifierExamples.Charts.Tracing` has the citations). So a renderer
   that only walked `parent_span_id` would draw a dozen unrelated
@@ -178,7 +178,7 @@ defmodule StatifierExamples.TraceCollector do
 
   # The correlation keys a reader actually follows between two roots. They
   # are the ids the three contracts agree on: a logical session, a durable
-  # run, the two ends of a parent/child link, and `statifier_oban`'s scope
+  # execution, the two ends of a parent/child link, and `statifier_oban`'s scope
   # (which the bridge already aliases onto `statifier.session_id`).
   @correlation ~w(
     statifier.session_id
@@ -194,7 +194,7 @@ defmodule StatifierExamples.TraceCollector do
   The span events matter more than the span's own attributes here: the
   `child.started` and `child.answered` edges are *points*, so the bridge
   lands them on whatever step span is open around them, and the child's
-  run id is on the event rather than on its host span.
+  execution id is on the event rather than on its host span.
   """
   @spec identifiers(collected()) :: MapSet.t(String.t())
   def identifiers(span) do
@@ -207,7 +207,7 @@ defmodule StatifierExamples.TraceCollector do
 
   # Parent edges, link edges, and shared-identifier edges, all undirected.
   # The last is what the design leans on hardest: with every seam that can
-  # outlive a request deliberately rooting its own trace, a shared run id
+  # outlive a request deliberately rooting its own trace, a shared execution id
   # is the only thing joining two of them.
   @spec adjacency([collected()]) :: %{optional(String.t()) => MapSet.t(String.t())}
   defp adjacency(spans) do

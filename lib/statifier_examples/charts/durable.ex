@@ -1,21 +1,21 @@
 defmodule StatifierExamples.Charts.Durable do
   @moduledoc """
-  One durable run of one compiled document, driven through
+  One durable execution of one compiled document, driven through
   `StatifierPersistence.Driver`: load, step, execute effects, persist -
   every step, with no live process holding the chart between steps.
 
   This is the restart demo `statifier_persistence` was built for,
-  delivered in the app that embeds it. `README.md`'s "Durable runs"
+  delivered in the app that embeds it. `README.md`'s "Durable executions"
   section walks it with a `kill -9`.
 
   ## What is durable and what is not
 
-  Durable: the chart's position after every step, the run's status, and
+  Durable: the chart's position after every step, the execution's status, and
   the account `myapp:provision` writes. Those live in SQLite and a killed
   server finds all three exactly where it left them.
 
   Not durable: the *feed*. Rows are derived from the effects a step
-  returns, and effects are not stored - so a resumed run opens with one
+  returns, and effects are not stored - so a resumed execution opens with one
   row saying it was picked up, the marks the loaded position implies, and
   then narrates everything that happens from there. Storing the narration
   would be a second write path for something the position already implies,
@@ -46,13 +46,13 @@ defmodule StatifierExamples.Charts.Durable do
 
   `effects:` is an executor - every non-lifecycle effect, in the order the
   stepper hands them over. It does three things and none of them is "step
-  the run": it records the effect for the feed, it lets
+  the execution": it records the effect for the feed, it lets
   `StatifierExamples.Charts.Timers` claim the ones that are timers, and it
   lets `StatifierExamples.Charts.AsyncCalls` claim the ones that start or
   cancel an asynchronous invocation.
 
   `dispatch:` performs one `<invoke>`, through
-  `StatifierExamples.Charts.dispatch/3` with the run id as its context, and
+  `StatifierExamples.Charts.dispatch/3` with the execution id as its context, and
   records the answer for the feed. What the *chart* is told is the driver's
   to build.
 
@@ -61,7 +61,7 @@ defmodule StatifierExamples.Charts.Durable do
   child finishes and its **parent** has to be answered. See
   `resolve_chart/1`.
 
-  ## A subchart is not answered here either: it starts its own run
+  ## A subchart is not answered here either: it starts its own execution
 
   `statifier_blocks:subchart` never reaches
   `StatifierExamples.Charts.dispatch/3`. The dispatch fun routes it to
@@ -69,16 +69,16 @@ defmodule StatifierExamples.Charts.Durable do
   document this host publishes and hands back
   `{:start_child, resolved, {:invoke, invoke}}` - the same instruction
   `Statifier.Session` gets, unrenamed. The driver executes it by creating
-  the child as **its own persisted run**, inside the parent's own
+  the child as **its own persisted execution**, inside the parent's own
   exclusion, then answers `:pending`: the parent reaches quiescence with
   the invocation live, exactly as it does for an asynchronous call below.
 
-  The child is an ordinary run in every way that matters to this app. It
+  The child is an ordinary execution in every way that matters to this app. It
   has its own row in `statifier_executions`, its own position, its own status,
-  and a run id a reader can put in the page URL - `resume/3` picks it up
+  and an execution id a reader can put in the page URL - `resume/3` picks it up
   with no idea it is anybody's child. What makes it a child is one key in
   its metadata, `StatifierPersistence.Execution.Linkage`'s, naming the parent
-  run, the invocation, and the child's own content hash.
+  execution, the invocation, and the child's own content hash.
 
   Two things follow from the linkage and this module does both. When the
   child reaches a terminal status, the driver answers the parent's
@@ -93,7 +93,7 @@ defmodule StatifierExamples.Charts.Durable do
   the wizard's company-details step - and for that one `dispatch:` answers
   `:pending` instead of a donedata map. Nothing is buffered, the drive
   reaches quiescence, and the position persists with the invocation still
-  live in `active_invocations`: the run rests durably in the middle of a
+  live in `active_invocations`: the execution rests durably in the middle of a
   call, with no process holding it and an Oban job carrying the work.
   Whatever eventually finishes that job answers through
   `complete_invocation/3` or `fail_invocation/3` below, which are
@@ -103,14 +103,14 @@ defmodule StatifierExamples.Charts.Durable do
 
   Both report through the driving process' own mailbox. They are called
   synchronously, inside the driver's own `Executions.create/4` and `Executions.step/5`,
-  in this very process, so a message tagged with the run id and drained
+  in this very process, so a message tagged with the execution id and drained
   with a zero timeout is an ordered buffer that needs no second process and
   cannot outlive the drive that filled it. It is drained once, after the
   drive has returned, so a feed row's place in it is the order things
   happened in across every turn rather than within one.
 
   That the driver reports only the *final* step's result is all a reading
-  needs: a run's status is `:active` until it is terminal, so every
+  needs: an execution's status is `:active` until it is terminal, so every
   intermediate turn's status word is the one this module already ignores.
 
   ## The effects the executor performs
@@ -121,7 +121,7 @@ defmodule StatifierExamples.Charts.Durable do
   `StatifierExamples.Charts.Timers`, which stores them as Oban jobs, so
   the wizard's abandonment reminder outlives the node that armed it. When
   such a job fires it comes back through `deliver/2` below, which is the
-  same drive loop entered from a process that has never seen this run.
+  same drive loop entered from a process that has never seen this execution.
 
   A schedule that fails raises rather than answering `{:error, _}`: the
   stepper re-enters an executor failure as `error.communication`, so an
@@ -161,15 +161,15 @@ defmodule StatifierExamples.Charts.Durable do
   alias StatifierPersistence.{Driver, Executions, Storage}
   alias StatifierPersistence.Execution.Linkage
 
-  # The run-record metadata key that says which shipped fixture a run is a
-  # run OF. It is the only thing a fired timer job carries back into a
-  # cold node that can name the chart again - the job itself holds a run
+  # The execution-record metadata key that says which shipped fixture an execution is an
+  # execution OF. It is the only thing a fired timer job carries back into a
+  # cold node that can name the chart again - the job itself holds an execution
   # id and an event, and a chart is neither.
   @fixture_key "fixture"
 
-  # The run-record metadata key carrying the host-provenance pin: which
-  # child chart each `core.subchart` in this run's document resolved to
-  # when the run was created (campaign-023 ruling R-d). See
+  # The execution-record metadata key carrying the host-provenance pin: which
+  # child chart each `core.subchart` in this execution's document resolved to
+  # when the execution was created (campaign-023 ruling R-d). See
   # `StatifierExamples.Charts.Subchart.identities/1`, which builds it.
   @subcharts_key "subcharts"
 
@@ -188,8 +188,8 @@ defmodule StatifierExamples.Charts.Durable do
   # One entry in a drive's buffer: an effect the stepper produced, or a row
   # the host wrote about a call it performed. Both shapes travel the one
   # mailbox so the feed reads in the order things actually happened.
-  # The note's fifth element is the durable child run the row is about, or
-  # `nil` for a row about this run's own work: see
+  # The note's fifth element is the durable child execution the row is about, or
+  # `nil` for a row about this execution's own work: see
   # `StatifierExamples.Charts.Execution`'s `entry` type for why a child's rows
   # are marked rather than left to read as the parent's.
   @typep buffered ::
@@ -197,33 +197,33 @@ defmodule StatifierExamples.Charts.Durable do
            | {:note, Execution.entry_kind(), String.t(), String.t(), String.t() | nil}
 
   @doc """
-  Starts a durable run of `compiled` and drives it to its first rest.
+  Starts a durable execution of `compiled` and drives it to its first rest.
 
   `execution_id` is the caller's opaque key (ADR-0004 decision 2) and this app
-  puts it in the page URL, which is what makes a run something a reader
+  puts it in the page URL, which is what makes an execution something a reader
   can come back to. Creating one that already exists is the adapter's
   atomic `:execution_exists` refusal, not a pre-check.
 
-  `fixture_key` is recorded in the run's metadata, and it is what
+  `fixture_key` is recorded in the execution's metadata, and it is what
   `deliver/2` reads to rebuild the chart when a timer fires on a node
-  that has never seen this run. It is optional because a run of a
-  document that is not a shipped fixture has no key to record - such a
-  run steps and resumes exactly as before, and a timer fired for it is
+  that has never seen this execution. It is optional because an execution of a
+  document that is not a shipped fixture has no key to record - such an
+  execution steps and resumes exactly as before, and a timer fired for it is
   discarded rather than delivered, which `deliver/2` says in its own
   words.
 
   ## What else the metadata carries: the subchart pin
 
   A `core.subchart` names its child by **document id**, which is stable
-  across every revision of that child, so the run record would otherwise
-  say nothing about which revision this run actually ran. Campaign-023
+  across every revision of that child, so the execution record would otherwise
+  say nothing about which revision this execution actually ran. Campaign-023
   ruling R-d puts it in the metadata at create: one content hash per
   document the chart names as a child, taken over the child exactly as the
   handler compiles it (`StatifierExamples.Charts.Subchart.identities/1`).
 
   It is written at create and never rewritten, which is what makes it a
   pin rather than a cache. A document naming no child records no key at
-  all - most runs of this app - and a child that cannot be resolved or
+  all - most executions of this app - and a child that cannot be resolved or
   compiled today is left out rather than recorded as an error, because a
   pin to nothing is not a pin.
   """
@@ -237,7 +237,7 @@ defmodule StatifierExamples.Charts.Durable do
          {:ok, store} <- store() do
       durable = %__MODULE__{execution_id: execution_id, store: store, machine: machine}
       run = Execution.reading(machine, compiled, document, execution_id)
-      run = Execution.note(run, :started, "Run started", execution_id)
+      run = Execution.note(run, :started, "Execution started", execution_id)
 
       settle(
         durable,
@@ -248,17 +248,17 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  Picks a stored run back up: the same document, the same run id, a fresh
+  Picks a stored execution back up: the same document, the same execution id, a fresh
   process, and whatever the last step left in `statifier_executions`.
 
   Nothing is stepped. The position is loaded so the page can paint the
-  marks the run is actually sitting on, and the reading opens with a row
+  marks the execution is actually sitting on, and the reading opens with a row
   saying where it came from. Continuing is the reader's next press.
 
-  A run id nobody stored is `{:error, :execution_not_found}`. A document edited
-  since the run started is `{:error, {:identity_mismatch, stored,
+  An execution id nobody stored is `{:error, :execution_not_found}`. A document edited
+  since the execution started is `{:error, {:identity_mismatch, stored,
   supplied}}` out of the storage layer's own guard, which is the answer
-  this app wants: resuming a run on a chart that is no longer the chart it
+  this app wants: resuming an execution on a chart that is no longer the chart it
   ran on is exactly the thing chart identity exists to refuse.
   """
   @spec resume(Compiled.t(), Document.t(), String.t()) :: {:ok, driven()} | {:error, term()}
@@ -275,7 +275,7 @@ defmodule StatifierExamples.Charts.Durable do
         |> Execution.reading(compiled, document, execution_id)
         |> Execution.note(
           :started,
-          "Run resumed from storage",
+          "Execution resumed from storage",
           "#{execution_id} (#{record.status})"
         )
         |> Execution.absorb({:effect, {:trace, stable(machine_state)}})
@@ -286,13 +286,13 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  Picks a stored run back up knowing only its id: the chart is read out of
+  Picks a stored execution back up knowing only its id: the chart is read out of
   the record rather than supplied.
 
-  `resume/3`'s sibling for the caller that has a run id and nothing else,
+  `resume/3`'s sibling for the caller that has an execution id and nothing else,
   which is every caller that got one out of a URL. It is what makes a
   durable subchart child openable at all: the page compiles the document on
-  its canvas with `compile/3`'s root recipe, and a child run's stored
+  its canvas with `compile/3`'s root recipe, and a child execution's stored
   identity is keyed on the **child** recipe (`child_use: true`, no
   declarations, no `terminate:`), so resuming a child with the page's own
   compile is refused as `{:error, {:identity_mismatch, _, _}}` - correctly,
@@ -303,7 +303,7 @@ defmodule StatifierExamples.Charts.Durable do
   because a caller resuming by id has no other way to know which one it
   got.
 
-  `{:error, :chart_unknown}` for a run of a chart this app no longer
+  `{:error, :chart_unknown}` for an execution of a chart this app no longer
   ships; everything else is `resume/3`'s.
   """
   @spec resume(String.t()) :: {:ok, {driven(), Document.t()}} | {:error, term()}
@@ -350,7 +350,7 @@ defmodule StatifierExamples.Charts.Durable do
   failure, the compiler stamps the reserved
   `statifier_persistence:execution_status` `<donedata>` param on the top-level
   `<final>` an unhandled failure-classed completion reaches, and the
-  driver's own automatic path persists the run `:failed` and answers the
+  driver's own automatic path persists the execution `:failed` and answers the
   parent on that step. This module used to read the child's status back
   and call `Driver.answer_parent/3` with a host-invented reason when it
   was still `:active`; `se-cqr` deleted that translation, which is
@@ -401,23 +401,23 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  The `Statifier.MachineState` a stored run is resting on, chart and all.
+  The `Statifier.MachineState` a stored execution is resting on, chart and all.
 
-  `resume/1`'s reading without the reading: the same four steps - the run
+  `resume/1`'s reading without the reading: the same four steps - the execution
   record, the chart recipe the record names, `Statifier.compile/1` on the
   emitted bytes, and the position loaded against the machine those bytes
-  produce - answering the state itself rather than a `Run` a page can
+  produce - answering the state itself rather than an `Execution` a page can
   paint.
 
   It is public because a fan-out needs it and nothing else can supply it.
   `core.map` carries its `items` into the invocation as a **path**
   (sb ADR-0009 decision 3), the `<param>` is a quoted literal, and by the
   time the fan-out job runs there is no session and no live datamodel -
-  only the effect and the run id it was scoped to. So the handler
+  only the effect and the execution id it was scoped to. So the handler
   evaluates the path against the parent's own persisted datamodel, and
   this is the door to it. `StatifierExamples.Charts.FanOut` is the caller.
 
-  `{:error, :chart_unknown}` for a run of a chart this app no longer
+  `{:error, :chart_unknown}` for an execution of a chart this app no longer
   ships, and the storage layer's own errors otherwise - the same answers
   `resume/1` gives, because it is the same walk.
   """
@@ -435,7 +435,7 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  Delivers one external event and drives the run to its next rest.
+  Delivers one external event and drives the execution to its next rest.
 
   The event carries this host's `caller_context` stamp (st-ADR-0063): the
   current trace context in W3C text form, or `nil` when nothing is being
@@ -448,7 +448,7 @@ defmodule StatifierExamples.Charts.Durable do
 
   This is the only place the stamp is applied, and it covers the cold
   re-entry doors too: `deliver/2` and `complete_invocation/3` both drive
-  the run back through here.
+  the execution back through here.
 
   ## `data` is the event's payload, and one chart cannot be driven without it
 
@@ -477,37 +477,37 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  Abandons the run: the one terminal transition the host makes rather than
+  Abandons the execution: the one terminal transition the host makes rather than
   the chart (ADR-0004 decision 6). The stored position is left exactly
   where it was, so the record says who stopped it and the chart's own last
   word is not overwritten.
 
-  ## It cascades into the run's durable subchart children
+  ## It cascades into the execution's durable subchart children
 
-  A run stopped by its host while a `core.subchart` child is live would
+  An execution stopped by its host while a `core.subchart` child is live would
   otherwise leave that child `active` forever: nothing is holding it, its
   parent will never be answered, and no press anywhere reaches it. So this
   walks the child subtree too, with `StatifierPersistence.Executions.cascade_cancel/3`
   over `StatifierPersistence.Execution.Linkage.parent_match/1` - *every* child
-  this run ever started, across every invocation, and every run linked to
+  this execution ever started, across every invocation, and every execution linked to
   those, recursively (sp ADR-0008 decision 5).
 
   Cancellation retains: a cancelled child keeps its record and its stored
   position byte-identical, and only the status word changes, to
   `:cancelled`. That is deliberate on the package's part and it is what
-  makes this safe to press - a cancelled child is still a run a reader can
+  makes this safe to press - a cancelled child is still an execution a reader can
   open and read the position of.
 
   The two terminal words differ, and the difference is honest rather than
-  an inconsistency to smooth over: the run the host stopped is `failed`
-  with `host:stopped`, because a host stopping a run is what ADR-0004
+  an inconsistency to smooth over: the execution the host stopped is `failed`
+  with `host:stopped`, because a host stopping an execution is what ADR-0004
   decision 6 calls a failure, and the children are `cancelled`, because
   ADR-0008 decision 5's cascade is what happened to them.
 
   The parent is failed **first**. A child cancelled while its parent is
   still active could complete in the window between the two writes and
   answer a parent that is about to be stopped anyway; failing the parent
-  first means that answer lands on a terminal run and is discarded, which
+  first means that answer lands on a terminal execution and is discarded, which
   is ADR-0007 decision 3's mechanism doing its job.
   """
   @spec abandon(t()) :: :ok
@@ -542,14 +542,14 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  A fresh run id. A UUID's worth of randomness, hex, no dashes: it goes in
+  A fresh execution id. A UUID's worth of randomness, hex, no dashes: it goes in
   a URL and in a fictional email address, and both read better without.
   """
   @spec new_execution_id() :: String.t()
   def new_execution_id, do: 16 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
 
   @doc """
-  The one compile recipe a durable run's chart identity is keyed on.
+  The one compile recipe a durable execution's chart identity is keyed on.
 
   Every place this app compiles a document it intends to run goes through
   here, and that is load bearing rather than tidy. `:declare` and
@@ -585,25 +585,25 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  Feeds one fired durable timer's event back into a stored run.
+  Feeds one fired durable timer's event back into a stored execution.
 
-  The cold entry point: everything it is given is a run id and an event
-  name, and everything else - which chart, where the run had got to, what
+  The cold entry point: everything it is given is an execution id and an event
+  name, and everything else - which chart, where the execution had got to, what
   it does next - comes back out of SQLite. That is what makes the
   wizard's reminder survive a restart, and it is why this function takes
   no `%__MODULE__{}`: the process that armed the timer is gone.
 
   `:delivered` when the event was fed back, `{:discarded, reason}` when
-  it was not. Discarding is the ordinary answer for a run that is no
+  it was not. Discarding is the ordinary answer for an execution that is no
   longer live (spec 6.2, st-ADR-0054 decision 4) and for a chart this app
   can no longer rebuild;
   `StatifierExamples.Charts.Timers.Delivery`'s moduledoc walks the
   reasons. Anything else - a database that is not there - raises out of
   the layer below and is retried by Oban, which is the right answer to a
-  fact about the node rather than about the run.
+  fact about the node rather than about the execution.
 
   A delivered event is broadcast on `topic/1`, so a page that happens to
-  be showing this run redraws instead of waiting for someone to reload
+  be showing this execution redraws instead of waiting for someone to reload
   it. Nothing here depends on anyone listening.
   """
   @spec deliver(String.t(), String.t()) :: :delivered | {:discarded, term()}
@@ -625,18 +625,18 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  Answers one asynchronous invocation and drives the stored run on.
+  Answers one asynchronous invocation and drives the stored execution on.
 
   `deliver/2`'s sibling for the other kind of out-of-band arrival: where
-  that one feeds a fired timer's event into a run, this one feeds an
+  that one feeds a fired timer's event into an execution, this one feeds an
   invocation's own answer through
   `StatifierPersistence.Driver.done_invocation/5` - the public re-entry
   door its ADR-0007 added, which builds the same `done.invoke.<invoke_id>`
   event a live `Statifier.Session` would build and steps it inside the
-  run's serialization strategy.
+  execution's serialization strategy.
 
-  Cold in exactly the way `deliver/2` is: everything it is given is a run
-  id, an invocation id and a result, and which chart, where the run had
+  Cold in exactly the way `deliver/2` is: everything it is given is an execution
+  id, an invocation id and a result, and which chart, where the execution had
   got to and what it does next all come back out of SQLite. That is what
   makes the answer survive the restart, and it is why this takes no
   `%__MODULE__{}` - the process that started the call is gone.
@@ -644,7 +644,7 @@ defmodule StatifierExamples.Charts.Durable do
   `:delivered` when the answer was fed back, `{:discarded, reason}` when
   it was not. Three reasons, and all three are ordinary:
 
-    * the run is no longer live - it finished or was abandoned while the
+    * the execution is no longer live - it finished or was abandoned while the
       job ran;
     * the chart cannot be rebuilt - the same
       `StatifierExamples.Charts.Timers.Delivery` list, for the same
@@ -655,10 +655,10 @@ defmodule StatifierExamples.Charts.Durable do
       interrupt exits the invoking state, the entry leaves
       `active_invocations`, and the answer arrives for an invocation the
       chart has already stopped waiting for. The driver decides it from
-      the loaded position, inside the run's own serialization strategy, so
+      the loaded position, inside the execution's own serialization strategy, so
       a cancel cannot land between the read and the step.
 
-  The reason is the stored run's own status in all three cases, because
+  The reason is the stored execution's own status in all three cases, because
   that is what tells the two apart - the driver's `{:discarded, run}`
   deliberately does not (statifier_persistence ADR-0007's Consequences).
   To a job they mean the same thing: do not retry, nothing to do.
@@ -694,10 +694,10 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   @doc """
-  The PubSub topic one run's out-of-band advances are announced on.
+  The PubSub topic one execution's out-of-band advances are announced on.
 
-  A run id and not a page: which processes are showing a run is not
-  something a background job can know, and the run id is the one name
+  An execution id and not a page: which processes are showing an execution is not
+  something a background job can know, and the execution id is the one name
   both ends already have.
   """
   @spec topic(String.t()) :: String.t()
@@ -714,9 +714,9 @@ defmodule StatifierExamples.Charts.Durable do
   # It carries no `:active <- record.status` check of its own, and that is
   # deliberate rather than an omission. `deliver/2` has one because it
   # feeds an ordinary event and the driver would happily queue that against
-  # a finished run. An invocation answer has a stricter guard already, in a
+  # a finished execution. An invocation answer has a stricter guard already, in a
   # better place: `StatifierPersistence.Driver` reads liveness off the
-  # loaded position INSIDE the run's serialization strategy, so a cancel
+  # loaded position INSIDE the execution's serialization strategy, so a cancel
   # cannot land between the read and the step. A pre-check here would
   # answer the same question earlier and worse, and would hide the one that
   # counts.
@@ -757,7 +757,7 @@ defmodule StatifierExamples.Charts.Durable do
   end
 
   # `settle/3` for the doors, and it differs in exactly one place:
-  # `{:discarded, record}` is an answer nobody wanted rather than a run to
+  # `{:discarded, record}` is an answer nobody wanted rather than an execution to
   # keep reading, so it is reported rather than folded. The buffer is
   # drained and thrown away on both non-delivering arms, for the reason
   # `settle/3` gives - a drive that stopped part way through has still
@@ -788,13 +788,13 @@ defmodule StatifierExamples.Charts.Durable do
     )
   end
 
-  # The cold rebuild: which chart is `record` a run of, compiled the way
-  # that run's stored identity is keyed on.
+  # The cold rebuild: which chart is `record` an execution of, compiled the way
+  # that execution's stored identity is keyed on.
   #
-  # Two answers, because this app now creates runs two ways and they record
+  # Two answers, because this app now creates executions two ways and they record
   # different things.
   #
-  # A run this app started records its fixture key, and is compiled with
+  # An execution this app started records its fixture key, and is compiled with
   # `compile/3` - declarations and `terminate: true`. That is the arm every
   # fired timer and every asynchronous answer has always taken.
   #
@@ -854,7 +854,7 @@ defmodule StatifierExamples.Charts.Durable do
   # ----------------------------------------------------------- the driver
 
   # The driver, rebuilt per entry point rather than held on the struct:
-  # both funs below close over `self()`, and the process that resumes a run
+  # both funs below close over `self()`, and the process that resumes an execution
   # is routinely not the one that started it (a fired timer's Oban worker,
   # a second LiveView). A driver carried across processes would report into
   # a mailbox nobody is draining.
@@ -876,7 +876,7 @@ defmodule StatifierExamples.Charts.Durable do
   #
   # The package cannot supply this and says so: a stored `chart_blob` is
   # opaque to it, and this app stores no chart blobs at all - it stores
-  # positions and run records. What it does have is the shipped fixture
+  # positions and execution records. What it does have is the shipped fixture
   # list, which is fixed at build time, so the resolution is a walk over
   # the charts this host publishes, matching on the content hash the
   # storage layer keyed the parent's record by.
@@ -892,7 +892,7 @@ defmodule StatifierExamples.Charts.Durable do
   # It is recomputed per call rather than memoised, for
   # `StatifierExamples.Charts.Timers.config/0`'s reason - these are
   # constants and a cached copy is one more thing that can be stale - and
-  # it can afford to be: a resolver is consulted once per run that
+  # it can afford to be: a resolver is consulted once per execution that
   # terminates with a parent, not once per step.
   @spec resolve_chart(String.t()) :: {:ok, Machine.t()} | :error
   defp resolve_chart(content_hash) when is_binary(content_hash) do
@@ -937,7 +937,7 @@ defmodule StatifierExamples.Charts.Durable do
     [initialize: [trace: true], metadata: metadata(fixture_key, document)]
   end
 
-  # The two facts a created run records about the chart it is a run of:
+  # The two facts a created execution records about the chart it is an execution of:
   # which shipped fixture it came from, for a cold node rebuilding it, and
   # which child charts its subcharts resolved to, for a reader asking
   # afterwards what actually ran (campaign-023 ruling R-d).
@@ -966,7 +966,7 @@ defmodule StatifierExamples.Charts.Durable do
   # The buffer is drained on the error arm too, and thrown away. Nothing
   # reads it - the page keeps the reading it had - and a drive that failed
   # part way through has still filled it, so leaving it would let a later
-  # drive in this process narrate a run that is over.
+  # drive in this process narrate an execution that is over.
   @spec settle(t(), Execution.t(), Driver.result()) :: {:ok, driven()} | {:error, term()}
   defp settle(durable, run, {:ok, record, _machine_state}), do: rest(durable, run, record.status)
   defp settle(durable, run, {:discarded, record}), do: rest(durable, run, record.status)
@@ -997,15 +997,15 @@ defmodule StatifierExamples.Charts.Durable do
   # ------------------------------------------------------ the host's funs
 
   # An arity-2 fun rather than a module, because what it closes over - the
-  # run id it tags with and the process it reports to - is per-call state a
+  # execution id it tags with and the process it reports to - is per-call state a
   # module would have to be handed some other way.
-  # The two run ids `dispatch/1` describes, in the other fun. A durable
+  # The two execution ids `dispatch/1` describes, in the other fun. A durable
   # subchart child runs on this same executor, so a stored timer job keyed
   # on the closed-over `execution_id` would arm the CHILD's 24-hour wait and its
-  # abandonment reminder against the PARENT's run: they would fire, be
+  # abandonment reminder against the PARENT's execution: they would fire, be
   # delivered to a chart with no such event, and the child would wait
   # forever for a clock nobody was holding for it. `context.execution_id` is the
-  # run the effect belongs to, and it is what both consumers get.
+  # execution the effect belongs to, and it is what both consumers get.
   #
   # The buffer tag stays the drive's own `execution_id`, for `dispatch/1`'s
   # reason: it is what `drain/2` matches on.
@@ -1033,25 +1033,25 @@ defmodule StatifierExamples.Charts.Durable do
   # `:reason` is filled: this app makes one attempt through
   # `Charts.dispatch/3` and has no detail to add, and the driver spells an
   # absent key `:undefined` rather than `nil`.
-  # ## Two run ids, and which one each half uses
+  # ## Two execution ids, and which one each half uses
   #
   # A durable subchart child is driven by the driver this fun was built for,
   # with only the machine swapped (sp ADR-0008 decision 3's `create_child`),
-  # so the SAME dispatch fun performs the child's calls. Two run ids are
+  # so the SAME dispatch fun performs the child's calls. Two execution ids are
   # therefore in play whenever a subchart is running, and they are not
   # interchangeable:
   #
-  #   * `execution_id`, closed over here, is the run whose *drive* this is - the
+  #   * `execution_id`, closed over here, is the execution whose *drive* this is - the
   #     one being narrated. The feed buffer is tagged with it, because
   #     `drain/2` matches on that tag and a row tagged with a child's id
   #     would sit in the mailbox until some later drive in this process
-  #     picked it up and narrated a run that is over. Narrating a child's
+  #     picked it up and narrated an execution that is over. Narrating a child's
   #     steps in the parent's feed is also what a reader watching the
   #     parent wants: it is what the child is doing on the parent's behalf.
   #
-  #   * `context.execution_id`, handed in per call, is the run the invocation
+  #   * `context.execution_id`, handed in per call, is the execution the invocation
   #     actually BELONGS to. Everything with a consequence keys on it -
-  #     which run an account row is written for, which run an asynchronous
+  #     which execution an account row is written for, which execution an asynchronous
   #     job is scoped to - because a child's `myapp:provision` writing under
   #     the parent's key, or a child's asynchronous call answered into the
   #     parent, is a real and silent corruption rather than a cosmetic one.
@@ -1089,7 +1089,7 @@ defmodule StatifierExamples.Charts.Durable do
   # id, compiles it, and hands back
   # `{:start_child, resolved, {:invoke, invoke}}` - `Statifier.Session`'s
   # own instruction, unrenamed, which `StatifierPersistence.Driver`
-  # executes by creating the child as its own persisted run and answering
+  # executes by creating the child as its own persisted execution and answering
   # `:pending` (sp ADR-0008 decision 3).
   #
   # It reads `src` off `dispatch_context.invoke`, which is why this app's
@@ -1121,7 +1121,7 @@ defmodule StatifierExamples.Charts.Durable do
         instruction
 
       {:error, failure} = refusal ->
-        # No child run id to name: the child was refused before one was
+        # No child execution id to name: the child was refused before one was
         # constructed. The chart it would have been is what the row is
         # about, so that is what marks it.
         note(reader, execution_id, "Child chart refused", "#{type}: #{failure[:reason]}", type)
@@ -1130,22 +1130,22 @@ defmodule StatifierExamples.Charts.Durable do
     end
   end
 
-  # The child's run id, said in the feed at the moment it is started. It is
+  # The child's execution id, said in the feed at the moment it is started. It is
   # `StatifierPersistence.Execution.Linkage.child_execution_id/3`'s deterministic
   # construction rather than a value read back out of storage, because at
   # this point the child does not exist yet - the driver creates it when
   # this drive's dispatch fun returns. It is what a reader types into the
-  # page URL to open the child as a run of its own, which is the whole
+  # page URL to open the child as an execution of its own, which is the whole
   # point of a durable subchart, so the feed says it rather than making
   # someone query for it.
   @spec child_detail(String.t(), Statifier.Effect.Invoke.t()) :: String.t()
   defp child_detail(execution_id, invoke) do
-    "#{invoke.src} as run #{child_execution_id(execution_id, invoke)}"
+    "#{invoke.src} as execution #{child_execution_id(execution_id, invoke)}"
   end
 
   # The same construction, read twice: once into the row's sentence and
   # once into the mark that says the row is a child's. One function so the
-  # two cannot name different runs.
+  # two cannot name different executions.
   @spec child_execution_id(String.t(), Statifier.Effect.Invoke.t()) :: String.t()
   defp child_execution_id(execution_id, invoke) do
     Linkage.child_execution_id(execution_id, invoke.invoke_id, 0)
@@ -1199,9 +1199,9 @@ defmodule StatifierExamples.Charts.Durable do
 
   # The failure class the chart reads as `_event.data.reason`, spelled the
   # way `Statifier.Invoke.SyncHandler.Adapter` spells the same refusal for
-  # a session run of the same chart. The adapter keeps its copy private, so
-  # this is the one place the app repeats it, and a durable run and a
-  # session run answering the same refusal differently is exactly what
+  # a session execution of the same chart. The adapter keeps its copy private, so
+  # this is the one place the app repeats it, and a durable execution and a
+  # session execution answering the same refusal differently is exactly what
   # se-4dt.3 was closing.
   #
   # One clause per way `Charts.dispatch/3` refuses, and no fall-through:
@@ -1265,19 +1265,19 @@ defmodule StatifierExamples.Charts.Durable do
 
   # ------------------------------------------------------------- readings
 
-  # The stepper reports the run's status; the reading speaks the vocabulary
-  # `Execution.absorb/2`'s `{:halted, reason}` message uses, so a durable run and
-  # a session run finish with the same row and the same status word.
+  # The stepper reports the execution's status; the reading speaks the vocabulary
+  # `Execution.absorb/2`'s `{:halted, reason}` message uses, so a durable execution and
+  # a session execution finish with the same row and the same status word.
   #
   # There are FOUR stored statuses, not three: `statifier_persistence` 0.4.0
   # added `:cancelled` as a fourth terminal value (ADR-0008 decision 5), and
   # this app now produces one - `abandon/1` cascades into a live subchart
-  # child. A clause for it is not optional: a cancelled run opened by URL
+  # child. A clause for it is not optional: a cancelled execution opened by URL
   # reached this function with no matching clause and the page raised, which
   # is what a browser capture of the cascade found (se-6ag).
   #
   # `:failed` used to arrive at `:cancelled`'s word, because until se-j87
-  # nothing in this app produced a failed run and the two were both "ended
+  # nothing in this app produced a failed execution and the two were both "ended
   # from outside the chart". A fan-out is what made them different: under
   # `first_error` the child that failed and the siblings cancelled because
   # of it sit at different indices of the same answer, and a page that
@@ -1294,10 +1294,10 @@ defmodule StatifierExamples.Charts.Durable do
   defp resumed_status(run, :active), do: run
   defp resumed_status(run, status), do: finish(run, status)
 
-  # A resumed run has no entry set to fold - nothing entered, it was
+  # A resumed execution has no entry set to fold - nothing entered, it was
   # already there - so the marks come from the loaded configuration, which
   # is exactly what `MacrostepStable` carries. Building one is how the
-  # reading learns where the run is sitting without a second derivation
+  # reading learns where the execution is sitting without a second derivation
   # living here.
   @spec stable(Statifier.MachineState.t()) :: Statifier.Effect.Trace.MacrostepStable.t()
   defp stable(machine_state) do

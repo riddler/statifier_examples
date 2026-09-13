@@ -43,7 +43,7 @@ defmodule StatifierExamples.Charts.Tracing do
       previous macrostep of the same session with a link
       (statifier-ex `docs/opentelemetry.md`; ots-ADR-0003 decision 8 -
       spans start from a fresh context, never the ambient one);
-    * a durable child run is **linked** from its parent's step, never
+    * a durable child execution is **linked** from its parent's step, never
       parented by it, because parenthood would hold the parent's trace
       open for the child's whole life (sp `docs/telemetry.md`,
       ADR-0008);
@@ -60,7 +60,7 @@ defmodule StatifierExamples.Charts.Tracing do
   Within one process one thing does nest, and it is the useful one: the
   bridge parents a span under whatever span **it itself** has open in
   **that** process (ots-ADR-0004). So a durable step span contains its
-  macrostep span, and a child run created inside its parent's step -
+  macrostep span, and a child execution created inside its parent's step -
   which is where `{:start_child, _, _}` creates it - contains the child's
   step span too. That nesting comes from the bridge's own table and never
   from the process's ambient OTel context, which is why the host span
@@ -83,7 +83,7 @@ defmodule StatifierExamples.Charts.Tracing do
   the gap, which is the whole of what `drive/2` and `caller_context/0`
   buy.
 
-  A timer armed by the run's **first** drive carries no stamp whatever
+  A timer armed by the execution's **first** drive carries no stamp whatever
   this module does: `Statifier.Interpreter` sets `caller_context` to
   `nil` for the `:initialize` macrostep, because that macrostep has no
   calling event to inherit one from. Only a timer armed by an

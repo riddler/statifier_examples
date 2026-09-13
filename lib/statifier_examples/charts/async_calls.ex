@@ -3,13 +3,13 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   The one call in this app that does **not** answer inside the step that
   made it: the wizard's company-details step, started as an Oban job and
   answered minutes or days later, from a process that has never seen the
-  run.
+  execution.
 
   Every other `<invoke>` here is a function call wearing an invoke's
   clothes - `StatifierExamples.Charts.dispatch/3` runs it and hands back
   a `donedata` map before the durable step returns. That is the easy half
   of spec 6.4, and it left the production-shaped half unexercised: an
-  invocation that outlives the step, a run that rests durably with the
+  invocation that outlives the step, an execution that rests durably with the
   invocation still live, a cancel that means something because there is
   something to cancel.
 
@@ -20,8 +20,8 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   is a human step that takes hours, and the chart already surrounds it
   with the deadline that makes waiting safe. `blk_su_company` sits inside
   the wizard's onboarding group, whose body arms `signup.abandoned` two
-  hours out and whose interrupt rail listens for it - so a run resting on
-  this call is a run with a live invocation and an armed clock, which is
+  hours out and whose interrupt rail listens for it - so an execution resting on
+  this call is an execution with a live invocation and an armed clock, which is
   the whole shape se-d74 was filed for.
 
   It is chosen per *block*, not per type: the same `myapp:signup` handler
@@ -32,9 +32,9 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   ## Asynchronous on the durable path only
 
   `:pending` is `StatifierPersistence.Driver`'s arm (its ADR-0007), and
-  it exists because a durable run has no process to hold: the drive
+  it exists because a durable execution has no process to hold: the drive
   reaches quiescence, the position persists with the invocation live in
-  `active_invocations`, and nothing is waiting. A `Statifier.Session` run
+  `active_invocations`, and nothing is waiting. A `Statifier.Session` execution
   of the same chart has a process, holds it, and answers the same call
   through `StatifierExamples.Charts.SyncAdapter` in the same breath.
 
@@ -48,12 +48,12 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   - **Starting** is `StatifierOban.Invoke.Handler.perform_start/3`, called
     from `consume/2` on the `{:invoke, _}` effect - one job, unique on
     `{scope, invoke_id, macrostep}`, in the app's Oban queue. The scope is
-    the durable run id, which is what `statifier_oban` means by "the
-    host's own durable run id" where a session host passes `session_id`.
+    the durable execution id, which is what `statifier_oban` means by "the
+    host's own durable execution id" where a session host passes `session_id`.
   - **Answering** is the job's: `StatifierOban.Invoke.Worker` calls
     `run/1` below, then hands the result to
     `StatifierExamples.Charts.AsyncCalls.Delivery`, which re-enters the
-    run through `StatifierPersistence.Driver.done_invocation/5`.
+    execution through `StatifierPersistence.Driver.done_invocation/5`.
   - **Cancelling** is `StatifierOban.Invoke.Handler.perform_cancel/3`,
     called from `consume/2` on the `{:cancel_invoke, _}` effect the
     interpreter emits when a state carrying a live invocation exits. The
@@ -66,7 +66,7 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   `Statifier.Invoke.Handler` callbacks - `start/2`, `cancel/2`,
   `forward/3` and `perform/2`. Those are a **session's** planning seam
   (st-ADR-0051): the session calls them, folds the instructions they
-  return, and performs them. A durable run has no session and plans
+  return, and performs them. A durable execution has no session and plans
   nothing, so all four would be dead code here.
 
   What this host needs is the impure half, and the package exports it:
@@ -83,15 +83,15 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   `c:StatifierOban.Invoke.Handler.run/1` is handed the effect and nothing
   else - no scope. The scope is on the job row (`JobArgs.from_invoke/4`
   writes it, and the worker reads it to deliver with) but it is not
-  passed to the work, so a handler whose work keys on the *run* cannot be
+  passed to the work, so a handler whose work keys on the *execution* cannot be
   written against the base as shipped.
 
   That is why `myapp:provision` - this app's one call that writes, keyed
-  on the run id by `StatifierExamples.Signup.Accounts` - stays
+  on the execution id by `StatifierExamples.Signup.Accounts` - stays
   synchronous, and why the asynchronous example is a call whose work is
-  run-independent. `invoke.invoke_id` is the key the base offers instead,
+  execution-independent. `invoke.invoke_id` is the key the base offers instead,
   and it is the right key for deduplicating *this* invocation's work; it
-  is not a substitute for the run, because it restarts per run
+  is not a substitute for the execution, because it restarts per execution
   (st-ADR-0008). Raising it in `statifier_oban` is the reference
   embedder's job; working around it here would hide it.
 
@@ -201,8 +201,8 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   made inline, routed to the same handler module - which is what makes
   this an example of *when* a host defers a call rather than of a second
   way to answer one. The context is empty because this work is
-  run-independent by construction (see the moduledoc's gap section); a
-  handler clause that needs the run gets the clause that says so.
+  execution-independent by construction (see the moduledoc's gap section); a
+  handler clause that needs the execution gets the clause that says so.
 
   At-least-once is the base's contract, so this is idempotent by being a
   log line and a canned answer - which is all any handler in this app
@@ -216,7 +216,7 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   end
 
   @doc """
-  Consumes one effect on behalf of the run named by `execution_id`.
+  Consumes one effect on behalf of the execution named by `execution_id`.
 
   Two effects are this module's, and every other one passes through
   untouched:
@@ -271,7 +271,7 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   # The context the base reads its scope out of. `statifier_oban` names
   # the field `session_id` because a session host's scope IS its session
   # id, and documents the other case in the same breath: "the host's own
-  # durable run id". This host has no session, so the run id is what goes
+  # durable execution id". This host has no session, so the execution id is what goes
   # there, and the two registration fields are empty because neither
   # `perform_start/3` nor `perform_cancel/3` reads them - the full shape
   # is built rather than a bare map so the value still satisfies

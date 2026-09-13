@@ -1,6 +1,6 @@
 defmodule StatifierExamples.Charts.ExecutionLock do
   @moduledoc """
-  This app's per-run serialization strategy: the exclusion
+  This app's per-execution serialization strategy: the exclusion
   `StatifierPersistence.Executions` runs every fetch-to-persist tail inside.
 
   ## Why the host has to supply one at all
@@ -11,30 +11,30 @@ defmodule StatifierExamples.Charts.ExecutionLock do
   `StatifierExamples.Persistence` does not export that callback - SQLite
   has neither an advisory lock nor a row lock to take, and that module's
   moduledoc says why - so the default refuses with
-  `{:error, {:serialization, :not_supported}}` before a run ever starts.
+  `{:error, {:serialization, :not_supported}}` before an execution ever starts.
 
   The refusal is the contract working, not a gap: the strategy is a seam
   precisely so a host that orders deliveries some other way can say how.
-  This is that answer for a single-node app - a lock server keyed by run
+  This is that answer for a single-node app - a lock server keyed by execution
   id, which is the shape `StatifierPersistence.Serialization`'s own
   moduledoc names ("a single job-queue consumer per run id, for one").
 
   ## What it guarantees, and what it does not
 
-  The behaviour asks for two things and this gives both: for one run id
+  The behaviour asks for two things and this gives both: for one execution id
   two `with_execution/3` bodies never overlap, and a body that finishes before
   another starts is durable before the later one loads - the waiter is
   not woken until the holder has released, and the holder releases after
   its body has returned.
 
-  Bodies for *different* run ids run concurrently, which is the whole
+  Bodies for *different* execution ids run concurrently, which is the whole
   reason this is keyed rather than a single global mutex. Waiters on one
   id are served first-in-first-out, which is more than the behaviour
   promises and is free here.
 
   The body runs in the **calling** process, never in this server: a
   stepper tail does storage work and executor work, and a lock server
-  that ran it would serialize every run in the app behind one mailbox and
+  that ran it would serialize every execution in the app behind one mailbox and
   would die with the first executor that raised. What the server holds is
   the bookkeeping.
 
@@ -42,7 +42,7 @@ defmodule StatifierExamples.Charts.ExecutionLock do
 
   The caller is monitored for exactly as long as it holds the lock, so a
   crash between acquire and release hands the lock to the next waiter
-  instead of stranding the run id forever. That is not a nicety in this
+  instead of stranding the execution id forever. That is not a nicety in this
   app: the holder is usually a LiveView process, and a reader closing the
   tab mid-step is an ordinary thing to observe.
 

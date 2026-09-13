@@ -17,7 +17,7 @@ defmodule StatifierExamples.Signup.AccountsTest do
   defp count(email), do: Repo.one!(from(u in User, where: u.email == ^email, select: count()))
 
   # Sabotage: made `email_for/1` ignore its argument and answer a constant;
-  # this went red on the second run id, then reverted.
+  # this went red on the second execution id, then reverted.
   test "the address is a function of the run, so two runs are two accounts", %{run: run} do
     other = run <> "-other"
 
@@ -36,7 +36,7 @@ defmodule StatifierExamples.Signup.AccountsTest do
     assert count(email) == 1
   end
 
-  # The tag is the part a reader sees in the run feed, and it is derived
+  # The tag is the part a reader sees in the execution feed, and it is derived
   # from the write rather than guessed: a first delivery says `created` and
   # a replay says `existing`.
   #

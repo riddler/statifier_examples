@@ -51,7 +51,7 @@ defmodule StatifierExamplesWeb.ConnCase do
 
   The sharing is the part that matters here rather than the checkout: a
   LiveView test drives a *separate* process, and this app's Run button now
-  starts a durable run that writes to the database from inside it. Without
+  starts a durable execution that writes to the database from inside it. Without
   the shared owner that write finds no connection and the page fails in a
   way that says nothing about the page.
   """

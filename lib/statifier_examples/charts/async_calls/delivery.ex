@@ -1,17 +1,17 @@
 defmodule StatifierExamples.Charts.AsyncCalls.Delivery do
   @moduledoc """
-  How a finished invoke job gets its answer back into a durable run.
+  How a finished invoke job gets its answer back into a durable execution.
 
   `StatifierOban.Invoke.Delivery` is a behaviour for the same reason
-  `StatifierOban.Timer.Delivery` is: whether a run is live is the host's
+  `StatifierOban.Timer.Delivery` is: whether an execution is live is the host's
   question. The package's default answers it from `Statifier.Session`'s
   registry and delivers through `Statifier.Session.done_invocation/3`,
-  and this app has no session process to look up - its runs live in
-  SQLite between steps. So the answer here is the stored run's own
+  and this app has no session process to look up - its executions live in
+  SQLite between steps. So the answer here is the stored execution's own
   status and the persisted position's own `active_invocations`, and the
   feed-back is `StatifierPersistence.Driver`'s ADR-0007 re-entry doors.
 
-  Nothing about this module knows a page exists. It is handed a run id, an
+  Nothing about this module knows a page exists. It is handed an execution id, an
   invocation id and a result by an Oban worker, on a node that may have
   started after the invocation did, and everything it needs to rebuild the
   chart it reads back out of storage. That is what "the invocation
@@ -30,7 +30,7 @@ defmodule StatifierExamples.Charts.AsyncCalls.Delivery do
 
   Both discard for the same three reasons, and
   `StatifierExamples.Charts.Durable`'s own `complete_invocation/3` spells
-  them: the run is no longer live, the chart can no longer be rebuilt, or
+  them: the execution is no longer live, the chart can no longer be rebuilt, or
   the invocation is no longer the live one under its state - spec 6.4.3's
   cancellation, which for this app is the abandonment deadline having
   fired while the job was still running. The worker records a discard on
@@ -50,7 +50,7 @@ defmodule StatifierExamples.Charts.AsyncCalls.Delivery do
   alias StatifierExamples.Charts.Durable
 
   @doc """
-  Reports the invocation named `invoke_id` in the run named `scope`
+  Reports the invocation named `invoke_id` in the execution named `scope`
   complete, with `donedata`.
   """
   @impl StatifierOban.Invoke.Delivery
@@ -59,7 +59,7 @@ defmodule StatifierExamples.Charts.AsyncCalls.Delivery do
   end
 
   @doc """
-  Reports the invocation named `invoke_id` in the run named `scope`
+  Reports the invocation named `invoke_id` in the execution named `scope`
   permanently failed, with st-ADR-0068's `failure` keyword list.
   """
   @impl StatifierOban.Invoke.Delivery

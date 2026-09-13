@@ -28,9 +28,9 @@ defmodule StatifierExamplesWeb.EditorLive do
       second view over the same documents - `StatifierExamplesWeb.PlanLive` -
       is a second LiveView, so a map held here is one that page cannot see.
       An edit now survives a document switch AND a reload, and still does not
-      survive a restart: what this app stores is *runs*, not drafts;
-    * the run id, which is a query parameter for the same reason the other
-      two are. A durable run outlives the process that started it, so the
+      survive a restart: what this app stores is *executions*, not drafts;
+    * the execution id, which is a query parameter for the same reason the other
+      two are. A durable execution outlives the process that started it, so the
       page needs a name for the one it is showing, and a name in the URL is
       one a reader can come back to after the server was killed. See
       `StatifierExamples.Charts.Durable`;
@@ -166,16 +166,16 @@ defmodule StatifierExamplesWeb.EditorLive do
     {:noreply, assign(socket, :drawer_height, height)}
   end
 
-  # A durable run that moved without this page pressing anything: a
-  # reminder timer fired in an Oban job, drove the stored run, and
-  # announced it on the run's topic (`StatifierExamples.Charts.Durable`'s
-  # `deliver/2`). The page is one of possibly several showing this run and
+  # A durable execution that moved without this page pressing anything: a
+  # reminder timer fired in an Oban job, drove the stored execution, and
+  # announced it on the execution's topic (`StatifierExamples.Charts.Durable`'s
+  # `deliver/2`). The page is one of possibly several showing this execution and
   # is not the driver, so it adopts the reading the drive produced rather
   # than deriving a second one - which is also why the feed opens with the
   # resume row: the reading came from storage, exactly as it does after a
   # reload, and this app would rather show that seam than hide it.
   #
-  # The id check is not paranoia. A page that patched to a different run
+  # The id check is not paranoia. A page that patched to a different execution
   # between the broadcast and its delivery is still subscribed for one
   # more message.
   def handle_info(
@@ -343,14 +343,14 @@ defmodule StatifierExamplesWeb.EditorLive do
     |> assign(:page_title, fixture.name)
   end
 
-  # A run is a run OF a document, so opening a different one stops showing
+  # An execution is an execution OF a document, so opening a different one stops showing
   # it. The editor clears its own marks on a document switch for the same
-  # reason, and a host that kept the run would be holding marks the editor
+  # reason, and a host that kept the execution would be holding marks the editor
   # has already dropped and a feed about a chart nobody is looking at.
   #
-  # Stops *showing*, not stops: the run is durable, so forgetting it here
+  # Stops *showing*, not stops: the execution is durable, so forgetting it here
   # loses a page's worth of assigns and nothing else. Coming back to the
-  # same URL picks it up again, which is the whole point of the run id
+  # same URL picks it up again, which is the whole point of the execution id
   # being in the URL.
   @spec end_run_on_switch(Phoenix.LiveView.Socket.t(), Charts.Fixture.t()) ::
           Phoenix.LiveView.Socket.t()
@@ -364,10 +364,10 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   # --------------------------------------------------------------- running
 
-  # The Run press. Every run this page starts is durable: the position is
-  # in SQLite after every step, the run id goes into the URL, and the page
-  # holds no more of the run than a reader is looking at. Pressing Run
-  # while one is showing starts a second run rather than replacing a
+  # The Run press. Every execution this page starts is durable: the position is
+  # in SQLite after every step, the execution id goes into the URL, and the page
+  # holds no more of the execution than a reader is looking at. Pressing Run
+  # while one is showing starts a second execution rather than replacing a
   # process, because there is no process - the one already stored keeps
   # whatever it had reached, and the URL now names the new one.
   @spec start_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
@@ -389,7 +389,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   end
 
   # The Stop press: the host's own terminal transition (ADR-0004 decision
-  # 6), so the stored record says a host stopped this run rather than the
+  # 6), so the stored record says a host stopped this execution rather than the
   # chart finishing it.
   @spec stop_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp stop_run(%{assigns: %{durable: %Durable{} = durable}} = socket) do
@@ -409,15 +409,15 @@ defmodule StatifierExamplesWeb.EditorLive do
     |> assign(:run_error, nil)
   end
 
-  # Which run's out-of-band advances this page is listening for. A page
-  # subscribes because a durable run can move without it: the wizard's
+  # Which execution's out-of-band advances this page is listening for. A page
+  # subscribes because a durable execution can move without it: the wizard's
   # reminder fires in a job, not in a click, and a feed that only ever
-  # redrew on a press would sit there stale while the run went on without
+  # redrew on a press would sit there stale while the execution went on without
   # it.
   #
   # Keyed on the topic rather than on "have I subscribed", so switching
-  # documents or starting a second run leaves exactly one subscription
-  # behind and no page ever receives another run's advances.
+  # documents or starting a second execution leaves exactly one subscription
+  # behind and no page ever receives another execution's advances.
   @spec watch_run(Phoenix.LiveView.Socket.t(), String.t() | nil) ::
           Phoenix.LiveView.Socket.t()
   defp watch_run(socket, execution_id) do
@@ -448,18 +448,18 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   defp send_run_event(socket, _event), do: socket
 
-  # Picking a stored run back up, which is what a reload after a `kill -9`
+  # Picking a stored execution back up, which is what a reload after a `kill -9`
   # is. Three cases and they are all ordinary: the page is already showing
-  # this run (a patch this page itself pushed), the document does not
-  # compile so there is no machine to resume onto, or the run is genuinely
+  # this execution (a patch this page itself pushed), the document does not
+  # compile so there is no machine to resume onto, or the execution is genuinely
   # somewhere in storage and this is the first the process has heard of it.
   #
-  # The third case resumes by run id alone (`Durable.resume/1`) rather than
+  # The third case resumes by execution id alone (`Durable.resume/1`) rather than
   # with the compile on this page's canvas, and that is what lets the page
-  # open a **durable subchart child**. A child run's stored identity is
+  # open a **durable subchart child**. A child execution's stored identity is
   # keyed on the child compile of its document and the canvas holds the root
   # compile of the same document, so resuming with this page's own would be
-  # refused on identity - correctly and uselessly. Which recipe a stored run
+  # refused on identity - correctly and uselessly. Which recipe a stored execution
   # wants is a fact about the record, and `Durable.resume/1` reads it there.
   @spec restore_execution(Phoenix.LiveView.Socket.t(), String.t() | nil) ::
           Phoenix.LiveView.Socket.t()
@@ -488,7 +488,7 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   # A refusal is shown rather than swallowed. `{:identity_mismatch, _, _}`
   # is the one a reader will actually meet - it means the document was
-  # edited after the run started - and a page that quietly showed no run
+  # edited after the execution started - and a page that quietly showed no execution
   # would be hiding the guard doing its job.
   @spec adopt(Phoenix.LiveView.Socket.t(), {:ok, Durable.driven()} | {:error, term()}) ::
           Phoenix.LiveView.Socket.t()
@@ -503,7 +503,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   defp adopt(socket, {:error, reason}) do
     socket
     |> forget_run()
-    |> assign(:run_error, "run refused: #{inspect(reason)}")
+    |> assign(:run_error, "execution refused: #{inspect(reason)}")
   end
 
   @spec execution_id(Phoenix.LiveView.Socket.t()) :: String.t() | nil
@@ -512,8 +512,8 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   defp execution_id(_socket), do: nil
 
-  # The URL is where the run id lives, so every press that changes which
-  # run the page is showing ends in a patch. Pressing Run and then reading
+  # The URL is where the execution id lives, so every press that changes which
+  # execution the page is showing ends in a patch. Pressing Run and then reading
   # the address bar is how a reader gets a link they can come back to.
   @spec patch_to_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp patch_to_run(socket) do
@@ -525,7 +525,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   # ------------------------------------------------------------- the seams
 
   # The one assign the editor takes from a host that is executing the open
-  # document: the run itself, as the `StatifierUI.Live.State` the package's
+  # document: the execution itself, as the `StatifierUI.Live.State` the package's
   # Run pane reads, pushed with `send_update/3`.
   #
   # This used to be three assigns and a drawer tab, and what replaced them
@@ -533,23 +533,23 @@ defmodule StatifierExamplesWeb.EditorLive do
   # painted `active_marks` and `invoke_mark` from its own in-memory
   # `StatifierExamples.Charts.Execution`, which knew only what the current
   # process had watched happen; and it rendered its own event feed into a
-  # host drawer tab, which a resumed run opened with a single row saying it
-  # had been resumed, because effects are not stored. Seating the run
+  # host drawer tab, which a resumed execution opened with a single row saying it
+  # had been resumed, because effects are not stored. Seating the execution
   # itself moves both readings onto the stored log: the pane derives the
-  # marks from the run's own selected macrostep against the provenance the
+  # marks from the execution's own selected macrostep against the provenance the
   # editor recompiles (which is what `compile_options` in `render/1` is
-  # for), so scrubbing back moves them, and the log is the run's whole
+  # for), so scrubbing back moves them, and the log is the execution's whole
   # history rather than this process's share of it.
   #
   # Pushed and not passed in the component call, because that is the door
-  # the package documents for a host reacting to a run event it received
+  # the package documents for a host reacting to an execution event it received
   # out of band - which is exactly what a subscriber message is - and
   # because `run` is held as editor state behind a `Map.has_key?/2` guard,
   # so a parent re-render that does not name the key leaves it alone.
   #
-  # A run that cannot be read back is not a blank pane: `run_error` carries
+  # An execution that cannot be read back is not a blank pane: `run_error` carries
   # the refusal to the header, beside the one a refused resume writes,
-  # because a page showing no run for a run that exists is the one reading
+  # because a page showing no execution for an execution that exists is the one reading
   # this seam must not produce.
   @spec push_run(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp push_run(socket) do
@@ -568,8 +568,8 @@ defmodule StatifierExamplesWeb.EditorLive do
     end
   end
 
-  # The stored run, read back through the input log. `:none` when the page
-  # is showing no run at all, or no compiled chart to read one over - both
+  # The stored execution, read back through the input log. `:none` when the page
+  # is showing no execution at all, or no compiled chart to read one over - both
   # of which are ordinary states and neither of which is an error.
   @spec replayed(Phoenix.LiveView.Socket.t()) ::
           {:ok, StatifierUI.Live.State.t()} | :none | {:error, term()}
@@ -581,16 +581,16 @@ defmodule StatifierExamplesWeb.EditorLive do
   end
 
   # The rest of the option list this page compiles with, for the editor's
-  # own provenance recompile - the one the Run pane resolves a run's state
+  # own provenance recompile - the one the Run pane resolves an execution's state
   # ids through. It is assembled here from the same three values
   # `StatifierExamples.Charts.Durable.compile/3` passes rather than read
   # back off `@compiled`: the pane's marks are in the right places only
-  # while the chart the editor recompiles is byte-for-byte the one the run
+  # while the chart the editor recompiles is byte-for-byte the one the execution
   # executed, and `terminate: true` in particular is what puts the
-  # top-level finals in it that a completed run's last configuration sits
+  # top-level finals in it that a completed execution's last configuration sits
   # on.
   #
-  # `:declare` is not in the list even though the run compiles with it: the
+  # `:declare` is not in the list even though the execution compiles with it: the
   # package takes that key from the `declare` assign whatever this list
   # says, which is why the assign is passed beside it in `render/1` and why
   # the two cannot disagree.
@@ -609,7 +609,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   # every edit, so the findings pane is never showing an answer to a document
   # that is no longer on the canvas. Compile is still a button because a host
   # whose compile is expensive wants one, and this page is what such a host
-  # copies - but the button re-runs a pass that is already current rather than
+  # copies - but the button re-executions a pass that is already current rather than
   # being the only thing that runs it.
   #
   # `:declare` comes off the FIXTURE rather than off the document on the
@@ -653,7 +653,7 @@ defmodule StatifierExamplesWeb.EditorLive do
     |> assign(:verdict, verdict(socket, anchored))
   end
 
-  # The artifact a run needs and the findings pane does not: the generated
+  # The artifact an execution needs and the findings pane does not: the generated
   # bytes to start a session on, and the provenance that turns a state id
   # back into the block to mark. A document that does not compile has none,
   # and `nil` is what makes Run refuse rather than the button being hidden -

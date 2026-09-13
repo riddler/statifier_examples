@@ -168,14 +168,14 @@ defmodule StatifierExamples.MixProject do
       # 0.4.0. The two interim git pins this arm carried across
       # campaign 026 are retired here (se-p22's pattern).
       #
-      # The requirement moves to the 0.6 line to keep the reference
-      # embedder on what is published. 0.6.0 emits statifier's own
+      # The requirement moves to the 0.6 line to keep the reference embedder on
+      # what is published. 0.6.0 emits statifier's own
       # `[:statifier, :session, ...]` telemetry from a durably-stepped
-      # run, tagged `driver: :persistence`, so the OTel bridge draws the
-      # same macrostep spans and effect events for a durable run as for a
-      # session-hosted one. This app asks for nothing new to get that -
-      # it is the bridge's doing, not the host's - and 0.5.0 remains what
-      # the durable subchart and the capstone's trace graph actually need.
+      # execution, tagged `driver: :persistence`, so the OTel bridge draws the
+      # same macrostep spans and effect events for a durable execution as for a
+      # session-hosted one. This app asks for nothing new to get that - it is
+      # the bridge's doing, not the host's - and 0.5.0 remains what the durable
+      # subchart and the capstone's trace graph actually need.
       #
       # The requirement moves to the 0.7 line, and getting there took two
       # releases. 0.7.0's V03 DDL could not apply to this app's SQLite
@@ -203,9 +203,9 @@ defmodule StatifierExamples.MixProject do
       # 0.7.1 also makes the Ecto adapter declare `supports_metadata?/1`
       # false off Postgres, which is a refusal at open for a durable
       # subchart rather than a raise from inside one.
-      # `StatifierExamples.Persistence` answers that callback for itself
-      # now, on the same grounds it already wrote `list_executions_by_metadata/2`
-      # in Elixir on.
+      # `StatifierExamples.Persistence` answers that callback for itself now, on
+      # the same grounds it already wrote `list_executions_by_metadata/2` in
+      # Elixir on.
       #
       # The LOCK moves to 0.7.2 under that same `~> 0.7` requirement.
       # 0.7.2 fixes the fan-out this app runs: a settlement used to read a
@@ -217,9 +217,9 @@ defmodule StatifierExamples.MixProject do
       # loses a child's result to it.
       #
       # The requirement moves to the 0.8 line. 0.8.0 is what lets a chart
-      # fail its own run: settling in a top-level `<final>` whose
+      # fail its own execution: settling in a top-level `<final>` whose
       # `<donedata>` carries `statifier_persistence:execution_status` set to
-      # `"failed"` persists the run as `:failed` with the failure string
+      # `"failed"` persists the execution as `:failed` with the failure string
       # `"failed_final"`, so a `:first_error` fan-out cancels the failed
       # child's siblings with no host in the loop (ADR-0008's amendment,
       # accepted). The host-side translation this app writes for exactly
@@ -239,15 +239,16 @@ defmodule StatifierExamples.MixProject do
       # adapter off Postgres - `docs/non-postgres-backends.md` there - and
       # what this app has been doing in Elixir all along.
 
-      # The requirement moves to the 0.9 line, and this arm is a Hex
-      # requirement again. The interim git pin `se-dh0` took on this
-      # package - the commit carrying ADR-0010's durable per-run input log
-      # (`sp-80g`), while 0.9.0 was unpublished - is retired by `se-gty`,
-      # and the `refute` in `StatifierExamples.MixDepsTest` is what says it
-      # did not come back. The `override: true` that pin needed goes with
-      # it: a Hex requirement satisfies the requirements `statifier_oban`
-      # and `statifier_blocks` state on this package, which is exactly what
-      # a git ref cannot do.
+      # The requirement moves to the 0.9 line, and this arm is a Hex requirement
+      # again. The interim git pin `se-dh0` took on this package - the commit
+      # carrying ADR-0010's durable per-execution input log (`sp-80g`), while
+      # 0.9.0 was unpublished - is retired by `se-gty`, and the `refute` in
+      # `StatifierExamples.MixDepsTest` is what says it did not come back. The
+      # `override: true` that pin needed goes with it. This note used to say the
+      # override was there because `statifier_oban` and `statifier_blocks` state
+      # Hex requirements on this package; at 0.10.0 and 0.28.0 neither does -
+      # `mix.lock` shows both stating one on `statifier` and neither naming
+      # `statifier_persistence` at all (se-24p, 2026-09-13).
       #
       # 0.9.0 is REQUIRED rather than tidy. It carries the input log
       # itself - `supports_input_log?/1`, `append_input/3` and
@@ -275,18 +276,18 @@ defmodule StatifierExamples.MixProject do
       # subchart child failed from OUTSIDE the interpreter used to leave
       # its parent's `<invoke>` pending forever; `Executions.fail/4` now takes a
       # `driver:` option and answers the parent itself, with
-      # `Driver.resolve_and_answer_parent/3` as the public form of that
-      # answer for a caller holding no drive of the child. The option is
-      # OPT-IN and this app does not take it: its one `Executions.fail/4` call
-      # is `Charts.Durable.abandon/1`, which stops a run the host owns and
-      # then cascade-cancels that run's children rather than answering a
-      # parent of its own. Passing `driver:` there would change which word
-      # a stopped run's parent sees, which is a decision of its own and
-      # not this re-pin's. The release's other addition,
+      # `Driver.resolve_and_answer_parent/3` as the public form of that answer
+      # for a caller holding no drive of the child. The option is OPT-IN and
+      # this app does not take it: its one `Executions.fail/4` call is
+      # `Charts.Durable.abandon/1`, which stops an execution the host owns and
+      # then cascade-cancels that execution's children rather than answering a
+      # parent of its own. Passing `driver:` there would change which word a
+      # stopped execution's parent sees, which is a decision of its own and not
+      # this re-pin's. The release's other addition,
       # `Ecto.Migrations.expected_version/0`, is for a host whose schema is
       # hand-written DDL; this app's migrations delegate to
-      # `Ecto.Migrations.up/1` and `down/1`, so the version it is on is the
-      # one the package wrote.
+      # `Ecto.Migrations.up/1` and `down/1`, so the version it is on is the one
+      # the package wrote.
       #
       # The requirement moves to the 0.12 line, and back to a bare Hex
       # two-tuple. se-20j held a COMMITTED GIT PIN here for one release
@@ -577,7 +578,7 @@ defmodule StatifierExamples.MixProject do
   # The default arm is a Hex requirement on the 0.14 line, and 0.14.0 is
   # the floor: `StatifierBlocks.Runtime.DurableSubchart` - the handler
   # that answers `core.subchart` by starting the child as its own persisted
-  # `statifier_persistence` run - landed after 0.13.0 and is what this
+  # `statifier_persistence` execution - landed after 0.13.0 and is what this
   # app's durable subchart proof is written against. 0.13.0 carries only
   # the in-memory `StatifierBlocks.Runtime.Subchart`, whose
   # `{:start_child, _, _}` nothing but `Statifier.Session` executes. The
@@ -700,17 +701,17 @@ defmodule StatifierExamples.MixProject do
   # classes no outcome as a failure compile to the bytes they compiled
   # to at 0.20.0, so this app's stored documents are unaffected.
   #
-  # The half this app was waiting for is the failure seam: a block
-  # type may class one of its outcomes as a failure through the new
-  # `failure_outcomes/1` callback, and the compiler stamps the
-  # reserved donedata param on that outcome's top-level `<final>`. At
-  # 0.21.0 that param was spelled `statifier_persistence:run_status`;
-  # the key is `statifier_persistence:execution_status` from
-  # `statifier_blocks` 0.28.0, and the old spelling is still read. At 0.21.0 `core.map` and
-  # `core.subchart` classed their `error` outcome and every other type
-  # classed nothing - `core.invoke` included - which is what kept the
-  # host-side translation in `StatifierExamples.Charts.Durable` alive
-  # through that release; the paragraph below is where it ends.
+  # The half this app was waiting for is the failure seam: a block type may
+  # class one of its outcomes as a failure through the new `failure_outcomes/1`
+  # callback, and the compiler stamps the reserved donedata param on that
+  # outcome's top-level `<final>`. At 0.21.0 that param was spelled
+  # `statifier_persistence:run_status`; the key is
+  # `statifier_persistence:execution_status` from `statifier_blocks` 0.28.0, and
+  # the old spelling is still read. At 0.21.0 `core.map` and `core.subchart`
+  # classed their `error` outcome and every other type classed nothing -
+  # `core.invoke` included - which is what kept the host-side translation in
+  # `StatifierExamples.Charts.Durable` alive through that release; the paragraph
+  # below is where it ends.
   # `statifier_ui`
   # becomes an optional dependency at `~> 0.9` with this release, and
   # is declared directly above at that line;
@@ -739,13 +740,13 @@ defmodule StatifierExamples.MixProject do
   # three compile options `StatifierExamples.Charts.Durable.compile/3`
   # passes - `terminate: true`, the known invoke types and the datamodel -
   # or the pane reads its marks off a differently compiled chart than the
-  # one the run executed. The second is `sb-hxs5`: `core.invoke` classes
-  # its `error` outcome as a failure like `core.map` and `core.subchart`
-  # do, and an unhandled failure-classed completion is carried to the
-  # document's top-level `<final>`, which is what stamps the reserved
-  # donedata param - `statifier_persistence:run_status` at this release,
-  # `statifier_persistence:execution_status` from 0.28.0 - on the chunk
-  # chart's error final. That is what let `se-cqr` delete the host-side translation
+  # one the execution ran on. The second is `sb-hxs5`: `core.invoke` classes
+  # its `error` outcome as a failure like `core.map` and `core.subchart` do, and
+  # an unhandled failure-classed completion is carried to the document's
+  # top-level `<final>`, which is what stamps the reserved donedata param -
+  # `statifier_persistence:run_status` at this release,
+  # `statifier_persistence:execution_status` from 0.28.0 - on the chunk chart's
+  # error final. That is what let `se-cqr` delete the host-side translation
   # `StatifierExamples.Charts.Durable` used to do instead.
   #
   # 0.22.0 is a minor with notes, and the notes reach this app in one

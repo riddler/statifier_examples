@@ -1,29 +1,29 @@
 defmodule StatifierExamplesWeb.SignupJourneyLive do
   @moduledoc """
   `/signup-journey` - the walking skeleton with the chart underneath it: one
-  durable run of the signup Path, one screen at a time.
+  durable execution of the signup Path, one screen at a time.
 
   `StatifierExamplesWeb.SignupScreensLive` is this page's predecessor and they
   are worth reading together. That one draws the same element documents with
   the responses in its own socket and an outcome it only displays; this one
-  holds **no authoritative run state**. Every press goes to
-  `StatifierExamples.Signup.Journey` carrying no run state but the id - the
+  holds **no authoritative execution state**. Every press goes to
+  `StatifierExamples.Signup.Journey` carrying no execution state but the id - the
   outcome pressed and the draft typed travel with it, and nothing else does -
-  and `Journey` loads the run from storage, raises the outcome as an event
-  carrying what the form collected, and answers with the screen the run moved
+  and `Journey` loads the execution from storage, raises the outcome as an event
+  carrying what the form collected, and answers with the screen the execution moved
   to. Reload the page, kill the server, open the same URL on another machine:
-  the run is where it was, because the only thing that had to survive was the
+  the execution is where it was, because the only thing that had to survive was the
   id in `?execution=`.
 
-  ## What the socket holds, and why none of it is the run
+  ## What the socket holds, and why none of it is the execution
 
-  Two things, and neither of them is authoritative run state.
+  Two things, and neither of them is authoritative execution state.
 
   The **view** `Journey` last answered with - a screen, its resolved nodes,
-  the datamodel, the responses, a status. That is a copy of run state and it
+  the datamodel, the responses, a status. That is a copy of execution state and it
   can be stale between redraws, which is why every press re-reads: the only
   thing `handle_event("outcome", ...)` takes out of it is `execution_id`, so a
-  second person pressing the same run is refused by `Journey` against the
+  second person pressing the same execution is refused by `Journey` against the
   stored position rather than raced here. The stale copy is read for one
   other purpose, and it is a presentational one:
   `handle_event("response", ...)` re-resolves the screen it holds against the
@@ -33,18 +33,18 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
   The **draft**: what a reader has typed and not sent. It is not in the chart
   because it has not been submitted, and a page that persisted every keystroke
-  would be writing a run's datamodel on behalf of a reader who may still press
+  would be writing an execution's datamodel on behalf of a reader who may still press
   Back. It matters for more than the input values - `Journey.resolve/2`
   re-resolves the screen against it, which is what makes the plan screen's two
   plan buttons appear as the seat count is typed.
 
   ## Why it subscribes
 
-  A durable run moves without a press. The Path's business arm rests on the
+  A durable execution moves without a press. The Path's business arm rests on the
   asynchronous company-details call and an Oban job answers it; the
   reminder and each screen's deadline are stored jobs too. `Durable`
   broadcasts every out-of-band advance on `Durable.topic/1`, so the page
-  redraws when the run moves rather than showing a screen the run has left.
+  redraws when the execution moves rather than showing a screen the execution has left.
   """
 
   use StatifierExamplesWeb, :live_view
@@ -77,7 +77,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   # A keystroke with no view to re-resolve. The form is drawn only inside the
   # `:if={@view}` block and only under `:if={@view.screen}`, so no reader
   # reaches this - but `Journey.resolve/2` takes a view and both its clauses
-  # want a map with a `:screen`, so an event arriving from a page whose run
+  # want a map with a `:screen`, so an event arriving from a page whose execution
   # has since been refused would raise rather than refuse. It takes the
   # refusal the rest of the page already uses, and a refusal already on
   # screen is the more informative one, so it stays.
@@ -99,7 +99,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     end
   end
 
-  # The run moved without a press: a job answered the company-details call,
+  # The execution moved without a press: a job answered the company-details call,
   # or a deadline elapsed. The broadcast carries a reading, and this page
   # deliberately does not use it - it re-resolves from storage instead, so
   # what it draws is the position rather than someone else's view of it.
@@ -165,7 +165,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     """
   end
 
-  # Load the run named in the URL and subscribe to its advances. A run id
+  # Load the execution named in the URL and subscribe to its advances. An execution id
   # nobody stored shows the refusal rather than an empty page, for
   # `StatifierExamplesWeb.EditorLive`'s reason: a page that quietly showed
   # nothing would be hiding the storage guard doing its job.

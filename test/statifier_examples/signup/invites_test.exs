@@ -66,11 +66,11 @@ defmodule StatifierExamples.Signup.InvitesTest do
     assert Invites.count() == 25
   end
 
-  # The promoted row is the only one carrying a run of its own, and it
-  # carries the run id the writer was handed rather than one derived a
+  # The promoted row is the only one carrying an execution of its own, and it
+  # carries the execution id the writer was handed rather than one derived a
   # second time.
   #
-  # Sabotage: made `promoted_for/3` return the run id for every row; this
+  # Sabotage: made `promoted_for/3` return the execution id for every row; this
   # went red on the promoted count. Reverted.
   test "only the promoted row carries a run of its own" do
     assert {:ok, 25} = Invites.record("su-c07", "run-7", "promoted-su-c07")

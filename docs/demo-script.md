@@ -323,10 +323,10 @@ given a resolver over this app's own fixture list.
 **See**: the child starts. Of the rows that land, these four are the beat:
 
 ```
-0 | Run started         | 83aae24cd3331f9d66bef6e983292dba
+0 | Execution started   | 83aae24cd3331f9d66bef6e983292dba
 1 | Entered             | blk_so_root, blk_so_wizard
 2 | Invoke dispatched   | statifier_blocks:subchart on blk_so_wizard
-3 | Child chart started | bdoc_signup_demo as run 83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0
+3 | Child chart started | bdoc_signup_demo as execution 83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0
 ```
 
 Row 3 is the whole point. On the durable path a `core.subchart` is not

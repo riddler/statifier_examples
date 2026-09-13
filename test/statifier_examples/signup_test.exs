@@ -105,7 +105,7 @@ defmodule StatifierExamples.SignupTest do
   # The host used to carry that declaration because a block document had
   # nowhere to put it; sb ADR-0001 decision 11 gave it somewhere, so the
   # document carries it and the host's list is empty. This asserts the
-  # record, and the run tests assert what it buys.
+  # record, and the execution tests assert what it buys.
   #
   # Sabotage: removed the `signup` entry from `signup_wizard.json`'s
   # `datamodel` key; this went red here and took the two provisioning

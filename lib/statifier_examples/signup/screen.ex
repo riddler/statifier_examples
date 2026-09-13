@@ -60,14 +60,14 @@ defmodule StatifierExamples.Signup.Screen do
   event for it to wait for: every ordinary exit from a screen is a button,
   and a button is an interrupt. So the await names an event the host sends
   only to re-present a screen it has already shown, and its real job is to
-  be somewhere the run can *sit* with a deadline on it. There is no
+  be somewhere the execution can *sit* with a deadline on it. There is no
   "wait indefinitely, with a timeout" primitive in the `core.*` vocabulary
   today; the park is this app's way of not having one, and it is recorded
   as a finding rather than hidden here.
 
   ## What the deadline actually does, which is less than it sounds
 
-  It abandons **the group**, not the run. The `timed_out` final is emitted
+  It abandons **the group**, not the execution. The `timed_out` final is emitted
   at the end of the group's `body`, so a screen that times out completes
   exactly as a screen a button abandoned does: the Path advances to the
   next block and nothing downstream can tell the two apart - which is what
@@ -77,7 +77,7 @@ defmodule StatifierExamples.Signup.Screen do
   what it does to the group; read it as "stop waiting after", not as
   "end the signup". The same reading applies to a `Back` button: it
   abandons the group like any other, so it moves the Path *forward*.
-  Giving a screen a real back edge, or a run a real give-up, needs the
+  Giving a screen a real back edge, or an execution a real give-up, needs the
   outcome surface finding 1 of the spike document says a composite does
   not have.
 
@@ -140,8 +140,8 @@ defmodule StatifierExamples.Signup.Screen do
   `StatifierBlocks.Composite.expand/2` mints each member's id from the
   composite block's id and the local id `subtree/1` gave it, so the park of
   `blk_sp_account` is `blk_sp_account_park`. That is the one place this
-  app can ask **which screen a parked run is sitting on**: the reading's
-  active block ids are the run's position, and the park is the block a
+  app can ask **which screen a parked execution is sitting on**: the reading's
+  active block ids are the execution's position, and the park is the block a
   waiting screen is resting in. `StatifierExamples.Signup.Journey` is the
   caller, and the minting rule lives here rather than there because
   `subtree/1` above is what names the member.

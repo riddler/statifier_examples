@@ -1,7 +1,7 @@
 defmodule StatifierExamples.Charts.Replay do
   @moduledoc """
-  The stored run, read back as a run: this app's mapping from
-  `statifier_persistence`'s durable per-run input log to the message
+  The stored execution, read back as an execution: this app's mapping from
+  `statifier_persistence`'s durable per-execution input log to the message
   stream `StatifierUI.Live.State` - and so `statifier_blocks`' Run pane -
   renders.
 
@@ -10,13 +10,13 @@ defmodule StatifierExamples.Charts.Replay do
   theirs:
 
     * `statifier_persistence` stores the inputs. Its ADR-0010 adds two
-      optional adapter callbacks - append one input, list a run's inputs -
+      optional adapter callbacks - append one input, list an execution's inputs -
       and states the mapping from a stored entry to a
       `t:Statifier.Session.Recording.entry/0` in its decision 8, then
       builds it nowhere: "`from_events/4` is `statifier-ui`'s and no code
       in this package calls it".
     * `statifier_ui` replays. `StatifierUI.Trace.Replay.from_events/4`
-      takes the compiled chart, the options the run was made under, and
+      takes the compiled chart, the options the execution was made under, and
       the entries - and it has no idea where a host keeps them.
     * `statifier_blocks`' Run pane draws the result. It takes a
       `StatifierUI.Live.State` and asks nothing about where the stream
@@ -24,20 +24,20 @@ defmodule StatifierExamples.Charts.Replay do
       are the same struct.
 
   So this module is decision 8's table, in Elixir, plus the two facts a
-  reader of the log cannot recover from the log: which chart the run ran,
+  reader of the log cannot recover from the log: which chart the execution ran,
   and which options it was created under.
 
   ## The options a replay needs, and where each one comes from
 
   ADR-0010 decision 8 is explicit that the log is one of four replay
   inputs and supplies exactly one: "a host that cannot reproduce the
-  options its run was created under cannot replay it, log or no log".
+  options its execution was created under cannot replay it, log or no log".
   This app can reproduce all of them, and each is taken from the place
-  the live run took it from rather than from a value that merely looks
+  the live execution took it from rather than from a value that merely looks
   right:
 
     * `:trace` - `true`, because `StatifierExamples.Charts.Durable`'s
-      create passes `initialize: [trace: true]` on every run it makes.
+      create passes `initialize: [trace: true]` on every execution it makes.
       Without it `from_events/4` refuses outright with
       `{:initialize_opts, :trace_disabled}` rather than quietly producing
       a stream missing ten of the format's twenty-five message types.
@@ -52,17 +52,17 @@ defmodule StatifierExamples.Charts.Replay do
       when its type is registered, and a recorded
       `{:invoked_event, invoke_id, _, _}` whose id is not tracked is
       *dropped without an error*. Omitting the snapshot would silently
-      replay a card-processing run with none of its authorization answers
+      replay a card-processing execution with none of its authorization answers
       in it.
 
   Nothing else is passed, and the omissions are deliberate.
-  `:invoke_handlers` is `%{}` because that is what the live run planned
-  under: this app drives its runs through
+  `:invoke_handlers` is `%{}` because that is what the live execution planned
+  under: this app drives its executions through
   `StatifierPersistence.Driver`'s own `dispatch:` seam, which never puts a
   handler map on the interpreter's plan context. `:datamodel`, `:routes`
   and `:max_macrostep_rounds` are not passed for the same reason - the
   create does not pass them either. A replay is faithful when it is driven
-  by the options the run was driven by, not by the options that would make
+  by the options the execution was driven by, not by the options that would make
   it succeed.
 
   ## The doors, and the one this app cannot log
@@ -81,17 +81,17 @@ defmodule StatifierExamples.Charts.Replay do
   door, because that is the door
   `StatifierExamples.Charts.Durable.deliver/2` drives it through. So a
   firing replays as an ordinary external event: the credit the `<send>`
-  raised stays outstanding and nothing is checked against it. The run
+  raised stays outstanding and nothing is checked against it. The execution
   replays identically either way - `Statifier.Replay` only *checks* a
   `{:timer, ...}` entry - so what is lost is a check, not a step, and the
   alternative would be this app guessing at a `send_id` the log does not
   carry.
 
-  ## What a child run's log holds
+  ## What a child execution's log holds
 
   Nothing of its parent's, and the parent's holds nothing of the child's
   own inputs (ADR-0010 decision 7). A durable subchart's child is an
-  ordinary run with an ordinary log, and what crosses between them is the
+  ordinary execution with an ordinary log, and what crosses between them is the
   child's *answer*, which reaches the parent through
   `StatifierPersistence.Driver.answer_parent/3` and lands on the parent's
   log at the `:answer_parent` door as the `done.invoke.<invoke_id>` or
@@ -101,7 +101,7 @@ defmodule StatifierExamples.Charts.Replay do
   That is why the parent's Run pane narrates its children without this
   module joining anything: the answers are the parent's own inputs. What
   it does not narrate is the child's internal steps, and it should not -
-  those are the child's run, and reading them means reading the child's
+  those are the child's execution, and reading them means reading the child's
   log.
   """
 
@@ -116,20 +116,20 @@ defmodule StatifierExamples.Charts.Replay do
   alias StatifierUI.Trace.Replay, as: TraceReplay
 
   @typedoc """
-  Why a stored run could not be read back as a run.
+  Why a stored execution could not be read back as an execution.
 
     * `:input_log_unsupported` - the store keeps no input log. Nothing is
-      broken; ADR-0010 decision 1 refuses at no door, so a run made
+      broken; ADR-0010 decision 1 refuses at no door, so an execution made
       against such a store ran normally and simply cannot be replayed.
-    * `{:input_log_closed, seq}` - the run outgrew its cap and the log
+    * `{:input_log_closed, seq}` - the execution outgrew its cap and the log
       closed itself with a marker at that ordinal (decision 6). The
-      prefix before it is real, and drawing it as a whole run would be
+      prefix before it is real, and drawing it as a whole execution would be
       the one dishonest reading available here.
     * `{:no_session_id, execution_id}` - the stored position carries no
       `_sessionid`, so no message envelope can be stamped.
     * `{:unmapped_door, door, input}` - a row at a door decision 8's
-      table has no mapping for. Refused rather than guessed at: a run
-      replayed with an input silently dropped is a different run.
+      table has no mapping for. Refused rather than guessed at: an execution
+      replayed with an input silently dropped is a different execution.
     * `{:no_invoke_id, event_name}` - an invocation answer whose event
       carries no `invokeid`; see `entry/1`.
 
@@ -149,17 +149,17 @@ defmodule StatifierExamples.Charts.Replay do
   stored input log over `compiled`'s chart.
 
   `compiled` is this app's own `StatifierBlocks.Compiled` - the
-  one `StatifierExamples.Charts.Durable.compile/3` produced and the run
+  one `StatifierExamples.Charts.Durable.compile/3` produced and the execution
   was created over. Its `scxml` is compiled here exactly as
   `Durable.start/4` compiles it, so the machine a replay runs on is the
-  machine the run ran on rather than one that merely parses the same
+  machine the execution ran on rather than one that merely parses the same
   document.
 
   The result is a `StatifierUI.Live.State` with `stats: nil`, which is
   statifier-ui's own signal for a persisted stream: the status pane says
   so, and `statifier_blocks` reads the same `nil` to leave the Run pane's
   send control disabled. That is the honest reading - there is no session
-  process behind a durable run to send into - and it is why this app keeps
+  process behind a durable execution to send into - and it is why this app keeps
   its own send controls on the page header.
   """
   @spec state(String.t(), Compiled.t()) :: {:ok, State.t()} | {:error, refusal()}
@@ -191,10 +191,10 @@ defmodule StatifierExamples.Charts.Replay do
   end
 
   @doc """
-  Whether a run made now would have a log to be read back from.
+  Whether an execution made now would have a log to be read back from.
 
   The capability question ADR-0010 decision 1 makes public precisely so a
-  host does not have to infer it from a run that turned out to be
+  host does not have to infer it from an execution that turned out to be
   unreplayable.
   """
   @spec supported?() :: boolean()
@@ -205,7 +205,7 @@ defmodule StatifierExamples.Charts.Replay do
     end
   end
 
-  # The options the recorded run was made under. See the moduledoc for
+  # The options the recorded execution was made under. See the moduledoc for
   # where each one comes from and why the list is this short.
   @spec initialize_opts(String.t()) :: keyword()
   defp initialize_opts(session_id) do
@@ -260,19 +260,19 @@ defmodule StatifierExamples.Charts.Replay do
   # initialize itself and false of the drive around it. This app's create
   # performs the chart's synchronous invocations, and every answer the
   # driver feeds back reaches the interpreter through the same single
-  # write site inside the run's serialized unit, still carrying the
+  # write site inside the execution's serialized unit, still carrying the
   # `entry: :create` stamp the create opened with. So a
-  # `signup_wizard` run's log opens with two `"create"` rows holding
+  # `signup_wizard` execution's log opens with two `"create"` rows holding
   # `done.invoke.<invoke_id>` events, before its first `"step"` row.
   #
   # They are mapped by what the event is rather than by the door, and that
   # is the record's own rule rather than a new one: decision 8 makes the
   # event authoritative for the `invoke_id` for exactly this reason, and
   # says outright that "a mapping that produced `{:event, ...}` would
-  # replay an external delivery where the run had an invocation answer".
+  # replay an external delivery where the execution had an invocation answer".
   # An `invokeid` on the event is what an invocation answer has and an
   # external delivery does not. The alternative - refusing the row - would
-  # make every run this app can start unreplayable, which is not a reading
+  # make every execution this app can start unreplayable, which is not a reading
   # the record can have intended of a seam whose stated purpose is
   # unblocking this page.
   @spec entry(Storage.input()) ::
@@ -295,7 +295,7 @@ defmodule StatifierExamples.Charts.Replay do
   # not carry the id the entry shape needs. `Statifier.Replay` drops an
   # `{:invoked_event, invoke_id, _, _}` whose id does not line up with a
   # live invocation *silently*, so a `nil` here would diverge the replayed
-  # stream from the run with nothing said - the one failure mode this
+  # stream from the execution with nothing said - the one failure mode this
   # module is worth having.
   @spec invoked(Statifier.Event.t()) ::
           {:ok, Statifier.Session.Recording.entry()} | {:error, refusal()}

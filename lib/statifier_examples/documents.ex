@@ -34,7 +34,7 @@ defmodule StatifierExamples.Documents do
     * an edit survives a reload and a document switch, because the map
       outlives the socket that wrote it;
     * an edit does not survive a restart, because the map is process state
-      and nothing writes it to disk. What this app *stores* is runs.
+      and nothing writes it to disk. What this app *stores* is executions.
 
   `reset/0` is the test seam, and it is here rather than in the test tree
   because the state it clears is this module's.

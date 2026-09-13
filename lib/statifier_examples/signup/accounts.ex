@@ -3,15 +3,15 @@ defmodule StatifierExamples.Signup.Accounts do
   The one write the signup wizard makes: the account row `myapp:provision`
   exists to create.
 
-  ## Why the run id is the address
+  ## Why the execution id is the address
 
   The chart carries no datamodel and no personal data, so nothing in the
   wizard names the person signing up - and nothing should. What the host
-  has instead is the run: one run of the signup chart is one signup, and
-  the run id is stable across a restart because it is stored beside the
+  has instead is the execution: one execution of the signup chart is one signup, and
+  the execution id is stable across a restart because it is stored beside the
   position. So the account this example provisions is addressed
-  `signup-<run id>@example.com`, which is fiction the way every value in
-  this repo is fiction, and which is a *deterministic function of the run*
+  `signup-<execution id>@example.com`, which is fiction the way every value in
+  this repo is fiction, and which is a *deterministic function of the execution*
   rather than a value invented at the moment of writing.
 
   That determinism is what makes the next paragraph possible.
@@ -25,15 +25,15 @@ defmodule StatifierExamples.Signup.Accounts do
   key is the implementer's". This is that implementation, and it does not
   keep a table of keys to do it.
 
-  The address is the key. It is derived from the run id, the `users` table
+  The address is the key. It is derived from the execution id, the `users` table
   carries a unique index on `email`, and `provision/1` inserts with
   `on_conflict: :nothing` against that index. A replayed provision
   therefore finds the row already there and returns `{:existing, user}`
   rather than a second account or a raised constraint error, and the
-  caller can say which happened - which is what the run feed prints, so
+  caller can say which happened - which is what the execution feed prints, so
   the property is visible rather than asserted.
 
-  What this does not claim: it is not idempotent across *different* runs
+  What this does not claim: it is not idempotent across *different* executions
   that mean the same person, because nothing here knows they do. A host
   with a real signup keys on the address the person typed, and then this
   same upsert is the whole of the mechanism.

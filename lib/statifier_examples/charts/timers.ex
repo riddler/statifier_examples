@@ -1,6 +1,6 @@
 defmodule StatifierExamples.Charts.Timers do
   @moduledoc """
-  Where a durable run's `<send delay=...>` becomes a stored Oban job.
+  Where a durable execution's `<send delay=...>` becomes a stored Oban job.
 
   `Statifier.Session` arms a delayed send with `Process.send_after/3`, so
   every pending timer dies with the node. The signup wizard's reminder is
@@ -11,7 +11,7 @@ defmodule StatifierExamples.Charts.Timers do
 
   ## The two effects, and only those two
 
-  A durable run's executor sees every non-lifecycle effect the stepper
+  A durable execution's executor sees every non-lifecycle effect the stepper
   produced (`StatifierExamples.Charts.Durable`'s executor). Two of them
   are ours:
 
@@ -31,11 +31,11 @@ defmodule StatifierExamples.Charts.Timers do
 
   Every other effect passes through untouched.
 
-  ## The scope is the run id
+  ## The scope is the execution id
 
   `StatifierOban.Timer.Key`'s scope is "the caller's to supply, never
-  derived", and for a process-less host it is whatever that host calls a
-  run. This app's is the durable run id, which is also what the page URL
+  derived", and for a process-less host it is whatever that host calls an
+  execution. This app's is the durable execution id, which is also what the page URL
   carries - so a stored job, a stored position and a link a reader can
   come back to all name the same thing.
 
@@ -46,7 +46,7 @@ defmodule StatifierExamples.Charts.Timers do
   prevent, and answering `{:error, _}` would be worse: the stepper
   re-enters an executor failure as `error.communication` and would steer
   the chart with an infrastructure fact. So an insert that fails raises,
-  the step fails loudly, and the run's position is not advanced past a
+  the step fails loudly, and the execution's position is not advanced past a
   send that was never armed.
   """
 
@@ -90,7 +90,7 @@ defmodule StatifierExamples.Charts.Timers do
   def oban, do: @oban
 
   @doc """
-  Consumes one effect on behalf of the run named by `execution_id`.
+  Consumes one effect on behalf of the execution named by `execution_id`.
 
   Answers `:ok` for every effect, including the ones it does nothing
   with: the caller is an executor, whose whole vocabulary is `:ok` and

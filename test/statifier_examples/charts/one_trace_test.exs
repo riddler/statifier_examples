@@ -1,7 +1,7 @@
 defmodule StatifierExamples.Charts.OneTraceTest do
   @moduledoc """
   The campaign-026 capstone proof (`se-opg`): the whole durable arc -
-  parent session, durable step, `start_child`, the child's own run, a
+  parent session, durable step, `start_child`, the child's own execution, a
   timer firing, and the child's completion re-entering the parent -
   observable as **one navigable trace graph**.
 
@@ -16,7 +16,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
       with a link (statifier-ex `docs/opentelemetry.md`; ots-ADR-0003
       decision 8 starts every span from a fresh context and never the
       ambient one, so no host span can gather them);
-    * a child run is linked from its parent's step, never parented -
+    * a child execution is linked from its parent's step, never parented -
       parenthood would hold the parent's trace open for the child's whole
       life (sp `docs/telemetry.md`, ADR-0008);
     * a fired timer is linked to the trace that armed it, never parented,
@@ -40,7 +40,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
   """
 
   # Not async, for `StatifierExamples.Charts.DurableTest`'s reasons - the
-  # named run lock, and the repo - and for one of its own: the simple
+  # named execution lock, and the repo - and for one of its own: the simple
   # processor's exporter is global, so two tests collecting at once would
   # read each other's spans.
   use ExUnit.Case, async: false
@@ -71,14 +71,14 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     end
 
     # The arc reached its end at all. Asserted first and separately,
-    # because every span assertion below is worthless against a run that
+    # because every span assertion below is worthless against an execution that
     # stopped halfway: a missing edge would then be reporting a broken
     # chart rather than a broken trace.
     #
     # Sabotage: dropped the timer drain from `arc!/1`; this went red with
     # the child still `:active`, which is also the clearest statement of
     # what the drain does - with no button pressed anywhere, a fired timer
-    # is the only thing that advances either run. Reverted.
+    # is the only thing that advances either execution. Reverted.
     test "runs to both terminal statuses", %{execution_id: execution_id, child_id: child_id} do
       assert record!(child_id).status == :completed
       assert record!(execution_id).status == :completed
@@ -88,7 +88,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # produce. `{:start_child, _, _}` creates the child inside the
     # parent's own step, in the parent's process, so ots-ADR-0004's
     # bridge-owned nesting puts the child's step span *inside* the
-    # parent's - the one place in this arc where two runs genuinely share
+    # parent's - the one place in this arc where two executions genuinely share
     # a trace id.
     #
     # Sabotage: asserted the child's step span was a root
@@ -111,7 +111,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # carrying both ends of the link - which is what makes it navigable
     # from the parent alone.
     #
-    # Sabotage: asserted the child_execution_id was the parent's run id; this
+    # Sabotage: asserted the child_execution_id was the parent's execution id; this
     # went red reporting the real child id. Reverted.
     test "the child-start edge names both runs", %{
       spans: spans,
@@ -127,16 +127,16 @@ defmodule StatifierExamples.Charts.OneTraceTest do
 
     # Edge two: the timer fire. The delivery seam runs in an Oban job with
     # nothing of this bridge open around it, so the FIRE is a detached
-    # root - and the edge back to the run is `statifier.session_id`, onto
+    # root - and the edge back to the execution is `statifier.session_id`, onto
     # which the bridge aliases `statifier_oban`'s `scope`.
     #
     # The ARMING is not a root, as of `opentelemetry_statifier` 0.4.1: a
-    # scheduling point whose `scope` is a host's durable run id lands as a
+    # scheduling point whose `scope` is a host's durable execution id lands as a
     # span event on the step span open in the emitting process, rather
     # than rooting a trace of its own. This app arms every one of these
     # inside `StatifierExamples.Charts.Durable`'s step, so all three land
     # on `statifier_persistence.execution.step`. The 0.4.0 behaviour - one bare
-    # `timer.scheduled` root per arming, joined to the run by nothing but
+    # `timer.scheduled` root per arming, joined to the execution by nothing but
     # the aliased scope - is what that release calls the defect, and the
     # arc reads better without it: the arming is now on the very span a
     # reader is already holding.
@@ -145,7 +145,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # which is the pair a reader follows: one `timer.scheduled` event and
     # one `timer.fired` root, same scope, same send.
     #
-    # Sabotage: matched the fired spans against the PARENT's run id
+    # Sabotage: matched the fired spans against the PARENT's execution id
     # instead of the child's; this went red with an empty list, which is
     # also the se-6ag finding restated - the wizard's timers are the
     # child's, not the parent's. Reverted.
@@ -207,7 +207,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # `TraceCollector`'s `@correlation` list; this went red on the
     # `statifier_oban.timer.fired` roots, which carry no other id this
     # graph knows - the bridge aliases `scope` onto that one key and
-    # nothing else joins a fired timer to the run it belongs to. Reverted.
+    # nothing else joins a fired timer to the execution it belongs to. Reverted.
     test "every stage is reachable from the parent's first step", %{
       spans: spans,
       execution_id: execution_id
@@ -228,10 +228,10 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # step span that emitted it. The claim is unchanged in substance - a
     # reader starting from the parent's first step can see where each
     # timer was armed - and stronger in form: the arming is no longer
-    # joined to the run by a correlation id the collector has to match,
+    # joined to the execution by a correlation id the collector has to match,
     # it is carried by a span the graph already reaches.
     #
-    # Sabotage: asserted the events against a run id no arming used (the
+    # Sabotage: asserted the events against an execution id no arming used (the
     # PARENT's, which arms none of these - they are all the wizard
     # child's); this went red with an empty list, the se-6ag finding
     # restated once more. Reverted.
@@ -305,7 +305,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
 
     # Stages 1-4: the parent's session starts, its first durable step
     # runs, it reaches `core.subchart`, and the child is created as its
-    # own persisted run inside that very step.
+    # own persisted execution inside that very step.
     Tracing.drive(
       "statifier_examples.start",
       %{"statifier_examples.execution_id" => execution_id},
@@ -320,7 +320,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     {:ok, child_compiled} = Subchart.child_compile(child.document)
 
     # The child picked up cold, exactly as a fired timer picks it up: from
-    # its run id and the stored position, by a struct that has never seen
+    # its execution id and the stored position, by a struct that has never seen
     # the parent.
     {:ok, {_durable, _run}} = Durable.resume(child_compiled, child.document, child_id)
 
@@ -337,12 +337,12 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     # Stage 6: the child reaches its own end, and its completion re-enters
     # the parent through the driver's `chart_resolver:` seam. The async
     # drain is the child's own company-details call being answered from
-    # its Oban job - a durable subchart child is an ordinary run, so this
+    # its Oban job - a durable subchart child is an ordinary execution, so this
     # app's asynchronous invocation seam works inside one.
     #
     # Nothing presses a button anywhere in this arc, and that is the point
     # rather than an omission: every stage after the child's first rest is
-    # reached by a stored job firing into a run no process was holding,
+    # reached by a stored job firing into an execution no process was holding,
     # which is the whole claim the durable stack makes. The second timer
     # to fire is the wizard's 24-hour `core.wait`.
     Oban.drain_queue(queue: AsyncCalls.queue())
@@ -377,7 +377,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     TraceCollector.reachable(spans, &(&1.span_id == first.span_id))
   end
 
-  # The first step span for a run, which is the one a reader starts from.
+  # The first step span for an execution, which is the one a reader starts from.
   defp step_for!(spans, execution_id) do
     spans
     |> named("statifier_persistence.execution.step")

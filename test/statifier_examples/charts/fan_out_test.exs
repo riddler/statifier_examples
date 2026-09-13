@@ -2,11 +2,11 @@ defmodule StatifierExamples.Charts.FanOutTest do
   @moduledoc """
   The hybrid fan-out, end to end: a `core.map` over ten chunk
   descriptors, one bulk data-plane call per chunk, one promoted row with
-  a run of its own, and both aggregation policies proved through the
+  an execution of its own, and both aggregation policies proved through the
   parent's own door (se-j87).
   """
 
-  # Not async: durable runs step through the application's own
+  # Not async: durable executions step through the application's own
   # `StatifierExamples.Charts.ExecutionLock`, which is named, shared state, and
   # they write to the repo and to the Oban jobs table.
   use ExUnit.Case, async: false
@@ -92,7 +92,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # nothing else - `child_use: true` emits
   # `<donedata><param expr="'done'" name="outcome"/></donedata>` and
   # there is no authoring surface for a richer one. So the per-chunk
-  # summary the handler builds reaches the host's table and the run feed
+  # summary the handler builds reaches the host's table and the execution feed
   # rather than the parent's datamodel. That gap is reported upstream
   # rather than worked around here, and the assertions below say what the
   # shipped vocabulary actually gives.
@@ -122,8 +122,8 @@ defmodule StatifierExamples.Charts.FanOutTest do
   end
 
   # The descriptor reached the index it belongs to, proved where the
-  # evidence actually is: a chunk's rows carry the run that wrote them,
-  # and a fan-out child's run id is the parent's plus the invocation plus
+  # evidence actually is: a chunk's rows carry the execution that wrote them,
+  # and a fan-out child's execution id is the parent's plus the invocation plus
   # the index. So `su-c07`'s rows being written by `.../blk_bi_chunks/6`
   # is the seventh descriptor having been handed to the seventh child.
   #
@@ -147,7 +147,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
 
   # The other half of the boundary rule. One invitee's signup waits on a
   # person, which is chart semantics and not a row's, so that row gets an
-  # ordinary run of the wizard - openable, resumable and drivable like
+  # ordinary execution of the wizard - openable, resumable and drivable like
   # any other, which is what `resume/1` answering it proves.
   #
   # Sabotage: made `Promotion.promote/1` answer `{:ok, :none}` for every
@@ -172,11 +172,11 @@ defmodule StatifierExamples.Charts.FanOutTest do
   end
 
   # A start job is at-least-once, so the whole chain has to be. The child
-  # run is adopted rather than created twice, the rows are one set rather
-  # than two, and the promoted invitee has one run and not a second.
+  # execution is adopted rather than created twice, the rows are one set rather
+  # than two, and the promoted invitee has one execution and not a second.
   #
   # Sabotage: made `Invites.promoted_execution_id/1` mint a fresh id per call;
-  # this went red - the second delivery started a second wizard run.
+  # this went red - the second delivery started a second wizard execution.
   # Reverted.
   test "a redelivered chunk start is idempotent", %{execution_id: execution_id} do
     start!("signup_bulk_invites", execution_id)
@@ -199,7 +199,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
   end
 
   # `first_error` cancels the rest, and the half only a host can reach is
-  # the unstarted one: an index whose start job has not run has no run
+  # the unstarted one: an index whose start job has not run has no execution
   # record for the cascade to walk, so the driver's `child_canceller:`
   # seam is what cancels its job.
   #
@@ -245,7 +245,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
 
   # A failed child and a cancelled sibling sit at different indices of the
   # same answer, so the page has to call them different things. It did not
-  # until this bead: nothing in this app produced a `:failed` run before a
+  # until this bead: nothing in this app produced a `:failed` execution before a
   # fan-out did, and `finish/2` folded `:failed` into `:cancelled`'s word.
   # A browser capture of the strict document is what found it.
   #
@@ -269,7 +269,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # `error` outcome as a failure (`sb-hxs5`), the compiler carries an
   # unhandled failure-classed completion out to the document's top-level
   # `<final>`, and the reserved `statifier_persistence:execution_status` param
-  # on that final is what the storage layer reads to persist the run
+  # on that final is what the storage layer reads to persist the execution
   # `:failed`. Compiled through `Subchart.child_compile/1` rather than
   # `Durable.compile/3` because that is the recipe a fan-out child is
   # actually built with (`start_child_at/6`).

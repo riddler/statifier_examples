@@ -41,7 +41,7 @@ defmodule StatifierExamples.Application do
       # canonical `statifier_blocks:subchart` handler. Without the registry
       # the sessions still run and the handlers have no way home.
       Statifier.Supervisor,
-      # The per-run exclusion durable runs step inside. It has to be this
+      # The per-execution exclusion durable executions step inside. It has to be this
       # app's own: `StatifierExamples.Persistence` declines the optional
       # `lock_execution/3` that `StatifierPersistence.Executions`' default strategy
       # asks for, so without a strategy the host supplies, every durable
@@ -51,7 +51,7 @@ defmodule StatifierExamples.Application do
       # (its ADR-0002) and this app is the only thing that could, so the
       # wizard's abandonment reminder has a scheduler to be stored in.
       # It sits after the repo it runs on and before the endpoint, so a
-      # fired timer can never reach a run before the store is up.
+      # fired timer can never reach an execution before the store is up.
       {Oban, Application.fetch_env!(:statifier_examples, Oban)},
       # Start a worker by calling: StatifierExamples.Worker.start_link(arg)
       # {StatifierExamples.Worker, arg},

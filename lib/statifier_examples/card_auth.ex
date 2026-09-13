@@ -50,7 +50,7 @@ defmodule StatifierExamples.CardAuth do
   legal, which left the domain's first step listed last. `se-0u1` replaced
   that with a decision.
 
-  The run is four passages, and each is in the order it happens:
+  The execution is four passages, and each is in the order it happens:
 
   | Order | Type | Why here |
   |---|---|---|

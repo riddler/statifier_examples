@@ -36,7 +36,7 @@ defmodule StatifierExamples.Signup.Path do
   it deliberately does **not** put the screen in that event name - so two
   screens declaring one outcome name compile to two handlers listening for
   one event, and pressing either button interrupts whichever screen the
-  run happens to be sitting in. That one is not silent so much as
+  execution happens to be sitting in. That one is not silent so much as
   spectacular, and it is the same shape of mistake, so it is the same
   check.
 

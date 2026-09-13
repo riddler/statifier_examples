@@ -28,21 +28,21 @@ defmodule StatifierExamples.Signup.Handlers do
   rather than a canned step.
   `myapp:provision` is the
   one call in this app that writes - the wizard exists to create an
-  account, and a handler that only logged would leave the run having meant
+  account, and a handler that only logged would leave the execution having meant
   nothing. Every value that reaches either is fictional -
   `@example.com` addresses and made-up plan names.
 
-  ## The call that writes needs to know which run it is
+  ## The call that writes needs to know which execution it is
 
   `StatifierPersistence.Executor`'s at-least-once contract means a
   provision can be delivered twice, so the write has to be idempotent on
   something stable. Nothing in the chart is: it carries no datamodel and
-  no identity. The *run* is, and a durable driver passes it in the call
+  no identity. The *execution* is, and a durable driver passes it in the call
   context `StatifierExamples.Charts.dispatch/3` takes - which is why the
   provisioning clause matches on `%{execution_id: execution_id}` and every other
   driver gets the clause that says so. A `Statifier.Session` is one of
   those: the adapter hands a handler the engine's plan context, which
-  names a session and never a run, because a session has none.
+  names a session and never an execution, because a session has none.
 
   `StatifierExamples.Signup.Accounts` holds the write and the reasoning
   about the key.
@@ -88,7 +88,7 @@ defmodule StatifierExamples.Signup.Handlers do
   `myapp:process_rows` is the data plane. It is handed one chunk
   DESCRIPTOR, processes every invitee that descriptor stands for in one
   bulk write, promotes the one whose signup has to wait on a person, and
-  answers a **summary** - the chunk, the row count, and the promoted run.
+  answers a **summary** - the chunk, the row count, and the promoted execution.
   The rows themselves are never in the answer, because the answer is
   assembled into the parent's datamodel and stays there for the rest of
   the parent's life.
@@ -106,7 +106,7 @@ defmodule StatifierExamples.Signup.Handlers do
   # this clause gets what three screens collected rather than a step name.
   #
   # It answers a receipt rather than the responses back: `assign_to` writes
-  # whatever comes back into the run's datamodel, and echoing a map that is
+  # whatever comes back into the execution's datamodel, and echoing a map that is
   # already at `responses` would put a second copy of it in the position
   # every later step reads. The receipt is what a caller could not have
   # known - that the account was created, for whom, and how much was
@@ -114,7 +114,7 @@ defmodule StatifierExamples.Signup.Handlers do
   #
   # Stub in the sense the spike needs (`docs/spikes/SF040-signup-skeleton.md`):
   # it writes nothing. `myapp:provision` is this app's call that does, and it
-  # is idempotent on the run id for the reason its own clause gives.
+  # is idempotent on the execution id for the reason its own clause gives.
   def handle("myapp:signup", %{"responses" => responses}, _context) when is_map(responses) do
     Logger.info("myapp:signup created the account for #{inspect(Map.get(responses, "email"))}")
 
@@ -143,9 +143,9 @@ defmodule StatifierExamples.Signup.Handlers do
     {:ok, %{"account" => user.email, "provisioned" => Atom.to_string(result)}}
   end
 
-  # No run to key the write on, so there is nothing durable to write. A
+  # No execution to key the write on, so there is nothing durable to write. A
   # bare `Statifier.Session` is the caller here - the adapter's plan
-  # context names a session, not a run - and a session's invocations do not
+  # context names a session, not an execution - and a session's invocations do not
   # outlive the process that started them; provisioning an account from one
   # would leave a row nothing can ever find its way back to.
   def handle("myapp:provision", params, _context) do
@@ -174,7 +174,7 @@ defmodule StatifierExamples.Signup.Handlers do
     end
   end
 
-  # No run to key the writes on, the same case `myapp:provision` has
+  # No execution to key the writes on, the same case `myapp:provision` has
   # below it, and refused rather than skipped: a bulk call is the whole
   # of what a chunk child exists to do, so answering "processed nothing"
   # would report a chunk as done when its rows are not written.
@@ -184,9 +184,9 @@ defmodule StatifierExamples.Signup.Handlers do
   def handle(invoke_type, _params, _context),
     do: {:error, {:unknown_invoke_type, invoke_type}}
 
-  # The run a promoted invitee was given, whether this delivery started it
+  # The execution a promoted invitee was given, whether this delivery started it
   # or found the one an earlier delivery of the same chunk started - the
-  # row records the run either way, because the row is about the invitee
+  # row records the execution either way, because the row is about the invitee
   # and not about which delivery got there first.
   @spec promoted_execution_id(Promotion.outcome()) :: String.t() | nil
   defp promoted_execution_id({:started, execution_id}), do: execution_id

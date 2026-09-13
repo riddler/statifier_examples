@@ -115,20 +115,19 @@ paragraph under it names.
 Re-measured 2026-09-07 (`se-6jn`), on the `statifier_blocks` commit
 `eb64d4cbe8b038021b2a62a10b4b5bc15028c2fd` (`eb64d4c`), which is where
 `mix.exs` was pinned when the measurement was taken. The pin advanced once
-more after it - to `e61890a`, for `se-1q8`'s pass-through slots - and
-`se-c9l` has since retired it for the Hex requirement `~> 0.26`; `eb64d4c`
-is an ancestor of `v0.26.0` (`f9b62c5`), so the release carries the tree
-the measurement was taken on. The measurement before it was taken on
-`3a210a9`, an ancestor of `v0.25.0` (`7186b24`) and so of this commit;
-every cite below is by module, function and clause rather than by line in
-the package, and every one of them resolves on both. What moved between the two is the
-subject of this pass: `sb-8fa8` keeps a refused
-`Edit.Session.change_config/3`'s per-field findings in the session's
-`draft_findings` and routes them with `ViewModel.overlay_findings/2`,
-which took two near-verbatim fragments out of this file, and `sb-6xkf`
-promoted the three transparent-container readers, which took none - this
-page draws no container through. Both numbers are below. The first
-measurement was taken on `ea2fdee` and is what `se-avi` acted on: it read
+more after it - to `e61890a`, for `se-1q8`'s pass-through slots - and `se-c9l`
+has since retired it for the Hex requirement `~> 0.26`; `eb64d4c` is an ancestor
+of `v0.26.0` (`f9b62c5`), so the release carries the tree the measurement was
+taken on. The measurement before it was taken on `3a210a9`, an ancestor of
+`v0.25.0` (`7186b24`) and so of this commit; every cite below is by module,
+function and clause rather than by line in the package, and every one of them
+resolves on both. What moved between the two is the subject of this pass:
+`sb-8fa8` keeps a refused `Edit.Session.change_config/3`'s per-field findings in
+the session's `draft_findings` and routes them with
+`ViewModel.overlay_findings/2`, which took two near-verbatim fragments out of
+this file, and `sb-6xkf` promoted the three transparent-container readers, which
+took none - this page draws no container through. Both numbers are below. The
+first measurement was taken on `ea2fdee` and is what `se-avi` acted on: it read
 `StatifierExamplesWeb.PlanLive` fragment by fragment, said of each whether
 it was a copy of something inside the package's editor, and recommended
 promoting the ones that answer a question about a document rather than
@@ -140,16 +139,16 @@ That is what this table now measures: not what a second embedder *would*
 have to copy, but what one still does.
 
 `StatifierExamplesWeb.PlanLive` is 860 lines
-(`wc -l lib/statifier_examples_web/live/plan_live.ex`); each row's count
-below is `sed -n '<first>,<last>p' lib/statifier_examples_web/live/plan_live.ex | wc -l`
-over the span named in the row. Of those 860, **0 lines are verbatim
-copies** of the package editor's private helpers, **9 are near-verbatim**,
-and **851 are the host's own** - 129 of them the moduledoc and 266 of them
-this page's markup. The spans named in the table cover 836 of the 860; the
-other 24 are `defmodule`, the closing `end`, and the blank line between one
-span and the next, and they are the host's own by default.
-`lib/statifier_examples/documents.ex`, the store both pages share, is a
-further 81 lines with no package counterpart at all.
+(`wc -l lib/statifier_examples_web/live/plan_live.ex`);
+each row's count below is
+`sed -n '<first>,<last>p' lib/statifier_examples_web/live/plan_live.ex | wc -l`
+over the span named in the row. Of those 860, **0 lines are verbatim copies** of
+the package editor's private helpers, **9 are near-verbatim**, and **851 are the
+host's own** - 129 of them the moduledoc and 266 of them this page's markup. The
+spans named in the table cover 836 of the 860; the other 24 are `defmodule`, the
+closing `end`, and the blank line between one span and the next, and they are
+the host's own by default. `lib/statifier_examples/documents.ex`, the store both
+pages share, is a further 81 lines with no package counterpart at all.
 
 The three numbers to read against `ea2fdee`'s 35 / 183 / 649 are 0 / 9 /
 851, where the pass before this one read 0 / 9 / 833 and the one before
@@ -370,11 +369,11 @@ until then it carried no `metadata.domain` and was the one card chart the
 advisories were off for. Joining meant declaring what it writes:
 `myapp.authorize_with_deadline` records each lane's answer at
 `<lane name>.result`, so the three lane roots its defaults name -
-`fraud_review`, `balance_check` and `three_ds` - each carry a `result` in
-the datamodel document. It carries three scopes of declared paths and a fourth key,
+`fraud_review`, `balance_check` and `three_ds` - each carry a `result` in the
+datamodel document. It carries three scopes of declared paths and a fourth key,
 `types`, naming two records and a shape: `cards.credit_txn`, what the flow is
-about; `cards.settlement`, what a settled amount would be; and `Settleable`,
-the amount-and-currency pair a capture needs and no more.
+about; `cards.settlement`, what a settled amount would be; and `Settleable`, the
+amount-and-currency pair a capture needs and no more.
 
 Nothing flows between adjacent blocks. Every value is written to a path by
 name and read from one by name, so the question at any position is what the
@@ -459,8 +458,9 @@ Pressing **Run** on the editor page starts a *durable* execution. There is no
 process holding the chart between steps: every step goes
 `load -> step -> execute effects -> persist` through
 `StatifierPersistence.Executions`, and the chart's position lands in the
-`statifier_executions` table before the press returns. The execution id goes into
-the page URL, which is what makes an execution something you can come back to.
+`statifier_executions` table before the press returns. The execution id goes
+into the page URL, which is what makes an execution something you can come back
+to.
 
 Two host pieces make that work and both are worth reading before copying:
 
@@ -493,7 +493,7 @@ when you press it, through to the account the wizard creates.
 2. Press **Run** in the header. The chart runs through two `myapp:signup`
    calls and parks in its verification group, waiting on the 24-hour
    `core.wait` with both interrupts armed. Open the drawer's **Runs** tab
-   to watch it: `Run started`, two `Invoke dispatched` / `Performed`
+   to watch it: `Execution started`, two `Invoke dispatched` / `Performed`
    pairs, and a `Delayed send` for the wait.
 
 3. Look at the address bar. It now carries an `execution=` parameter - that is
@@ -520,9 +520,10 @@ when you press it, through to the account the wizard creates.
    `execution=` parameter included.
 
 7. The page comes back on the configuration the execution was left in: the wait
-   block and both interrupt rules are marked active on the canvas, the
-   header says `running`, and the Runs tab opens with one row -
-   `Run resumed from storage`, naming the execution id and its stored status.
+   block and both interrupt rules are marked active on the canvas, the header
+   says `running`, and the Runs tab opens with one row -
+   `Execution resumed from storage`, naming the execution id and its stored
+   status.
 
 8. Press **signup.abandoned** in the Runs panel. The resumed execution steps on
    from exactly where it was: the abandon interrupt fires, the
@@ -836,12 +837,11 @@ by setting `STATIFIER_UI_REF` so `mix.exs` takes the package from git; that
 leg is `continue-on-error`, and each leg prints the version or commit it
 resolved. The second leg exists because the first one only ever sees released
 code, so a bundler break sat unnoticed until the release that shipped it -
-ADR-0009's own Note records that weakening. Nothing is pinned for it:
-`mix.lock` stays at the Hex resolution, and the override lives in the CI job
-alone. To reproduce that leg locally, run `mix deps.get` and `mix assets.bundle` with
+ADR-0009's own Note records that weakening. Nothing is pinned for it: `mix.lock`
+stays at the Hex resolution, and the override lives in the CI job alone. To
+reproduce that leg locally, run `mix deps.get` and `mix assets.bundle` with
 `STATIFIER_UI_REF=main` set for both; it rewrites `mix.lock` in the working
-tree, so `git checkout mix.lock && mix deps.get` afterwards to come back to
-Hex.
+tree, so `git checkout mix.lock && mix deps.get` afterwards to come back to Hex.
 
 ## Layout
 

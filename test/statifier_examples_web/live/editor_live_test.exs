@@ -804,7 +804,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
   describe "running the open document" do
     # The bead's acceptance criteria, machine-checked against the rendered
-    # page rather than against the run struct: a Run press starts a session,
+    # page rather than against the execution struct: a Run press starts a session,
     # and the editor paints the marks the host hands it.
     #
     # Sabotage: made `push_run/1` push `active_marks: []`; the
@@ -827,27 +827,27 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # The marks are the pane's, and the pane resolves them through a chart it
     # recompiles itself - so this is as much a test of `compile_options/1`
     # and the `declare` assign as of the marks. A page that passed the
-    # editor a different option list than the run executed under would
-    # resolve the run's state ids against different bytes and mark nothing.
+    # editor a different option list than the execution executed under would
+    # resolve the execution's state ids against different bytes and mark nothing.
     #
     # se-dh0 retired the assertion that used to live here, that the block
     # whose call came back carries `data-invoke-outcome="done"`. That mark
     # was the host's, pushed from `Execution.invoke`, which knew what this process
-    # had watched happen; a run seated in the pane derives its invoke mark
+    # had watched happen; an execution seated in the pane derives its invoke mark
     # from the trace instead, and `StatifierBlocks.Runtime.Marks.from_trace/2`
     # marks a call that is still OUT with no outcome (`{block_id, nil}`) and
     # says nothing about one that has come back. The chip is a real reading
     # to have lost, and it belongs upstream rather than back here: this app
-    # would have to keep a second, live-only run beside the stored one to
+    # would have to keep a second, live-only execution beside the stored one to
     # paint it, which is exactly what this bead retired.
-    # What `compile_options` actually buys, on the only run where it can be
-    # seen. The Run pane resolves a run's state ids through a chart the editor
-    # recompiles for itself, and this page hands it the option list the run was
-    # compiled with. For a run resting mid-flight the two compiles agree about
-    # every state the run is in anyway, so nothing shows; for a run that has
+    # What `compile_options` actually buys, on the only execution where it can be
+    # seen. The Run pane resolves an execution's state ids through a chart the editor
+    # recompiles for itself, and this page hands it the option list the execution was
+    # compiled with. For an execution resting mid-flight the two compiles agree about
+    # every state the execution is in anyway, so nothing shows; for an execution that has
     # SETTLED, the configuration includes a top-level `<final>` that only
     # `terminate: true` puts in the chart at all - so a recompile without it
-    # resolves the last configuration to nothing and the finished run draws no
+    # resolves the last configuration to nothing and the finished execution draws no
     # marks.
     #
     # `card_processing` is the fixture because it runs to `done` on one press:
@@ -855,7 +855,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     #
     # Sabotage: dropped `compile_options` from `render/1`'s component call,
     # leaving the editor to recompile without `terminate: true`; the finished
-    # run's mark was gone and this went red, while every mid-flight test above
+    # execution's mark was gone and this went red, while every mid-flight test above
     # stayed green. Reverted from a backup copy.
     test "a settled run still marks the block it settled in", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
@@ -868,9 +868,9 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
 
     # Sabotage: dropped the `declare` assign from `render/1`'s component call,
-    # leaving the editor to recompile the run's provenance with `declare: []`
-    # while the run itself ran on the fixture's declarations. The two compiles
-    # produce different bytes, the run's state ids resolved against none of
+    # leaving the editor to recompile the execution's provenance with `declare: []`
+    # while the execution itself ran on the fixture's declarations. The two compiles
+    # produce different bytes, the execution's state ids resolved against none of
     # them, and this went red with no marks on the page at all. Reverted from
     # a backup copy.
     test "the marks are read off the replayed run, through the host's own compile options",
@@ -886,9 +886,9 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
     OLD_END
 
-    # The run's narration is the pane's log now, not a drawer tab of this
-    # app's own, and what it narrates is the STORED run rather than what this
-    # process watched: the log is built by replaying the run's persisted
+    # The execution's narration is the pane's log now, not a drawer tab of this
+    # app's own, and what it narrates is the STORED execution rather than what this
+    # process watched: the log is built by replaying the execution's persisted
     # input log through statifier-ui (`StatifierExamples.Charts.Replay`).
     # The macrostep grouping is statifier-ui's, the section is
     # statifier_blocks', and neither is this app's markup any more - which is
@@ -914,7 +914,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # se-5ep: the page's own compile has to carry the fixture's declared
     # `<data>` roots, because a guard reading a root nothing declared raises
     # `error.execution` rather than reading it as undefined - and so does
-    # the wizard's `core.assign`, which runs two blocks into the run. The
+    # the wizard's `core.assign`, which executions two blocks into the execution. The
     # feed is where a reader would see it, so the feed is where it is
     # refuted.
     #
@@ -935,15 +935,15 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
     # The event affordance: one button per event the document declares, in
     # the page's own header beside Run and Stop, and pressing it steps the
-    # stored run.
+    # stored execution.
     #
     # They are the page's rather than the Run pane's send control, and that
-    # is a fact about a durable run rather than a preference. The pane's
+    # is a fact about a durable execution rather than a preference. The pane's
     # control writes into a live `Statifier.Session` server and is enabled
-    # only for a run that has one (`run_session` non-nil and the run's
-    # `stats` non-nil); a durable run has no session process at all, and a
+    # only for an execution that has one (`run_session` non-nil and the execution's
+    # `stats` non-nil); a durable execution has no session process at all, and a
     # replayed reading of one is exactly what statifier-ui's `stats: nil`
-    # means. So the pane correctly reads this app's run as not sendable, and
+    # means. So the pane correctly reads this app's execution as not sendable, and
     # the host keeps the affordance.
     #
     # The assertion is on the LOG and not on the button's own name: the
@@ -967,7 +967,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
     OLD_END
 
-    # A run is a run OF a document, so switching documents ends it. The
+    # An execution is an execution OF a document, so switching documents ends it. The
     # assertion is on the HOST's own status, not on the marks: the editor
     # clears those itself on a document switch, so a host that kept its
     # session running would look identical on the canvas and differ only
@@ -1009,12 +1009,12 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   end
 
   describe "picking a durable run back up" do
-    # The run id is in the URL because a durable run outlives the process
-    # that started it, and a run nobody can name again is not much use
+    # The execution id is in the URL because a durable execution outlives the process
+    # that started it, and an execution nobody can name again is not much use
     # after a restart. This is the affordance the README's kill-and-resume
     # walkthrough turns into a step.
     #
-    # Sabotage: made `patch_to_run/1` patch with `nil` for the run id; this
+    # Sabotage: made `patch_to_run/1` patch with `nil` for the execution id; this
     # went red, then reverted.
     test "the Run press puts the run id in the URL", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
@@ -1025,10 +1025,10 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
 
     # The restart, as the page sees it: a second mount that shares nothing
-    # with the first but the URL, and comes up on the configuration the run
+    # with the first but the URL, and comes up on the configuration the execution
     # was left in.
     #
-    # Sabotage: made `restore_execution/2` ignore its run id and answer the
+    # Sabotage: made `restore_execution/2` ignore its execution id and answer the
     # socket unchanged; the marks were gone and this went red, then
     # reverted.
     test "reloading the run URL resumes the stored run", %{conn: conn} do
@@ -1045,21 +1045,21 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
              |> element(~s([data-block-id="blk_su_verify_wait"]))
              |> render() =~ ~s(data-run-active="true")
 
-      # And the whole run comes back with it, not one row saying it was
+      # And the whole execution comes back with it, not one row saying it was
       # picked up. The feed this replaced derived its rows from the effects
-      # a step returned, and effects are not stored, so a resumed run
-      # opened with a single "Run resumed from storage" line; the input log
-      # is the run's own history, so a resumed page opens on all of it.
+      # a step returned, and effects are not stored, so a resumed execution
+      # opened with a single "Execution resumed from storage" line; the input log
+      # is the execution's own history, so a resumed page opens on all of it.
       assert render_until(resumed, "Macrostep 1 - initialize")
       OLD_END
     end
 
-    # And it steps: a resumed run answers the event buttons the same way,
+    # And it steps: a resumed execution answers the event buttons the same way,
     # which is what "continues" means on this page.
     #
     # Sabotage: made `send_run_event/2` drop its `Durable.send_event/3` and
     # answer the socket unchanged; the press did nothing and this went red,
-    # along with the two other tests that step a run by pressing. Reverted.
+    # along with the two other tests that step an execution by pressing. Reverted.
     # (se-b2f: the note here used to name `run.session`, a field the deleted
     # in-memory driver owned.)
     test "a resumed run steps on the next press", %{conn: conn} do
@@ -1076,7 +1076,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       OLD_END
     end
 
-    # se-k4a, on the page rather than on the driver: a run driven past the
+    # se-k4a, on the page rather than on the driver: an execution driven past the
     # verification wait finishes, and the header says `done` instead of
     # sitting on `running` forever. The page compiles with
     # `terminate: true`, and this is the only test that reads what that buys
@@ -1084,10 +1084,10 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     #
     # se-d74 put one beat between the press and the finish. The abandon
     # route lands in the onboarding group, whose company-details step is
-    # this app's one asynchronous call, so the press now leaves the run
+    # this app's one asynchronous call, so the press now leaves the execution
     # RESTING on that invocation with the header still reading `running` -
     # which is the correct answer, not a stall. Draining the invocations
-    # queue is that call's job running; the answer re-enters the stored run
+    # queue is that call's job running; the answer re-enters the stored execution
     # and the page redraws off the broadcast, which is what `render_until/2`
     # is waiting for.
     #
@@ -1113,7 +1113,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert render_until(view, ~s(data-run-status="done"))
     end
 
-    # A link that outlived its run, or one somebody typed. The page says so
+    # A link that outlived its execution, or one somebody typed. The page says so
     # rather than showing an empty canvas and letting a reader guess.
     #
     # Sabotage: made `adopt/2`'s error clause answer the socket unchanged;
@@ -1122,14 +1122,14 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       {:ok, _view, html} =
         live(conn, ~p"/editor?#{[doc: "signup_wizard", execution: "no-such-execution"]}")
 
-      assert html =~ "run refused"
+      assert html =~ "execution refused"
       assert html =~ "execution_not_found"
     end
 
     # Stop is the host's own terminal transition, and the page stops naming
-    # a run it has abandoned.
+    # an execution it has abandoned.
     #
-    # Sabotage: made the `run-stop` handler skip its patch; the run id
+    # Sabotage: made the `run-stop` handler skip its patch; the execution id
     # stayed in the URL and this went red, then reverted.
     test "Stop drops the run from the page and from the URL", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
@@ -1710,13 +1710,13 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     |> LazyHTML.attribute("data-block-id")
   end
 
-  # Presses Run in the host header, then renders until the run has actually
+  # Presses Run in the host header, then renders until the execution has actually
   # reached the page. The press only starts the session; the effects arrive
   # as ordinary messages afterwards, so the render the click returns is the
   # one taken before the first of them was handled. Polling the render is
   # what a subscriber-driven page makes available - there is no callback to
   # await and no state to peek at from out here - and the deadline is what
-  # turns a stalled run into a failure rather than a hang.
+  # turns a stalled execution into a failure rather than a hang.
   @spec run(Phoenix.LiveViewTest.View.t()) :: String.t()
   defp run(view) do
     view |> element(~s(button[phx-click="run-start"])) |> render_click()

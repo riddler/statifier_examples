@@ -1,19 +1,19 @@
 defmodule StatifierExamples.Signup.Promotion do
   @moduledoc """
   The other half of the boundary rule: the one row in a batch whose
-  processing has to wait on a person, and the run it is given (se-j87).
+  processing has to wait on a person, and the execution it is given (se-j87).
 
   A `core.map` fan-out is the chart orchestrating batches. Every invitee a
   chunk stands for is processed as data, in bulk, by one call - and one of
   them is not, because their signup waits for a person to verify an
   address, which is chart semantics and not a row's. That invitee is
-  **promoted**: it gets a run of its own, of the signup wizard this app
+  **promoted**: it gets an execution of its own, of the signup wizard this app
   already ships, through the host's ordinary entry door.
 
   ## The ordinary door, and why not a subchart
 
   `StatifierExamples.Charts.Durable.start/4` is the same call the editor's
-  Run button makes. A promoted invitee is therefore a run a reader opens
+  Run button makes. A promoted invitee is therefore an execution a reader opens
   by URL like any other, resumes after a `kill -9` like any other, and
   drives to the end like any other - which is the point. It is not a
   durable subchart of the chunk chart, and the difference is deliberate:
@@ -24,10 +24,10 @@ defmodule StatifierExamples.Signup.Promotion do
   ## Idempotency
 
   A chunk's start job is at-least-once, so this can be asked twice for the
-  same chunk. The run id is derived from the descriptor
+  same chunk. The execution id is derived from the descriptor
   (`StatifierExamples.Signup.Invites.promoted_execution_id/1`), so the second
   ask reaches the storage layer's atomic `:execution_exists` refusal and is
-  reported as `{:existing, execution_id}` rather than starting a second run -
+  reported as `{:existing, execution_id}` rather than starting a second execution -
   the same shape, and the same honesty, as
   `StatifierExamples.Signup.Accounts.provision/1`'s
   `{:created, _} | {:existing, _}`.
@@ -39,20 +39,20 @@ defmodule StatifierExamples.Signup.Promotion do
   alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Signup.Invites
 
-  # The document a promoted invitee gets a run of: the wizard this app
-  # already ships, by its fixture key, so the run records the same
-  # `fixture` metadata every other root run records and a fired timer can
+  # The document a promoted invitee gets an execution of: the wizard this app
+  # already ships, by its fixture key, so the execution records the same
+  # `fixture` metadata every other root execution records and a fired timer can
   # rebuild its chart on a cold node.
   @wizard "signup_wizard"
 
   @typedoc """
-  What promoting did: started the run, found the one a previous delivery
+  What promoting did: started the execution, found the one a previous delivery
   of the same chunk started, or found nothing to promote in this chunk.
   """
   @type outcome :: {:started, String.t()} | {:existing, String.t()} | :none
 
   @doc """
-  Gives the invitee in `chunk_id` that needs chart semantics a run of its
+  Gives the invitee in `chunk_id` that needs chart semantics an execution of its
   own, or answers `:none` for a chunk holding no such invitee.
 
   `{:error, reason}` only for a failure that is not "it already exists":
@@ -96,7 +96,7 @@ defmodule StatifierExamples.Signup.Promotion do
   end
 
   # The atomic refusal, not a pre-check: a second delivery of the same
-  # chunk asks for the same derived run id and the adapter says the row is
+  # chunk asks for the same derived execution id and the adapter says the row is
   # already there. That is the promotion being idempotent, so it is an
   # answer rather than an error.
   defp started({:error, :execution_exists}, execution_id, email) do

@@ -1,6 +1,6 @@
 defmodule StatifierExamples.Signup.Journey do
   @moduledoc """
-  The signup Path as a **durable run**: what a page shows, and what a press
+  The signup Path as a **durable execution**: what a page shows, and what a press
   does to it.
 
   The three halves of the skeleton meet here.
@@ -12,8 +12,8 @@ defmodule StatifierExamples.Signup.Journey do
 
   ## Two functions, and that is the contract
 
-  `current/1` **resolves**: a run id in, the screen that run is sitting on
-  and the nodes to draw out. `submit/3` **presses**: a run id, the outcome
+  `current/1` **resolves**: an execution id in, the screen that execution is sitting on
+  and the nodes to draw out. `submit/3` **presses**: an execution id, the outcome
   a button named, and what the form collected; findings back if the screen
   does not validate, and otherwise the next resolve.
 
@@ -30,23 +30,23 @@ defmodule StatifierExamples.Signup.Journey do
   the two properties worth naming are what a host implementing it has to
   provide rather than what this app happens to do:
 
-    * **Neither takes a run.** Both take a run *id* and load the run from
+    * **Neither takes an execution.** Both take an execution *id* and load the execution from
       storage. There is no process to hand around, no session, and nothing
       in a socket that the next press depends on - which is what makes a
       journey survive a deploy, and what makes `submit/3` callable from a
       controller, a job, or a test just as well as from a LiveView.
     * **Neither returns a chart.** What comes back is a screen, some nodes,
       the responses so far and a status. A page built on this pair cannot
-      reach into the run, and so cannot start depending on the chart's
+      reach into the execution, and so cannot start depending on the chart's
       shape.
 
-  ## Where a run rests, and how this finds out
+  ## Where an execution rests, and how this finds out
 
   A `myapp.screen` expands to a group that presents the screen and then
-  parks on a `core.await`, so **a run waiting for a reader is a run whose
+  parks on a `core.await`, so **an execution waiting for a reader is an execution whose
   position includes that await's block** - `Screen.park_block_id/1` of the
   screen block's own id. `current/1` reads the reading's active blocks and
-  looks for exactly that. A run resting anywhere else is a run with no
+  looks for exactly that. An execution resting anywhere else is an execution with no
   screen to draw: mid-call on the asynchronous company-details step, or
   finished. Both answer `screen: nil`, and the page says so rather than
   guessing.
@@ -100,9 +100,9 @@ defmodule StatifierExamples.Signup.Journey do
   @fixture "signup_path"
 
   @typedoc """
-  What a page needs to draw one moment of a run, and nothing else.
+  What a page needs to draw one moment of an execution, and nothing else.
 
-  `screen` is `nil` when the run is not sitting on one (see the moduledoc),
+  `screen` is `nil` when the execution is not sitting on one (see the moduledoc),
   and `nodes` is then empty. `responses` is what the chart has collected so
   far, keyed by element key; `findings` is empty except in the
   `{:invalid, view}` a refused `submit/3` answers with.
@@ -118,16 +118,16 @@ defmodule StatifierExamples.Signup.Journey do
         }
 
   @doc """
-  Starts a durable run of the Path and drives it to its first screen.
+  Starts a durable execution of the Path and drives it to its first screen.
 
-  The run id is the caller's to keep: it goes in the page's URL and it is
+  The execution id is the caller's to keep: it goes in the page's URL and it is
   the only handle anything here takes.
   """
   @spec start() :: {:ok, String.t()} | {:error, term()}
   def start, do: start(Durable.new_execution_id())
 
   @doc """
-  `start/0` with the run id supplied, which is what a test wants.
+  `start/0` with the execution id supplied, which is what a test wants.
   """
   @spec start(String.t()) :: {:ok, String.t()} | {:error, term()}
   def start(execution_id) when is_binary(execution_id) do
@@ -143,11 +143,11 @@ defmodule StatifierExamples.Signup.Journey do
   end
 
   @doc """
-  The resolve half: what the run keyed `execution_id` is showing right now.
+  The resolve half: what the execution keyed `execution_id` is showing right now.
 
-  Loads the run cold - the position out of storage, the chart out of the
+  Loads the execution cold - the position out of storage, the chart out of the
   record - so a caller that has only an id out of a URL is a caller in full
-  possession of the run.
+  possession of the execution.
 
   `{:error, :execution_not_found}` for an id nobody stored, and the storage
   layer's own refusals otherwise.
@@ -182,12 +182,12 @@ defmodule StatifierExamples.Signup.Journey do
 
   `responses` is the form's, keyed by element key and holding strings.
 
-  Three answers. `{:ok, view}` is the screen the run moved to - or `nil`
+  Three answers. `{:ok, view}` is the screen the execution moved to - or `nil`
   where it went somewhere with no screen. `{:invalid, view}` is the same
   screen again with `findings` filled in and **nothing sent**: a screen
-  that does not validate never reaches the chart, so the run's position
+  that does not validate never reaches the chart, so the execution's position
   does not move and neither does anything in storage. `{:error, reason}` is
-  a run that could not be loaded, or an outcome no button on the current
+  an execution that could not be loaded, or an outcome no button on the current
   screen declares.
 
   The responses are merged into what the chart already holds before the
@@ -258,7 +258,7 @@ defmodule StatifierExamples.Signup.Journey do
   end
 
   # A view with a screen in it, as an error-shaped answer for `submit/3`:
-  # pressing a button on a run that has moved on is not a validation
+  # pressing a button on an execution that has moved on is not a validation
   # failure, it is a stale page.
   @spec parked_on(view()) :: {:ok, view()} | {:error, :not_on_a_screen}
   defp parked_on(%{screen: nil}), do: {:error, :not_on_a_screen}
@@ -266,7 +266,7 @@ defmodule StatifierExamples.Signup.Journey do
 
   # Which screen a position is resting in. The park block of each
   # `myapp.screen` the Path names, looked for in the reading's active
-  # blocks; `nil` when the run is resting anywhere else.
+  # blocks; `nil` when the execution is resting anywhere else.
   @spec screen_at(Execution.t()) :: Screens.screen() | nil
   defp screen_at(%Execution{active: active}) do
     parks = MapSet.new(active)
@@ -296,7 +296,7 @@ defmodule StatifierExamples.Signup.Journey do
     Map.put(datamodel, "responses", Map.merge(Map.get(datamodel, "responses") || %{}, typed))
   end
 
-  # The run's own persisted datamodel, which is where the responses a screen
+  # The execution's own persisted datamodel, which is where the responses a screen
   # resolves against live once a chart is holding them.
   @spec datamodel(String.t()) :: {:ok, map()} | {:error, term()}
   defp datamodel(execution_id) do
