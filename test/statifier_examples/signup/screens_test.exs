@@ -33,17 +33,26 @@ defmodule StatifierExamples.Signup.ScreensTest do
     #
     # What does NOT discriminate here, since the shape invites the guess:
     # dropping "heading" from `fill_node/2`'s `when type in [...]` guard
-    # leaves this case green. That mutation only stops slots being filled,
-    # and no heading in `priv/fixtures/signup_screens.json` carries one -
-    # there are four, and this one's text is the literal "Create your
-    # account". The heading arm of the guard is therefore uncovered by any
-    # case in this file; the `text` arm is covered by the case below.
+    # leaves this case green, because this heading's text is the literal
+    # "Create your account". That arm is discriminated by the slotted
+    # heading case below instead.
     test "a heading keeps its level and its text" do
       node = resolved_node("account", @answered, "account_heading")
 
       assert node["type"] == "heading"
       assert node["level"] == 1
       assert node["text"] == "Create your account"
+    end
+
+    # Sabotage: dropping "heading" from `fill_node/2`'s `when type in
+    # [...]` guard leaves the raw `{{ responses.first_name }}` in the
+    # referral heading and this assertion fails. Confirmed red, then
+    # reverted from a copy.
+    test "a heading has its slot filled from the datamodel" do
+      node = resolved_node("confirm", @answered, "confirm_referral_heading")
+
+      assert node["text"] == "One more thing, Ada"
+      refute node["text"] =~ "{{"
     end
 
     # Sabotage: replacing `fill_node/2`'s `Map.update!(node_doc, "text",

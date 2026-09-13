@@ -1,5 +1,11 @@
 # The hybrid fan-out, end to end Implementation Plan
 
+**Vocabulary, 2026-09-13.** This file is a dated implementation record, and a
+dated record keeps the vocabulary it was written in: the "run"/"runs" wording
+below stands as written and is not revised to match later decisions. The
+durable-record noun in this app's own prose and user-visible text is
+"execution" everywhere else, since the rename landed in PR 106.
+
 ## Overview
 
 Build the Tier A hybrid fan-out in the examples app, end to end and live: a

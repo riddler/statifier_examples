@@ -884,8 +884,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
              |> render() =~ ~s(data-run-active="true")
     end
 
-    OLD_END
-
     # The execution's narration is the pane's log now, not a drawer tab of this
     # app's own, and what it narrates is the STORED execution rather than what this
     # process watched: the log is built by replaying the execution's persisted
@@ -909,8 +907,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       refute html =~ "myapp-runs__detail"
     end
 
-    OLD_END
-
     # se-5ep: the page's own compile has to carry the fixture's declared
     # `<data>` roots, because a guard reading a root nothing declared raises
     # `error.execution` rather than reading it as undefined - and so does
@@ -930,8 +926,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       refute html =~ "error.execution"
     end
-
-    OLD_END
 
     # The event affordance: one button per event the document declares, in
     # the page's own header beside Run and Stop, and pressing it steps the
@@ -964,8 +958,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       assert render_until(view, "Macrostep 4 - signup.email_verified")
     end
-
-    OLD_END
 
     # An execution is an execution OF a document, so switching documents ends it. The
     # assertion is on the HOST's own status, not on the marks: the editor
@@ -1051,7 +1043,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       # opened with a single "Execution resumed from storage" line; the input log
       # is the execution's own history, so a resumed page opens on all of it.
       assert render_until(resumed, "Macrostep 1 - initialize")
-      OLD_END
     end
 
     # And it steps: a resumed execution answers the event buttons the same way,
@@ -1073,7 +1064,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       |> render_click()
 
       assert render_until(resumed, "signup.abandoned")
-      OLD_END
     end
 
     # se-k4a, on the page rather than on the driver: an execution driven past the
@@ -1099,7 +1089,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       run(view)
       assert_patch(view)
-      OLD_END
 
       html =
         view
