@@ -84,23 +84,24 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # Ecto's own query telemetry is the seam, and it is a cheap one: attach,
     # resolve one view, count what the test process issued.
     #
-    # THREE, not one, and the difference is worth stating because it is the
-    # part se-w4i does not claim. One `Durable.resume/1` reads the record to
-    # pick the chart, `resume/3` reads it again to open the reading on the
-    # stored status, and the position load reads it a third time. Those
-    # three belong to one resume and are that function's own business. What
-    # this case pins is that `current/1` resolves the execution ONCE: before
-    # se-w4i it resumed for the reading and then walked storage a second
-    # time through `Durable.machine_state/1` for the datamodel, and the
-    # count here was FIVE.
+    # TWO, not one, and the difference is worth stating because it is the
+    # part se-w4i does not claim. One `Durable.resume/1` reads the record
+    # once - to pick the chart and to open the reading on the stored status,
+    # off the same row - and the position load reads it a second time. Those
+    # two belong to one resume and are that function's own business. It was
+    # THREE until the record fetch inside `resume/3` was collapsed into the
+    # one `resume/1` already does. What this case pins is that `current/1`
+    # resolves the execution ONCE: before se-w4i it resumed for the reading
+    # and then walked storage a second time through `Durable.machine_state/1`
+    # for the datamodel, and the count here was FIVE.
     #
-    # Sabotage: put `{:ok, datamodel} <- datamodel(execution_id)` back into
-    # `current/1`'s `with` and drew the view from it. This case went red at
-    # 5 reads and nothing else moved - the two walks return the same
-    # position, which is exactly why the second one was invisible until it
-    # was counted. Reverted from a copy.
+    # Sabotage: restored the second `Storage.fetch_execution/2` inside
+    # `Durable.resume/3`'s `with` (the shape this test pinned at 3). This
+    # case went red at 3 reads and nothing else moved - the extra read
+    # returns the row `resume/1` already holds, which is exactly why it was
+    # invisible until it was counted. Reverted from a copy.
     test "reading and datamodel come out of the same load", %{execution_id: execution_id} do
-      assert reads_during(fn -> assert {:ok, _view} = Journey.current(execution_id) end) == 3
+      assert reads_during(fn -> assert {:ok, _view} = Journey.current(execution_id) end) == 2
     end
 
     # Queries issued by this process, against the execution table, while
