@@ -113,7 +113,11 @@ defmodule StatifierExamples.MixProject do
       # `Executions.inputs/2`, `list_executions_by_metadata/2`,
       # `statifier_persistence:execution_status` - because a reader
       # following one of these names is looking it up in the package as it
-      # is today, where the old spellings resolve to nothing. Read "0.9.0
+      # is today. The old spellings resolve to nothing there, with one
+      # exception: the donedata key `statifier_persistence:run_status` is
+      # still READ, for one release, beside the new one
+      # (`statifier_persistence` states that in `Executions`' moduledoc,
+      # and the `statifier_blocks` arm below says the same). Read "0.9.0
       # carries `Executions.inputs/2`" as "0.9.0 is the release that added
       # the function now called `Executions.inputs/2`", which is what the
       # floor was moved for; the name is the pointer, not a claim about
@@ -694,8 +698,10 @@ defmodule StatifierExamples.MixProject do
   # The half this app was waiting for is the failure seam: a block
   # type may class one of its outcomes as a failure through the new
   # `failure_outcomes/1` callback, and the compiler stamps the
-  # reserved `statifier_persistence:execution_status` `<donedata>` param on
-  # that outcome's top-level `<final>`. At 0.21.0 `core.map` and
+  # reserved donedata param on that outcome's top-level `<final>`. At
+  # 0.21.0 that param was spelled `statifier_persistence:run_status`;
+  # the key is `statifier_persistence:execution_status` from
+  # `statifier_blocks` 0.28.0, and the old spelling is still read. At 0.21.0 `core.map` and
   # `core.subchart` classed their `error` outcome and every other type
   # classed nothing - `core.invoke` included - which is what kept the
   # host-side translation in `StatifierExamples.Charts.Durable` alive
@@ -732,8 +738,9 @@ defmodule StatifierExamples.MixProject do
   # its `error` outcome as a failure like `core.map` and `core.subchart`
   # do, and an unhandled failure-classed completion is carried to the
   # document's top-level `<final>`, which is what stamps the reserved
-  # `statifier_persistence:execution_status` param on the chunk chart's error
-  # final. That is what let `se-cqr` delete the host-side translation
+  # donedata param - `statifier_persistence:run_status` at this release,
+  # `statifier_persistence:execution_status` from 0.28.0 - on the chunk
+  # chart's error final. That is what let `se-cqr` delete the host-side translation
   # `StatifierExamples.Charts.Durable` used to do instead.
   #
   # 0.22.0 is a minor with notes, and the notes reach this app in one

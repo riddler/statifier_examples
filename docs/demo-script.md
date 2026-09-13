@@ -1,8 +1,9 @@
 # The executing signup: a demo script
 
 A numbered walk through the signup wizard as a *running* chart: the authoring
-view, a durable run, live block marking, the Run pane over the stored run, a `kill -9` the run
-survives, the abandonment nudge, and the account the wizard exists to create. The last
+view, a durable execution, live block marking, the Run pane over the stored
+execution, a `kill -9` the execution survives, the abandonment nudge, and the
+account the wizard exists to create. The last
 two beats step outside the wizard: one runs a chart that embeds another, and
 one puts the editor back in the author's hands and writes a flow backwards
 from its sink.
@@ -12,8 +13,8 @@ line quoted below was read off a real run of this repository at `main` on a
 fresh `mix setup`, so a beat that does not match is a bug rather than drift in
 the prose. The whole thing takes about five minutes.
 
-The README's "Durable runs, and picking one up after a `kill -9`" section is
-the same machinery explained; this file is the version you read out loud with
+The README's "Durable executions, and picking one up after a `kill -9`" section
+is the same machinery explained; this file is the version you read out loud with
 the app in front of you.
 
 ## Before you start
@@ -27,8 +28,8 @@ Two shells are easier than one: the second is where the `sqlite3` queries and
 the `kill -9` go. Nothing here needs a service, a container or a credential -
 the database is one SQLite file under `priv/`.
 
-Start from a database with no runs in it. `mix ecto.reset` is the blunt way,
-and it is fine: nothing in this repo is precious.
+Start from a database with no executions in it. `mix ecto.reset` is the blunt
+way, and it is fine: nothing in this repo is precious.
 
 ---
 
@@ -45,7 +46,7 @@ palette on the left counts `31 block types, 1 recipe`. Nothing is running
 yet, so the header shows a **Run** button and no status beside it.
 
 This is the whole point of the beat: what you are looking at is an editor, not
-a viewer. The run you are about to start runs *this* document.
+a viewer. The execution you are about to start runs *this* document.
 
 ## 2. Read the header's run controls
 
@@ -53,8 +54,8 @@ a viewer. The run you are about to start runs *this* document.
 
 **See**: `Run`, and then three event buttons - `signup.abandoned`,
 `signup.email_verified`, `signup.reminder_due` - present but disabled. There
-is no run yet, and the canvas is sitting on the page rather than inside a run
-pane.
+is no execution yet, and the canvas is sitting on the page rather than inside
+a run pane.
 
 The buttons are the document's own: they are the `event` of every
 `core.on_event` block in it, sorted. A document with different interrupts
@@ -62,9 +63,9 @@ offers different buttons, and no code here knows their names.
 
 They are in the header rather than in the Run pane deliberately. The pane
 `statifier_blocks` gives a host has a send control of its own, and it writes
-into a live `Statifier.Session` process; a durable run does not have one, so
-the pane reads a run of this app's as not sendable and says so. Sending to a
-stored run is the host's own door, and this is it.
+into a live `Statifier.Session` process; a durable execution does not have
+one, so the pane reads an execution of this app's as not sendable and says so.
+Sending to a stored execution is the host's own door, and this is it.
 
 ## 3. Press Run
 
@@ -72,10 +73,10 @@ stored run is the host's own door, and this is it.
 
 **See**: three things move at once.
 
-- The address bar grows a `run=` parameter -
-  `?doc=signup_wizard&theme=light&run=868edf9bf6eb15ac3e3e58427b57a105`. That
-  hex string is the run id, and it is the only thing you need to come back to
-  this run later.
+- The address bar grows an `execution=` parameter -
+  `?doc=signup_wizard&theme=light&execution=868edf9bf6eb15ac3e3e58427b57a105`. That
+  hex string is the execution id, and it is the only thing you need to come
+  back to this execution later.
 - The header status beside Run reads `running`, and Run becomes **Stop**.
 - The canvas marks seven blocks active - the 24-hour wait
   (`blk_su_verify_wait`), the three interrupt rules watching it
@@ -83,7 +84,7 @@ stored run is the host's own door, and this is it.
   three groups they are nested in (`blk_su_root`, `blk_su_verify`,
   `blk_su_reminder_window`).
 
-  Seven and not four, since se-dh0. The marks are read off the run's own
+  Seven and not four, since se-dh0. The marks are read off the execution's own
   configuration now rather than derived by this app, and a configuration
   holds the compound states above an atomic one as well as the atomic one
   itself - so a group whose child is active is marked too, which is what an
@@ -92,7 +93,7 @@ stored run is the host's own door, and this is it.
 The chart has walked from the top to the place where it can only wait for the
 outside world, and it did that in the time it took the button to come back up.
 
-## 4. Read the run
+## 4. Read the execution
 
 **Do**: look at the pane the canvas is now sitting inside.
 
@@ -113,11 +114,11 @@ and the configuration the macrostep came to rest on.
 
 Three things this pane is, that the hand-rolled feed it replaced was not.
 
-**It is the stored run, not this page's memory.** The rows are produced by
-replaying the run's persisted input log - `statifier_persistence`'s
+**It is the stored execution, not this page's memory.** The rows are produced
+by replaying the execution's persisted input log - `statifier_persistence`'s
 ADR-0010, read by `StatifierExamples.Charts.Replay` - through statifier-ui,
 which turns it into exactly the message stream a live session emits. Reload
-the page and the whole run comes back, which section 7 is about.
+the page and the whole execution comes back, which section 7 is about.
 
 **It scrubs.** Press `Prev` and the marks on the canvas move to where the
 chart was at the previous macrostep; the note above says which point is
@@ -126,29 +127,29 @@ Press `Live` to come back to the tip.
 
 **It says what it cannot do.** Beside the send control:
 `A persisted run has nothing to send to.` The pane's own send control writes
-into a live `Statifier.Session` process, and a durable run has none - so the
-event buttons for this run are the host's, in the page header beside Run and
-Stop.
+into a live `Statifier.Session` process, and a durable execution has none - so
+the event buttons for this execution are the host's, in the page header beside
+Run and Stop.
 
-What the log shows for the run so far is two calls out to the host, then two
-delays: the abandonment nudge at 90 seconds and the verification wait at 24
+What the log shows for the execution so far is two calls out to the host, then
+two delays: the abandonment nudge at 90 seconds and the verification wait at 24
 hours. The nudge is 90 seconds because
 `config :statifier_examples, :signup_reminder_delay` says so in dev - the
 fixture itself ships the production framing, `2d`, and the host applies the
 configured duration as the document loads.
 
-## 5. Confirm the run is durable rather than merely running
+## 5. Confirm the execution is durable rather than merely running
 
 **Do**: in the second shell,
 
 ```sh
 sqlite3 priv/repo/statifier_examples_dev.db \
-  "select run_id, status, length(position_blob) from statifier_runs;"
+  "select execution_id, status, length(position_blob) from statifier_executions;"
 sqlite3 priv/repo/statifier_examples_dev.db \
   "select id, state, args ->> 'event', scheduled_at from oban_jobs;"
 ```
 
-**See**: one run row - `active`, with a position blob of about 1.2 kB - and
+**See**: one execution row - `active`, with a position blob of about 1.2 kB - and
 two job rows, both `scheduled`:
 
 ```
@@ -156,10 +157,10 @@ two job rows, both `scheduled`:
 2|scheduled|statifier_blocks.wait.blk_su_verify_wait|<24 hours from now>
 ```
 
-Both delays are rows in the same file the run is in. There is no process
+Both delays are rows in the same file the execution is in. There is no process
 holding this chart, and no timer in anybody's mailbox.
 
-**Do**, while you are in there, ask what the run was driven by:
+**Do**, while you are in there, ask what the execution was driven by:
 
 ```sh
 sqlite3 priv/repo/statifier_examples_dev.db \
@@ -169,9 +170,9 @@ sqlite3 priv/repo/statifier_examples_dev.db \
 **See**: one row per event that reached the interpreter, dense from zero, each
 naming the door it came in at - the invocation answers the create's own drive
 fed back, then a `step` for every event sent since. That table is
-`statifier_persistence`'s per-run input log (its ADR-0010), it is what section
-4's pane was replaying, and it is the reason section 7's resumed page comes
-back with the whole run rather than a line saying it was resumed.
+`statifier_persistence`'s per-execution input log (its ADR-0010), it is what
+section 4's pane was replaying, and it is the reason section 7's resumed page
+comes back with the whole execution rather than a line saying it was resumed.
 
 ## 6. Kill the server the hard way
 
@@ -190,13 +191,13 @@ to lose.
 ## 7. Start it again and reload the same URL
 
 **Do**: `mix phx.server` in the first shell, then reload the page with the
-`run=` parameter still on it.
+`execution=` parameter still on it.
 
-**See**: the run comes back on the configuration it was left in.
+**See**: the execution comes back on the configuration it was left in.
 
 - The same seven blocks are marked active on the canvas.
 - The header says `running`.
-- The Run pane's log is the whole run again - `Macrostep 1 - initialize`
+- The Run pane's log is the whole execution again - `Macrostep 1 - initialize`
   down to the macrostep the chart came to rest on - not a single line saying
   it was picked up.
 
@@ -204,9 +205,9 @@ That last point is the one worth stopping on, because it is the beat this
 script used to have to apologise for. The **marks** always came from the
 stored position and were always exact. The **narration** did not: it was
 derived from the effects each step returned, effects were not stored, and a
-resumed run opened with the fact that it had been resumed and nothing else.
-Now the run's inputs are stored too, so what comes back after the `kill -9`
-is the run, not a note about it.
+resumed execution opened with the fact that it had been resumed and nothing
+else. Now the execution's inputs are stored too, so what comes back after the
+`kill -9` is the execution, not a note about it.
 
 ## 8. Nudge the visitor who never verified
 
@@ -217,8 +218,8 @@ so the beat is repeatable and the demo stays under five minutes. The event it
 sends is the same one the stored job carries.
 
 **See**: the log gains a macrostep named for the event - `signup.reminder_due`
-- and then the ones its cascade raised, and the run **stops in the middle of a
-call**. Open the last macrostep and read its rounds: the reminder is
+- and then the ones its cascade raised, and the execution **stops in the
+middle of a call**. Open the last macrostep and read its rounds: the reminder is
 delivered, the abandon interrupt takes the group, the notify call goes out and
 comes back, the onboarding group is entered, and the company-details call is
 dispatched with no answer after it.
@@ -227,7 +228,7 @@ That last one is the beat worth stopping on. Every other call in this app is
 answered inside the step that made it; the company-details step is not.
 Collecting a company's details is a human step that takes hours, so the host
 starts it as an Oban job and tells the chart nothing yet. The drive reaches
-quiescence and the run **persists with the invocation still live** - no
+quiescence and the execution **persists with the invocation still live** - no
 process is holding it, and the header reads `running` rather than `done`. Kill
 the server here and the call is still outstanding when it comes back.
 
@@ -235,12 +236,12 @@ the server here and the call is still outstanding when it comes back.
 macrosteps the answer drove, ending in the workspace being created, and the
 header goes to `done`.
 
-That is the job answering, on a process that has never seen this run: it
-rebuilt the chart, the position and the run out of SQLite, fed the answer back
-through the durable driver's completion door, and the page redrew because the
-answer was broadcast. One reading and not two, which is the other half of what
-the input log bought: the narration is the run's, so a second drive by a
-different process extends it rather than replacing it.
+That is the job answering, on a process that has never seen this execution: it
+rebuilt the chart, the position and the execution out of SQLite, fed the answer
+back through the durable driver's completion door, and the page redrew because
+the answer was broadcast. One reading and not two, which is the other half of
+what the input log bought: the narration is the execution's, so a second drive by
+a different process extends it rather than replacing it.
 
 Narrate the whole thing honestly, because it is what the chart says: the nudge
 fires, the reminder window ends, the visitor is notified, the signup pauses on
@@ -251,16 +252,16 @@ change to the chart, not to this script.
 The header now reads `done`, the three event buttons are disabled again, and
 the only active mark left is the root.
 
-If the run sits on `running` and never advances, the invocations queue is not
-draining - `select id, state, queue from oban_jobs` will show the invoke job
+If the execution sits on `running` and never advances, the invocations queue is
+not draining - `select id, state, queue from oban_jobs` will show the invoke job
 `available`. It is a stored row either way, which is the point.
 
-## 9. Look at what the run wrote
+## 9. Look at what the execution wrote
 
 **Do**:
 
 ```sh
-sqlite3 priv/repo/statifier_examples_dev.db "select run_id, status from statifier_runs;"
+sqlite3 priv/repo/statifier_examples_dev.db "select execution_id, status from statifier_executions;"
 sqlite3 priv/repo/statifier_examples_dev.db "select id, email from users;"
 sqlite3 priv/repo/statifier_examples_dev.db "select id, state from oban_jobs;"
 ```
@@ -275,11 +276,12 @@ sqlite3 priv/repo/statifier_examples_dev.db "select id, state from oban_jobs;"
 3|cancelled
 ```
 
-The run record is `completed`, not `active`: the page compiles the document
+The execution record is `completed`, not `active`: the page compiles the document
 with `terminate: true`, which is what gives the emission a top-level `<final>`
 and lets a chart actually finish.
 
-One user row, keyed on the run id - the chart carries no personal data, so the
+One user row, keyed on the execution id - the chart carries no personal data,
+so the
 address is derived rather than collected, and it is fiction like every value
 in this repository.
 
@@ -301,7 +303,7 @@ the 24-hour wait, and finishing onboarding took down its two-hour deadline.
 ```
 
 `myapp:provision` is the only one of the three that writes, and it is
-idempotent on the run id: deliver it twice and the second says
+idempotent on the execution id: deliver it twice and the second says
 `provisioned=existing`.
 
 ## 11. Run a chart that embeds another chart
@@ -331,8 +333,8 @@ Row 3 is the whole point. On the durable path a `core.subchart` is not
 something the parent holds in memory: `StatifierExamples.Charts.Durable`
 routes the invoke type to `StatifierBlocks.Runtime.DurableSubchart`, which
 turns the block's `{:start_child, _, _}` instruction into **its own
-persisted run** - its own row, its own position, its own status, its own
-run id.
+persisted execution** - its own row, its own position, its own status, its own
+execution id.
 
 That id is not random. It is the parent's, plus the invocation, plus the
 child index, so a child id strictly extends its parent's, which is what
@@ -340,21 +342,23 @@ makes the tree acyclic and the cascade below terminate. And the parent does
 not answer the call itself: it rests on the live child until the child
 reaches a terminal status, and the driver answers the invocation then.
 
-**Do**: open the child as a run of its own. Its id is the one row 3 printed:
+**Do**: open the child as an execution of its own. Its id is the one row 3
+printed:
 
 ```
-http://127.0.0.1:8645/editor?doc=signup_wizard&run=83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0
+http://127.0.0.1:8645/editor?doc=signup_wizard&execution=83aae24cd3331f9d66bef6e983292dba/blk_so_wizard/0
 ```
 
 **See**: the wizard, at `revision 11`, id `bdoc_signup_demo`, `running`, and a
-Run pane of its own with the child's own run in it - its own log, replayed
-from its own input log. One log per run is `statifier_persistence`'s ADR-0010
+Run pane of its own with the child's own execution in it - its own log,
+replayed from its own input log. One log per execution is
+`statifier_persistence`'s ADR-0010
 decision 7, and this page is what it looks like: the child's steps are here,
 and on the parent's page there is only the answer the child sent back.
 
 Nothing on that page knows it is anybody's child. It is the wizard, resumed
 from storage exactly as section 7 resumed the parent after the `kill -9` -
-and resumed **by run id alone**, because the page's own compile is the root
+and resumed **by execution id alone**, because the page's own compile is the root
 recipe while a child's stored identity is keyed on the child recipe, so the
 usual resume-onto-this-canvas path would refuse it. Drive the wizard to the
 end here and the parent finishes too, with nobody pressing anything on the
@@ -366,16 +370,17 @@ still live.
 **See**: reload the child's URL. The header says `cancelled`.
 
 Stopping a parent has to take its children with it: nothing is holding an
-orphaned child, and its stored timers would go on firing into a run no page
-will ever show. `StatifierExamples.Charts.Durable.abandon/1` walks the run's
-child subtree and cancels it. Cancellation *retains* - the child keeps its
-record and its stored position byte for byte - which is why the page above
-still renders after the stop, and it is what makes the button safe to press.
+orphaned child, and its stored timers would go on firing into an execution no
+page will ever show. `StatifierExamples.Charts.Durable.abandon/1` walks the
+execution's child subtree and cancels it. Cancellation *retains* - the child
+keeps its record and its stored position byte for byte - which is why the page
+above still renders after the stop, and it is what makes the button safe to
+press.
 
 **What the host had to supply** is three small things, and naming them is
 the point of a reference embedder:
 
-- **`StatifierExamples.Persistence.list_runs_by_metadata/2`** is what opts
+- **`StatifierExamples.Persistence.list_executions_by_metadata/2`** is what opts
   this app into durable subcharts at all. The driver refuses to start a
   child over a store that cannot enumerate one, because a child that could
   never be found is a child that could never be cancelled. SQLite has no
@@ -392,7 +397,7 @@ the point of a reference embedder:
 `Statifier.Session` started with
 `StatifierExamples.Charts.invoke_handlers/0` **and
 `inherit_invoke_handlers: true`** runs `blk_so_wizard` as a child *session*
-instead - byte for byte the chart the run record pinned at create, compiled
+instead - byte for byte the chart the execution record pinned at create, compiled
 as a child, which `StatifierExamples.Charts.SubchartTest` asserts by
 comparing the child's content hash against that pin. It runs to depth 2
 there, driven rather than read: the child dispatches its own `myapp:signup`
@@ -413,16 +418,16 @@ gives both the same resolver, so nothing in the document says which
 deployment shape it is for. That is the thing to say out loud, because it
 means an author never writes a chart for one deployment shape.
 
-## 12. Read what the run pinned
+## 12. Read what the execution pinned
 
-**Do**: in the second shell, read the run's metadata.
+**Do**: in the second shell, read the execution's metadata.
 
 ```sh
 sqlite3 priv/repo/statifier_examples_dev.db \
-  "select metadata from statifier_runs order by inserted_at desc limit 1;"
+  "select metadata from statifier_executions order by inserted_at desc limit 1;"
 ```
 
-**See**: two keys - the fixture the run is of, and the child chart it
+**See**: two keys - the fixture the execution is of, and the child chart it
 resolved:
 
 ```json
@@ -432,9 +437,10 @@ resolved:
 
 `core.subchart` names its child by **document id**, and a document id is
 stable across every revision of that child - so the record would otherwise
-say nothing about which revision this run actually ran. The hash is that
+say nothing about which revision this execution actually ran. The hash is that
 missing fact, written once at create and never rewritten (campaign-023 ruling
-R-d). Edit the wizard, start a second onboarding run, and the two runs' pins
+R-d). Edit the wizard, start a second onboarding execution, and the two
+executions' pins
 differ while both still say `bdoc_signup_demo`. The digits are not quoted
 here for the same reason: they are a hash of the child's bytes, and this
 deployment writes its configured reminder delay into them before compiling
@@ -442,11 +448,11 @@ deployment writes its configured reminder delay into them before compiling
 
 It is the host's fact, not the compiler's: `StatifierBlocks.Core.Subchart`
 says so in as many words - pinning a particular child revision at publish
-time is a host provenance concern, carried in run metadata.
+time is a host provenance concern, carried in execution metadata.
 
 ## 13. Author a flow backwards, from its sink
 
-This beat needs no run and no second shell. It is about the *authoring*
+This beat needs no execution and no second shell. It is about the *authoring*
 half, and about the two block types `statifier_blocks` added for it.
 
 **Do**: switch the DOCUMENT select to `Card processing (sketch)`, or go to
@@ -521,8 +527,8 @@ each step of it, so the beat is machine-verified rather than remembered.
 
 ## 14. Edit a guard through picklists, and watch it stay source text
 
-This beat needs no run either. It is about the *condition* half of authoring,
-and about a chain that starts three packages away.
+This beat needs no execution either. It is about the *condition* half of
+authoring, and about a chain that starts three packages away.
 
 **Do**: open <http://127.0.0.1:8645/editor?doc=card_processing>, fold the
 palette, and click the **Branch** that sits under **Rate the transaction** -
@@ -645,7 +651,7 @@ again -
 24 | Delayed send | statifier_blocks.wait.blk_su_verify_wait in 86400000 ms
 ```
 
-The run is back where it started, one round later. The only event that
+The execution is back where it started, one round later. The only event that
 advances *past* the wait is the wait's own event,
 `statifier_blocks.wait.blk_su_verify_wait`, and no button offers it - the
 buttons are the document's `core.on_event` names, and a `core.wait` is not one
