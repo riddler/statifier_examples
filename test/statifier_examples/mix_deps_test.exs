@@ -763,9 +763,16 @@ defmodule StatifierExamples.MixDepsTest do
   # exist under that spelling, so this app's adapter implementation does
   # not compile against it.
   #
-  # A bare two-tuple with no `override: true` is also the assertion: a
-  # Hex requirement is what satisfies the requirements `statifier_oban`
-  # and `statifier_blocks` state on this package, which no git ref does.
+  # A bare two-tuple with no `override: true` is also the assertion, and
+  # the membership check is what carries it: `refute lock_line =~ ":git,"`
+  # alone would still pass against a pin that came back carrying
+  # `override: true`, because an overridden git dep resolves to a `{:git,
+  # ...}` lock entry under a DIFFERENT arm spelling than the one this
+  # case names. Nothing in the resolved graph forces the Hex spelling on
+  # THIS package - neither `statifier_oban` 0.10.0 nor `statifier_blocks`
+  # 0.28.0 states a requirement on `statifier_persistence` (that argument
+  # belongs to the `statifier` arm above, where both of them do) - so the
+  # literal arm is the only thing that can catch it.
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
   # release line (`"0.11.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.12.0 entry against the mutated expectation.
