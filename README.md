@@ -61,7 +61,7 @@ neither variable, so a CI run always resolves `statifier_blocks` from Hex.
    survives a document switch and a reload and does not survive a restart -
    nothing writes a document to disk. The app does have a database:
    `StatifierExamples.Repo`, on SQLite, carries `statifier_persistence`'s
-   run storage rather than documents.
+   execution storage rather than documents.
 
 An unknown `doc=` is not a 404: the page falls back to the first fixture,
 `card_processing`, because a query-string name is a thing somebody typed.
@@ -348,8 +348,8 @@ supposed to have something to say:
 - `signup_onboarding` - `Findings 0`.
 - `signup_bulk_invites` - `Findings 0`.
 - `signup_bulk_invites_strict` - `Findings 0`. Its deliberate bad chunk id is
-  a **runtime** fact, not a compile-time one: `first_error` is what a run does
-  with the failure, and the compiler has nothing to say about a string.
+  a **runtime** fact, not a compile-time one: `first_error` is what an execution
+  does with the failure, and the compiler has nothing to say about a string.
 - `signup_invite_chunk` - `Findings 0`.
 
 ## The typed environment, and the two answers it gives
@@ -448,26 +448,27 @@ drawer". To copy the host's half:
    page root on purpose - the package declares the token's `auto` default on
    `.sb-editor` itself, and a declaration there beats an inherited one.
 
-## Durable runs, and picking one up after a `kill -9`
+## Durable executions, and picking one up after a `kill -9`
 
-Pressing **Run** on the editor page starts a *durable* run. There is no
+Pressing **Run** on the editor page starts a *durable* execution. There is no
 process holding the chart between steps: every step goes
 `load -> step -> execute effects -> persist` through
-`StatifierPersistence.Runs`, and the chart's position lands in the
-`statifier_runs` table before the press returns. The run id goes into the
-page URL, which is what makes a run something you can come back to.
+`StatifierPersistence.Executions`, and the chart's position lands in the
+`statifier_executions` table before the press returns. The execution id goes into
+the page URL, which is what makes an execution something you can come back to.
 
 Two host pieces make that work and both are worth reading before copying:
 
 - `StatifierExamples.Charts.Durable` is the driver - the loop that steps,
   answers the calls the chart made, and steps again.
-- `StatifierExamples.Charts.RunLock` is this app's per-run serialization
-  strategy. It is **not optional**: `StatifierPersistence.Runs` defaults to
-  the storage adapter's `lock_run/3`, `StatifierExamples.Persistence`
-  declines that callback because SQLite has no row lock to take, and the
-  default therefore refuses with `{:error, {:serialization,
-  :not_supported}}` before a run can start. A host on Postgres takes the
-  default; a host on SQLite writes the twenty lines this one writes.
+- `StatifierExamples.Charts.ExecutionLock` is this app's per-execution
+  serialization strategy. It is **not optional**:
+  `StatifierPersistence.Executions` defaults to the storage adapter's
+  `lock_execution/3`, `StatifierExamples.Persistence` declines that callback
+  because SQLite has no row lock to take, and the default therefore refuses
+  with `{:error, {:serialization, :not_supported}}` before an execution can
+  start. A host on Postgres takes the default; a host on SQLite writes the
+  twenty lines this one writes.
 
 `docs/demo-script.md` is the same ground as a numbered beat list to read out
 loud with the app in front of you - what to press, and what you should see
@@ -490,14 +491,15 @@ when you press it, through to the account the wizard creates.
    to watch it: `Run started`, two `Invoke dispatched` / `Performed`
    pairs, and a `Delayed send` for the wait.
 
-3. Look at the address bar. It now carries a `run=` parameter - that is
-   the run id, and it is the only thing you need to find this run again.
+3. Look at the address bar. It now carries an `execution=` parameter - that is
+   the execution id, and it is the only thing you need to find this execution
+   again.
 
-4. Confirm the run is durable rather than merely running:
+4. Confirm the execution is durable rather than merely running:
 
    ```sh
    sqlite3 priv/repo/statifier_examples_dev.db \
-     "select run_id, status, length(position_blob) from statifier_runs;"
+     "select execution_id, status, length(position_blob) from statifier_executions;"
    ```
 
    One row, `active`, with a position blob of about a kilobyte.
@@ -510,18 +512,18 @@ when you press it, through to the account the wizard creates.
    ```
 
 6. Start it again with `mix phx.server`, and reload the **same URL**,
-   `run=` parameter included.
+   `execution=` parameter included.
 
-7. The page comes back on the configuration the run was left in: the wait
+7. The page comes back on the configuration the execution was left in: the wait
    block and both interrupt rules are marked active on the canvas, the
    header says `running`, and the Runs tab opens with one row -
-   `Run resumed from storage`, naming the run id and its stored status.
+   `Run resumed from storage`, naming the execution id and its stored status.
 
-8. Press **signup.abandoned** in the Runs panel. The resumed run steps on
+8. Press **signup.abandoned** in the Runs panel. The resumed execution steps on
    from exactly where it was: the abandon interrupt fires, the
    verification group finishes, onboarding runs its branch, and the chart
    reaches its root outcome and finishes - the header says `done` and the
-   `statifier_runs` row is `completed`. Nothing about the step knows a
+   `statifier_executions` row is `completed`. Nothing about the step knows a
    server died.
 
    Finishing at all is an opt-in: the page compiles with
@@ -531,18 +533,19 @@ when you press it, through to the account the wizard creates.
    raises `done.outcome` internally and the session stays active forever.
    The option changes the generated bytes and therefore the content hash
    chart identity is keyed on, so it is a property of the chart rather
-   than of a run: a run stored in the dev database **before** this option
-   was passed belongs to the old hash and will not resume. Delete the
-   database (or just start a fresh run) rather than looking for a way to
-   carry one across.
+   than of an execution: an execution stored in the dev database **before**
+   this option was passed belongs to the old hash and will not resume. Delete
+   the database (or just start a fresh execution) rather than looking for a way
+   to carry one across.
 
 ### What survives and what does not
 
-Durable: the chart's position after every step, the run's status, the
-account `myapp:provision` writes, and - since se-dh0 - the run's **inputs**.
+Durable: the chart's position after every step, the execution's status, the
+account `myapp:provision` writes, and - since se-dh0 - the execution's
+**inputs**.
 
 The inputs are the newest of those and the one that changed what this page
-shows. `statifier_persistence`'s ADR-0010 adds an optional per-run input
+shows. `statifier_persistence`'s ADR-0010 adds an optional per-execution input
 log to the storage adapter: every event that reaches the interpreter is
 appended, verbatim, inside the same exclusion the step runs in, stamped
 with the door it entered by and a dense ordinal.
@@ -551,20 +554,21 @@ V05 in `priv/repo/migrations` creates the table, and
 `StatifierExamples.Charts.Replay` maps the log back into the recording
 statifier-ui replays.
 
-So a resumed run no longer opens with one row saying it was picked up. The
-whole run comes back: the editor page replays the stored inputs into the
-same wire-format message stream a live session produces and seats it in
+So a resumed execution no longer opens with one row saying it was picked up.
+The whole execution comes back: the editor page replays the stored inputs into
+the same wire-format message stream a live session produces and seats it in
 `statifier_blocks`' Run pane, which is where the marks, the scrubber and
 the event log now come from. Scrubbing back moves the marks, because the
-marks are read off the run rather than off whatever this process watched.
+marks are read off the execution rather than off whatever this process
+watched.
 
 Two things that costs, said out loud. The log stores document payload - an
 event's `data` is the host's own values - so turning it on is a
 data-retention decision and not a debugging switch; the cap
 `StatifierExamples.Persistence.init/1` declares is this app's answer for a
-demo database. And the pane's own send control stays disabled for a run of
-this app's: it writes into a live `Statifier.Session` server, and a durable
-run has no process at all. The event buttons are in the page header
+demo database. And the pane's own send control stays disabled for an execution
+of this app's: it writes into a live `Statifier.Session` server, and a durable
+execution has no process at all. The event buttons are in the page header
 instead, beside Run and Stop.
 
 ### The one call that writes
@@ -572,9 +576,9 @@ instead, beside Run and Stop.
 `myapp:provision` creates the account row the wizard exists to produce, in
 `StatifierExamples.Signup.Accounts`. Two things about it are the point:
 
-- **The run is the key.** The chart carries no datamodel and no personal
-  data, so the address is derived from the run id -
-  `signup-<run id>@example.com`, fiction like every value in this repo.
+- **The execution is the key.** The chart carries no datamodel and no personal
+  data, so the address is derived from the execution id -
+  `signup-<execution id>@example.com`, fiction like every value in this repo.
 - **It is idempotent on that key, honestly.** `StatifierPersistence`'s
   executor contract is at-least-once: a host that crashed between
   executing an effect and persisting the step re-drives the same event and
@@ -590,15 +594,15 @@ block document cannot declare its own datamodel roots - and a `core.assign`
 near the top of the document sets the two values, standing in for the step
 that would collect them. `StatifierExamples.Charts.DurableTest` exercises
 the write on that fixture rather than on a document built in the test, so
-the run the demo does is the run the suite covers.
+the execution the demo does is the execution the suite covers.
 
 ### A chart that embeds another chart, durably
 
 `Signup onboarding` runs the whole wizard as a child chart, through one
 `core.subchart` block naming the wizard's document id. On the durable path
 the child is not something the parent holds: it is **its own persisted
-run**, with its own row in `statifier_runs`, its own position, its own
-status, and a run id that goes in the page URL like any other.
+execution**, with its own row in `statifier_executions`, its own position, its
+own status, and an execution id that goes in the page URL like any other.
 
 Press **Run** on
 <http://127.0.0.1:8645/editor?doc=signup_onboarding> and the parent's Run
@@ -608,21 +612,21 @@ when the child finishes, the answer comes back as an ordinary
 
 That the parent narrates its child at all is a property of the input log
 rather than of anything this app writes. ADR-0010 decision 7 keeps one log
-per run - a child is an ordinary run with a log of its own, and nothing
-merges the two - but the child's **answer** reaches the parent through
+per execution - a child is an ordinary execution with a log of its own, and
+nothing merges the two - but the child's **answer** reaches the parent through
 `Driver.answer_parent/3`, which re-enters the parent through its own
 invocation door. So the answer is one of the parent's own inputs, and the
 parent's pane shows it without joining anything. What the parent's log does
 not hold is the child's own steps, and it should not: those are the child's
-run, and reading them means opening the child's run id in the page.
+execution, and reading them means opening the child's execution id in the page.
 
 That id is not random. It is the parent's, plus the invocation, plus the
 child index, so a child id strictly extends its parent's - which is what
 makes the tree acyclic and the cascade below terminate. Open it and you
-are looking at the wizard as a run of its own:
+are looking at the wizard as an execution of its own:
 
 ```
-http://127.0.0.1:8645/editor?doc=signup_wizard&run=<parent>/blk_so_wizard/0
+http://127.0.0.1:8645/editor?doc=signup_wizard&execution=<parent>/blk_so_wizard/0
 ```
 
 Drive it to the end there. The parent finishes too, without anybody
@@ -631,7 +635,7 @@ status the driver answers the parent's invocation, and the parent takes
 its `on_done` or `on_abandon` slot. Three host pieces make that work and
 each is small:
 
-- **`StatifierExamples.Persistence.list_runs_by_metadata/2`** is what opts
+- **`StatifierExamples.Persistence.list_executions_by_metadata/2`** is what opts
   this app into durable subcharts at all. The driver refuses to start a
   child over a store that cannot enumerate one - a child that could never
   be found is a child that could never be cancelled - and enumerating on
@@ -649,10 +653,10 @@ each is small:
 - **`StatifierExamples.Charts.Durable.abandon/1` cascades.** Press **Stop**
   on a parent with a live child and the child is cancelled with it.
   Cancellation *retains*: the child's stored position is byte-identical
-  afterwards, so a cancelled child is still a run you can open and read.
+  afterwards, so a cancelled child is still an execution you can open and read.
 
 None of this is in the document. Whether a `core.subchart` runs in memory
-or as its own persisted run is host wiring - `statifier_blocks` ships two
+or as its own persisted execution is host wiring - `statifier_blocks` ships two
 handlers for the one invoke type and this app gives both the same
 resolver - which is the thing to say out loud, because it means an author
 never writes a chart for one deployment shape.
@@ -668,29 +672,29 @@ The rule the shape follows is worth saying in one sentence, because it is
 the decision every host embedding this engine has to make:
 
 > **The chart orchestrates batches; the data plane processes rows. A row
-> gets its own run only when its processing has to wait or branch on its
+> gets its own execution only when its processing has to wait or branch on its
 > own state.**
 
 So `chunks` holds ten short strings - `su-c01` through `su-c10` - and never
-an invitee. That is not tidiness. A run's datamodel is serialized on every
-persisted step for the rest of the run, so a fan-out over ten thousand
-invitee ids costs what ids cost, and one over ten thousand invitee records
-charges the parent for those records forever. What a descriptor stands for
-is derived from it, in `StatifierExamples.Signup.Invites`, exactly the way
-the wizard's account address is derived from its run id - and for the same
+an invitee. That is not tidiness. An execution's datamodel is serialized on
+every persisted step for the rest of the execution, so a fan-out over ten
+thousand invitee ids costs what ids cost, and one over ten thousand invitee
+records charges the parent for those records forever. What a descriptor stands
+for is derived from it, in `StatifierExamples.Signup.Invites`, exactly the way
+the wizard's account address is derived from its execution id - and for the same
 reason, since a start job is at-least-once and the derivation is what makes
 the write idempotent.
 
 Each chunk child is one bulk call, `myapp:process_rows`, which writes
 twenty-five rows to `invite_outcomes` - a table this app owns and the
 engine has never heard of - and answers a summary. Two hundred and fifty
-rows are processed by ten runs, not by two hundred and fifty.
+rows are processed by ten executions, not by two hundred and fifty.
 
 **The promoted row.** One invitee's signup waits for a person to verify an
 address, which is chart semantics and not a row's. That invitee is
 promoted: `StatifierExamples.Signup.Promotion` starts an ordinary durable
-run of the signup wizard for it, through the same door the editor's Run
-button uses. It is a run you open by URL, resume after a `kill -9`, and
+execution of the signup wizard for it, through the same door the editor's Run
+button uses. It is an execution you open by URL, resume after a `kill -9`, and
 drive to the end like any other, and its id is on that invitee's row. It is
 deliberately **not** a durable subchart of the chunk chart: a subchart's
 lifetime is its parent's, and a finished batch import should not take a
@@ -704,18 +708,18 @@ and the answer is still a dense, index-ordered list, with `"cancelled"`
 sitting at the index of every sibling that never ran.
 
 Cancelling those siblings takes two doors, because they are two different
-things. A sibling that already has a run is cancelled as a run, by
+things. A sibling that already has an execution is cancelled as an execution, by
 `statifier_persistence`'s own cascade. A sibling whose **start job** has
-not run yet has no run record at all, so nothing in that package can see
+not run yet has no execution record at all, so nothing in that package can see
 it - `StatifierExamples.Charts.FanOut.canceller/0` is what reaches it,
 through the driver's `child_canceller:` seam and into
 `statifier_oban`'s job table.
 
 **Four host seams, and that is the whole of it.** The adapter answers
-`supports_run_outcome?/1` and `list_run_states_by_metadata/2`, without
-which a fan-out is refused at open rather than half-started. The
+`supports_execution_outcome?/1` and `list_execution_states_by_metadata/2`,
+without which a fan-out is refused at open rather than half-started. The
 `StatifierOban.Config` names a `:child_starter`, because the scheduling
-package creates no runs. The driver is built with a `child_canceller:`,
+package creates no executions. The driver is built with a `child_canceller:`,
 because the persistence package cannot see an unstarted job. And the
 dispatch fun answers a `core.map` `:pending`, because N creates cannot hold
 the parent's exclusion. Nothing else in this app knows a fan-out is
@@ -727,16 +731,19 @@ name** and nothing else - `child_use: true` compiles a fixed
 `<donedata>` - so the per-chunk summary the bulk handler builds reaches
 this app's own table rather than the parent's `results`
 list, whose entries carry `%{"outcome" => "done"}`. And a chart still has
-no way to say "this run failed" *from the blocks this chunk is built out
+no way to say "this execution failed" *from the blocks this chunk is built out
 of*. Half of that gap closed on 2026-09-06: `statifier_persistence` 0.8.0
-fails a run whose chart settles in a top-level `<final>` tagged
-`statifier_persistence:run_status` `= "failed"`, and `statifier_blocks`
-0.21.0 stamps that tag on the final of any outcome a block type classes as
-a failure through its new `failure_outcomes/1` callback. But only
+fails an execution whose chart settles in a top-level `<final>` tagged with
+the reserved status donedata param `= "failed"` - the param is
+`statifier_persistence:execution_status` today and was
+`statifier_persistence:run_status` at that release, which is still read -
+and `statifier_blocks` 0.21.0 stamps that tag on the final of any outcome a
+block type classes as a failure through its new `failure_outcomes/1`
+callback. But only
 `core.map` and `core.subchart` class one, and the chunk chart is a
 `core.sequence` around a single `core.invoke`, whose `error` outcome is
 classed as nothing - so its refusal reaches no failure-classed final and
-the run would still sit `active` forever.
+the execution would still sit `active` forever.
 
 So this app still translates that - a chunk chart is one bulk call and has
 nowhere to rest, so a chunk child that is not terminal when its
@@ -756,7 +763,7 @@ vocabulary at all. What makes it interesting is where the delay is kept.
 
 `Statifier.Session` arms a delayed send with `Process.send_after/3`, so
 the timer dies with the node: deploy during the window and the nudge is
-silently gone. A durable run has no process to hold one in the first
+silently gone. A durable execution has no process to hold one in the first
 place. So this app hands the effect to
 [`statifier_oban`](https://github.com/riddler/statifier_oban) instead
 (`StatifierExamples.Charts.Timers`), which stores it as an `oban_jobs`
@@ -768,8 +775,8 @@ Three things follow, and each is worth seeing:
 
 - **The reminder survives a restart.** `kill -9` the server mid-window and
   the job is still there. When it fires,
-  `StatifierExamples.Charts.Timers.Delivery` answers the run-liveness
-  question from the stored run's status and hands the event to
+  `StatifierExamples.Charts.Timers.Delivery` answers the execution-liveness
+  question from the stored execution's status and hands the event to
   `StatifierExamples.Charts.Durable.deliver/2`, which rebuilds the chart
   and the position out of storage. Nothing in that path has ever seen the
   process that armed the timer.
@@ -778,7 +785,7 @@ Three things follow, and each is worth seeing:
   send was armed in, so leaving the verification window cancels the stored
   job. The same machinery makes the wizard's 24-hour `core.wait` durable,
   because a wait compiles to a delayed send too.
-- **A page that is open redraws.** The drive announces itself on the run's
+- **A page that is open redraws.** The drive announces itself on the execution's
   topic and the editor page adopts the reading, so the nudge appears in
   the Run pane's log while you are watching rather than on the next reload.
 
@@ -795,7 +802,7 @@ seconds would make the example lie about the product. So
 block as the document is loaded, the test environment configures something
 else again, and neither has to pretend to be the other. It does change the
 document's bytes, and therefore the content hash chart identity is keyed
-on - so a run armed under one delay will not resume under another, which
+on - so an execution armed under one delay will not resume under another, which
 is the identity guard doing its job rather than a wrinkle to work around.
 
 ## The gate
@@ -838,9 +845,9 @@ Hex.
 | `StatifierExamples.CardAuth` | the card-processing block types and their invoke handlers |
 | `StatifierExamples.Signup` | the signup-wizard block types and their invoke handlers |
 | `StatifierExamples.Charts` | shared host plumbing: the palette, the icon seam, the theme tokens, the fixture list |
-| `StatifierExamples.Charts.Durable` | the durable run driver: step, answer the chart's calls, step again |
+| `StatifierExamples.Charts.Durable` | the durable execution driver: step, answer the chart's calls, step again |
 | `StatifierExamples.Charts.FanOut` | the fan-out host half: the job that starts one, the seam that creates each child, the door that cancels the unstarted |
-| `StatifierExamples.Charts.RunLock` | the per-run serialization strategy durable steps run inside |
+| `StatifierExamples.Charts.ExecutionLock` | the per-execution serialization strategy durable steps run inside |
 | `StatifierExamples.Persistence` | the storage adapter and the `statifier_persistence` host declaration |
 
 Both domains are filled. `StatifierExamples.Charts` also carries the shared
@@ -863,7 +870,7 @@ teaching the reader to pick, so there is one of each and both domains use it:
   module registers, and one call - `type`, the `<param>` values, and the
   driver's own call context - answered or refused with
   `{:error, {:unknown_invoke_type, type}}`. The context is empty from the
-  in-memory driver and carries `run_id` from the durable one; only
+  in-memory driver and carries `execution_id` from the durable one; only
   `myapp:provision` reads it, because only it writes. That shape is the one the
   runtime asks for - st-ADR-0051 registers handlers per session as a
   `%{invoke type => module}` map - and it is what makes
