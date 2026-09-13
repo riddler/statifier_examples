@@ -78,6 +78,67 @@ defmodule StatifierExamples.Signup.JourneyTest do
     end
   end
 
+  describe "current/1 walks storage once" do
+    # se-w4i, asserted by counting rather than by reading the source. Every
+    # read of the execution row goes through `StatifierExamples.Repo`, so
+    # Ecto's own query telemetry is the seam, and it is a cheap one: attach,
+    # resolve one view, count what the test process issued.
+    #
+    # THREE, not one, and the difference is worth stating because it is the
+    # part se-w4i does not claim. One `Durable.resume/1` reads the record to
+    # pick the chart, `resume/3` reads it again to open the reading on the
+    # stored status, and the position load reads it a third time. Those
+    # three belong to one resume and are that function's own business. What
+    # this case pins is that `current/1` resolves the execution ONCE: before
+    # se-w4i it resumed for the reading and then walked storage a second
+    # time through `Durable.machine_state/1` for the datamodel, and the
+    # count here was FIVE.
+    #
+    # Sabotage: put `{:ok, datamodel} <- datamodel(execution_id)` back into
+    # `current/1`'s `with` and drew the view from it. This case went red at
+    # 5 reads and nothing else moved - the two walks return the same
+    # position, which is exactly why the second one was invisible until it
+    # was counted. Reverted from a copy.
+    test "reading and datamodel come out of the same load", %{execution_id: execution_id} do
+      assert reads_during(fn -> assert {:ok, _view} = Journey.current(execution_id) end) == 3
+    end
+
+    # Queries issued by this process, against the execution table, while
+    # `work` runs. The pid filter keeps Oban's own pollers out of the count.
+    defp reads_during(work) do
+      owner = self()
+      handler = "se-w4i-#{System.unique_integer([:positive])}"
+
+      :ok =
+        :telemetry.attach(
+          handler,
+          [:statifier_examples, :repo, :query],
+          fn _event, _measurements, %{source: source}, ^owner ->
+            if self() == owner and source == "statifier_executions" do
+              send(owner, {:execution_read, handler})
+            end
+          end,
+          owner
+        )
+
+      try do
+        work.()
+      after
+        :telemetry.detach(handler)
+      end
+
+      drain_reads(handler, 0)
+    end
+
+    defp drain_reads(handler, count) do
+      receive do
+        {:execution_read, ^handler} -> drain_reads(handler, count + 1)
+      after
+        0 -> count
+      end
+    end
+  end
+
   describe "three submits" do
     # THE END-TO-END CASE. Three presses, each one a cold load from storage,
     # and what comes back at the end is the receipt the create-account call
