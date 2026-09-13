@@ -169,5 +169,25 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       assert has_element?(live, "#journey-error")
       refute has_element?(live, "#journey-responses")
     end
+
+    # No reader can reach this: the form is rendered only under `:if={@view}`,
+    # so `render_change/2` on the element is not available and the event has
+    # to be sent to the view directly. It is still worth holding, because
+    # `Journey.resolve/2` wants a view with a `:screen` and a page whose run
+    # has just been refused has none.
+    #
+    # Sabotage: removed the `view: nil` clause from
+    # `handle_event("response", ...)`. This case went red - the event raised
+    # a FunctionClauseError on `Journey.resolve/2` and took the view down
+    # with it. Reverted from a copy.
+    test "and a keystroke with no run refuses rather than raising", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-a-run")
+
+      html = render_change(live, "response", %{"responses" => %{"first_name" => "Ada"}})
+
+      assert html =~ "no_execution"
+      assert has_element?(live, "#journey-error")
+      refute has_element?(live, "#journey-responses")
+    end
   end
 end
