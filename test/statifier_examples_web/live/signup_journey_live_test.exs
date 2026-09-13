@@ -24,13 +24,14 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     %{live: live, html: html, execution_id: execution_id}
   end
 
-  describe "with no run" do
+  describe "with no execution" do
     test "it offers to start one", %{conn: conn} do
       {:ok, live, html} = live(conn, ~p"/signup-journey")
 
-      assert html =~ "No run yet"
+      assert html =~ "No execution yet"
+      assert has_element?(live, "#no-execution")
       assert has_element?(live, "#start-journey")
-      refute has_element?(live, "#run-id")
+      refute has_element?(live, "#execution-id")
     end
 
     # Sabotage: made `handle_event("start", ...)` patch to the page with no
@@ -56,7 +57,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # `handle_event("response", ...)`. This case went red - the event raised
     # a FunctionClauseError on `Journey.resolve/2` and took the view down
     # with it. Reverted from a copy.
-    test "and a keystroke with no run refuses rather than raising", %{conn: conn} do
+    test "and a keystroke with no execution refuses rather than raising", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey")
 
       html = render_change(live, "response", %{"responses" => %{"first_name" => "Ada"}})
@@ -76,7 +77,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # `handle_event("outcome", ...)`. This case went red - the event raised
     # reading `execution_id` out of nil and took the view down with it.
     # Reverted from a copy.
-    test "and an outcome press with no run refuses rather than raising", %{conn: conn} do
+    test "and an outcome press with no execution refuses rather than raising", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey")
 
       html = render_click(live, "outcome", %{"outcome" => "continue"})
@@ -89,9 +90,10 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
   describe "the screen it draws" do
     test "is the resolved one, not the whole document", %{conn: conn} do
-      %{live: live, html: html} = started(conn)
+      %{live: live, html: html, execution_id: execution_id} = started(conn)
 
       assert html =~ "Create your account"
+      assert has_element?(live, "#execution-id", execution_id)
       assert has_element?(live, "#first_name")
       assert has_element?(live, "#email")
 
@@ -132,7 +134,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # can see. The clearing stays because a Path whose screens shared a key
     # would send the previous screen's response as this one's. Reverted from a
     # copy.
-    test "moves the run to the next screen", %{conn: conn} do
+    test "moves the execution to the next screen", %{conn: conn} do
       %{live: live} = started(conn)
 
       live |> form("#journey-responses", responses: @account) |> render_change()
@@ -175,7 +177,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     end
   end
 
-  describe "the run outlives the page" do
+  describe "the execution outlives the page" do
     # THE POINT OF THE PAGE. A second mount of the same URL is a different
     # process with a different socket and nothing carried over, and it opens
     # on the screen the first one left the execution on, reading the responses back
@@ -202,8 +204,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       assert render(second) =~ "ada@example.com"
     end
 
-    test "and a run id nobody stored shows the refusal", %{conn: conn} do
-      {:ok, live, html} = live(conn, ~p"/signup-journey?execution=not-a-run")
+    test "and an execution id nobody stored shows the refusal", %{conn: conn} do
+      {:ok, live, html} = live(conn, ~p"/signup-journey?execution=not-an-execution")
 
       assert html =~ "execution_not_found"
       assert has_element?(live, "#journey-error")
@@ -217,8 +219,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # Sabotage: made the clause assign `:no_execution` unconditionally. This
     # case went red - the page drew "no_execution" and the reader lost the
     # reason. Reverted from a copy.
-    test "and a keystroke on a refused run keeps the refusal it has", %{conn: conn} do
-      {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-a-run")
+    test "and a keystroke on a refused execution keeps the refusal it has", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-an-execution")
 
       html = render_change(live, "response", %{"responses" => %{"first_name" => "Ada"}})
 
@@ -229,8 +231,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # Sabotage: made the outcome clause assign `:no_execution` unconditionally.
     # This case went red - the page drew "no_execution" and the reader lost
     # the reason. Reverted from a copy.
-    test "and an outcome press on a refused run keeps the refusal it has", %{conn: conn} do
-      {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-a-run")
+    test "and an outcome press on a refused execution keeps the refusal it has", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-an-execution")
 
       html = render_click(live, "outcome", %{"outcome" => "continue"})
 

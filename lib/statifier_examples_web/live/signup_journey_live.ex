@@ -126,7 +126,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
         <header class="flex items-center justify-between gap-4">
           <h1 class="text-sm font-semibold uppercase tracking-wide opacity-60">Signup journey</h1>
           <button id="start-journey" type="button" class="btn btn-sm" phx-click="start">
-            Start a new run
+            Start a new execution
           </button>
         </header>
 
@@ -134,13 +134,14 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
           {inspect(@error)}
         </p>
 
-        <p :if={is_nil(@view)} id="no-run" class="text-base-content/70">
-          No run yet. Press <em>Start a new run</em> and the Path begins at its first screen.
+        <p :if={is_nil(@view)} id="no-execution" class="text-base-content/70">
+          No execution yet. Press <em>Start a new execution</em>
+          and the Path begins at its first screen.
         </p>
 
         <div :if={@view} class="flex flex-col gap-6">
-          <p id="run-id" class="font-mono text-xs opacity-60">
-            run {@view.execution_id} - {@view.status}
+          <p id="execution-id" class="font-mono text-xs opacity-60">
+            execution {@view.execution_id} - {@view.status}
           </p>
 
           <ul
@@ -225,8 +226,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   @spec off_screen(atom()) :: String.t()
   defp off_screen(:running),
     do:
-      "The run is between screens - it is resting on a call this app runs as a job. " <>
+      "The execution is between screens - it is resting on a call this app runs as a job. " <>
         "This page redraws when the job answers."
 
-  defp off_screen(status), do: "The run finished: #{status}."
+  defp off_screen(status), do: "The execution finished: #{status}."
 end
