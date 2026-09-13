@@ -45,7 +45,7 @@ defmodule StatifierExamples.Signup do
   handler map down (statifier-ex st-pvpz). It is still deliberately one
   level deep, now as a choice about this example set rather than a limit:
   see `StatifierExamples.Charts.Subchart` on that, and on what a durable
-  run does with a subchart.
+  execution does with a subchart.
   """
 
   alias StatifierBlocks.{Block, Decode, Document, Edit}
@@ -81,7 +81,7 @@ defmodule StatifierExamples.Signup do
   # Both lists are empty, and that is the point rather than an oversight.
   # The wizard used to declare `signup` here because a guard reading a root
   # nothing declared raises `error.execution` instead of reading it as
-  # undefined - which is what used to send every run of it down the
+  # undefined - which is what used to send every execution of it down the
   # `otherwise` arm - and a block document had nowhere to say so. It has
   # somewhere now: sb ADR-0001 decision 11 gives the envelope a `datamodel`
   # key, and each fixture declares its own roots in the bytes an author
@@ -174,7 +174,7 @@ defmodule StatifierExamples.Signup do
   #
   # It changes the document's bytes and therefore the content hash chart
   # identity is keyed on, which is the correct consequence and not a
-  # side effect to design around: a run armed under one delay is a run of
+  # side effect to design around: an execution armed under one delay is an execution of
   # a different chart from one armed under another, and the storage
   # layer's identity guard says so rather than resuming it quietly.
   #

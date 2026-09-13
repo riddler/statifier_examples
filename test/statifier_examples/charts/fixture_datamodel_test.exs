@@ -8,7 +8,7 @@ defmodule StatifierExamples.Charts.FixtureDatamodelTest do
   asserting is not that the key is present - it is that the key is
   *complete*: a root an emitted expression loads and nothing declares is
   an `error.execution` at run time, which is exactly the defect that used
-  to send every run of the wizard down its `otherwise` arm.
+  to send every execution of the wizard down its `otherwise` arm.
 
   So the check is derived rather than transcribed. Each fixture is
   compiled, every `cond`, `expr` and `location` attribute in the generated

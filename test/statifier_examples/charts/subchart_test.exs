@@ -49,7 +49,7 @@ defmodule StatifierExamples.Charts.SubchartTest do
   @missing "bdoc_nothing_ships_this"
 
   # The wizard's first step. A child session that cannot answer
-  # `myapp:signup` sits here for the rest of the run, which is what the
+  # `myapp:signup` sits here for the rest of the execution, which is what the
   # whole document did before handler inheritance arrived (st-pvpz).
   @child_first_state "s_blk_su_account"
 
@@ -142,7 +142,7 @@ defmodule StatifierExamples.Charts.SubchartTest do
 
   # The evidence for "the new fixture runs the wizard as a child": a child
   # session exists, under the block's own id, and the machine it is running
-  # is byte-for-byte the chart the run's pin names - the same content hash,
+  # is byte-for-byte the chart the execution's pin names - the same content hash,
   # which is the identity statifier-ex ADR-0052 defines and the storage
   # layer compares. Being inside the wizard's own body is the third half of
   # it: an empty child chart would have the wrong hash, but a child sitting
@@ -221,14 +221,14 @@ defmodule StatifierExamples.Charts.SubchartTest do
   # finishes, and the outcome it finished with reaches the parent - which
   # is the one reading `signup_onboarding` exists for. The event goes to
   # the CHILD, out of the wizard's own interrupt vocabulary, so what drives
-  # the run to its end is a chart one level down answering its own event.
+  # the execution to its end is a chart one level down answering its own event.
   #
   # `{:halted, :done}` off a subscription rather than a poll: the parent's
   # finish is several hops after this call returns (the child ends, reports
   # `done.invoke`, the parent routes it through `on_done`, runs the notify
   # there and completes), and a snapshot taken before those hops is a race,
   # not a result. The subscription's halt message is the last one a session
-  # sends for a run (st ADR-0044 decision 2).
+  # sends for an execution (st ADR-0044 decision 2).
   #
   # Sabotage: dropped `inherit_invoke_handlers: true` from `session_opts/0`;
   # this went red on `assert_receive` timing out - the parked child never
@@ -288,7 +288,7 @@ defmodule StatifierExamples.Charts.SubchartTest do
   end
 
   # A pin is a pin: there is nothing to record for a child that cannot be
-  # resolved, and the run finds out at execution time instead (the refusal
+  # resolved, and the execution finds out at execution time instead (the refusal
   # the test above drives). Recording an error string here would put a
   # value in the provenance slot that names no chart.
   #

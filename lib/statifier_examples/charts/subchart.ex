@@ -72,22 +72,22 @@ defmodule StatifierExamples.Charts.Subchart do
   authoring choice about the example set, and it is the choice that keeps
   `resolve_chart/2`'s missing `{:cycle, _}` arm honest - see above.
 
-  ## Durable runs, and why this module serves both
+  ## Durable executions, and why this module serves both
 
   `{:start_child, _, _}` used to be executed by `Statifier.Session` and by
-  nothing else, so a durable run reaching a subchart was refused. It is
+  nothing else, so a durable execution reaching a subchart was refused. It is
   not any more (se-6ag): `StatifierPersistence.Driver` executes the same
-  instruction by creating the child as its **own persisted run**, linked
-  to the parent by run metadata and pinned to the child's content hash
+  instruction by creating the child as its **own persisted execution**, linked
+  to the parent by execution metadata and pinned to the child's content hash
   (sp ADR-0008).
 
-  Which of the two runs a `core.subchart` is host wiring rather than a
+  Which of the two executions a `core.subchart` is host wiring rather than a
   fact about the document (sb ADR-0008 decision 1), and the two handlers
   are two modules serving one invoke type: `StatifierBlocks.Runtime.Subchart`
   in memory, `StatifierBlocks.Runtime.DurableSubchart` durably. This
   module is the **host callbacks for both** - `resolve_chart/2` and
   `palette/0` are shared and unchanged (decision 2), so the same lookup
-  answers a session run and a durable run and there is no second place a
+  answers a session execution and a durable execution and there is no second place a
   document id is resolved. `StatifierExamples.Charts.invoke_handlers/0`
   registers the in-memory one for a session; the durable one is reached
   from `StatifierExamples.Charts.Durable`'s dispatch fun, which is where
@@ -95,8 +95,8 @@ defmodule StatifierExamples.Charts.Subchart do
 
   The pin `identities/1` records is unchanged and is still worth having
   on the durable path, though the two answer different questions. The pin
-  says which child revision this run was *created* against, at create; the
-  child run's own linkage carries the hash the driver actually started,
+  says which child revision this execution was *created* against, at create; the
+  child execution's own linkage carries the hash the driver actually started,
   at dispatch. They agree, and a reader with both can say so.
   """
 
@@ -151,9 +151,9 @@ defmodule StatifierExamples.Charts.Subchart do
   Campaign-023 ruling R-d, and the host-provenance pattern
   `StatifierBlocks.Core.Subchart` names - "pinning a *particular* child
   revision at publish time is a host provenance concern, carried in run
-  metadata; the compiler does not do it". `src` is a document id, so a run
-  started today and a run started after the child is edited both say
-  `bdoc_signup_demo` and mean different charts. Recorded at run create
+  metadata; the compiler does not do it". `src` is a document id, so an execution
+  started today and an execution started after the child is edited both say
+  `bdoc_signup_demo` and mean different charts. Recorded at execution create
   (`StatifierExamples.Charts.Durable.start/4`), the hash is what tells the
   two apart afterwards.
 
@@ -170,7 +170,7 @@ defmodule StatifierExamples.Charts.Subchart do
 
   A child that does not resolve, or does not compile, is **absent** rather
   than recorded as an error: metadata is a pin, and there is nothing to
-  pin. The run finds out at execution time, where the package refuses with
+  pin. The execution finds out at execution time, where the package refuses with
   `unknown_document` or `child_compile_findings` and the reason reaches the
   chart.
   """

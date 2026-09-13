@@ -9,13 +9,13 @@ defmodule StatifierExamples.Charts.ExecutionLockTest do
     %{lock: lock}
   end
 
-  # Two bodies for one run id, started at the same moment, must not
+  # Two bodies for one execution id, started at the same moment, must not
   # overlap: the first records its entry and exit before the second records
   # its entry. The marks are drained IN ORDER - `assert_received` scans the
-  # whole mailbox and would pass on an interleaved run - so the assertion
+  # whole mailbox and would pass on an interleaved execution - so the assertion
   # is on the sequence, which is the whole guarantee.
   #
-  # Sabotage: made `handle_call({:acquire, _}, ...)` reply `:ok` for a run
+  # Sabotage: made `handle_call({:acquire, _}, ...)` reply `:ok` for an execution
   # id already held instead of enqueueing; the marks came back
   # `first_in, second_in, second_out, first_out` and this went red, then
   # reverted.
@@ -60,11 +60,11 @@ defmodule StatifierExamples.Charts.ExecutionLockTest do
     end
   end
 
-  # Different run ids are exactly what the keying buys, so a body holding
+  # Different execution ids are exactly what the keying buys, so a body holding
   # one id must not delay a body on another.
   #
   # Sabotage: made `handle_call({:acquire, _}, ...)` key every lock on a
-  # single constant instead of the run id; this went red on the timeout,
+  # single constant instead of the execution id; this went red on the timeout,
   # then reverted.
   test "two run ids run concurrently", %{lock: lock} do
     marks = self()
@@ -96,7 +96,7 @@ defmodule StatifierExamples.Charts.ExecutionLockTest do
   end
 
   # A holder that dies mid-body must hand the lock on rather than strand
-  # the run id, because the holder here is usually a page.
+  # the execution id, because the holder here is usually a page.
   #
   # Sabotage: dropped the `Process.monitor/1` call in `grant/3`, so no
   # `:DOWN` ever arrived; this went red on the timeout, then reverted.

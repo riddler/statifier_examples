@@ -4,9 +4,9 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
   What is asserted here is only what the page adds over
   `StatifierExamples.Signup.JourneyTest`: that the markup carries the
-  resolved screen, that a press reaches the run, that a refused submit draws
+  resolved screen, that a press reaches the execution, that a refused submit draws
   its findings, and - the property the page exists to demonstrate - that a
-  second mount of the same URL picks the run up where the first one left it.
+  second mount of the same URL picks the execution up where the first one left it.
   """
 
   use StatifierExamplesWeb.ConnCase, async: false
@@ -34,7 +34,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     end
 
     # Sabotage: made `handle_event("start", ...)` patch to the page with no
-    # `run` param. Exactly this case went red: the patch drew the empty page
+    # `execution` param. Exactly this case went red: the patch drew the empty page
     # again and `#journey-responses` never appeared. Reverted from a copy.
     test "and starting one lands on the first screen", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey")
@@ -50,7 +50,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # block, so there is no element to change and the event has to be sent to
     # the view directly. It is still worth refusing, because
     # `Journey.resolve/2` wants a view with a `:screen` and a page with no
-    # run has no view at all.
+    # execution has no view at all.
     #
     # Sabotage: removed the `view: nil` clause from
     # `handle_event("response", ...)`. This case went red - the event raised
@@ -103,7 +103,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
   describe "a press" do
     # The page's whole job in one case: a click becomes an event on a durable
-    # run, and what comes back is the next screen.
+    # execution, and what comes back is the next screen.
     #
     # Sabotage: made `handle_event("outcome", ...)` assign the view without
     # clearing the draft. NOTHING went red: a stale draft is merged into the
@@ -158,11 +158,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
   describe "the run outlives the page" do
     # THE POINT OF THE PAGE. A second mount of the same URL is a different
     # process with a different socket and nothing carried over, and it opens
-    # on the screen the first one left the run on, reading the responses back
+    # on the screen the first one left the execution on, reading the responses back
     # out of the chart rather than out of anything it kept.
     #
     # Sabotage: made `Journey.current/1` build its view from an empty
-    # datamodel rather than the run's. Two cases went red, this one on the
+    # datamodel rather than the execution's. Two cases went red, this one on the
     # address it reads back: with no responses the confirm summary's text slot
     # renders empty and the collected block is bare. Reverted from a copy.
     test "and a second mount opens where it was", %{conn: conn} do
@@ -177,7 +177,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       assert has_element?(second, "#seats")
 
       # The first screen's responses are the chart's now, and the page reads
-      # them back out of it - the collected block is drawn from the run's own
+      # them back out of it - the collected block is drawn from the execution's own
       # datamodel.
       assert render(second) =~ "ada@example.com"
     end

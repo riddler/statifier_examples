@@ -49,7 +49,7 @@ defmodule StatifierExamples.Signup.HandlersTest do
   # chart invents its own data.
   #
   # Sabotage: made answers/1 answer `%{}` for "account"; this went red, and
-  # took the two wizard run tests in `DurableTest` with it - the plan branch
+  # took the two wizard execution tests in `DurableTest` with it - the plan branch
   # had nothing to guard on again. Reverted.
   test "myapp:signup answers with what the account step collected" do
     capture_log(fn ->
@@ -73,7 +73,7 @@ defmodule StatifierExamples.Signup.HandlersTest do
     end)
   end
 
-  # Sabotage: dropped the run-less provisioning clause's "skipped" answer to
+  # Sabotage: dropped the execution-less provisioning clause's "skipped" answer to
   # `{:ok, %{}}`; this went red, then reverted.
   test "myapp:provision with no run to key on writes nothing and says so" do
     log =
@@ -86,13 +86,13 @@ defmodule StatifierExamples.Signup.HandlersTest do
     assert log =~ "skipped"
   end
 
-  # The clause a durable run reaches: the context names the run, so the
+  # The clause a durable execution reaches: the context names the execution, so the
   # write has a key and happens. The row itself is
   # `StatifierExamples.Signup.AccountsTest`'s subject; what this asserts is
   # that the handler routes on the context rather than ignoring it.
   #
   # Sabotage: narrowed the `%{execution_id: execution_id}` clause's guard to
-  # `is_atom(execution_id)`, so the call fell through to the run-less clause;
+  # `is_atom(execution_id)`, so the call fell through to the execution-less clause;
   # this went red, then reverted.
   test "myapp:provision with a run provisions the account and reports it", %{run: execution_id} do
     log =

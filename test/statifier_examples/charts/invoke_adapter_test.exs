@@ -124,12 +124,12 @@ defmodule StatifierExamples.Charts.InvokeAdapterTest do
   end
 
   # The durable driver is the only caller that passes a context, and it is
-  # the one the run-keyed clause in `Signup.Handlers` matches on. The
+  # the one the execution-keyed clause in `Signup.Handlers` matches on. The
   # session driver reaches the same handlers through the adapter with the
-  # engine's plan context, which names no run - so the run-less clause is
+  # engine's plan context, which names no execution - so the execution-less clause is
   # what a session gets, and that is the branch this asserts.
   #
-  # Sabotage: made the run-less `myapp:provision` clause answer
+  # Sabotage: made the execution-less `myapp:provision` clause answer
   # `{:ok, %{"provisioned" => "created"}}`; this went red. Reverted from a
   # backup copy.
   test "a driver with no run to name gets the clause that says so" do

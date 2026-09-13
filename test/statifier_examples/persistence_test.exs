@@ -3,7 +3,7 @@ defmodule StatifierExamples.PersistenceTest do
   `StatifierExamples.Persistence`'s own callback: the child enumeration
   that opts this adapter into durable subcharts (se-6ag).
 
-  The package's conformance suite - run next door in
+  The package's conformance suite - execution next door in
   `StatifierExamples.PersistenceConformanceTest` - already generates the
   containment case for any adapter that exports
   `list_executions_by_metadata/2`, and it is the case that matters. What is here
@@ -46,7 +46,7 @@ defmodule StatifierExamples.PersistenceTest do
   end
 
   # A parent with two children under two different invocations, plus an
-  # unrelated run and one belonging to somebody else's parent. Both of the
+  # unrelated execution and one belonging to somebody else's parent. Both of the
   # driver's own match shapes are asserted against it, because the cascade
   # uses one and `StatifierExamples.Charts.Durable.abandon/1` uses the
   # other, and getting the containment right for one and wrong for the
@@ -114,12 +114,12 @@ defmodule StatifierExamples.PersistenceTest do
 
   # The one mistake this callback is able to make. An empty match map is
   # contained by every stored map, so answering it would hand a cascade
-  # every run in the table to cancel. Both package adapters raise instead,
+  # every execution in the table to cancel. Both package adapters raise instead,
   # and so does this one.
   #
   # Sabotage: deleted the `map_size(match) > 0` guard from
   # `validate_match!/1`, so an empty map took the string-keys arm and
-  # passed; this went red - every inserted run came back. Reverted.
+  # passed; this went red - every inserted execution came back. Reverted.
   test "list_executions_by_metadata refuses an empty match rather than matching everything", %{
     opts: opts
   } do
@@ -183,7 +183,7 @@ defmodule StatifierExamples.PersistenceTest do
            ]
   end
 
-  # A matched run carrying no linkage answers `child_index: nil` rather
+  # A matched execution carrying no linkage answers `child_index: nil` rather
   # than raising or being dropped - the callback's own type says so, and a
   # match written wide enough to catch a parent is how it happens.
   #
@@ -201,8 +201,8 @@ defmodule StatifierExamples.PersistenceTest do
   end
 
   # The same refusal `list_executions_by_metadata/2` makes, for a worse reason:
-  # a settlement that read every run in the table as its own children
-  # would answer a parent on behalf of runs that are nobody's child.
+  # a settlement that read every execution in the table as its own children
+  # would answer a parent on behalf of executions that are nobody's child.
   #
   # Sabotage: dropped the `validate_match!/1` call from
   # `list_execution_states_by_metadata/2`; this went red on the first

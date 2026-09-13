@@ -18,23 +18,23 @@ defmodule StatifierExamples.Persistence do
   ## Why this module exists rather than using the Ecto adapter directly
 
   The Ecto adapter's optional `lock_execution/3` is Postgres-shaped: it takes
-  `pg_advisory_xact_lock` and then a `SELECT ... FOR UPDATE` on the run
+  `pg_advisory_xact_lock` and then a `SELECT ... FOR UPDATE` on the execution
   row. SQLite has neither. Its writer exclusion is the whole database
   rather than one row, so there is no advisory lock to take and no row to
   lock, and calling that callback here fails outright with `no such
   function: hashtextextended`.
 
   So this adapter does not export `lock_execution/3` at all. That is the
-  storage contract's own way of saying an adapter does not offer per-run
+  storage contract's own way of saying an adapter does not offer per-execution
   locking - exporting the optional callback is what opts an adapter into
   it - and it is checked rather than asserted: the conformance suite
-  generates the per-run lock cases only for an adapter that exports the
+  generates the per-execution lock cases only for an adapter that exports the
   callback, and this one passes the suite it is given.
 
   The consequence belongs to whoever runs charts on top of this, and is
   not hidden: `StatifierPersistence.Executions` defaults its serialization to
   the adapter lock, and that default over an adapter with no `lock_execution/3`
-  refuses with `{:error, {:serialization, :not_supported}}`. Durable runs
+  refuses with `{:error, {:serialization, :not_supported}}`. Durable executions
   through this adapter therefore have to pass an explicit serialization
   strategy - one chosen deliberately for a single-writer, file-backed
   database - rather than take the default. A host that wants the default
@@ -66,8 +66,8 @@ defmodule StatifierExamples.Persistence do
   What it costs is a table scan per call, and that cost is stated rather
   than hidden: the query is per *cascade* rather than per step (the driver
   reaches it on a `cancel_invoke` effect and on `start_child`'s guard),
-  and this app's database holds the runs of a demo. A deployment with a
-  real run table wants Postgres and the delegated `jsonb` query, which is
+  and this app's database holds the executions of a demo. A deployment with a
+  real execution table wants Postgres and the delegated `jsonb` query, which is
   the same sentence `lock_execution/3` gets above - and it is why this remains
   a property of the database this app chose for a one-command setup rather
   than a limitation of the package.
@@ -89,7 +89,7 @@ defmodule StatifierExamples.Persistence do
 
   @behaviour StatifierPersistence.Storage.Adapter
 
-  # The per-run input-log cap this app declares at `init/1`; see there.
+  # The per-execution input-log cap this app declares at `init/1`; see there.
   @input_log_cap 2_000
 
   import Ecto.Query, only: [from: 2]
@@ -105,7 +105,7 @@ defmodule StatifierExamples.Persistence do
   @doc """
   Resolves the adapter handle, naming this module as the persistence host
   so a caller opening the store never has to repeat it, and declaring the
-  per-run input-log cap.
+  per-execution input-log cap.
 
   The cap is a retention decision rather than a tuning knob: an entry
   holds the verbatim `%Statifier.Event{}` a step was driven with, so a log
@@ -118,10 +118,10 @@ defmodule StatifierExamples.Persistence do
   can still say otherwise.
 
   What the cap buys is the editor page's Run pane, which replays a stored
-  run out of this log (`StatifierExamples.Charts.Replay`). A run that
+  execution out of this log (`StatifierExamples.Charts.Replay`). An execution that
   outgrows it keeps stepping - the log closes itself with a marker and
-  the run is unaffected, which is the record's decision 6 - and the page
-  refuses to draw a truncated log as a whole run rather than showing a
+  the execution is unaffected, which is the record's decision 6 - and the page
+  refuses to draw a truncated log as a whole execution rather than showing a
   partial one as complete.
   """
   @impl StatifierPersistence.Storage.Adapter
@@ -157,7 +157,7 @@ defmodule StatifierExamples.Persistence do
   defdelegate isolate(opts), to: EctoAdapter
 
   @doc """
-  Declares the per-run input log (the optional
+  Declares the per-execution input log (the optional
   `c:StatifierPersistence.Storage.Adapter.supports_input_log?/1`), and the
   two callbacks behind it.
 
@@ -165,7 +165,7 @@ defmodule StatifierExamples.Persistence do
   of what `supports_metadata?/1` and the two callbacks below it had to do.
   The reason is the whole of ADR-0010 decision 9: the input log's table is
   four ordinary columns and one unique index, its append is an insert
-  taking `seq` from the run's current maximum under the exclusion the
+  taking `seq` from the execution's current maximum under the exclusion the
   caller already holds, and its read is an ordered select. There is no
   `jsonb` predicate in it, no advisory lock, and no index type beyond a
   unique one - so the shipped Ecto adapter's implementation is correct on
@@ -174,10 +174,10 @@ defmodule StatifierExamples.Persistence do
 
   Exporting `supports_input_log?/1` is what opts this app in. An adapter
   that does not export it stores no inputs and sees no behaviour change -
-  no run-lifecycle call refuses on the log, deliberately (decision 1) - so
+  no execution-lifecycle call refuses on the log, deliberately (decision 1) - so
   this is the one capability in this module whose absence would cost a
-  feature rather than break a run. What it costs to have is one insert per
-  step, and what it buys is the only reading of a durable run this app has
+  feature rather than break an execution. What it costs to have is one insert per
+  step, and what it buys is the only reading of a durable execution this app has
   ever been able to show whole: see `StatifierExamples.Charts.Replay`.
 
   Turning it on is a data-retention decision and not a debugging switch;
@@ -230,7 +230,7 @@ defmodule StatifierExamples.Persistence do
   def supports_metadata?(_opts), do: true
 
   @doc """
-  Every stored run whose `metadata` contains `match` (the optional
+  Every stored execution whose `metadata` contains `match` (the optional
   `c:StatifierPersistence.Storage.Adapter.list_executions_by_metadata/2`,
   ADR-0008 decision 5).
 
@@ -245,8 +245,8 @@ defmodule StatifierExamples.Persistence do
   nested map under the package's reserved key.
 
   An empty map, or one with a non-string key, is an `ArgumentError` and
-  not an answer: it would otherwise match every run in the table, and
-  cascade-cancelling every run in the table is the one mistake this
+  not an answer: it would otherwise match every execution in the table, and
+  cascade-cancelling every execution in the table is the one mistake this
   callback is able to make. That is the refusal both package adapters
   make, spelled the same way.
   """
@@ -297,8 +297,8 @@ defmodule StatifierExamples.Persistence do
   `c:StatifierPersistence.Storage.Adapter.supports_execution_outcome?/1`).
 
   `true`, and the declaration costs nothing new: `outcome_blob` is an
-  ordinary column on the runs schema from V03, written through the same
-  delegated `update_execution/2` every other run field goes through, and read
+  ordinary column on the executions schema from V03, written through the same
+  delegated `update_execution/2` every other execution field goes through, and read
   back by the package. The shipped Ecto adapter answers `false` off
   Postgres for the reason `supports_metadata?/1` above answers `false`
   there - the queries beside it are `jsonb` SQL - and this adapter
@@ -315,7 +315,7 @@ defmodule StatifierExamples.Persistence do
   def supports_execution_outcome?(_opts), do: true
 
   @doc """
-  The indexed status projection of every stored run whose `metadata`
+  The indexed status projection of every stored execution whose `metadata`
   contains `match` (the optional
   `c:StatifierPersistence.Storage.Adapter.list_execution_states_by_metadata/2`).
 
@@ -333,7 +333,7 @@ defmodule StatifierExamples.Persistence do
   it does not move a blob per child, and this app's answer does not
   either.
 
-  `child_index` is `nil` for a matched run carrying no linkage, which is
+  `child_index` is `nil` for a matched execution carrying no linkage, which is
   what the callback's type says and what a match written wide enough to
   catch a parent would produce. `status` is the stored string read back as
   the atom the projection's type names, one clause per status the storage
@@ -342,8 +342,8 @@ defmodule StatifierExamples.Persistence do
   reported as something else.
 
   The refusal is `list_executions_by_metadata/2`'s, for its reason: an empty
-  match, or one with a non-string key, would select every run in the
-  table, and a settlement that read every run in the table as its own
+  match, or one with a non-string key, would select every execution in the
+  table, and a settlement that read every execution in the table as its own
   children is the one mistake this callback can make.
   """
   @impl StatifierPersistence.Storage.Adapter
@@ -376,8 +376,8 @@ defmodule StatifierExamples.Persistence do
   defp status("cancelled"), do: :cancelled
 
   # The child's own index, out of the linkage the package writes under its
-  # reserved metadata key. `nil` for a run carrying no linkage at all -
-  # a root run, or a parent caught by a match written wide enough to
+  # reserved metadata key. `nil` for an execution carrying no linkage at all -
+  # a root execution, or a parent caught by a match written wide enough to
   # include it - which is the case the callback's type names.
   @spec child_index(map() | nil) :: non_neg_integer() | nil
   defp child_index(metadata) when is_map(metadata) do
@@ -406,5 +406,5 @@ defmodule StatifierExamples.Persistence do
   end
 
   # No lock_execution/3. See the moduledoc: not exporting it is how an adapter
-  # declines the optional per-run lock, and SQLite cannot honour it.
+  # declines the optional per-execution lock, and SQLite cannot honour it.
 end

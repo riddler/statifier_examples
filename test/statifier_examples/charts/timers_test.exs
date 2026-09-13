@@ -1,10 +1,10 @@
 defmodule StatifierExamples.Charts.TimersTest do
   @moduledoc """
   The abandonment reminder, end to end: armed as a stored job, taken back
-  down when the wizard moves on, and fed back into the run from a process
+  down when the wizard moves on, and fed back into the execution from a process
   that has never seen it.
 
-  Not async: durable runs step through the application's named
+  Not async: durable executions step through the application's named
   `StatifierExamples.Charts.ExecutionLock`, and the jobs are rows.
   """
 
@@ -111,7 +111,7 @@ defmodule StatifierExamples.Charts.TimersTest do
 
   # The whole point of the bead, asserted at the row: parking in the
   # verification window leaves a job behind, in this app's own queue, on
-  # this app's own Oban instance, keyed on the run.
+  # this app's own Oban instance, keyed on the execution.
   #
   # Sabotage: made `Timers.consume/2`'s `SendDelayed` clause fall through to
   # the catch-all `:ok`; this went red with no job, then reverted.
@@ -164,9 +164,9 @@ defmodule StatifierExamples.Charts.TimersTest do
   end
 
   # The cold path, and the one that says "survives a restart": everything
-  # `deliver/2` is given is a run id and an event name, and it rebuilds the
-  # chart, the position and the run from storage. All three halves of the
-  # bead's acceptance are here - the nudge reaches `myapp:notify`, the run
+  # `deliver/2` is given is an execution id and an event name, and it rebuilds the
+  # chart, the position and the execution from storage. All three halves of the
+  # bead's acceptance are here - the nudge reaches `myapp:notify`, the execution
   # goes on, and the feed a page would draw carries the row.
   #
   # Sabotage: made `Durable.deliver/2`'s `fixture_for/1` read the metadata
@@ -186,15 +186,15 @@ defmodule StatifierExamples.Charts.TimersTest do
     # The first fires the two stored timers - the reminder and the
     # verification wait, both scheduled at the moment of the drain. It used
     # to report one success: whichever ran first drove the whole wizard to
-    # completion, and the other then found a finished run and discarded.
+    # completion, and the other then found a finished execution and discarded.
     # Now the first one to run rests the wizard on its asynchronous
-    # company-details call instead, so the run is still live when the
+    # company-details call instead, so the execution is still live when the
     # second arrives and both succeed.
     #
     # The second drain is that call's own job, which is in the app's OTHER
-    # queue: invoke jobs run the host's actual work and are kept apart from
+    # queue: invoke jobs execution the host's actual work and are kept apart from
     # the timers for that reason (`config/config.exs`). Running it is what
-    # finishes the run.
+    # finishes the execution.
     log =
       at_info(fn ->
         assert %{success: 2} = Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
@@ -208,7 +208,7 @@ defmodule StatifierExamples.Charts.TimersTest do
     # the fired timer's drive is the one that reaches `myapp:notify` and
     # rests on the asynchronous call, and the job's answer opens its own
     # reading from the resumed position and finishes. Both are asserted
-    # because a page showing this run redraws on each.
+    # because a page showing this execution redraws on each.
     assert_receive {:execution_advanced, ^execution_id,
                     {%Durable{}, %Execution{status: :running} = nudged}}
 
@@ -220,18 +220,18 @@ defmodule StatifierExamples.Charts.TimersTest do
   end
 
   # Spec 6.2's discard, enforced at the delivery seam st-ADR-0054 decision 4
-  # puts it behind: a run that finished before the delay elapsed does not
+  # puts it behind: an execution that finished before the delay elapsed does not
   # receive the event. The job is cancelled rather than completed, so the
   # discard is on the row rather than nowhere.
   #
   # Sabotage: deleted `deliver/2`'s `:active <- record.status` clause; the
-  # job drained as a success against a finished run and this went red on
+  # job drained as a success against a finished execution and this went red on
   # the cancelled count, then reverted.
   test "a reminder that fires after the run finished is discarded", %{execution_id: execution_id} do
     {durable, run} = start!(execution_id)
     {:ok, _driven} = Durable.send_event(durable, run, @wait)
 
-    # The wait leaves the run resting on se-d74's asynchronous
+    # The wait leaves the execution resting on se-d74's asynchronous
     # company-details call, so finishing it takes that call's job running -
     # in the app's other queue, which is why the reminder job's own state
     # is untouched by this drain.
@@ -241,13 +241,13 @@ defmodule StatifierExamples.Charts.TimersTest do
 
     # Asked directly, because the race this guards is one a cancel cannot
     # win: a job already executing when its scope exited reaches delivery
-    # with the run finished behind it.
+    # with the execution finished behind it.
     assert Durable.deliver(execution_id, @reminder) == {:discarded, :completed}
   end
 
-  # A run this app can no longer name a chart for is a discard too, with
-  # the reason saying so. Started without a fixture key, which is what a
-  # run of a document that is not a shipped fixture looks like.
+  # An execution this app can no longer name a chart for is a discard too, with
+  # the reason saying so. Started without a fixture key, which is what an
+  # execution of a document that is not a shipped fixture looks like.
   #
   # Sabotage: made `deliver/2` answer `:delivered` for a `:chart_unknown`
   # fixture lookup; it raised on the missing fixture instead of cancelling
@@ -260,7 +260,7 @@ defmodule StatifierExamples.Charts.TimersTest do
   end
 
   # The metadata a fired timer reads is written once, at create, and has to
-  # still be there after the run has been stepped - `step/5` takes no
+  # still be there after the execution has been stepped - `step/5` takes no
   # metadata option, so a stepper that dropped the column would leave every
   # long-delayed timer undeliverable.
   #

@@ -4,9 +4,9 @@ defmodule StatifierExamples.Signup.InviteOutcome do
   table's schema.
 
   As minimal as `StatifierExamples.Signup.User`, and for the same reason.
-  The chart owns the batch; this row owns one invitee's outcome, the run
+  The chart owns the batch; this row owns one invitee's outcome, the execution
   that wrote it, and - for the one row in a fan-out that needed chart
-  semantics - the run that was started for it.
+  semantics - the execution that was started for it.
 
   `{chunk_id, email}` is the natural key, so the table carries a unique
   index on the pair and this module carries the constraint that names it.

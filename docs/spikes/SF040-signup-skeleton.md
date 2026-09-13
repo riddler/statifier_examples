@@ -458,6 +458,9 @@ with no way off it. The draft is never persisted and never sent.
    "not answered" from "answered with nothing", and a guard reading such a
    path gets a value rather than a missing one.
 
+   (Dated: this is what the spike measured. `statifier_blocks` 0.28.0 leaves
+   such a destination unwritten instead - see the R10d section below.)
+
 3. **`timed_out` is unreachable from the Path, exactly as k2 said.** The
    deadline works: each screen's `core.await` arms a stored Oban job through
    `StatifierExamples.Charts.Timers`, draining the queue fires it, and the
@@ -816,14 +819,23 @@ about this app:
   returns to a screen, which is also why k3's sabotage of the renderer's
   stored-response attribute reddened nothing: no input is ever redrawn over a
   response the chart holds.
-- The overwrite that *does* happen is the destructive one nobody asked for.
-  Every question on a screen is in every button's capture map, so whichever
-  button ends the screen writes all of that screen's response paths - filling
-  the unanswered ones in as `:undefined`. Press Back on the plan screen
-  without typing a seat count and `responses.seats` is written `:undefined`
-  rather than left absent. Nothing downstream can tell "not answered" from
-  "answered with nothing", and a guard reading such a path gets a value
-  instead of a missing one.
+- The overwrite that *does* happen is no longer destructive, and this is the
+  one place the spike's reading has been overtaken. As of
+  `statifier_blocks` 0.28.0 (sb-ADR-0002's capture Note, N2) a capture pair
+  whose source is absent from `_event.data` leaves its destination
+  **unwritten**: press Back on the plan screen without typing a seat count
+  and `responses.seats` is not in the map at all, so "not answered" and
+  "answered with nothing" are distinguishable again and a guard reading such
+  a path gets a missing value. `JourneyTest` asserts it by absence
+  (`refute Map.has_key?(moved.responses, "seats")`).
+
+  Dated history, because it is what the spike measured: before 0.28.0 the
+  destination was written with the interpreter's `:undefined`, which is the
+  finding the k3 section above still records at the shape it had then
+  (se-1mc, 2026-09-13). What has NOT changed is the other half - every
+  question on a screen is still in every button's capture map, so whichever
+  button ends the screen still writes all of that screen's ANSWERED
+  response paths.
 
 So Q17's open half - flat versus namespaced, and how back navigation and
 re-asks overwrite - gets one input from this spike and it is not the one the
@@ -875,8 +887,9 @@ Four properties are the contract rather than the implementation:
    every Path that calls anything.
 
 Point 4 is also the one input this spike has for Q13's streaming half. The
-page learned the job had answered because it subscribes to the run's topic
-and redrew on a `:run_advanced` broadcast, with nothing clicked between the
+page learned the job had answered because it subscribes to the execution's
+topic and redrew on an `:execution_advanced` broadcast (spelled
+`:run_advanced` when the spike was written), with nothing clicked between the
 two frames (`se-7wt-confirm-screen.png`). A transport whose only verb is a
 request cannot express that frame; whether the answer is a subscription, a
 poll, or a contract that simply blocks is Q13's, but the state exists whether
@@ -888,14 +901,18 @@ GraphQL question this app never posed.
 
 ### Q16, how a Journey was keyed before an account existed
 
-`Journey.start/0` mints the run id with `Durable.new_run_id/0` -
+`Journey.start/0` mints the execution id with `Durable.new_execution_id/0` -
 `16 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)`
-(`lib/statifier_examples/charts/durable.ex:538`) - and that id is the entire
-identity. It goes in the page's URL as `?run=<id>`
-(`lib/statifier_examples_web/live/signup_journey_live.ex:63`), and
-`handle_params/3` loads whatever run the query string names. There is no
+(`lib/statifier_examples/charts/durable.ex:549`, read at 20ae6fb) - and that
+id is the entire identity. It goes in the page's URL as `?execution=<id>`
+(`lib/statifier_examples_web/live/signup_journey_live.ex:70`, same SHA), and
+`handle_params/3` loads whatever execution the query string names. There is no
 cookie, no signed token, no host session, and nothing in the socket the next
 press depends on.
+
+(The spike wrote this as `new_run_id/0`, `durable.ex:538` and `?run=`; the
+execution rename landed in `se-20j` and the cites are re-located here
+by anchor - se-1mc, 2026-09-13. The finding itself is unchanged.)
 
 Three things that gives Q16 to work with:
 

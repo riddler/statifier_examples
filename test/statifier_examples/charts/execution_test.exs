@@ -1,5 +1,5 @@
 defmodule StatifierExamples.Charts.ExecutionTest do
-  # Async: nothing here starts a process or writes a row. `Run` is a fold
+  # Async: nothing here starts a process or writes a row. `Execution` is a fold
   # over effects, so every derivation it makes is testable by handing it
   # the effects rather than by driving a chart into producing them - and
   # since se-b2f deleted the in-memory driver, handing them over is the
@@ -52,7 +52,7 @@ defmodule StatifierExamples.Charts.ExecutionTest do
       }}}
   end
 
-  # The bare mark: an `:invoke` effect on its own leaves the run pointing at
+  # The bare mark: an `:invoke` effect on its own leaves the execution pointing at
   # the block with no answer, which is the editor's spelling for a call that
   # is still out.
   #
@@ -117,7 +117,7 @@ defmodule StatifierExamples.Charts.ExecutionTest do
   end
 
   # The active marks the editor paints. Atomic states only: the configuration
-  # carries every ancestor, and a mark on the root block would say the run is
+  # carries every ancestor, and a mark on the root block would say the execution is
   # everywhere at once.
   #
   # Sabotage: dropped the `Machine.atomic?/2` filter from `mark_active/2`;
@@ -179,11 +179,11 @@ defmodule StatifierExamples.Charts.ExecutionTest do
     assert details(entered) == ["Collect email and password"]
   end
 
-  # A run that is over takes the status, drops the invoke mark - nothing is
+  # An execution that is over takes the status, drops the invoke mark - nothing is
   # out any more - and draws the row that says so.
   #
   # Sabotage: made the `{:halted, reason}` clause leave `run.invoke` alone;
-  # the finished run still carried a call and this went red. Reverted.
+  # the finished execution still carried a call and this went red. Reverted.
   test "a halted run takes the status, clears the mark, and says so" do
     run =
       reading()

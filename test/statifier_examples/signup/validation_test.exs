@@ -4,7 +4,7 @@ defmodule StatifierExamples.Signup.ValidationTest do
   questions can declare, and the three things this module deliberately does
   not do.
 
-  A pure test - nothing here names a run, a chart or LiveView.
+  A pure test - nothing here names an execution, a chart or LiveView.
   """
 
   use ExUnit.Case, async: true

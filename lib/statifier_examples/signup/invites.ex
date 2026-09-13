@@ -8,8 +8,8 @@ defmodule StatifierExamples.Signup.Invites do
 
   A `core.map` fans out over **descriptors** - ids, ranges, chunk handles
   - and never over row payloads, because the list it maps over lives in
-  the parent run's datamodel and is serialized on every persisted step
-  for the rest of the run. A fan-out over ten thousand invitee ids costs
+  the parent execution's datamodel and is serialized on every persisted step
+  for the rest of the execution. A fan-out over ten thousand invitee ids costs
   what ids cost; one over ten thousand invitee records charges the parent
   for those records forever.
 
@@ -38,12 +38,12 @@ defmodule StatifierExamples.Signup.Invites do
 
   One invitee in this example needs chart semantics - their signup waits
   on a person, which is exactly the condition the boundary rule names -
-  and that row gets a run of its own rather than being processed as data.
+  and that row gets an execution of its own rather than being processed as data.
   Which invitee is a fact about the descriptor, so `promoted_email/1`
-  answers it and `promoted_execution_id/1` names the run it is given, both
-  deterministically: a redelivered chunk asks for the same run id and the
+  answers it and `promoted_execution_id/1` names the execution it is given, both
+  deterministically: a redelivered chunk asks for the same execution id and the
   storage layer's atomic `:execution_exists` refusal is what makes the second
-  ask a no-op rather than a second run.
+  ask a no-op rather than a second execution.
   """
 
   import Ecto.Query, only: [from: 2]
@@ -104,18 +104,18 @@ defmodule StatifierExamples.Signup.Invites do
   def promoted_email(chunk_id) when is_binary(chunk_id), do: nil
 
   @doc """
-  The run id a promoted invitee's own run is started under.
+  The execution id a promoted invitee's own execution is started under.
 
   Derived from the descriptor, so a redelivered chunk asks for the same
-  run and gets the storage layer's `:execution_exists` refusal rather than a
+  execution and gets the storage layer's `:execution_exists` refusal rather than a
   second one.
   """
   @spec promoted_execution_id(String.t()) :: String.t()
   def promoted_execution_id(chunk_id) when is_binary(chunk_id), do: "promoted-#{chunk_id}"
 
   @doc """
-  Records every row of `chunk_id` as processed by the run `execution_id`, with
-  `promoted_execution_id` on the one row that got a run of its own.
+  Records every row of `chunk_id` as processed by the execution `execution_id`, with
+  `promoted_execution_id` on the one row that got an execution of its own.
 
   Answers how many rows the chunk stands for, which is the same number on
   a first delivery and on a replay. `:error` for an unrecognised

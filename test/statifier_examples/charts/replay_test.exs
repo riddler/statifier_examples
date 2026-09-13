@@ -1,5 +1,5 @@
 defmodule StatifierExamples.Charts.ReplayTest do
-  # Not async: a replay reads a durable run, and a durable run steps
+  # Not async: a replay reads a durable execution, and a durable execution steps
   # through the application's named `StatifierExamples.Charts.ExecutionLock` and
   # writes to the repo.
   use ExUnit.Case, async: false
@@ -74,7 +74,7 @@ defmodule StatifierExamples.Charts.ReplayTest do
   # is silent rather than loud. `Statifier.Replay` tracks an invocation in its
   # live set only when the type is registered, and it DISCARDS a recorded
   # `{:invoked_event, invoke_id, _, _}` whose id is not tracked - no error,
-  # just a run that replays as though the call never came back.
+  # just an execution that replays as though the call never came back.
   #
   # So the assertion is on the answers being in the stream, by name, rather
   # than on the replay succeeding: a replay missing every answer succeeds
@@ -96,7 +96,7 @@ defmodule StatifierExamples.Charts.ReplayTest do
     assert dequeued?(messages, "done.invoke.s_blk_su_send_verification__running.inv_2")
   end
 
-  # An event the replayed run's interpreter took off its queue, by name.
+  # An event the replayed execution's interpreter took off its queue, by name.
   defp dequeued?(messages, name) do
     Enum.any?(messages, fn
       %{type: "trace.event_dequeued", payload: %{"event" => %{"name" => ^name}}} -> true

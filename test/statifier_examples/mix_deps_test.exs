@@ -35,7 +35,7 @@ defmodule StatifierExamples.MixDepsTest do
   # host-side moved with it.
   #
   # 0.14.0 remains the floor: `StatifierBlocks.Runtime.DurableSubchart` - the handler that
-  # answers `core.subchart` by starting the child as its own persisted run
+  # answers `core.subchart` by starting the child as its own persisted execution
   # - landed after 0.13.0, and se-6ag's durable subchart proof is written
   # against it. The 0.13 line carries only the in-memory
   # `StatifierBlocks.Runtime.Subchart`, whose `{:start_child, _, _}`
@@ -100,7 +100,7 @@ defmodule StatifierExamples.MixDepsTest do
   #
   # The arm moves to the 0.21 line, and this app asked for one half of it.
   # 0.21.0 makes the editor a debugger - a Source tab over the compiled
-  # SCXML, the canvas seated in a run pane with statifier-ui's status,
+  # SCXML, the canvas seated in an execution pane with statifier-ui's status,
   # scrubber and event log around it - and widens what a block can say:
   # `core.branch` declares a third slot for an arm whose condition cannot
   # be decided, a host states a rule about a whole document through
@@ -117,7 +117,7 @@ defmodule StatifierExamples.MixDepsTest do
   # `failure_outcomes/1` callback, and the compiler stamps a reserved
   # `statifier_persistence:execution_status` `<donedata>` param on that
   # outcome's top-level `<final>` under both compile options - which is
-  # what `statifier_persistence` 0.8.0 reads to mark the run `:failed`.
+  # what `statifier_persistence` 0.8.0 reads to mark the execution `:failed`.
   # At 0.21.0 `core.map` and `core.subchart` classed their `error`
   # outcome; every other type, `core.invoke` included, classed nothing.
   # The chunk chart this app fans out over is a `core.sequence` around
@@ -128,7 +128,7 @@ defmodule StatifierExamples.MixDepsTest do
   # `core.invoke` classes its `error` outcome like the other two do, and
   # an unhandled failure-classed completion is carried to the document's
   # top-level `<final>`. The chunk chart's error final now carries the
-  # reserved param, `statifier_persistence` marks the child run
+  # reserved param, `statifier_persistence` marks the child execution
   # `:failed` on its own step, and `se-cqr` deleted
   # `StatifierExamples.Charts.Durable`'s translation. That is what this
   # pin buys on top of `sb-hgjk`'s `compile_options` assign; the ledger
@@ -634,9 +634,9 @@ defmodule StatifierExamples.MixDepsTest do
   # retired, and the `refute` below is what says neither came back.
   #
   # It moves to the 0.6 line as of se-vrq. 0.6.0 emits statifier's own
-  # `[:statifier, :session, ...]` telemetry from a durably-stepped run,
+  # `[:statifier, :session, ...]` telemetry from a durably-stepped execution,
   # tagged `driver: :persistence`, so the OTel bridge draws the same
-  # macrostep spans and effect events for a durable run as for a
+  # macrostep spans and effect events for a durable execution as for a
   # session-hosted one. This app asks for nothing new to get that, and
   # 0.5.0 remains what the durable subchart and the trace graph need.
   #
@@ -699,9 +699,9 @@ defmodule StatifierExamples.MixDepsTest do
   # requirement to the resolved release, as before.
   #
   # 0.8.0 is REQUIRED rather than tidy, on two counts. A chart can now
-  # fail its own run: settling in a top-level `<final>` whose `<donedata>`
+  # fail its own execution: settling in a top-level `<final>` whose `<donedata>`
   # carries `statifier_persistence:execution_status` set to `"failed"` persists
-  # the run as `:failed` with the failure string `"failed_final"`, so a
+  # the execution as `:failed` with the failure string `"failed_final"`, so a
   # `:first_error` fan-out cancels the failed child's siblings with no
   # host-side translation (ADR-0008's amendment, accepted). And
   # `Migrations.down/1` takes `from:`, the ceiling a capped migration
@@ -721,15 +721,17 @@ defmodule StatifierExamples.MixDepsTest do
   # `se-dh0` took bought, so `se-gty` retires the pin and the `refute`
   # below is what says it did not come back. `override: true` goes with
   # it, and asserting the bare two-tuple is what would catch it quietly
-  # returning - the pin needed it only because `statifier_oban` and
-  # `statifier_blocks` state their own Hex requirements on this package
-  # and no git ref satisfies one.
+  # returning. This note used to add that the pin needed `override: true`
+  # because `statifier_oban` and `statifier_blocks` state their own Hex
+  # requirements on this package; at 0.10.0 and 0.28.0 neither does -
+  # `mix.lock` shows both stating one on `statifier` and neither naming
+  # `statifier_persistence` at all (se-24p, 2026-09-13).
   #
   # 0.9.0 is REQUIRED rather than tidy. It carries ADR-0010's durable
-  # per-run input log: the three optional storage-adapter callbacks
+  # per-execution input log: the three optional storage-adapter callbacks
   # `StatifierExamples.Persistence` exports, `Executions.inputs/2` and
   # `Storage.input_log_supported?/1` to read it back, and migration V05
-  # as the table. That log is the only history a stored run has ever had,
+  # as the table. That log is the only history a stored execution has ever had,
   # and without it `StatifierExamples.Charts.Replay` has nothing to
   # replay and the editor page's Run pane is empty.
   #
@@ -764,15 +766,23 @@ defmodule StatifierExamples.MixDepsTest do
   # not compile against it.
   #
   # A bare two-tuple with no `override: true` is also the assertion, and
-  # the membership check is what carries it: `refute lock_line =~ ":git,"`
-  # alone would still pass against a pin that came back carrying
-  # `override: true`, because an overridden git dep resolves to a `{:git,
-  # ...}` lock entry under a DIFFERENT arm spelling than the one this
-  # case names. Nothing in the resolved graph forces the Hex spelling on
-  # THIS package - neither `statifier_oban` 0.10.0 nor `statifier_blocks`
-  # 0.28.0 states a requirement on `statifier_persistence` (that argument
-  # belongs to the `statifier` arm above, where both of them do) - so the
-  # literal arm is the only thing that can catch it.
+  # the membership check is what carries it - but not for the reason this
+  # note used to give. It said `refute lock_line =~ ":git,"` would pass
+  # against a pin carrying `override: true`; that is false. `mix.lock`
+  # keys its entries by PACKAGE name, so an overridden git pin still
+  # writes `"statifier_persistence": {:git, ...}` and the `refute` catches
+  # it - the lock's own `daisyui` and `heroicons` git entries are that
+  # shape (se-24p, 2026-09-13).
+  #
+  # What the membership assertion actually earns is the HEX escape: an arm
+  # that gained `override: true` while staying on Hex resolves to a
+  # `{:hex, :statifier_persistence, "0.12...."}` lock line, which passes
+  # the version assertion AND the `refute` on its own. Only the literal
+  # bare two-tuple sees the three-tuple in `deps`. Nothing in the resolved
+  # graph forces the Hex spelling on THIS package either - neither
+  # `statifier_oban` 0.10.0 nor `statifier_blocks` 0.28.0 states a
+  # requirement on `statifier_persistence` (that argument belongs to the
+  # `statifier` arm above, where both of them do).
   # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
   # release line (`"0.11.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.12.0 entry against the mutated expectation.
@@ -898,7 +908,7 @@ defmodule StatifierExamples.MixDepsTest do
   # 0.3.0 remains the floor: the two SIBLING setup
   # calls the capstone needs, `OpentelemetryStatifier.Persistence.setup/1`
   # and `OpentelemetryStatifier.Oban.setup/1`, landed after 0.2.0. On
-  # 0.2.0 only the interpreter half exists, which in a durable run bridges
+  # 0.2.0 only the interpreter half exists, which in a durable execution bridges
   # nothing at all. The interim git pin this arm was introduced on for
   # se-opg is retired, and the `refute` below is what says so.
   #
@@ -913,7 +923,7 @@ defmodule StatifierExamples.MixDepsTest do
   #
   # `se-h6v` restores the Hex spelling now that 0.6.0 is published, in the
   # same commit that restores the persistence arm - the lockstep is the
-  # point, and asserting both as Hex two-tuples in the same run is what
+  # point, and asserting both as Hex two-tuples in the same execution is what
   # would catch one half being retired without the other. The 0.6 floor is
   # REQUIRED: 0.6.0 is the release that subscribes to the renamed
   # `[:statifier_persistence, :execution, ...]` prefix and emits the

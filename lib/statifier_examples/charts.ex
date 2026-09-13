@@ -48,10 +48,10 @@ defmodule StatifierExamples.Charts do
   Two drivers reach the handlers, and they know different things.
   `Statifier.Session` drives through the adapter, which hands a handler the
   engine's own plan context - `session_id` and the two registrations, and
-  no run, because a session has none. `StatifierExamples.Charts.Durable`
+  no execution, because a session has none. `StatifierExamples.Charts.Durable`
   drives the pure core itself and calls `dispatch/3` directly, so it passes
-  what it knows: the run id, because a handler that writes needs a stable
-  key and the run is the only one this app has (see
+  what it knows: the execution id, because a handler that writes needs a stable
+  key and the execution is the only one this app has (see
   `StatifierExamples.Signup.Accounts`).
 
   A handler says which it needs by matching on it, and gets the clause for
@@ -223,7 +223,7 @@ defmodule StatifierExamples.Charts do
   to that same `dispatch/4`, which the engine does make public for a host
   in exactly this position - because the engine types its fourth argument
   as the plan context a session hands a handler, and what this driver has
-  to say about a call is a run id (see `t:call_context/0`). Handing it a
+  to say about a call is an execution id (see `t:call_context/0`). Handing it a
   context of that shape is a contract violation dialyzer reports, so the
   app routes over the same list rather than through the same function. The
   list is still the one place a handler module is named, which is what the
@@ -250,7 +250,7 @@ defmodule StatifierExamples.Charts do
   `StatifierExamples.Charts.Durable` routes the type to
   `StatifierBlocks.Runtime.DurableSubchart` in its own dispatch fun,
   *before* this function is reached, and the driver starts the child as
-  its own persisted run (se-6ag). This clause is what is left over: the
+  its own persisted execution (se-6ag). This clause is what is left over: the
   honest answer for anyone who asks the sync routing table to perform a
   subchart, which no caller in this app does.
   """

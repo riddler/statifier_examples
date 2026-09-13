@@ -4,11 +4,11 @@ defmodule StatifierExamples.Charts.FanOut do
   that creates each child, and the door that cancels the ones that never
   started (se-j87).
 
-  A `core.map` block is one `<invoke>` that becomes N child runs, one per
+  A `core.map` block is one `<invoke>` that becomes N child executions, one per
   item, whose answers are assembled into one dense list. Three packages
   meet here and none of them is a host: `statifier_blocks` names the
   invoke type and nothing else, `statifier_oban` schedules and does not
-  create runs, and `statifier_persistence` creates and settles runs and
+  create executions, and `statifier_persistence` creates and settles executions and
   does not schedule. What is left over is this module.
 
   ## The shape is `StatifierExamples.Charts.AsyncCalls`', one layer up
@@ -32,12 +32,12 @@ defmodule StatifierExamples.Charts.FanOut do
   the whole list on the wire.
 
   So the handler evaluates it, and by then there is no session and no
-  live datamodel - only the effect and the run id the job was scoped to.
-  `run/2` reads the parent run's own persisted position through
+  live datamodel - only the effect and the execution id the job was scoped to.
+  `run/2` reads the parent execution's own persisted position through
   `StatifierExamples.Charts.Durable.machine_state/1` and walks the dotted
   path over it. `start_child/5` does the same, because the start jobs
   carry the fan-out's original effect and not the evaluated list: N reads
-  of one run's position, on a database that is a file, for a batch of
+  of one execution's position, on a database that is a file, for a batch of
   ten. A deployment where that mattered would put the snapshot on the job
   args, which is a packaging change and not a design one.
 
@@ -50,10 +50,10 @@ defmodule StatifierExamples.Charts.FanOut do
   ## The two cancel doors
 
   `first_error` cancels the rest as soon as one child fails, and the two
-  halves live in two packages because they can. A child that exists is a
-  run, cancelled by `StatifierPersistence.Executions.cascade_cancel/3` inside
+  halves live in two packages because they can. A child that exists is an
+  execution, cancelled by `StatifierPersistence.Executions.cascade_cancel/3` inside
   the settlement section. An index whose start job has not run yet has no
-  run record at all, so it is invisible there - and
+  execution record at all, so it is invisible there - and
   `StatifierOban.Invoke.FanOut.cancel_unstarted/3` is the other door,
   reached through the driver's `child_canceller:` seam.
 
@@ -115,7 +115,7 @@ defmodule StatifierExamples.Charts.FanOut do
 
   `AsyncCalls.config/0`'s, plus the one option that makes a fan-out
   possible: `:child_starter`, naming this module, because the scheduling
-  package creates no runs and has no dependency on the one that does.
+  package creates no executions and has no dependency on the one that does.
   `:max_fan_out` is left at the package's default - see the moduledoc.
 
   Built on every call, for `Timers.config/0`'s reason: these are
@@ -147,7 +147,7 @@ defmodule StatifierExamples.Charts.FanOut do
   delivering, and the invocation stays open until the settlement side
   answers it once on behalf of all N.
 
-  The list comes out of the parent run's own datamodel, at the path the
+  The list comes out of the parent execution's own datamodel, at the path the
   block's `items` names. A path that resolves to nothing is
   `{:error, {:items_undefined, path}}` and a value that is not a list is
   `{:error, {:items_not_a_list, path}}`; both fail the invocation
@@ -174,7 +174,7 @@ defmodule StatifierExamples.Charts.FanOut do
   `StatifierOban.Invoke.ChildStarter`'s callback. It is called from an
   Oban job and therefore at least once per index, and it is idempotent on
   `{parent_execution_id, invoke.invoke_id, index}` because
-  `StatifierPersistence.Driver.start_child_at/6` is: the child's run id is
+  `StatifierPersistence.Driver.start_child_at/6` is: the child's execution id is
   derived from that triple, and a second call adopts the child the first
   one created.
 
@@ -201,8 +201,8 @@ defmodule StatifierExamples.Charts.FanOut do
   @doc """
   The `child_canceller:` fun `StatifierPersistence.Driver` is built with.
 
-  It is handed the parent run id, the invocation id and the indices with
-  no run record, and it uses the first two: the package's cancel matches
+  It is handed the parent execution id, the invocation id and the indices with
+  no execution record, and it uses the first two: the package's cancel matches
   every `ChildStartWorker` job for `{scope, invoke_id}` that has not run,
   across every index and generation, so the index list is a narrowing
   this door does not need. A cancel matching nothing answers `{:ok, 0}`
@@ -220,7 +220,7 @@ defmodule StatifierExamples.Charts.FanOut do
   end
 
   @doc """
-  Consumes one effect on behalf of the run named by `execution_id`.
+  Consumes one effect on behalf of the execution named by `execution_id`.
 
   `AsyncCalls.consume/2`'s twin, for the one effect this module claims:
   a `{:invoke, %Invoke{}}` whose type is a `core.map`'s becomes one
@@ -268,7 +268,7 @@ defmodule StatifierExamples.Charts.FanOut do
     end
   end
 
-  # The descriptor list, evaluated out of the parent run's own persisted
+  # The descriptor list, evaluated out of the parent execution's own persisted
   # datamodel at the path the block's `items` names.
   @spec descriptors(String.t(), Invoke.t()) :: {:ok, list()} | {:error, term()}
   defp descriptors(parent_execution_id, %Invoke{} = invoke) do
@@ -319,7 +319,7 @@ defmodule StatifierExamples.Charts.FanOut do
   defp started({:refused, reason}), do: {:error, reason}
 
   # The context the base reads its scope out of, `AsyncCalls.ctx/1`'s copy
-  # and for its reason: this host has no session, so the run id is what
+  # and for its reason: this host has no session, so the execution id is what
   # goes in the field a session host puts its session id in.
   @spec ctx(String.t()) :: Statifier.Invoke.Handler.ctx()
   defp ctx(execution_id) do

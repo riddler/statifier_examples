@@ -1,22 +1,22 @@
 defmodule StatifierExamples.Signup.JourneyTest do
   @moduledoc """
-  The Journey loop end to end: the Path as a durable run, three submits, a
-  screen nobody answers, and the create-account call the run ends on.
+  The Journey loop end to end: the Path as a durable execution, three submits, a
+  screen nobody answers, and the create-account call the execution ends on.
 
-  Not async: durable runs step through the application's named
+  Not async: durable executions step through the application's named
   `StatifierExamples.Charts.ExecutionLock`, and the timers are rows.
 
   ## The acceptance line, and where it could not be met literally
 
   `se-7wt` asks for "an end-to-end test [that] drives three submits and one
-  timeout through the durable run". Three submits and one timeout cannot
-  share a run here: the Path has three screens, a timed-out screen is by
-  definition one that was **not** submitted, and a run that took all three
+  timeout through the durable execution". Three submits and one timeout cannot
+  share an execution here: the Path has three screens, a timed-out screen is by
+  definition one that was **not** submitted, and an execution that took all three
   buttons has finished before any deadline can elapse. So the end-to-end
-  obligation is met by two runs in this module - "three submits" below, and
+  obligation is met by two executions in this module - "three submits" below, and
   "a screen nobody answers" beside it - and the divergence is recorded here
   rather than papered over by a test that drives both in one function and
-  calls itself one run.
+  calls itself one execution.
   """
 
   use ExUnit.Case, async: false
@@ -41,7 +41,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   defp keys(%{nodes: nodes}), do: Enum.map(nodes, & &1["key"])
 
-  # Everything a run's own reader can see of it, loaded the way a page
+  # Everything an execution's own reader can see of it, loaded the way a page
   # loads it: from the id and nothing else.
   defp seen(execution_id) do
     {:ok, view} = Journey.current(execution_id)
@@ -71,10 +71,10 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # id instead of `Screen.park_block_id/1`'s. EIGHTEEN cases went red
     # across this module and the page's - no view ever finds a screen - which
     # is the right blast radius for the one thing the loop rests on. This
-    # case was not among them: a run that does not exist has no screen to
+    # case was not among them: an execution that does not exist has no screen to
     # miss. Reverted from a copy.
     test "a run id nobody stored is a refusal, not an empty page" do
-      assert Journey.current("no-such-run") == {:error, :execution_not_found}
+      assert Journey.current("no-such-execution") == {:error, :execution_not_found}
     end
   end
 
@@ -88,7 +88,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # (`Durable.send_event/4`'s default). Five cases went red, this one at
     # its first assertion about `responses`: no capture wrote anything at all,
     # so the branch on `responses.plan` took neither arm and three cases that
-    # only wanted a run somewhere down the business arm fell over too.
+    # only wanted an execution somewhere down the business arm fell over too.
     # Reverted from a copy.
     test "drive the run from the first screen to the created account", %{
       execution_id: execution_id
@@ -141,7 +141,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
     # The other arm, and the shape se-d74 built: more than one seat is the
     # business plan, whose company-details step this app runs as an Oban job.
-    # The run rests durably in the middle of the call - no screen, no
+    # The execution rests durably in the middle of the call - no screen, no
     # process, a live invocation - and the job's answer is what moves it on.
     #
     # Sabotage: made `payload/2` ignore the button's `payload` map. Five
@@ -174,13 +174,13 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   describe "the run parks between screens" do
     # "No process alive" in the only sense that can be asserted: nothing in
-    # this app holds a parked run. A `Statifier.Session` would be registered
+    # this app holds a parked execution. A `Statifier.Session` would be registered
     # under the engine's own registry (st-ADR-0027) and there is none, and
     # the view a page draws carries no pid of any kind.
     #
     # No sabotage: this case asserts an absence, so there is nothing in
     # `lib/` to break that would make it pass. What it would catch is a
-    # future arm that quietly started a session to keep a run warm, which is
+    # future arm that quietly started a session to keep an execution warm, which is
     # exactly the regression it is here for.
     test "with nothing holding it", %{execution_id: execution_id} do
       view = seen(execution_id)
@@ -211,15 +211,15 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   describe "a screen nobody answers" do
     # THE TIMEOUT CASE. The screen's deadline is a stored Oban job, armed by
-    # `StatifierExamples.Charts.Timers` when the run parked; draining the
+    # `StatifierExamples.Charts.Timers` when the execution parked; draining the
     # queue is the day passing. What it takes is the await's `timed_out`
     # outcome, and the Path goes on to the next screen with nothing
     # captured - which is `StatifierExamples.Signup.Screen`'s "it abandons
-    # the group, not the run" in one run.
+    # the group, not the execution" in one execution.
     #
     # Sabotage: set the account screen's `timeout` param to "" in the Path
     # document. `core.await` writes no deadline send without one, the drain
-    # found only the Path's own reminder, the run stayed on the account
+    # found only the Path's own reminder, the execution stayed on the account
     # screen, and exactly this case went red. Reverted from a copy.
     test "times out, takes the timed_out slot, and the Path goes on", %{
       execution_id: execution_id
@@ -244,7 +244,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # app: `core.await` emits `statifier_blocks.await.<block id>` and
     # transitions to its `timed_out` final on it. Asserted through the feed
     # the deadline's own drive produced, which is what a page watching the
-    # run would have drawn.
+    # execution would have drawn.
     defp timed_out?(execution_id) do
       assert_receive {:execution_advanced, ^execution_id, {%Durable{}, reading}}
 
@@ -256,11 +256,11 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   describe "a submit the screen refuses" do
     # Nothing is sent and nothing moves. The findings come back against the
-    # same screen, and the run's position in storage is untouched - which is
+    # same screen, and the execution's position in storage is untouched - which is
     # the property that matters: a refused submit is not a half-press.
     #
     # Sabotage: made `submit/3` press first and discard the findings. Two
-    # cases went red, this one and the page's own refusal case: the run moved
+    # cases went red, this one and the page's own refusal case: the execution moved
     # to the plan screen on a form holding one malformed address. Reverted
     # from a copy.
     test "sends nothing and leaves the run where it was", %{execution_id: execution_id} do
@@ -296,7 +296,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
       assert {:ok, moved} = Journey.submit(execution_id, "went_back", %{})
 
-      # The branch on `responses.plan` takes neither arm, and the run lands on
+      # The branch on `responses.plan` takes neither arm, and the execution lands on
       # the confirm screen having gone nowhere near a plan.
       assert key(moved) == "confirm"
       refute Map.has_key?(moved.responses, "plan")
@@ -318,7 +318,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # from a page drawn before it was typed.
     #
     # Sabotage: made `button/2` look through the screen's document nodes
-    # instead of the resolved ones. Exactly this case went red: the run
+    # instead of the resolved ones. Exactly this case went red: the execution
     # advanced on a button no reader could have seen, and the refusal it
     # asserts never came. Reverted from a copy.
     test "is refused rather than sent", %{execution_id: execution_id} do

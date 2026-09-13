@@ -1,9 +1,9 @@
 defmodule StatifierExamples.Charts.Execution do
   @moduledoc """
-  The reading of one run of one compiled document: the marks the editor
+  The reading of one execution of one compiled document: the marks the editor
   paints, and the feed of what happened.
 
-  `StatifierExamples.Charts.Durable` produces it: it steps a durable run
+  `StatifierExamples.Charts.Durable` produces it: it steps a durable execution
   through `statifier_persistence` and folds the effects each step returns.
   The fold is written against the effect vocabulary rather than against
   that driver, because an effect is an effect - `{tag, payload}` in
@@ -20,11 +20,11 @@ defmodule StatifierExamples.Charts.Execution do
   second process. `absorb/2` is pure, so every derivation below is tested
   by feeding it effects rather than by driving a browser.
 
-  What the reading deliberately does not hold is a lifetime. A run that
+  What the reading deliberately does not hold is a lifetime. An execution that
   outlives the page it was started from needs a store, an owner that is
   not a viewer, and a way back in, and every one of those is
   `StatifierExamples.Charts.Durable`'s - which is why the page starts its
-  runs there and this struct is only what a reader sees.
+  executions there and this struct is only what a reader sees.
 
   ## The three derivations
 
@@ -33,9 +33,9 @@ defmodule StatifierExamples.Charts.Execution do
   `configuration` as state **indexes**. `active/1` is that configuration's
   *atomic* states mapped through `StatifierBlocks.Provenance`'s
   `by_state_id` to block ids: atomic only, because the configuration
-  includes every ancestor and a mark on the root block would say "the run
+  includes every ancestor and a mark on the root block would say "the execution
   is everywhere". The compiler's provenance is total over the emission, so
-  every state a run can be in names a block.
+  every state an execution can be in names a block.
 
   An `%Statifier.Effect.Invoke{}` lights the *invoke* mark: it carries the
   `state_index` of the state whose `<invoke>` fired, which is the block's
@@ -57,7 +57,7 @@ defmodule StatifierExamples.Charts.Execution do
   alias StatifierBlocks.{Block, Compiled, Document, Provenance}
 
   @typedoc """
-  What a row is about. `started` opens a run and reopens a resumed one,
+  What a row is about. `started` opens an execution and reopens a resumed one,
   `performed` is a call the host answered, and the rest name what the
   chart did.
   """
@@ -77,14 +77,14 @@ defmodule StatifierExamples.Charts.Execution do
   stylesheet tints; `label` and `detail` are the two columns a reader sees.
 
   `source` is the fourth thing a row can carry and the only optional one:
-  the durable **child run** the row is about, or `nil` for a row about
-  this run's own progress. Every row in a parent's feed is written by the
-  parent - a child run has a feed of its own, at its own run id - but the
+  the durable **child execution** the row is about, or `nil` for a row about
+  this execution's own progress. Every row in a parent's feed is written by the
+  parent - a child execution has a feed of its own, at its own execution id - but the
   rows that narrate a child are about work happening somewhere else, and
   a feed that drew them the same as the parent's own is a feed saying
-  that a fan-out's five children were five things this run did (se-0ay).
-  It carries the child's run id, or the child chart's document id where
-  the child never got a run id because it was refused.
+  that a fan-out's five children were five things this execution did (se-0ay).
+  It carries the child's execution id, or the child chart's document id where
+  the child never got an execution id because it was refused.
   """
   @type entry :: %{
           seq: non_neg_integer(),
@@ -122,7 +122,7 @@ defmodule StatifierExamples.Charts.Execution do
         }
 
   # Every key here is a fact the reading cannot be built without, so every
-  # key here is enforced. `session_id` is the run id the durable driver
+  # key here is enforced. `session_id` is the execution id the durable driver
   # goes by, and it is the only name this struct has.
   @enforce_keys [:session_id, :machine, :provenance, :labels, :events]
   defstruct [
@@ -152,15 +152,15 @@ defmodule StatifierExamples.Charts.Execution do
   @narrated_prefixes ["done.invoke.", "done.outcome.", "done.state."]
 
   @doc """
-  The reading of a run, identified by `execution_id`.
+  The reading of an execution, identified by `execution_id`.
 
   The durable driver's constructor, and the only one. It takes the
   `machine` explicitly rather than compiling one, because the machine a
-  durable run resumes on has to be the one whose identity matched the
+  durable execution resumes on has to be the one whose identity matched the
   stored position - deriving a second one here would be the same bytes
   compiled twice and a place for them to disagree.
 
-  No opening row: a created run and a resumed one open with different
+  No opening row: a created execution and a resumed one open with different
   words, and which of the two this is belongs to the driver that knows.
   """
   @spec reading(Machine.t(), Compiled.t(), Document.t(), String.t()) :: t()
@@ -179,13 +179,13 @@ defmodule StatifierExamples.Charts.Execution do
   Appends one row the *driver* wrote rather than one the chart produced.
 
   The feed is a fold over effects, and almost every row is. Three things a
-  reader needs to see are not effects at all: that a run started, that a
-  run was picked back up out of storage, and what a call the host
+  reader needs to see are not effects at all: that an execution started, that an
+  execution was picked back up out of storage, and what a call the host
   performed actually did. Those come through here, and they are marked as
   their own kinds so the stylesheet can tell them apart from the chart's
   own narration.
 
-  `source` names the durable child run the row is about, and defaults to
+  `source` names the durable child execution the row is about, and defaults to
   `nil` - the parent's own work. It is a separate argument rather than
   something parsed back out of `detail` because a label a reader can see
   should not depend on a sentence's punctuation surviving an edit.
@@ -195,12 +195,12 @@ defmodule StatifierExamples.Charts.Execution do
     do: append(run, kind, label, detail, source)
 
   @doc """
-  Folds one thing that happened into the run. Pure.
+  Folds one thing that happened into the execution. Pure.
 
   What arrives is an effect a step returned, wrapped `{:effect, {tag,
-  payload}}`, or `{:halted, reason}` for a run that is over. Anything this
+  payload}}`, or `{:halted, reason}` for an execution that is over. Anything this
   reading has nothing to say about - a trace point that is not one of the
-  rows, an effect the feed does not name - leaves the run exactly as it
+  rows, an effect the feed does not name - leaves the execution exactly as it
   was, which is what lets the fold be total over a vocabulary that grows.
   """
   @spec absorb(t(), term()) :: t()
@@ -352,7 +352,7 @@ defmodule StatifierExamples.Charts.Execution do
 
   Read off the `core.on_event` blocks the document holds, which is the one
   place a block document says "the outside may say this". The host page
-  turns each into a button, so the affordance for stepping a run is derived
+  turns each into a button, so the affordance for stepping an execution is derived
   from the chart rather than typed beside it - a document that grows an
   interrupt grows a button.
   """

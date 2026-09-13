@@ -112,18 +112,17 @@ defmodule StatifierExamples.Signup.Validation do
 
   # A number is never blank; a string of spaces always is.
   #
-  # `StatifierExamples.Signup.Journey.submit/3` hands this module the form's
-  # own strings, which is the right way round. A digits-only response does
-  # become an integer elsewhere - `resolve/2` coerces its draft on the way to
-  # the nodes this check is then handed, and `submit/3` coerces again on the
-  # way into `pressed/5`, for the payload - but neither reaches the
-  # `responses` argument here, and
-  # that is deliberate: `required` and `format` are rules about what was **typed**
-  # and a check that saw `5` where the reader wrote `5` has learned nothing
-  # extra. So the string clauses are the ones `Journey` exercises. The
-  # non-binary clause is for the other caller: `validate/2` is public, its
-  # rules are about a screen rather than about a form, and a host holding
-  # already-typed responses must not meet a crash here.
+  # `StatifierExamples.Signup.Journey.submit/3` hands this module the form's own
+  # strings, which is the right way round. A digits-only response does become an
+  # integer elsewhere - `resolve/2` coerces its draft on the way to the nodes
+  # this check is then handed, and `submit/3` coerces again on the way into
+  # `pressed/5`, for the payload - but neither reaches the `responses` argument
+  # here, and that is deliberate: `required` and `format` are rules about what
+  # was **typed** and a check that saw `5` where the reader wrote `5` has
+  # learned nothing extra. So the string clauses are the ones `Journey`
+  # exercises. The non-binary clause is for the other caller: `validate/2` is
+  # public, its rules are about a screen rather than about a form, and a host
+  # holding already-typed responses must not meet a crash here.
   @spec blank?(term()) :: boolean()
   defp blank?(response) when is_binary(response), do: String.trim(response) == ""
   defp blank?(nil), do: true
