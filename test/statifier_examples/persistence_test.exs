@@ -3,7 +3,7 @@ defmodule StatifierExamples.PersistenceTest do
   `StatifierExamples.Persistence`'s own callback: the child enumeration
   that opts this adapter into durable subcharts (se-6ag).
 
-  The package's conformance suite - execution next door in
+  The package's conformance suite - run next door in
   `StatifierExamples.PersistenceConformanceTest` - already generates the
   containment case for any adapter that exports
   `list_executions_by_metadata/2`, and it is the case that matters. What is here

@@ -754,7 +754,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert slot_ids(@plan_group, "interrupts") == before_rail
     end
 
-    # The picker paints the package's filter and the write re-executions it, so a
+    # The picker paints the package's filter and the write re-runs it, so a
     # crafted payload naming a recipe that does not land here is refused by
     # the same function that kept the row off the list - not by a second
     # landing rule written on this page.
@@ -817,7 +817,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     # it climb past every ancestor whatever the caller's list said. Both
     # cases below went red, the first naming `blk_cp_three_ds_group` in
     # `card_processing`. Reverted from a copy, with
-    # `MIX_ENV=test mix deps.compile statifier_blocks --force` execution either
+    # `MIX_ENV=test mix deps.compile statifier_blocks --force` run either
     # side of the revert - a stale test build reads as a false green.
     test "agree with the positions map this page's gap target reads" do
       for fixture <- Charts.fixtures() do

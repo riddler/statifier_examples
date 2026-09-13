@@ -1,6 +1,6 @@
 defmodule StatifierExamples.PersistenceConformanceTest do
   @moduledoc """
-  `statifier_persistence`'s lib-shipped conformance suite, execution against
+  `statifier_persistence`'s lib-shipped conformance suite, run against
   `StatifierExamples.Persistence` - this app's adapter over SQLite.
 
   This is the point of the exercise. The package's own suite runs the same

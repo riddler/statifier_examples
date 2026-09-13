@@ -192,7 +192,7 @@ defmodule StatifierExamples.Charts.TimersTest do
     # second arrives and both succeed.
     #
     # The second drain is that call's own job, which is in the app's OTHER
-    # queue: invoke jobs execution the host's actual work and are kept apart from
+    # queue: invoke jobs run the host's actual work and are kept apart from
     # the timers for that reason (`config/config.exs`). Running it is what
     # finishes the execution.
     log =

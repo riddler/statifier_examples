@@ -1226,9 +1226,9 @@ defmodule StatifierExamples.Charts.Durable do
 
   # The failure class the chart reads as `_event.data.reason`, spelled the
   # way `Statifier.Invoke.SyncHandler.Adapter` spells the same refusal for
-  # a session execution of the same chart. The adapter keeps its copy private, so
+  # a session run of the same chart. The adapter keeps its copy private, so
   # this is the one place the app repeats it, and a durable execution and a
-  # session execution answering the same refusal differently is exactly what
+  # session run answering the same refusal differently is exactly what
   # se-4dt.3 was closing.
   #
   # One clause per way `Charts.dispatch/3` refuses, and no fall-through:
@@ -1294,7 +1294,7 @@ defmodule StatifierExamples.Charts.Durable do
 
   # The stepper reports the execution's status; the reading speaks the vocabulary
   # `Execution.absorb/2`'s `{:halted, reason}` message uses, so a durable execution and
-  # a session execution finish with the same row and the same status word.
+  # a session run finish with the same row and the same status word.
   #
   # There are FOUR stored statuses, not three: `statifier_persistence` 0.4.0
   # added `:cancelled` as a fourth terminal value (ADR-0008 decision 5), and

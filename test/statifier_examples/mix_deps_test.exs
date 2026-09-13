@@ -100,7 +100,7 @@ defmodule StatifierExamples.MixDepsTest do
   #
   # The arm moves to the 0.21 line, and this app asked for one half of it.
   # 0.21.0 makes the editor a debugger - a Source tab over the compiled
-  # SCXML, the canvas seated in an execution pane with statifier-ui's status,
+  # SCXML, the canvas seated in a Run pane with statifier-ui's status,
   # scrubber and event log around it - and widens what a block can say:
   # `core.branch` declares a third slot for an arm whose condition cannot
   # be decided, a host states a rule about a whole document through

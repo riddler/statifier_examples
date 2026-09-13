@@ -609,7 +609,7 @@ defmodule StatifierExamplesWeb.EditorLive do
   # every edit, so the findings pane is never showing an answer to a document
   # that is no longer on the canvas. Compile is still a button because a host
   # whose compile is expensive wants one, and this page is what such a host
-  # copies - but the button re-executions a pass that is already current rather than
+  # copies - but the button re-runs a pass that is already current rather than
   # being the only thing that runs it.
   #
   # `:declare` comes off the FIXTURE rather than off the document on the

@@ -87,7 +87,7 @@ defmodule StatifierExamples.Charts.Subchart do
   in memory, `StatifierBlocks.Runtime.DurableSubchart` durably. This
   module is the **host callbacks for both** - `resolve_chart/2` and
   `palette/0` are shared and unchanged (decision 2), so the same lookup
-  answers a session execution and a durable execution and there is no second place a
+  answers a session run and a durable execution and there is no second place a
   document id is resolved. `StatifierExamples.Charts.invoke_handlers/0`
   registers the in-memory one for a session; the durable one is reached
   from `StatifierExamples.Charts.Durable`'s dispatch fun, which is where
