@@ -105,15 +105,17 @@ defmodule StatifierExamples.Signup.ScreenTest do
       assert Enum.all?(handlers, &(&1.config["outcome"] == "abandon"))
     end
 
-    # R10d: the destination is `responses.<element_key>` and the source is the
-    # bare key inside `_event.data` - the direction `core.on_event`'s
-    # "The optional `capture` map" states twice because it reads either way.
+    # R10d: the destination is `responses.<element_key>` and the source for a
+    # QUESTION is the bare key inside `_event.data` - the direction
+    # `core.on_event`'s "The optional `capture` map" states twice because it
+    # reads either way. The plan button's own pair is the other shape, a
+    # `["const", value]` literal (se-luu, 2026-09-13); both land in one map.
     test "each handler captures every question on the screen, keyed by destination" do
       [personal, _business, back] = expansion(@plan).slots["interrupts"]
 
       assert personal.config["capture"] == %{
                "responses.seats" => "seats",
-               "responses.plan" => "plan"
+               "responses.plan" => ["const", "personal"]
              }
 
       # `went_back` declares no `writes`, so it records the form and nothing
@@ -141,70 +143,76 @@ defmodule StatifierExamples.Signup.ScreenTest do
     end
   end
 
-  describe "what a button's `writes` map can and cannot do" do
-    # The blocking finding of the cold review on PR #98, pinned so the prose
-    # cannot drift back - and the general form it was written in HAS drifted.
-    # At `statifier_blocks` 0.28.0 a `capture` source is told apart by SHAPE
-    # (ADR-0002's Note of 2026-09-12, `N1`): a string is a path inside
-    # `_event.data`, and a `["const", value]` pair is a literal read from the
-    # document. `core/on_event.ex`'s own moduledoc calls the literal form
-    # "what lets two handlers on one screen record which of them fired". So
-    # "a capture value can never be a literal" is no longer true of the
-    # package, and no case here should be read as pinning it.
+  describe "what a button's `writes` map records" do
+    # The blocking finding of the cold review on PR #98 was pinned here so the
+    # prose could not drift back, and the general form it was written in HAD
+    # drifted: at `statifier_blocks` 0.28.0 a `capture` source is told apart by
+    # SHAPE (ADR-0002's Note of 2026-09-12, `N1`), a string being a path inside
+    # `_event.data` and a `["const", value]` pair a literal read from the
+    # document. `core/on_event.ex`'s own moduledoc calls the literal form "what
+    # lets two handlers on one screen record which of them fired".
     #
-    # What is still true, and is what these two cases pin, is the claim about
-    # THIS app: `Screen`'s `writes/1` passes a button's `writes` map through
-    # as it stands, every source the element document declares is a plain
-    # string, so both plan buttons declare the same pair and both compile to
-    # the same assign. What reaches `responses.plan` is whatever the host put
-    # in the payload - an unstated contract the spike document records as an
-    # ask. Whether this app should take the literal form up is a design
-    # question the skeleton has not answered, not a defect hidden here.
-    test "both plan buttons capture responses.plan identically, so the press says nothing" do
+    # se-luu (RQ-RF046-4, 2026-09-13) took the literal form up in THIS app, so
+    # what these cases pin is the other side of the same sentence: each plan
+    # button declares its OWN pair, the two no longer compile to the same
+    # assign, and the press is what reaches `responses.plan`. The host payload
+    # is no longer what carries it, and the plan buttons declare no `payload`
+    # map at all. `Screen`'s `writes/1` still passes the map through as it
+    # stands - the shape is the package's to read, not this app's to branch on.
+    test "each plan button captures its own literal, so the press says which fired" do
       [personal, business, _back] = expansion(@plan).slots["interrupts"]
 
-      assert personal.config["capture"]["responses.plan"] == "plan"
-      assert business.config["capture"]["responses.plan"] == "plan"
-      assert personal.config["capture"] == business.config["capture"]
+      assert personal.config["capture"]["responses.plan"] == ["const", "personal"]
+      assert business.config["capture"]["responses.plan"] == ["const", "business"]
+      refute personal.config["capture"] == business.config["capture"]
     end
 
     # The case above reads `capture` at CONFIG level, where a source is the
-    # string this app wrote. What that string MEANS is the package's to
-    # decide, and `N1` has just been decided: a plain string still compiles
-    # to a path, but it is now one shape among two. A future note that moved
-    # the string arm would leave every config-level assertion here green
-    # while the sentence they protect went false. This case reads the
-    # COMPILED bytes instead, so what is pinned is the emission itself -
-    # `expr="_event.data.plan"`, the form `StatifierExamples.Charts.Durable`
-    # states in its "`data` is the event's payload" section.
+    # value this app wrote into the element document. What that value MEANS
+    # is the package's to decide, and `N1` decided it by SHAPE. A future note
+    # that moved either arm would leave every config-level assertion here
+    # green while the sentence they protect went false. This case reads the
+    # COMPILED bytes instead, so what is pinned is the emission itself: the
+    # plan pair compiles to the button's literal, and the questions still
+    # compile to `expr="_event.data.<key>"`, the form
+    # `StatifierExamples.Charts.Durable` states in its "`data` is the event's
+    # payload" section. The literal is predicator's own string grammar,
+    # double quotes and all, XML-escaped into the attribute.
     #
-    # Sabotage: in `statifier_blocks`' `core/on_event.ex`,
-    # `defp source_expr(source) when is_binary(source)` returning
-    # `literal(source)` instead of `"_event.data." <> source` - the string
-    # arm read as a literal, which is exactly the drift this case exists to
-    # catch. THIS CASE WENT RED and both config-level cases above stayed
-    # GREEN, which is the whole reason this one is here. The dependency was
-    # recompiled with `MIX_ENV=test mix deps.compile statifier_blocks
-    # --force` before and after, and reverted from a copy.
-    test "the compiled emission reads responses.plan out of _event.data, never a literal" do
+    # Sabotage (se-luu, 2026-09-13): in `statifier_blocks`'
+    # `core/on_event.ex`, `defp source_expr([@const_tag, value])` returning
+    # `"_event.data." <> value` instead of `literal(value)` - the literal arm
+    # read as a path, which is the drift this case exists to catch. THIS CASE
+    # WENT RED on the `plan_exprs` assertion and both config-level cases
+    # above stayed GREEN, which is the whole reason this one is here. Second
+    # sabotage, on this app's own side: reverted the two `writes` pairs in
+    # `priv/fixtures/signup_screens.json` to the string form
+    # `{"responses.plan": "plan"}` from a copy - this case went red on the
+    # same assertion. The dependency was recompiled with
+    # `MIX_ENV=test mix deps.compile statifier_blocks --force` before and
+    # after, and both mutations were reverted from a copy.
+    test "the compiled emission writes each plan button's own literal into responses.plan" do
       {:ok, %Compiled{scxml: scxml}} = Compiler.compile(Path.document(), Charts.palette())
 
-      exprs =
+      plan_exprs =
         Regex.scan(~r{<assign expr="([^"]*)" location="responses\.plan"/>}, scxml,
           capture: :all_but_first
         )
 
-      # One per plan button, and each is the path, not the payload value.
-      assert exprs == [["_event.data.plan"], ["_event.data.plan"]]
+      # One per plan button, and each is that button's value read out of the
+      # DOCUMENT - no path, so nothing the host sends is read at all.
+      assert plan_exprs == [["&quot;personal&quot;"], ["&quot;business&quot;"]]
 
-      # And not only this pair: every assign the whole Path compiles to
-      # reads out of `_event.data`. (`'personal'` and `'business'` DO
-      # appear in the compiled bytes, as the plan branch's `cond` arms -
-      # the path read back, never a value written to it.)
+      # The other half of the shape rule, unchanged: every assign that is not
+      # one of those two still reads out of `_event.data`, because every
+      # question's capture pair is still a string source.
       all_exprs = Regex.scan(~r{<assign expr="([^"]*)"}, scxml, capture: :all_but_first)
 
       refute all_exprs == []
-      assert Enum.all?(all_exprs, fn [expr] -> String.starts_with?(expr, "_event.data") end)
+
+      assert Enum.all?(all_exprs -- plan_exprs, fn [expr] ->
+               String.starts_with?(expr, "_event.data")
+             end)
     end
 
     # What the field DOES buy, and the only thing it buys: which buttons
