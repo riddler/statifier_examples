@@ -5,7 +5,7 @@ defmodule StatifierExamplesWeb.SignupScreensLive do
   `priv/fixtures/signup_screens.json`.
 
   The page exists because function components that nothing renders are
-  components nobody has checked. There is no chart behind it yet: answers are
+  components nobody has checked. There is no chart behind it yet: responses are
   held in the socket, and an outcome is displayed rather than sent anywhere.
   `se-19h` puts the screen Composite underneath, and the outcome a button
   names here is the outcome slot it fills there - which is why this page
@@ -21,7 +21,7 @@ defmodule StatifierExamplesWeb.SignupScreensLive do
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, answers: %{}, outcome: nil, screens: Screens.screens())}
+    {:ok, assign(socket, responses: %{}, outcome: nil, screens: Screens.screens())}
   end
 
   @impl Phoenix.LiveView
@@ -34,8 +34,8 @@ defmodule StatifierExamplesWeb.SignupScreensLive do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("answer", %{"answers" => answers}, socket) do
-    {:noreply, assign(socket, answers: Map.merge(socket.assigns.answers, answers))}
+  def handle_event("response", %{"responses" => responses}, socket) do
+    {:noreply, assign(socket, responses: Map.merge(socket.assigns.responses, responses))}
   end
 
   def handle_event("outcome", %{"outcome" => outcome}, socket) do
@@ -44,7 +44,7 @@ defmodule StatifierExamplesWeb.SignupScreensLive do
 
   @impl Phoenix.LiveView
   def render(assigns) do
-    assigns = assign(assigns, datamodel: %{"answers" => coerce(assigns.answers)})
+    assigns = assign(assigns, datamodel: %{"responses" => coerce(assigns.responses)})
 
     ~H"""
     <Layouts.app flash={@flash}>
@@ -59,7 +59,7 @@ defmodule StatifierExamplesWeb.SignupScreensLive do
           </.link>
         </nav>
 
-        <form id="signup-answers" phx-change="answer" class="contents">
+        <form id="signup-responses" phx-change="response" class="contents">
           <SignupElements.resolved_screen screen={@screen} datamodel={@datamodel} />
         </form>
 
@@ -71,15 +71,15 @@ defmodule StatifierExamplesWeb.SignupScreensLive do
     """
   end
 
-  # Answers arrive from the form as strings. A condition like
-  # `answers.seats > 1` needs the number, and predicator will not compare a
+  # Responses arrive from the form as strings. A condition like
+  # `responses.seats > 1` needs the number, and predicator will not compare a
   # string to an integer, so a value that is entirely digits is read as one.
   # Coercing at the edge rather than in the resolver keeps the resolver's
   # contract simple: it evaluates against whatever datamodel it is handed,
   # and a chart-backed page (se-19h) will hand it typed values already.
   @spec coerce(%{optional(String.t()) => String.t()}) :: map()
-  defp coerce(answers) do
-    Map.new(answers, fn
+  defp coerce(responses) do
+    Map.new(responses, fn
       {key, value} when is_binary(value) ->
         case Integer.parse(value) do
           {number, ""} -> {key, number}

@@ -22,7 +22,7 @@ defmodule StatifierExamplesWeb.SignupScreensLiveTest do
     end
 
     # Sabotage: dropping `coerce/1` leaves the seat count a string,
-    # `answers.seats > 1` no longer evaluates to true, and the business
+    # `responses.seats > 1` no longer evaluates to true, and the business
     # button never appears.
     test "answering a question reveals the nodes its condition guards", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-screens?screen=plan")
@@ -32,7 +32,7 @@ defmodule StatifierExamplesWeb.SignupScreensLiveTest do
       html =
         live
         |> element("form")
-        |> render_change(%{"answers" => %{"seats" => "5"}})
+        |> render_change(%{"responses" => %{"seats" => "5"}})
 
       assert html =~ ~s(data-outcome="business_chosen")
       refute html =~ ~s(data-outcome="personal_chosen")
@@ -56,16 +56,16 @@ defmodule StatifierExamplesWeb.SignupScreensLiveTest do
       assert render_component(&SignupElements.element/1, node: node) =~ "<h2"
     end
 
-    test "a question renders its answer back into the input" do
+    test "a question renders its response back into the input" do
       node = %{"type" => "text_question", "key" => "first_name", "label" => "First name"}
 
       html =
         render_component(&SignupElements.element/1,
           node: node,
-          answers: %{"first_name" => "Ada"}
+          responses: %{"first_name" => "Ada"}
         )
 
-      assert html =~ ~s(name="answers[first_name]")
+      assert html =~ ~s(name="responses[first_name]")
       assert html =~ ~s(value="Ada")
     end
 
@@ -83,7 +83,7 @@ defmodule StatifierExamplesWeb.SignupScreensLiveTest do
       html =
         render_component(&SignupElements.resolved_screen/1,
           screen: Screens.screen("account"),
-          datamodel: %{"answers" => %{}}
+          datamodel: %{"responses" => %{}}
         )
 
       refute html =~ "Nice to meet you"

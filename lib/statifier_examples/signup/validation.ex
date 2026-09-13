@@ -37,7 +37,7 @@ defmodule StatifierExamples.Signup.Validation do
 
   ## A finding is a pair, and the key is the element key
 
-  `{key, message}` - the same key the answer lands at (`answers.<key>`,
+  `{key, message}` - the same key the response lands at (`responses.<key>`,
   Riddler R10d), so a page can put the message beside the input it belongs
   to without a second lookup, and the order is the document's.
   """
@@ -55,11 +55,11 @@ defmodule StatifierExamples.Signup.Validation do
   @email ~r/\A[^\s@]+@[^\s@.]+\.[^\s@]+\z/
 
   @doc """
-  Every reason `nodes` cannot be submitted with `answers`, in document
+  Every reason `nodes` cannot be submitted with `responses`, in document
   order, or `[]`.
 
   `nodes` are resolved nodes - `StatifierExamples.Signup.Screens.resolve/2`'s
-  answer - and `answers` is keyed by element key, as a form posts it.
+  answer - and `responses` is keyed by element key, as a form posts it.
 
   ## Examples
 
@@ -73,39 +73,39 @@ defmodule StatifierExamples.Signup.Validation do
       []
   """
   @spec validate([Screens.node_doc()], %{optional(String.t()) => term()}) :: [finding()]
-  def validate(nodes, answers) when is_list(nodes) and is_map(answers) do
+  def validate(nodes, responses) when is_list(nodes) and is_map(responses) do
     for %{"type" => "text_question"} = question <- nodes,
-        finding = check(question, Map.get(answers, Map.fetch!(question, "key"), "")),
+        finding = check(question, Map.get(responses, Map.fetch!(question, "key"), "")),
         do: finding
   end
 
-  # The first thing wrong with one answer, or `nil`. First rather than all,
+  # The first thing wrong with one response, or `nil`. First rather than all,
   # because "is required" and "must look like an email address" about the
   # same empty box are one mistake told twice.
   @spec check(Screens.node_doc(), term()) :: finding() | nil
-  defp check(question, answer) do
+  defp check(question, response) do
     key = Map.fetch!(question, "key")
-    blank? = blank?(answer)
+    blank? = blank?(response)
 
     cond do
       Map.get(question, "required") == true and blank? -> {key, "is required"}
       blank? -> nil
-      true -> formatted(key, Map.get(question, "format"), answer)
+      true -> formatted(key, Map.get(question, "format"), response)
     end
   end
 
   @spec formatted(String.t(), term(), term()) :: finding() | nil
-  defp formatted(_key, nil, _answer), do: nil
+  defp formatted(_key, nil, _response), do: nil
 
-  defp formatted(key, "email", answer) do
-    if is_binary(answer) and Regex.match?(@email, answer) do
+  defp formatted(key, "email", response) do
+    if is_binary(response) and Regex.match?(@email, response) do
       nil
     else
       {key, "must look like an email address"}
     end
   end
 
-  defp formatted(key, format, _answer) do
+  defp formatted(key, format, _response) do
     raise ArgumentError,
           "no check for format #{inspect(format)} (question #{inspect(key)})"
   end
@@ -114,15 +114,15 @@ defmodule StatifierExamples.Signup.Validation do
   #
   # `StatifierExamples.Signup.Journey.submit/3` hands this module the form's
   # own strings and coerces afterwards, which is the right way round: a
-  # digits-only answer becomes an integer for the payload and for re-resolving
+  # digits-only response becomes an integer for the payload and for re-resolving
   # the screen, but `required` and `format` are rules about what was **typed**
   # and a check that saw `5` where the reader wrote `5` has learned nothing
   # extra. So the string clauses are the ones `Journey` exercises. The
   # non-binary clause is for the other caller: `validate/2` is public, its
   # rules are about a screen rather than about a form, and a host holding
-  # already-typed answers must not meet a crash here.
+  # already-typed responses must not meet a crash here.
   @spec blank?(term()) :: boolean()
-  defp blank?(answer) when is_binary(answer), do: String.trim(answer) == ""
+  defp blank?(response) when is_binary(response), do: String.trim(response) == ""
   defp blank?(nil), do: true
-  defp blank?(_answer), do: false
+  defp blank?(_response), do: false
 end

@@ -82,7 +82,7 @@ defmodule StatifierExamples.Signup.ScreenTest do
     # Sabotage: made `handlers/1` drop the buttons whose node carries a
     # `condition`, which is two of the plan screen's three. Three cases went
     # red - this one, the capture case below, and the environment walk in
-    # `StatifierExamples.Signup.PathTest`, which loses `answers.plan` with the
+    # `StatifierExamples.Signup.PathTest`, which loses `responses.plan` with the
     # handlers that captured it. The distinctness case did NOT go red, and
     # that is worth knowing: it reads the outcomes off the element document
     # rather than off the expansion, so it cannot see a handler go missing.
@@ -105,28 +105,28 @@ defmodule StatifierExamples.Signup.ScreenTest do
       assert Enum.all?(handlers, &(&1.config["outcome"] == "abandon"))
     end
 
-    # R10d: the destination is `answers.<element_key>` and the source is the
+    # R10d: the destination is `responses.<element_key>` and the source is the
     # bare key inside `_event.data` - the direction `core.on_event`'s
     # "The optional `capture` map" states twice because it reads either way.
     test "each handler captures every question on the screen, keyed by destination" do
       [personal, _business, back] = expansion(@plan).slots["interrupts"]
 
       assert personal.config["capture"] == %{
-               "answers.seats" => "seats",
-               "answers.plan" => "plan"
+               "responses.seats" => "seats",
+               "responses.plan" => "plan"
              }
 
       # `went_back` declares no `writes`, so it records the form and nothing
       # about the press.
-      assert back.config["capture"] == %{"answers.seats" => "seats"}
+      assert back.config["capture"] == %{"responses.seats" => "seats"}
     end
 
     test "a screen with no writes on any button captures the questions alone" do
       [submit] = expansion(%{"screen" => "account", "timeout" => "1d"}).slots["interrupts"]
 
       assert submit.config["capture"] == %{
-               "answers.first_name" => "first_name",
-               "answers.email" => "email"
+               "responses.first_name" => "first_name",
+               "responses.email" => "email"
              }
     end
 
@@ -147,23 +147,23 @@ defmodule StatifierExamples.Signup.ScreenTest do
     # never a literal (`core/on_event.ex` builds each pair as
     # `{"expr", "_event.data." <> source}`), so `writes` CANNOT record which
     # button was pressed: both plan buttons declare the same pair and both
-    # compile to the same assign. What reaches `answers.plan` is whatever the
+    # compile to the same assign. What reaches `responses.plan` is whatever the
     # host put in the payload - an unstated contract the spike document
     # records as an ask.
-    test "both plan buttons capture answers.plan identically, so the press says nothing" do
+    test "both plan buttons capture responses.plan identically, so the press says nothing" do
       [personal, business, _back] = expansion(@plan).slots["interrupts"]
 
-      assert personal.config["capture"]["answers.plan"] == "plan"
-      assert business.config["capture"]["answers.plan"] == "plan"
+      assert personal.config["capture"]["responses.plan"] == "plan"
+      assert business.config["capture"]["responses.plan"] == "plan"
       assert personal.config["capture"] == business.config["capture"]
     end
 
     # What the field DOES buy, and the only thing it buys: which buttons
     # write the path at all.
-    test "a button declaring no writes leaves answers.plan alone" do
+    test "a button declaring no writes leaves responses.plan alone" do
       [_personal, _business, back] = expansion(@plan).slots["interrupts"]
 
-      refute Map.has_key?(back.config["capture"], "answers.plan")
+      refute Map.has_key?(back.config["capture"], "responses.plan")
     end
   end
 

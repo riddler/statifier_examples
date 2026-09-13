@@ -122,7 +122,7 @@ defmodule StatifierExamples.ViewModelPinTest do
     # two guarded fixtures above get, and the three-block arrangement each
     # screen stands for is why that matters here more than it did there.
     # `se-7wt` added the seventh step: the `core.invoke` the finished Path
-    # ends on, which hands the collected answers to `myapp:signup`.
+    # ends on, which hands the collected responses to `myapp:signup`.
     "signup_path" => {9, %{step: 7, arm: 2}}
   }
 

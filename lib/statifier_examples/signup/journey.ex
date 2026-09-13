@@ -17,10 +17,10 @@ defmodule StatifierExamples.Signup.Journey do
   a button named, and what the form collected; findings back if the screen
   does not validate, and otherwise the next resolve.
 
-  `resolve/2` is the first one again with a **draft**: the answers a reader
+  `resolve/2` is the first one again with a **draft**: the responses a reader
   has typed but not sent. A page needs it and a contract that omitted it
   would be wrong about this document, because an element's condition may
-  read an answer given on the screen it is on - the plan screen's two plan
+  read a response given on the screen it is on - the plan screen's two plan
   buttons are conditional on the seat count typed two lines above them, so
   a page resolving only against what the chart has stored would draw a
   screen with no way off it. The draft is never persisted and never sent;
@@ -36,7 +36,7 @@ defmodule StatifierExamples.Signup.Journey do
       journey survive a deploy, and what makes `submit/3` callable from a
       controller, a job, or a test just as well as from a LiveView.
     * **Neither returns a chart.** What comes back is a screen, some nodes,
-      the answers so far and a status. A page built on this pair cannot
+      the responses so far and a status. A page built on this pair cannot
       reach into the run, and so cannot start depending on the chart's
       shape.
 
@@ -55,18 +55,18 @@ defmodule StatifierExamples.Signup.Journey do
 
   `StatifierExamples.Signup.Screen`'s moduledoc has the finding: a
   `capture` map's value is a path inside `_event.data`, never a literal, so
-  what lands at `answers.<key>` is whatever **the host** put in the event's
+  what lands at `responses.<key>` is whatever **the host** put in the event's
   payload. This module is that host, so the contract is stated here in
   code:
 
-      payload = the form's answers, keyed by element key,
+      payload = the form's responses, keyed by element key,
                 merged with the firing button's own `payload` map
 
   The first half feeds every question's capture pair (destination
-  `answers.<key>`, source `<key>`). The second is how a press says
+  `responses.<key>`, source `<key>`). The second is how a press says
   something about *itself* - the plan buttons declare
   `"payload": {"plan": "business"}` and `{"plan": "personal"}`, which is
-  what the Path's `core.branch` on `answers.plan` reads, and without it
+  what the Path's `core.branch` on `responses.plan` reads, and without it
   both buttons would write the same nothing. Neither document states this
   and neither can check it; `docs/spikes/SF040-signup-skeleton.md` carries
   it as the ask.
@@ -82,12 +82,12 @@ defmodule StatifierExamples.Signup.Journey do
   a field no shipped screen can exercise is a field no test can defend.
   `docs/spikes/SF040-signup-skeleton.md` carries it as the ask.
 
-  ## Answers are coerced once, on the way in
+  ## Responses are coerced once, on the way in
 
-  A form posts strings. A condition like `answers.seats > 1` - the confirm
+  A form posts strings. A condition like `responses.seats > 1` - the confirm
   screen's referral question hangs off it - needs the number, and
   predicator will not compare a string to an integer. So a digits-only
-  answer is read as an integer **here**, before the chart is told anything,
+  response is read as an integer **here**, before the chart is told anything,
   and the datamodel a resolve reads back is already typed. se-e68's page
   coerced in its render for want of a chart; this is the same two lines in
   the one place that now has somewhere to put them.
@@ -103,7 +103,7 @@ defmodule StatifierExamples.Signup.Journey do
   What a page needs to draw one moment of a run, and nothing else.
 
   `screen` is `nil` when the run is not sitting on one (see the moduledoc),
-  and `nodes` is then empty. `answers` is what the chart has collected so
+  and `nodes` is then empty. `responses` is what the chart has collected so
   far, keyed by element key; `findings` is empty except in the
   `{:invalid, view}` a refused `submit/3` answers with.
   """
@@ -112,7 +112,7 @@ defmodule StatifierExamples.Signup.Journey do
           screen: Screens.screen() | nil,
           nodes: [Screens.node_doc()],
           datamodel: map(),
-          answers: %{optional(String.t()) => term()},
+          responses: %{optional(String.t()) => term()},
           status: Execution.status(),
           findings: [Validation.finding()]
         }
@@ -161,10 +161,10 @@ defmodule StatifierExamples.Signup.Journey do
   end
 
   @doc """
-  `view` re-resolved with `draft` - the answers a reader has typed on this
+  `view` re-resolved with `draft` - the responses a reader has typed on this
   screen and not sent - laid over what the chart has stored.
 
-  The nodes and the answers move; nothing else does, and nothing is
+  The nodes and the responses move; nothing else does, and nothing is
   written. See the moduledoc on why a page cannot do without it.
   """
   @spec resolve(view(), %{optional(String.t()) => term()}) :: view()
@@ -173,14 +173,14 @@ defmodule StatifierExamples.Signup.Journey do
   def resolve(%{screen: screen, datamodel: datamodel} = view, draft) when is_map(draft) do
     merged = merged(datamodel, coerce(draft))
 
-    %{view | answers: Map.fetch!(merged, "answers"), nodes: Screens.resolve(screen, merged)}
+    %{view | responses: Map.fetch!(merged, "responses"), nodes: Screens.resolve(screen, merged)}
   end
 
   @doc """
   The submit half: validate what a screen collected, then raise the
   outcome `outcome`'s button named.
 
-  `answers` is the form's, keyed by element key and holding strings.
+  `responses` is the form's, keyed by element key and holding strings.
 
   Three answers. `{:ok, view}` is the screen the run moved to - or `nil`
   where it went somewhere with no screen. `{:invalid, view}` is the same
@@ -190,29 +190,29 @@ defmodule StatifierExamples.Signup.Journey do
   a run that could not be loaded, or an outcome no button on the current
   screen declares.
 
-  The answers are merged into what the chart already holds before the
+  The responses are merged into what the chart already holds before the
   screen is resolved for validation, because a question can be conditional
-  on an answer given on this very screen - the plan screen's business hint
+  on a response given on this very screen - the plan screen's business hint
   is - and validating against the position's stale datamodel would check
   the screen the reader saw one keystroke ago.
   """
   @spec submit(String.t(), String.t(), %{optional(String.t()) => term()}) ::
           {:ok, view()} | {:invalid, view()} | {:error, term()}
-  def submit(execution_id, outcome, answers)
-      when is_binary(execution_id) and is_binary(outcome) and is_map(answers) do
+  def submit(execution_id, outcome, responses)
+      when is_binary(execution_id) and is_binary(outcome) and is_map(responses) do
     with {:ok, {{durable, run}, _document}} <- Durable.resume(execution_id),
          {:ok, datamodel} <- datamodel(execution_id),
-         {:ok, drafted} <- parked_on(resolve(view(execution_id, run, datamodel), answers)),
+         {:ok, drafted} <- parked_on(resolve(view(execution_id, run, datamodel), responses)),
          {:ok, button} <- button(drafted.nodes, outcome) do
-      case Validation.validate(drafted.nodes, answers) do
-        [] -> pressed(durable, run, execution_id, button, coerce(answers))
+      case Validation.validate(drafted.nodes, responses) do
+        [] -> pressed(durable, run, execution_id, button, coerce(responses))
         findings -> {:invalid, %{drafted | findings: findings}}
       end
     end
   end
 
   @doc """
-  The payload the press of `button` sends, for the answers `typed`.
+  The payload the press of `button` sends, for the responses `typed`.
 
   Public because it **is** the host contract the moduledoc describes, and a
   contract nothing can read is a contract nobody can check. `submit/3` is
@@ -244,14 +244,14 @@ defmodule StatifierExamples.Signup.Journey do
   @spec view(String.t(), Execution.t(), map()) :: view()
   defp view(execution_id, run, datamodel) do
     screen = screen_at(run)
-    answers = Map.get(datamodel, "answers") || %{}
+    responses = Map.get(datamodel, "responses") || %{}
 
     %{
       execution_id: execution_id,
       screen: screen,
       nodes: if(screen, do: Screens.resolve(screen, datamodel), else: []),
       datamodel: datamodel,
-      answers: answers,
+      responses: responses,
       status: run.status,
       findings: []
     }
@@ -293,10 +293,10 @@ defmodule StatifierExamples.Signup.Journey do
 
   @spec merged(map(), map()) :: map()
   defp merged(datamodel, typed) do
-    Map.put(datamodel, "answers", Map.merge(Map.get(datamodel, "answers") || %{}, typed))
+    Map.put(datamodel, "responses", Map.merge(Map.get(datamodel, "responses") || %{}, typed))
   end
 
-  # The run's own persisted datamodel, which is where the answers a screen
+  # The run's own persisted datamodel, which is where the responses a screen
   # resolves against live once a chart is holding them.
   @spec datamodel(String.t()) :: {:ok, map()} | {:error, term()}
   defp datamodel(execution_id) do
@@ -308,11 +308,11 @@ defmodule StatifierExamples.Signup.Journey do
   @spec document() :: StatifierBlocks.Document.t()
   defp document, do: StatifierExamples.Signup.Path.document()
 
-  # See the moduledoc: a digits-only answer becomes the integer a condition
+  # See the moduledoc: a digits-only response becomes the integer a condition
   # can compare. Everything else travels as the string the form posted.
   @spec coerce(%{optional(String.t()) => term()}) :: map()
-  defp coerce(answers) do
-    Map.new(answers, fn
+  defp coerce(responses) do
+    Map.new(responses, fn
       {key, value} when is_binary(value) ->
         case Integer.parse(value) do
           {number, ""} -> {key, number}

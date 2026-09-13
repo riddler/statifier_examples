@@ -23,7 +23,7 @@ defmodule StatifierExamples.Signup.Handlers do
   chart writes them wherever the calling block's `assign_to` says, and
   that is how the wizard's plan branch gets a plan to guard on. Its first
   clause is the exception, and the signup **Path** is why: the `core.invoke`
-  that Path ends on sends the three screens' collected answers as a param,
+  that Path ends on sends the three screens' collected responses as a param,
   so that one call is handed real data and answers a create-account receipt
   rather than a canned step.
   `myapp:provision` is the
@@ -102,26 +102,27 @@ defmodule StatifierExamples.Signup.Handlers do
              | {:chunk_refused, term()}}
   # The create-account call at the end of the signup **Path**, which is the
   # one `myapp:signup` call that is handed something: the `core.invoke`
-  # ending `priv/fixtures/signup_path.json` sends `answers=answers`, so this
-  # clause gets what three screens collected rather than a step name.
+  # ending `priv/fixtures/signup_path.json` sends `responses=responses`, so
+  # this clause gets what three screens collected rather than a step name.
   #
-  # It answers a receipt rather than the answers back: `assign_to` writes
+  # It answers a receipt rather than the responses back: `assign_to` writes
   # whatever comes back into the run's datamodel, and echoing a map that is
-  # already at `answers` would put a second copy of it in the position every
-  # later step reads. The receipt is what a caller could not have known -
-  # that the account was created, for whom, and how much was collected.
+  # already at `responses` would put a second copy of it in the position
+  # every later step reads. The receipt is what a caller could not have
+  # known - that the account was created, for whom, and how much was
+  # collected.
   #
   # Stub in the sense the spike needs (`docs/spikes/SF040-signup-skeleton.md`):
   # it writes nothing. `myapp:provision` is this app's call that does, and it
   # is idempotent on the run id for the reason its own clause gives.
-  def handle("myapp:signup", %{"answers" => answers}, _context) when is_map(answers) do
-    Logger.info("myapp:signup created the account for #{inspect(Map.get(answers, "email"))}")
+  def handle("myapp:signup", %{"responses" => responses}, _context) when is_map(responses) do
+    Logger.info("myapp:signup created the account for #{inspect(Map.get(responses, "email"))}")
 
     {:ok,
      %{
        "created" => true,
-       "email" => Map.get(answers, "email"),
-       "collected" => map_size(answers)
+       "email" => Map.get(responses, "email"),
+       "collected" => map_size(responses)
      }}
   end
 

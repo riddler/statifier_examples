@@ -17,7 +17,7 @@ defmodule StatifierExamples.Signup.ValidationTest do
     do: Map.merge(%{"type" => "text_question", "key" => "q", "label" => "Q"}, extra)
 
   describe "required" do
-    test "an empty required answer is a finding, and a blank one is too" do
+    test "an empty required response is a finding, and a blank one is too" do
       nodes = [question(%{"required" => true})]
 
       assert Validation.validate(nodes, %{"q" => ""}) == [{"q", "is required"}]
@@ -36,15 +36,15 @@ defmodule StatifierExamples.Signup.ValidationTest do
       assert Validation.validate([question(%{"required" => "yes"})], %{"q" => ""}) == []
     end
 
-    test "an answered required question is nothing at all" do
+    test "a filled-in required question is nothing at all" do
       assert Validation.validate([question(%{"required" => true})], %{"q" => "Ada"}) == []
     end
 
     # `Journey.submit/3` validates the form's strings and coerces afterwards,
     # so this case is about the OTHER caller: `validate/2` is public, and a
-    # host handing it answers it has already typed must not meet a crash in
+    # host handing it responses it has already typed must not meet a crash in
     # `blank?/1`.
-    test "a numeric answer is not blank" do
+    test "a numeric response is not blank" do
       assert Validation.validate([question(%{"required" => true})], %{"q" => 5}) == []
     end
   end
@@ -69,9 +69,9 @@ defmodule StatifierExamples.Signup.ValidationTest do
     end
 
     # A format is checked only when there is something to check: an optional
-    # question left empty is not a malformed answer, and reporting it as one
+    # question left empty is not a malformed response, and reporting it as one
     # would make every `format` imply `required`.
-    test "an empty optional answer is not a format failure" do
+    test "an empty optional response is not a format failure" do
       assert Validation.validate([question(%{"format" => "email"})], %{"q" => ""}) == []
     end
 
@@ -142,7 +142,7 @@ defmodule StatifierExamples.Signup.ValidationTest do
     # The plan screen's seat count is optional, which is what lets the
     # personal button be reachable without typing anything.
     test "the plan screen demands nothing" do
-      nodes = Screens.resolve(Screens.screen("plan"), %{"answers" => %{"seats" => 1}})
+      nodes = Screens.resolve(Screens.screen("plan"), %{"responses" => %{"seats" => 1}})
 
       assert Validation.validate(nodes, %{}) == []
     end

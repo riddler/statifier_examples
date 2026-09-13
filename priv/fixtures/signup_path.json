@@ -9,8 +9,8 @@
   },
   "datamodel": [
     {
-      "id": "answers",
-      "description": "What the screens collected, keyed by element key (Riddler R10d). Each myapp.screen writes answers.<element_key> from the firing button's capture map, and the plan buttons additionally record answers.plan."
+      "id": "responses",
+      "description": "What the screens collected, keyed by element key (Riddler R10d). Each myapp.screen writes responses.<element_key> from the firing button's capture map, and the plan buttons additionally record responses.plan."
     },
     {
       "id": "created",
@@ -58,11 +58,11 @@
             "arms": [
               {
                 "slot": "arm_business",
-                "cond": "answers.plan == 'business'"
+                "cond": "responses.plan == 'business'"
               },
               {
                 "slot": "arm_personal",
-                "cond": "answers.plan == 'personal'"
+                "cond": "responses.plan == 'personal'"
               }
             ]
           },
@@ -111,7 +111,7 @@
           "config": {
             "invoke_type": "myapp:signup",
             "assign_to": "created",
-            "params": "answers=answers"
+            "params": "responses=responses"
           }
         }
       ]

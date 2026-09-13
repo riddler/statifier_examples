@@ -40,8 +40,8 @@
         {
           "type": "text",
           "key": "account_greeting",
-          "condition": "answers.first_name != ''",
-          "text": "Nice to meet you, {{ answers.first_name }}."
+          "condition": "responses.first_name != ''",
+          "text": "Nice to meet you, {{ responses.first_name }}."
         },
         {
           "type": "button",
@@ -76,24 +76,24 @@
         {
           "type": "text",
           "key": "plan_business_hint",
-          "condition": "answers.seats > 1",
-          "text": "More than one seat puts you on the business plan, {{ answers.first_name }}."
+          "condition": "responses.seats > 1",
+          "text": "More than one seat puts you on the business plan, {{ responses.first_name }}."
         },
         {
           "type": "button",
           "key": "plan_personal",
-          "writes": { "answers.plan": "plan" },
+          "writes": { "responses.plan": "plan" },
           "payload": { "plan": "personal" },
-          "condition": "answers.seats <= 1",
+          "condition": "responses.seats <= 1",
           "label": "Take the personal plan",
           "outcome": "personal_chosen"
         },
         {
           "type": "button",
           "key": "plan_business",
-          "writes": { "answers.plan": "plan" },
+          "writes": { "responses.plan": "plan" },
           "payload": { "plan": "business" },
-          "condition": "answers.seats > 1",
+          "condition": "responses.seats > 1",
           "label": "Take the business plan",
           "outcome": "business_chosen"
         },
@@ -118,19 +118,19 @@
         {
           "type": "text",
           "key": "confirm_summary",
-          "text": "We will send a verification link to {{ answers.email }}. Open it within a day and the account is live."
+          "text": "We will send a verification link to {{ responses.email }}. Open it within a day and the account is live."
         },
         {
           "type": "heading",
           "key": "confirm_referral_heading",
-          "condition": "answers.seats > 1",
+          "condition": "responses.seats > 1",
           "level": 2,
           "text": "One more thing"
         },
         {
           "type": "text_question",
           "key": "referral",
-          "condition": "answers.seats > 1",
+          "condition": "responses.seats > 1",
           "label": "Who told you about us?",
           "placeholder": "A colleague",
           "required": false

@@ -6,7 +6,7 @@ defmodule StatifierExamples.Signup.ScreensTest do
   doctest Screens
 
   @answered %{
-    "answers" => %{
+    "responses" => %{
       "first_name" => "Ada",
       "email" => "ada@example.com",
       "seats" => 4
@@ -40,7 +40,7 @@ defmodule StatifierExamples.Signup.ScreensTest do
     end
 
     # Sabotage: replacing `fill_node/2`'s `Map.update!(node_doc, "text",
-    # ...)` with a bare `node_doc` leaves the raw `{{ answers.first_name }}`
+    # ...)` with a bare `node_doc` leaves the raw `{{ responses.first_name }}`
     # in place and this assertion fails. Confirmed red, then reverted.
     test "a text node has its slot filled from the datamodel" do
       node = resolved_node("account", @answered, "account_greeting")
@@ -80,7 +80,7 @@ defmodule StatifierExamples.Signup.ScreensTest do
     # Sabotage: making `shown?/2` return true for a non-true evaluation
     # lets the greeting through on an empty datamodel and this goes red.
     test "a node whose condition does not hold is not in the resolved list" do
-      keys = resolved_keys("account", %{"answers" => %{}})
+      keys = resolved_keys("account", %{"responses" => %{}})
 
       refute "account_greeting" in keys
       assert "account_heading" in keys
@@ -92,28 +92,32 @@ defmodule StatifierExamples.Signup.ScreensTest do
     end
 
     # Predicator answers a missing path two different ways, and both have to
-    # hide: a datamodel holding `answers` but not `seats` evaluates to
-    # `{:ok, :undefined}`, while one with no `answers` root at all is an
+    # hide: a datamodel holding `responses` but not `seats` evaluates to
+    # `{:ok, :undefined}`, while one with no `responses` root at all is an
     # `{:error, %UndefinedVariableError{}}`. `SignupScreensLive` always
     # supplies the root, so the page only ever meets the first; a caller
     # handing over a bare map meets the second.
     test "an unanswered path hides rather than raises, in both shapes" do
-      node = %{"condition" => "answers.seats > 1"}
+      node = %{"condition" => "responses.seats > 1"}
 
-      assert Predicator.evaluate("answers.seats > 1", %{"answers" => %{}}) == {:ok, :undefined}
-      assert {:error, _no_root} = Predicator.evaluate("answers.seats > 1", %{})
+      assert Predicator.evaluate("responses.seats > 1", %{"responses" => %{}}) ==
+               {:ok, :undefined}
 
-      refute Screens.shown?(node, %{"answers" => %{}})
+      assert {:error, _no_root} = Predicator.evaluate("responses.seats > 1", %{})
+
+      refute Screens.shown?(node, %{"responses" => %{}})
       refute Screens.shown?(node, %{})
     end
 
     test "source that does not parse hides rather than raising" do
-      refute Screens.shown?(%{"condition" => "answers.seats >"}, %{"answers" => %{"seats" => 4}})
+      refute Screens.shown?(%{"condition" => "responses.seats >"}, %{
+               "responses" => %{"seats" => 4}
+             })
     end
 
     test "the plan screen swaps its button on the seat count" do
-      personal = resolved_keys("plan", %{"answers" => %{"seats" => 1}})
-      business = resolved_keys("plan", %{"answers" => %{"seats" => 5}})
+      personal = resolved_keys("plan", %{"responses" => %{"seats" => 1}})
+      business = resolved_keys("plan", %{"responses" => %{"seats" => 5}})
 
       assert "plan_personal" in personal
       refute "plan_business" in personal
@@ -124,20 +128,22 @@ defmodule StatifierExamples.Signup.ScreensTest do
 
   describe "fill_slots/2" do
     test "an unresolved path renders as the empty string" do
-      assert Screens.fill_slots("To {{ answers.email }}.", %{"answers" => %{}}) == "To ."
+      assert Screens.fill_slots("To {{ responses.email }}.", %{"responses" => %{}}) == "To ."
       assert Screens.fill_slots("To {{ nope.at.all }}.", %{}) == "To ."
     end
 
     test "a non-string value is stringified" do
-      assert Screens.fill_slots("{{ answers.seats }}", %{"answers" => %{"seats" => 4}}) == "4"
+      assert Screens.fill_slots("{{ responses.seats }}", %{"responses" => %{"seats" => 4}}) == "4"
     end
 
     # Sabotage: `stringify/1`'s catch-all clause calling `to_string/1`
     # instead of returning "" raises `Protocol.UndefinedError` here.
     # Confirmed red, then reverted.
     test "a slot naming a whole subtree renders as the empty string" do
-      assert Screens.fill_slots("[{{ answers }}]", @answered) == "[]"
-      assert Screens.fill_slots("[{{ answers.tags }}]", %{"answers" => %{"tags" => []}}) == "[]"
+      assert Screens.fill_slots("[{{ responses }}]", @answered) == "[]"
+
+      assert Screens.fill_slots("[{{ responses.tags }}]", %{"responses" => %{"tags" => []}}) ==
+               "[]"
     end
 
     test "text with no slot is returned unchanged" do
@@ -145,9 +151,9 @@ defmodule StatifierExamples.Signup.ScreensTest do
     end
   end
 
-  describe "answer_keys/1" do
-    test "answers are keyed by element key" do
-      assert Screens.answer_keys(Screens.screen("account")) == ["first_name", "email"]
+  describe "response_keys/1" do
+    test "responses are keyed by element key" do
+      assert Screens.response_keys(Screens.screen("account")) == ["first_name", "email"]
     end
   end
 
