@@ -233,7 +233,7 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # handed an execution id and an invocation id off the job row, and the chart,
   # the position and the execution all come back out of SQLite. The execution finishes
   # on the far side, and `myapp:provision` - the step AFTER the
-  # asynchronous one - executions and writes.
+  # asynchronous one - runs and writes.
   #
   # `position!/1` before the drain is the restart said explicitly: a cold
   # decode of the stored bytes, holding the invocation, on a machine that
