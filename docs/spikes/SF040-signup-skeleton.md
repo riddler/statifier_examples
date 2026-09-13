@@ -17,26 +17,34 @@ section; nothing rewrites an earlier one.
 ## Vocabulary
 
 Written into this file by k4, after the skeleton was built. The operator's
-R10d amendment of 2026-09-12 (carried into campaign SF040 as consent
-amendment A2) settles the words this spike was groping for:
+R10d amendment of 2026-09-12 (recorded in the Riddler umbrella's
+`docs/decisions.md`; carried into campaign SF040 as consent amendment A2)
+settles the words this spike was groping for, and is the authority for the
+rename below:
 
 - a **question** owns its `answer_options` - the things a select or a
-  checkbox group chooses among;
+  checkbox group chooses among; none of this skeleton's questions is one
+  (verified: `heading`, `text`, `text_question` and `button` are the whole
+  of `priv/fixtures/signup_screens.json`'s `"type"` vocabulary), so no
+  fixture here carries one - adding one would be new behaviour this bead
+  does not do;
 - a visitor's **Journey** owns `responses`, and the datamodel root a screen
   writes is `responses.<element_key>`, not `answers.<element_key>`;
 - the **host-supplied** root is `context`, not `request`, so a `responses`
   root never reads as the reply half of a request/response pair.
 
-The k4 section at the foot of this file is written in that vocabulary. The
-k1, k2 and k3 sections above it, and all of the code and fixtures the
-skeleton shipped, still say `answers`: they were written before the ruling
-and this file's rule is that nothing rewrites an earlier section. The rename
-in this app is `se-ah4`, scheduled after the k1..k3 stack lands. Until it
-does, read `answers.<element_key>` in the sections above, in
-`priv/fixtures/signup_path.json`'s datamodel envelope, and in every module
-under `lib/statifier_examples/signup/` as the thing now called
-`responses.<element_key>`. Where k4 quotes code, a fixture or a test
-verbatim, it is quoted as it stands.
+**Landed 2026-09-13 (`se-ah4`).** The rename this section called for is done:
+every module under `lib/statifier_examples/signup/`, both signup fixtures,
+the LiveView pages and their tests now read `responses.<element_key>`, and
+`answers.<element_key>` survives nowhere in this app's signup domain. This
+file now reads in one vocabulary throughout, including the k1, k2 and k3
+sections below - this is the one deliberate exception to "nothing rewrites
+an earlier section" the Vocabulary section itself scheduled, made so this
+file does not go on describing words the code no longer uses. Where a k1-k3
+section still narrates the reasoning that led to the ruling, "answers" is
+kept as the word that reasoning was conducted in; only the still-live
+`responses.<element_key>` datamodel references were moved. Where k4 quotes
+code, a fixture or a test verbatim, it is quoted as it now stands.
 
 ## k1 findings - what the four types needed that a JSON document did not say
 
@@ -57,7 +65,7 @@ this app only gets to discover them.
    `{:ok, true}` puts a node on a screen and an unanswered question hides
    what depends on it. Which shape a caller actually meets is the caller's
    choice, not the document's: `StatifierExamplesWeb.SignupScreensLive`
-   always hands over an `answers` root, so every screen it draws - the first
+   always hands over a `responses` root, so every screen it draws - the first
    one included - sees `:undefined` and never the error; a caller passing a
    bare `%{}` gets the error instead. Nothing in the element document says
    either that the two shapes mean the same thing or that a renderer owes
@@ -66,20 +74,20 @@ this app only gets to discover them.
 
 2. **Hiding a node says nothing about its answer.** A `text_question` whose
    condition stops holding disappears from the screen. Whether the answer it
-   already wrote stays in `answers` is a question about the datamodel, not
+   already wrote stays in `responses` is a question about the datamodel, not
    about the screen, and the element document has no vocabulary for it. The
    skeleton leaves the answer in place, which means a reader can be routed by
    a value no longer visible on any screen.
 
 3. **A text slot that resolves to nothing has no declared spelling.** The
-   document writes `{{ answers.first_name }}`. The subset is Riddler R9's to
+   document writes `{{ responses.first_name }}`. The subset is Riddler R9's to
    define and **no Liquid library is added here** - `Screens.fill_slots/2` is
    one regex and one lookup, deliberately too small to be mistaken for an
    implementation. What that stand-in had to invent is the missing case: an
    unresolved path renders as the empty string, so a half-written sentence is
    what a reader sees. An error, a literal passthrough, and a default written
    beside the slot are all reasonable and all unspecified. So is a path that
-   resolves to a map or a list - `{{ answers }}` names something real and
+   resolves to a map or a list - `{{ responses }}` names something real and
    has no sensible string - which the stand-in renders as the empty string
    for the same reason, rather than raising inside a template.
 
@@ -104,7 +112,7 @@ this app only gets to discover them.
 
 7. **Answers arrive as strings and conditions compare typed values.** This is
    the app's problem rather than the format's, but it bit immediately:
-   `answers.seats > 1` is false for the string `"5"`, so
+   `responses.seats > 1` is false for the string `"5"`, so
    `StatifierExamplesWeb.SignupScreensLive` coerces digits to integers at the
    form edge. A chart-backed Path (k2) hands typed values over and will not
    need it - which is worth saying out loud, because a datamodel whose types
@@ -166,11 +174,11 @@ one frame rather than argued for:
 
 - The business hint reads **"More than one seat puts you on the business
   plan, ."** - the sentence ends in a comma and a full stop because
-  `{{ answers.first_name }}` is unresolved on a screen that never asked for a
+  `{{ responses.first_name }}` is unresolved on a screen that never asked for a
   name. That is finding 3's empty-string rule, and it looks exactly as bad as
   it should.
 - Before the seat count is typed, the plan screen shows **only** the Back
-  button: `plan_personal` guards on `answers.seats <= 1`, which is
+  button: `plan_personal` guards on `responses.seats <= 1`, which is
   `:undefined` rather than true while the question is unanswered, so the
   screen's default choice is missing until the reader answers something. That
   is finding 1 with a face on it - a document author would have written
@@ -242,12 +250,12 @@ stops being true.
    arrangement works and reads slightly dishonestly, which is worth one line
    in a spike rather than a workaround.
 
-5. **The environment walk sees `answers.*`, and types every one of them
+5. **The environment walk sees `responses.*`, and types every one of them
    `:unknown`.** This is the question the bead left open, and it has a
    definite answer in both directions. The paths **are** there - all four,
    and only after the screens that write them; `Environment.at/3` at the
-   confirm screen's position answers `answers.email`, `answers.first_name`,
-   `answers.plan`, `answers.seats`, and at the first position answers `%{}`.
+   confirm screen's position answers `responses.email`, `responses.first_name`,
+   `responses.plan`, `responses.seats`, and at the first position answers `%{}`.
    Every value is `:unknown`. That is not an accident of this document:
    `StatifierBlocks.Environment`'s moduledoc says a `capture` map "writes
    `:unknown` at each of its keys, one per pair" (`environment.ex:78`) and
@@ -261,23 +269,23 @@ stops being true.
 6. **A `capture` map cannot express a constant, so nothing lets a button
    record its own identity.** This is the finding the skeleton went looking
    for a field to solve and found it could not. The Path branches on
-   `answers.plan`, and no question asks for a plan - the choice *is* which
+   `responses.plan`, and no question asks for a plan - the choice *is* which
    button was pressed. The obvious move is to let a button say what its
    press records, so a button may now declare `writes`, a `capture` map of
-   its own, and both plan buttons declare `{"answers.plan": "plan"}`.
+   its own, and both plan buttons declare `{"responses.plan": "plan"}`.
 
    **That does not do what it looks like it does.** A `capture` value is a
    path inside `_event.data`, never a literal: `core/on_event.ex:806-820`
    builds each pair as `{"expr", "_event.data." <> source}`. Both plan
    buttons therefore compile to the byte-identical
-   `<assign location="answers.plan" expr="_event.data.plan"/>`, and what
-   reaches `answers.plan` is entirely whatever the **host** put in the
+   `<assign location="responses.plan" expr="_event.data.plan"/>`, and what
+   reaches `responses.plan` is entirely whatever the **host** put in the
    payload. The press contributes nothing.
 
    Two things follow, and both are the point. First, the field still earns
    its place, for a smaller reason than the one it was added for: it decides
    which buttons write the path **at all**, and `Back` declaring no `writes`
-   is why pressing it leaves `answers.plan` alone instead of overwriting it.
+   is why pressing it leaves `responses.plan` alone instead of overwriting it.
    Second, the Path's branch rests on a **host contract that neither
    document states** - an event raised for a button that declares `writes`
    must carry those source fields in its payload - and there is nowhere in
@@ -302,12 +310,12 @@ stops being true.
    `outcomes/1` and `io/1`, which the editor calls against config that is
    still being typed.
 
-8. **Answer-key uniqueness is a Path-wide property no compiler can check.**
+8. **Response-key uniqueness is a Path-wide property no compiler can check.**
    R10d keys answers by element key, so the key is not a per-screen
    identifier. The check shipped here is deliberately narrower than R10d's
-   whole surface: `Screens.answer_keys/1` reads `text_question` nodes only,
+   whole surface: `Screens.response_keys/1` reads `text_question` nodes only,
    so what `validate/1` holds unique is the keys that actually **carry an
-   answer**, and the finding is tagged `:duplicate_answer_key` to say so.
+   answer**, and the finding is tagged `:duplicate_response_key` to say so.
    Two screens sharing a `heading` or `button` key are not reported. That is
    a real remaining gap rather than a decision - a duplicated button key is
    as much a collision as a duplicated question key, it just collides in a
@@ -364,7 +372,7 @@ No ADR is amended in SF040 (consent clause 9), so these are recorded here:
   `payload`.** Finding 5. The payload declaration already carries the member
   types the capture sources are checked against, so the type of each
   destination is in hand at exactly the moment `capture_writes/1` discards
-  it. Typing them would make a Path's `answers.*` readable by the environment
+  it. Typing them would make a Path's `responses.*` readable by the environment
   walk, which is what a downstream branch guard wants. Owner:
   `statifier_blocks`.
 - **A "park until interrupted, with a deadline" primitive.** Finding 4.
@@ -387,8 +395,8 @@ No ADR is amended in SF040 (consent clause 9), so these are recorded here:
 | File | What it is |
 |---|---|
 | `lib/statifier_examples/signup/screen.ex` | `myapp.screen`: the composite, its params and its subtree |
-| `lib/statifier_examples/signup/path.ex` | the Path, and `validate/1` - the R10d uniqueness check |
-| `priv/fixtures/signup_path.json` | three screens, a branch on `answers.plan`, a reminder timer |
+| `lib/statifier_examples/signup/path.ex` | the Path, and `validate/1` - the host-side uniqueness check narrower than R10d's own sentence (finding 8) |
+| `priv/fixtures/signup_path.json` | three screens, a branch on `responses.plan`, a reminder timer |
 | `test/statifier_examples/signup/screen_test.exs` | the expansion, and the two limits above asserted as facts |
 | `test/statifier_examples/signup/path_test.exs` | the compile, the distinct events, the environment walk, the validator |
 
@@ -411,9 +419,9 @@ functions and a third that a linear-Path assumption would have missed:
 
 | Function | Takes | Answers |
 |---|---|---|
-| `Journey.current/1` | a run id | the screen the run is parked on, its resolved nodes, the answers so far, the status |
-| `Journey.submit/3` | a run id, the outcome a button named, the form's answers | `{:ok, next view}`, `{:invalid, same view with findings}`, or `{:error, reason}` |
-| `Journey.resolve/2` | a view and a **draft** | the same view re-resolved over answers the reader has typed and not sent |
+| `Journey.current/1` | a run id | the screen the run is parked on, its resolved nodes, the responses so far, the status |
+| `Journey.submit/3` | a run id, the outcome a button named, the form's responses | `{:ok, next view}`, `{:invalid, same view with findings}`, or `{:error, reason}` |
+| `Journey.resolve/2` | a view and a **draft** | the same view re-resolved over responses the reader has typed and not sent |
 
 Two properties are worth naming as part of the contract rather than as
 implementation. **Neither of the first two takes a run** - both take an id and
@@ -430,22 +438,22 @@ with no way off it. The draft is never persisted and never sent.
 
 1. **The host contract k2 predicted is real, and this page is the host.**
    k2's finding 6 says a `capture` value is a path inside `_event.data` and
-   never a literal, so what lands at `answers.plan` is whatever the host put
+   never a literal, so what lands at `responses.plan` is whatever the host put
    in the payload. Running it makes that concrete: the payload
-   `Journey.submit/3` sends is *the form's answers, keyed by element key,
+   `Journey.submit/3` sends is *the form's responses, keyed by element key,
    merged with the firing button's own `payload` map*, and the two plan
    buttons carry `"payload": {"plan": "business"}` and `{"plan": "personal"}`
    for the branch to read. `Journey.payload/2` is public for that reason - a
    contract nothing can read is a contract nobody can check. Without the
-   button half, `answers.plan` is `:undefined`, the branch takes neither arm
+   button half, `responses.plan` is `:undefined`, the branch takes neither arm
    and the run reaches the confirm screen having chosen nothing. That is
    asserted, both ways, in `JourneyTest`.
 
 2. **A capture writes its destination whether or not the payload carries the
    source.** Press Back on the plan screen without typing a seat count and
-   `answers.seats` is written as `:undefined` rather than left absent. Every
+   `responses.seats` is written as `:undefined` rather than left absent. Every
    question on a screen is in every button's capture map, so a screen's
-   answers are written by whichever button ends it, in full, with the
+   responses are written by whichever button ends it, in full, with the
    unanswered ones filled in as `:undefined`. Nothing downstream can tell
    "not answered" from "answered with nothing", and a guard reading such a
    path gets a value rather than a missing one.
@@ -515,7 +523,7 @@ with no way off it. The draft is never persisted and never sent.
    well.
 
 10. **No shipped screen can demonstrate an input drawn over a stored answer.**
-    The renderer takes an `answers` map for exactly that, and on this Path it
+    The renderer takes a `responses` map for exactly that, and on this Path it
     is unobservable: a linear Path never returns to a screen, so no input is
     ever redrawn over an answer the chart holds. Deleting the attribute's
     value reddened nothing in either suite. It stays correct because the next
@@ -527,7 +535,7 @@ with no way off it. The draft is never persisted and never sent.
     app had needed `_event.data` before - so k3 widened it to `/4`. Worth
     saying only because it is the seam a host meets first and it was missing:
     every door into a run (`send_event`, `deliver/2`,
-    `complete_invocation/3`) is about *which* event, and a screen's answers
+    `complete_invocation/3`) is about *which* event, and a screen's responses
     ride on the one thing none of them took.
 
 ### The acceptance line k3 could not meet literally
@@ -587,14 +595,14 @@ They are additional to k2's four, which all stand.
 
 Five files of k1's and k2's moved, each forced by the bead:
 `priv/fixtures/signup_path.json` gained the `core.invoke` the finished Path
-ends on (`myapp:signup` with `params: "answers=answers"`, writing to a
+ends on (`myapp:signup` with `params: "responses=responses"`, writing to a
 `created` root it also declares); `priv/fixtures/signup_screens.json` gained
 the `format` on the address question and the `payload` map on each plan
 button; `lib/statifier_examples/signup/screen.ex` gained
 `park_block_id/1`; `lib/statifier_examples/charts/durable.ex` gained the
 payload argument on `send_event`; `lib/statifier_examples/signup/handlers.ex`
 gained the `myapp:signup` clause that answers a create-account receipt for
-the answers it is handed. `test/statifier_examples/view_model_pin_test.exs`
+the responses it is handed. `test/statifier_examples/view_model_pin_test.exs`
 moved to the measured value, 9 rows for `signup_path` rather than 8, because
 the Path gained a block.
 
@@ -610,7 +618,7 @@ also the only evidence for something a test asserts differently.
 | `se-7wt-validation-findings.png` | Continue pressed with a blank name and `ada-at-example` in the address: both findings drawn, the screen still the account screen, the run not moved. Finding 6's two rules, as a reader meets them. |
 | `se-7wt-plan-screen-draft.png` | `5` typed into the seat count and nothing submitted: the business button has appeared, the personal one has not, and the hint reads "More than one seat puts you on the business plan, Ada." - a condition on a **draft** answer and a text slot filled from an answer the **chart** holds, on one screen. That is `resolve/2` and the k1 renderer doing two different jobs at once. |
 | `se-7wt-confirm-screen.png` | After pressing the business plan. The page was showing the between-screens state while the company-details job ran, and redrew **on its own** when the job answered - nothing was clicked between the two. The referral question is on the screen because the seat count is five. |
-| `se-7wt-run-finished.png` | Finish pressed: the run is `done` and the collected block holds all five answers the chart gathered. The server log for the same run carries `myapp:signup created the account for "ada@example.com"` - the create-account call, handed the answers. |
+| `se-7wt-run-finished.png` | Finish pressed: the run is `done` and the collected block holds all five responses the chart gathered. The server log for the same run carries `myapp:signup created the account for "ada@example.com"` - the create-account call, handed the responses. |
 
 ## k4 - what the skeleton settled, and what it only found out it did not know
 
@@ -627,7 +635,7 @@ commit.
 
 R10a says a Path is a `statifier_blocks` document plus the element documents
 its screens reference; a Journey is a durable run plus its datamodel; a Guide
-is the durable stepper composed with an element resolver and an answer
+is the durable stepper composed with an element resolver and a response
 validator **as effect executors**. Two of the three came out as ruled. The
 third did not, and the reason is the most useful thing this spike has to say
 about the mapping.
@@ -682,7 +690,7 @@ defend.
 | `lib/statifier_examples/signup/handlers.ex` | gained the `myapp:signup` clause that answers a create-account receipt | k3 |
 | `lib/statifier_examples/signup.ex`, `lib/statifier_examples_web/router.ex` | the document registration, the block type, two routes | k1, k2 |
 
-Six test modules and four pinned enumerations moved with them; k2's finding 9
+Seven test modules and four pinned enumerations moved with them; k2's finding 9
 records what the pinning convention costs a bead that adds a document.
 
 The split worth keeping is the one k1 named and k3 did not break: the
@@ -771,32 +779,35 @@ well; the skeleton chose both and nothing forced the choice.
 
 ### R10d and Q17, the responses layout used, and what Back did
 
-**Layout: flat.** One root, `responses.<element_key>` (spelled `answers` in
-the shipped bytes; see the Vocabulary note), declared once in the Path
-document's datamodel envelope alongside `created`, which the closing
+**Layout: flat.** One root, `responses.<element_key>`, declared once in the
+Path document's datamodel envelope alongside `created`, which the closing
 `core.invoke` writes its receipt to. No per-screen namespacing was tried,
 because nothing in three screens needed it, and the flat form is what makes
 k2's uniqueness check meaningful at all: a key is a datamodel path, so two
 screens claiming one key are two screens claiming one cell.
 
 **Uniqueness is a host check, and a narrower one than R10d's sentence.**
-`Path.validate/1` (`lib/statifier_examples/signup/path.ex:102`) reads
-`Screens.answer_keys/1`, which reads `text_question` nodes only, so what is
-held unique is the keys that actually carry a response - hence the
-`:duplicate_answer_key` tag. Two screens sharing a `heading` or `button` key
-are not reported. Building it turned up that the commonest instance is not
-two screens sharing a key but **one screen shown twice**, so the finding names
-the blocks that reach a repeated name rather than the screens. And the check
-is necessarily the host's: the element document is not a block document, the
-compiler never reads it, and nothing upstream can see two screens claiming
-one key.
+`Path.validate/1` (`lib/statifier_examples/signup/path.ex:102`) runs two
+checks. The first reads `Screens.response_keys/1`, which reads
+`text_question` nodes only, so what is held unique is the keys that actually
+carry a response - hence the `:duplicate_response_key` tag. Two screens
+sharing a `heading` or `button` key are not reported. Building it turned up
+that the commonest instance is not two screens sharing a key but **one
+screen shown twice**, so the finding names the blocks that reach a repeated
+name rather than the screens. The second check, `:duplicate_outcome`, holds
+`Screens.outcomes/1` to the same rule for the same reason: two screens'
+buttons cannot share an outcome name any more than two screens' questions
+can share a key. And the check is necessarily the host's: the element
+document is not a block document, the compiler never reads it, and nothing
+upstream can see two screens claiming one key.
 
 **Back navigation was not built and cannot be built on this shape.** This is
 the part of R10d the spike was meant to exercise and could not. The plan
 screen declares a Back button (`priv/fixtures/signup_screens.json:102-104`,
 key `plan_back`, outcome `went_back`), and because a composite answers only
 `done` (R10b above), `went_back` reaches no outcome slot and the Path has no
-way to tell it from `Continue`. **Pressing Back moves the Path forward.**
+way to tell it from `personal_chosen` or `business_chosen`, the plan
+screen's own two buttons. **Pressing Back moves the Path forward.**
 Two consequences follow, and both are findings about the ruling rather than
 about this app:
 
@@ -821,10 +832,13 @@ way to go backwards at all.** That is R10b's outcome limit again, met from the
 other side.
 
 `context` - A2's host-supplied root - does not exist in the skeleton. The
-Path declares `answers` and `created` and nothing else; no value enters a run
-from the host except through a button's event payload. A Path that needed to
-read who the visitor is, or what plan the marketing page offered them, has
-nowhere to put it today.
+Path declares `responses` and `created` and nothing else; no value enters a
+run from the host except through a button's event payload. A Path that
+needed to read who the visitor is, or what plan the marketing page offered
+them, has nowhere to put it today. Riddler R12.5 gives this a shape: the
+host supplies `context` at Journey creation and on every submit, and
+`resolve` and `submit` merge it before the step. That contract is **not yet
+implemented** here - noted for `se-ah4` to leave in place, not built.
 
 ### R10e and Q13, the resolve/submit pair, and the third state
 
@@ -894,7 +908,7 @@ Three things that gives Q16 to work with:
   `Referer`, and in any log that records paths.
 - **The handoff is not built.** The account is created by the *last* block of
   the Path (`blk_sp_create_account`, a `core.invoke` sending
-  `answers=answers` and writing its receipt to `created`), after every
+  `responses=responses` and writing its receipt to `created`), after every
   response is already collected. Nothing then associates the run with the
   account it just created; `created` holds a receipt and the run holds the
   responses, and the join between them exists only in the log line the stub
@@ -1065,12 +1079,14 @@ before being written down; all four are true.
    whole file at once.
 
 4. **The account of `Path.validate/1` is narrower than the function.** The k4
-   section describes the `:duplicate_answer_key` half and says two screens
+   section describes the `:duplicate_response_key` half and says two screens
    sharing a `heading` or `button` key are not reported, which is true of
    that check. `validate/1` also runs a second duplicate check,
    `:duplicate_outcome` over `Screens.outcomes/1`, so two screens sharing a
    button **outcome** are reported. k2's section discloses that half, so the
-   file as a whole is not wrong; k4's summary of it is incomplete.
+   file as a whole is not wrong; k4's summary of it is incomplete (`se-ah4`
+   folds this correction into the k4 "Uniqueness is a host check" section
+   above, which now names both checks).
 
 One finding the review raised as blocking is not listed above because it was
 corrected before the verdict landed, in this branch's second commit: the R10a

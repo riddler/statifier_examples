@@ -29,12 +29,12 @@ defmodule StatifierExamplesWeb.SignupElements do
   """
   attr :title, :string, required: true
   attr :nodes, :list, required: true, doc: "nodes from `Screens.resolve/2`"
-  attr :answers, :map, default: %{}, doc: "current answers, keyed by element key"
+  attr :responses, :map, default: %{}, doc: "current responses, keyed by element key"
 
   def screen(assigns) do
     ~H"""
     <section class="flex flex-col gap-4" data-screen-title={@title}>
-      <.element :for={node <- @nodes} node={node} answers={@answers} />
+      <.element :for={node <- @nodes} node={node} responses={@responses} />
     </section>
     """
   end
@@ -43,7 +43,7 @@ defmodule StatifierExamplesWeb.SignupElements do
   Draws one element node, dispatching on its `"type"`.
   """
   attr :node, :map, required: true
-  attr :answers, :map, default: %{}
+  attr :responses, :map, default: %{}
 
   def element(%{node: %{"type" => "heading"}} = assigns), do: heading(assigns)
   def element(%{node: %{"type" => "text"}} = assigns), do: text(assigns)
@@ -58,7 +58,7 @@ defmodule StatifierExamplesWeb.SignupElements do
 
   @doc "A screen's title, or a subtitle within it."
   attr :node, :map, required: true
-  attr :answers, :map, default: %{}
+  attr :responses, :map, default: %{}
 
   def heading(assigns) do
     ~H"""
@@ -73,7 +73,7 @@ defmodule StatifierExamplesWeb.SignupElements do
 
   @doc "A paragraph. Its text slots are already filled."
   attr :node, :map, required: true
-  attr :answers, :map, default: %{}
+  attr :responses, :map, default: %{}
 
   def text(assigns) do
     ~H"""
@@ -81,9 +81,9 @@ defmodule StatifierExamplesWeb.SignupElements do
     """
   end
 
-  @doc "A labelled text input, writing to `answers.<key>`."
+  @doc "A labelled text input, writing to `responses.<key>`."
   attr :node, :map, required: true
-  attr :answers, :map, default: %{}
+  attr :responses, :map, default: %{}
 
   def text_question(assigns) do
     ~H"""
@@ -93,8 +93,8 @@ defmodule StatifierExamplesWeb.SignupElements do
       </span>
       <input
         type="text"
-        name={"answers[#{@node["key"]}]"}
-        value={Map.get(@answers, @node["key"], "")}
+        name={"responses[#{@node["key"]}]"}
+        value={Map.get(@responses, @node["key"], "")}
         placeholder={@node["placeholder"]}
         required={@node["required"] == true}
         class="input input-bordered w-full"
@@ -105,7 +105,7 @@ defmodule StatifierExamplesWeb.SignupElements do
 
   @doc "A button that ends the screen by naming an outcome."
   attr :node, :map, required: true
-  attr :answers, :map, default: %{}
+  attr :responses, :map, default: %{}
 
   def button(assigns) do
     ~H"""
@@ -132,11 +132,11 @@ defmodule StatifierExamplesWeb.SignupElements do
     assigns =
       assign(assigns,
         nodes: Screens.resolve(assigns.screen, assigns.datamodel),
-        answers: Map.get(assigns.datamodel, "answers", %{})
+        responses: Map.get(assigns.datamodel, "responses", %{})
       )
 
     ~H"""
-    <.screen title={@screen.title} nodes={@nodes} answers={@answers} />
+    <.screen title={@screen.title} nodes={@nodes} responses={@responses} />
     """
   end
 end

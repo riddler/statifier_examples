@@ -19,7 +19,7 @@ defmodule StatifierExamples.Signup.Screen do
           core.send   present the screen
           core.await  park, with the deadline
         interrupts
-          core.on_event  one per button: capture the answers, abandon
+          core.on_event  one per button: capture the responses, abandon
 
   Two params: which screen (a key in `priv/fixtures/signup_screens.json`)
   and how long before an unattended screen is abandoned. Everything else -
@@ -28,25 +28,25 @@ defmodule StatifierExamples.Signup.Screen do
   the screen's buttons are already declared once, and a composite that made
   an author re-declare them here would be a second place for them to drift.
 
-  ## Where an answer lands
+  ## Where a response lands
 
-  `answers.<element_key>` (Riddler R10d), written by the firing handler's
+  `responses.<element_key>` (Riddler R10d), written by the firing handler's
   `capture` map - the key is the destination and the value is the path
   inside `_event.data` (`StatifierBlocks.Core.OnEvent`'s "The optional
   `capture` map"). So a screen's `text_question` keyed `first_name` writes
-  `answers.first_name`, and the document never says so twice.
+  `responses.first_name`, and the document never says so twice.
 
   A button may also declare `writes`, a `capture` map of its own, merged
-  into the handler's - `answers.plan` on the two plan buttons, which is what
+  into the handler's - `responses.plan` on the two plan buttons, which is what
   the Path branches on.
 
   **`writes` does not record which button was pressed, and cannot.** A
   `capture` value is a path inside `_event.data`, never a literal: the pair
   compiles to `expr="_event.data.<source>"`. Both plan buttons declare the
   same pair, so both compile to the byte-identical assign, and what lands in
-  `answers.plan` is whatever the **host** put in the event payload. What the
+  `responses.plan` is whatever the **host** put in the event payload. What the
   field actually buys is which buttons write the path **at all** - `Back`
-  declares no `writes`, so pressing it leaves `answers.plan` alone rather
+  declares no `writes`, so pressing it leaves `responses.plan` alone rather
   than overwriting it - and a place to say that this screen's press carries
   a `plan` field. The host contract that makes the Path's branch work is
   therefore unstated in both documents: an event named by
@@ -213,7 +213,7 @@ defmodule StatifierExamples.Signup.Screen do
   defp handlers(nil), do: []
 
   defp handlers(screen) do
-    capture = answer_capture(screen)
+    capture = response_capture(screen)
 
     screen
     |> buttons()
@@ -236,15 +236,18 @@ defmodule StatifierExamples.Signup.Screen do
   end
 
   # What the form collected: one pair per question on the screen, keyed by
-  # its destination. `answer_keys/1` is `Screens`' own reading of which
-  # nodes carry an answer, so the two modules cannot disagree about it.
-  @spec answer_capture(Screens.screen()) :: %{optional(String.t()) => String.t()}
-  defp answer_capture(screen) do
-    Map.new(Screens.answer_keys(screen), &{"answers." <> &1, &1})
+  # its destination. `response_keys/1` is `Screens`' own reading of which
+  # nodes carry a response, so the two modules cannot disagree about it.
+  @spec response_capture(Screens.screen()) :: %{optional(String.t()) => String.t()}
+  defp response_capture(screen) do
+    Map.new(Screens.response_keys(screen), &{"responses." <> &1, &1})
   end
 
-  # What the press itself records. Absent on most buttons; the two plan
-  # buttons declare `answers.plan`, which is what the Path branches on.
+  # A button's own additional capture pairs, if it declares `writes`. Absent
+  # on most buttons; the two plan buttons declare `responses.plan`, which is
+  # what the Path branches on - not a record of which button fired (the
+  # moduledoc's "`writes` does not record which button was pressed" explains
+  # why it cannot be).
   @spec writes(Screens.node_doc()) :: %{optional(String.t()) => String.t()}
   defp writes(button) do
     case Map.get(button, "writes") do

@@ -35,14 +35,14 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
     # Sabotage: made `handle_event("start", ...)` patch to the page with no
     # `run` param. Exactly this case went red: the patch drew the empty page
-    # again and `#journey-answers` never appeared. Reverted from a copy.
+    # again and `#journey-responses` never appeared. Reverted from a copy.
     test "and starting one lands on the first screen", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey")
 
       html = live |> element("#start-journey") |> render_click()
 
       assert html =~ "Create your account"
-      assert has_element?(live, "#journey-answers")
+      assert has_element?(live, "#journey-responses")
       assert has_element?(live, "#account_continue")
     end
   end
@@ -60,12 +60,12 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     end
 
     # Sabotage: made the page pass `@view.datamodel` to `SignupElements.screen`
-    # as its `answers` instead of `@view.answers`. NOTHING went red, in either
-    # suite, and that is a finding rather than a gap in the cases: this Path
-    # never returns to a screen, so no input is ever drawn over an answer the
-    # chart already holds, and the whole `answers` attribute is unobservable
-    # here. It stays correct because the next Path will not be linear.
-    # Reverted from a copy.
+    # as its `responses` instead of `@view.responses`. NOTHING went red, in
+    # either suite, and that is a finding rather than a gap in the cases: this
+    # Path never returns to a screen, so no input is ever drawn over a
+    # response the chart already holds, and the whole `responses` attribute is
+    # unobservable here. It stays correct because the next Path will not be
+    # linear. Reverted from a copy.
     test "and it redraws as the reader types, because a condition may read it",
          %{conn: conn} do
       %{live: live} = started(conn)
@@ -74,7 +74,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
       html =
         live
-        |> form("#journey-answers", answers: %{"first_name" => "Ada"})
+        |> form("#journey-responses", responses: %{"first_name" => "Ada"})
         |> render_change()
 
       assert html =~ "Nice to meet you, Ada."
@@ -90,12 +90,12 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # next screen's resolve and its payload, and no screen on this Path reads
     # or captures another screen's keys, so it changes nothing that anything
     # can see. The clearing stays because a Path whose screens shared a key
-    # would send the previous screen's answer as this one's. Reverted from a
+    # would send the previous screen's response as this one's. Reverted from a
     # copy.
     test "moves the run to the next screen", %{conn: conn} do
       %{live: live} = started(conn)
 
-      live |> form("#journey-answers", answers: @account) |> render_change()
+      live |> form("#journey-responses", responses: @account) |> render_change()
       html = live |> element("#account_continue") |> render_click()
 
       assert html =~ "Pick a plan"
@@ -105,7 +105,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "that does not validate draws its findings and stays put", %{conn: conn} do
       %{live: live} = started(conn)
 
-      live |> form("#journey-answers", answers: %{"email" => "ada"}) |> render_change()
+      live |> form("#journey-responses", responses: %{"email" => "ada"}) |> render_change()
       html = live |> element("#account_continue") |> render_click()
 
       assert html =~ "Create your account"
@@ -119,12 +119,12 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "on a button a condition reveals", %{conn: conn} do
       %{live: live} = started(conn)
 
-      live |> form("#journey-answers", answers: @account) |> render_change()
+      live |> form("#journey-responses", responses: @account) |> render_change()
       live |> element("#account_continue") |> render_click()
 
       refute has_element?(live, "#plan_personal")
 
-      live |> form("#journey-answers", answers: %{"seats" => "1"}) |> render_change()
+      live |> form("#journey-responses", responses: %{"seats" => "1"}) |> render_change()
 
       assert has_element?(live, "#plan_personal")
       refute has_element?(live, "#plan_business")
@@ -138,17 +138,17 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
   describe "the run outlives the page" do
     # THE POINT OF THE PAGE. A second mount of the same URL is a different
     # process with a different socket and nothing carried over, and it opens
-    # on the screen the first one left the run on, reading the answers back
+    # on the screen the first one left the run on, reading the responses back
     # out of the chart rather than out of anything it kept.
     #
     # Sabotage: made `Journey.current/1` build its view from an empty
     # datamodel rather than the run's. Two cases went red, this one on the
-    # address it reads back: with no answers the confirm summary's text slot
+    # address it reads back: with no responses the confirm summary's text slot
     # renders empty and the collected block is bare. Reverted from a copy.
     test "and a second mount opens where it was", %{conn: conn} do
       %{live: live, execution_id: execution_id} = started(conn)
 
-      live |> form("#journey-answers", answers: @account) |> render_change()
+      live |> form("#journey-responses", responses: @account) |> render_change()
       live |> element("#account_continue") |> render_click()
 
       {:ok, second, html} = live(conn, ~p"/signup-journey?execution=#{execution_id}")
@@ -156,7 +156,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       assert html =~ "Pick a plan"
       assert has_element?(second, "#seats")
 
-      # The first screen's answers are the chart's now, and the page reads
+      # The first screen's responses are the chart's now, and the page reads
       # them back out of it - the collected block is drawn from the run's own
       # datamodel.
       assert render(second) =~ "ada@example.com"
@@ -167,7 +167,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
       assert html =~ "execution_not_found"
       assert has_element?(live, "#journey-error")
-      refute has_element?(live, "#journey-answers")
+      refute has_element?(live, "#journey-responses")
     end
   end
 end

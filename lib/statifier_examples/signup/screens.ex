@@ -23,7 +23,7 @@ defmodule StatifierExamples.Signup.Screens do
   | `button` | a button that ends the screen | `label`, `outcome` |
 
   Every node carries a `key`. For a `text_question` the key is also where
-  the answer lives: answers are keyed by element key, `answers.<key>`
+  the response lives: responses are keyed by element key, `responses.<key>`
   (Riddler R10d), so the document never has to say a second time where a
   question writes to. For the other three types the key is an identifier and
   nothing more, which is one field carrying two meanings - a finding this
@@ -43,7 +43,7 @@ defmodule StatifierExamples.Signup.Screens do
       datamodel is empty. A node with no condition is always kept.
 
     * **Text slots.** A `heading` or `text` node's text may hold
-      `{{ answers.first_name }}`. `fill_slots/2` is the two-line stand-in for
+      `{{ responses.first_name }}`. `fill_slots/2` is the two-line stand-in for
       the templating subset: one regex, one lookup. It is **not** a Liquid
       implementation and this app does not depend on one - the subset is
       Riddler R9's to define, and a library added here would quietly become
@@ -64,7 +64,7 @@ defmodule StatifierExamples.Signup.Screens do
   @typedoc "One screen: a key, a title, and a flat list of nodes."
   @type screen :: %{key: String.t(), title: String.t(), nodes: [node_doc()]}
 
-  # `{{ answers.first_name }}`: the delimiters, any surrounding whitespace,
+  # `{{ responses.first_name }}`: the delimiters, any surrounding whitespace,
   # and a dotted path of word characters between them.
   @slot ~r/\{\{\s*([\w.]+)\s*\}\}/
 
@@ -98,7 +98,7 @@ defmodule StatifierExamples.Signup.Screens do
   The nodes of `screen` a reader should see, with their text slots filled.
 
   `datamodel` is the map conditions are evaluated against and slots are read
-  from - `%{"answers" => %{"first_name" => "Ada"}}` for the documents this
+  from - `%{"responses" => %{"first_name" => "Ada"}}` for the documents this
   app ships.
 
   ## Examples
@@ -136,14 +136,14 @@ defmodule StatifierExamples.Signup.Screens do
 
   The two-line stand-in for the templating subset. An unresolved path becomes
   the empty string, and so does one naming something with no sensible string
-  of its own - a map or a list, as `{{ answers }}` would be. Raising inside a
+  of its own - a map or a list, as `{{ responses }}` would be. Raising inside a
   paragraph is not a behaviour a screen can recover from.
 
   ## Examples
 
       iex> StatifierExamples.Signup.Screens.fill_slots(
-      ...>   "Hello, {{ answers.first_name }}.",
-      ...>   %{"answers" => %{"first_name" => "Ada"}}
+      ...>   "Hello, {{ responses.first_name }}.",
+      ...>   %{"responses" => %{"first_name" => "Ada"}}
       ...> )
       "Hello, Ada."
   """
@@ -164,11 +164,11 @@ defmodule StatifierExamples.Signup.Screens do
   end
 
   @doc """
-  The element keys `screen`'s questions write answers under, in document
-  order. `answers.<key>` is where each one lands (Riddler R10d).
+  The element keys `screen`'s questions write responses under, in document
+  order. `responses.<key>` is where each one lands (Riddler R10d).
   """
-  @spec answer_keys(screen()) :: [String.t()]
-  def answer_keys(%{nodes: nodes}) do
+  @spec response_keys(screen()) :: [String.t()]
+  def response_keys(%{nodes: nodes}) do
     for %{"type" => "text_question"} = node_doc <- nodes, do: Map.fetch!(node_doc, "key")
   end
 

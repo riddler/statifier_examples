@@ -5,7 +5,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
   `StatifierExamplesWeb.SignupScreensLive` is this page's predecessor and they
   are worth reading together. That one draws the same element documents with
-  the answers in its own socket and an outcome it only displays; this one
+  the responses in its own socket and an outcome it only displays; this one
   holds **no authoritative run state**. Every press goes to
   `StatifierExamples.Signup.Journey` with a run id and nothing else, and
   `Journey` loads the run from storage, raises the outcome as an event
@@ -19,7 +19,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   Two things, and neither is decided from.
 
   The **view** `Journey` last answered with - a screen, its resolved nodes,
-  the datamodel, the answers, a status. That is a copy of run state and it
+  the datamodel, the responses, a status. That is a copy of run state and it
   can be stale between redraws, which is why every press re-reads: the only
   thing `handle_event("outcome", ...)` takes out of it is `execution_id`, so a
   second person pressing the same run is refused by `Journey` against the
@@ -68,8 +68,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     end
   end
 
-  def handle_event("answer", %{"answers" => answers}, socket) do
-    draft = Map.merge(socket.assigns.draft, answers)
+  def handle_event("response", %{"responses" => responses}, socket) do
+    draft = Map.merge(socket.assigns.draft, responses)
 
     {:noreply, assign(socket, draft: draft, view: Journey.resolve(socket.assigns.view, draft))}
   end
@@ -126,11 +126,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
             </li>
           </ul>
 
-          <form :if={@view.screen} id="journey-answers" phx-change="answer" class="contents">
+          <form :if={@view.screen} id="journey-responses" phx-change="response" class="contents">
             <SignupElements.screen
               title={@view.screen.title}
               nodes={@view.nodes}
-              answers={@view.answers}
+              responses={@view.responses}
             />
           </form>
 
@@ -140,7 +140,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
           <details class="text-xs opacity-70">
             <summary>What the chart has collected</summary>
-            <pre id="collected" class="whitespace-pre-wrap">{inspect(@view.answers, pretty: true)}</pre>
+            <pre id="collected" class="whitespace-pre-wrap">{inspect(@view.responses, pretty: true)}</pre>
           </details>
         </div>
       </div>

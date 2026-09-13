@@ -55,7 +55,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
       assert key(view) == "account"
       assert view.status == :running
-      assert view.answers == %{}
+      assert view.responses == %{}
 
       # `account_greeting` is conditional on a name nobody has given yet.
       assert keys(view) == [
@@ -86,8 +86,8 @@ defmodule StatifierExamples.Signup.JourneyTest do
     #
     # Sabotage: made `pressed/5` send the outcome event with no payload
     # (`Durable.send_event/4`'s default). Five cases went red, this one at
-    # its first assertion about `answers`: no capture wrote anything at all,
-    # so the branch on `answers.plan` took neither arm and three cases that
+    # its first assertion about `responses`: no capture wrote anything at all,
+    # so the branch on `responses.plan` took neither arm and three cases that
     # only wanted a run somewhere down the business arm fell over too.
     # Reverted from a copy.
     test "drive the run from the first screen to the created account", %{
@@ -95,15 +95,15 @@ defmodule StatifierExamples.Signup.JourneyTest do
     } do
       assert {:ok, plan} = Journey.submit(execution_id, "account_submitted", @account)
       assert key(plan) == "plan"
-      assert plan.answers == %{"first_name" => "Ada", "email" => "ada@example.com"}
+      assert plan.responses == %{"first_name" => "Ada", "email" => "ada@example.com"}
 
       assert {:ok, confirm} = Journey.submit(execution_id, "personal_chosen", %{"seats" => "1"})
       assert key(confirm) == "confirm"
-      assert confirm.answers["plan"] == "personal"
+      assert confirm.responses["plan"] == "personal"
 
       # Coerced on the way in, which is what lets the confirm screen's
       # conditional half stay off for a one-seat signup.
-      assert confirm.answers["seats"] == 1
+      assert confirm.responses["seats"] == 1
       assert keys(confirm) == ["confirm_heading", "confirm_summary", "confirm_finish"]
 
       # The paragraph reads back the address the first screen collected,
@@ -116,16 +116,16 @@ defmodule StatifierExamples.Signup.JourneyTest do
       assert key(done) == nil
 
       # The stub create-account call, and the proof it was handed the
-      # answers rather than a step name: it echoes the address back.
+      # responses rather than a step name: it echoes the address back.
       # Four, not the five this counted before `statifier_blocks` 0.28.0.
-      # `collected` is `map_size(answers)`, and the confirm screen demands
+      # `collected` is `map_size(responses)`, and the confirm screen demands
       # nothing, so its own capture pair has no source in `_event.data`.
       # Under sb-ADR-0002's capture Note (N2) that pair now leaves its
       # destination UNWRITTEN, where it used to write the interpreter's
       # `:undefined` into it and be counted. The four that remain are the
       # two the account screen collected, the plan the button recorded and
       # the coerced seat count - measured, not relaxed.
-      assert done.answers == %{
+      assert done.responses == %{
                "first_name" => "Ada",
                "email" => "ada@example.com",
                "plan" => "personal",
@@ -145,7 +145,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # process, a live invocation - and the job's answer is what moves it on.
     #
     # Sabotage: made `payload/2` ignore the button's `payload` map. Five
-    # cases went red, this one on the `screen: nil` rest: `answers.plan` was
+    # cases went red, this one on the `screen: nil` rest: `responses.plan` was
     # never written, the branch took neither arm, and no call was ever
     # made. Reverted from a copy.
     test "the business arm rests durably on an asynchronous call", %{execution_id: execution_id} do
@@ -154,7 +154,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
       assert {:ok, mid_call} = Journey.submit(execution_id, "business_chosen", %{"seats" => "5"})
       assert key(mid_call) == nil
       assert mid_call.status == :running
-      assert mid_call.answers["plan"] == "business"
+      assert mid_call.responses["plan"] == "business"
 
       assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
 
@@ -235,7 +235,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
       assert key(seen(execution_id)) == "plan"
 
       # Nothing was captured, because a timeout captures nothing.
-      assert seen(execution_id).answers == %{}
+      assert seen(execution_id).responses == %{}
 
       assert timed_out?(execution_id)
     end
@@ -275,7 +275,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
              ]
 
       assert key(seen(execution_id)) == "account"
-      assert seen(execution_id).answers == %{}
+      assert seen(execution_id).responses == %{}
     end
 
     # Back is a button like any other, and that is the k2 finding happening:
@@ -296,10 +296,10 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
       assert {:ok, moved} = Journey.submit(execution_id, "went_back", %{})
 
-      # The branch on `answers.plan` takes neither arm, and the run lands on
+      # The branch on `responses.plan` takes neither arm, and the run lands on
       # the confirm screen having gone nowhere near a plan.
       assert key(moved) == "confirm"
-      refute Map.has_key?(moved.answers, "plan")
+      refute Map.has_key?(moved.responses, "plan")
 
       # And the seat count the reader never typed is not written at all. A
       # capture pair whose source is absent from `_event.data` leaves its
@@ -308,7 +308,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
       # with the interpreter's `:undefined`, which is what finding 2 of the
       # k3 section recorded. Absence is the assertion, exactly as the `plan`
       # line two above it already reads.
-      refute Map.has_key?(moved.answers, "seats")
+      refute Map.has_key?(moved.responses, "seats")
     end
   end
 
@@ -344,7 +344,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   describe "resolve/2, the draft half" do
     # What a page needs and a contract without it would get wrong: the plan
-    # screen's buttons are conditional on an answer given on that very
+    # screen's buttons are conditional on a response given on that very
     # screen, so a resolve against the stored datamodel alone draws a screen
     # with no way off it.
     #
@@ -352,7 +352,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # unchanged. Eight cases went red, this one on both button assertions and
     # the rest on the plan screen becoming a screen with no way off it - six
     # of them could not reach a plan at all. Reverted from a copy.
-    test "a typed answer changes what the screen offers", %{execution_id: execution_id} do
+    test "a typed response changes what the screen offers", %{execution_id: execution_id} do
       {:ok, plan} = Journey.submit(execution_id, "account_submitted", @account)
 
       refute "plan_personal" in keys(plan)
@@ -367,7 +367,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
       _drafted = Journey.resolve(view, %{"first_name" => "Ada"})
 
-      assert seen(execution_id).answers == %{}
+      assert seen(execution_id).responses == %{}
     end
 
     test "a view with no screen resolves to itself", %{execution_id: execution_id} do
@@ -387,7 +387,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
     #
     # A pure case; the sabotage for the behaviour is on the business arm
     # above.
-    test "is the form's answers plus the button's own literals" do
+    test "is the form's responses plus the button's own literals" do
       [personal, business, back] =
         for %{"type" => "button"} = node <- Screens.screen("plan").nodes, do: node
 

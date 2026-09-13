@@ -9,7 +9,7 @@ defmodule StatifierExamples.Signup.PathTest do
   second one recorded, and a timer alongside. Its buttons raise **distinct**
   events, which is what lets `StatifierExamples.Signup.Screen` leave the
   screen out of an event name. And the **environment walk** answers a
-  question about `answers.*` that the bead left open: the paths are there,
+  question about `responses.*` that the bead left open: the paths are there,
   and every one of them is `:unknown`.
 
   A pure test: nothing here names LiveView.
@@ -51,8 +51,8 @@ defmodule StatifierExamples.Signup.PathTest do
         Enum.find(Document.blocks(document()), &(&1.id == "blk_sp_plan_branch"))
 
       assert Enum.map(config["arms"], & &1["cond"]) == [
-               "answers.plan == 'business'",
-               "answers.plan == 'personal'"
+               "responses.plan == 'business'",
+               "responses.plan == 'personal'"
              ]
     end
   end
@@ -80,8 +80,8 @@ defmodule StatifierExamples.Signup.PathTest do
     end
   end
 
-  describe "the environment walk over answers.*" do
-    # THE OPEN QUESTION THE BEAD LEFT: does the ADR-0011 walk see `answers.*`
+  describe "the environment walk over responses.*" do
+    # THE OPEN QUESTION THE BEAD LEFT: does the ADR-0011 walk see `responses.*`
     # typed? It sees the paths - all four, and only after the screens that
     # write them - and it types every one of them `:unknown`.
     #
@@ -91,14 +91,14 @@ defmodule StatifierExamples.Signup.PathTest do
     # no declaration on this side can improve it. The ask is recorded in
     # `docs/spikes/SF040-signup-skeleton.md`; this case is what would go red
     # if the package ever answered otherwise.
-    test "every answers path is present, and every one is :unknown" do
+    test "every responses path is present, and every one is :unknown" do
       env = Environment.at(palette(), document(), {"blk_sp_root", "body", 4})
 
       assert Enum.sort(Map.keys(env)) == [
-               "answers.email",
-               "answers.first_name",
-               "answers.plan",
-               "answers.seats"
+               "responses.email",
+               "responses.first_name",
+               "responses.plan",
+               "responses.seats"
              ]
 
       assert Enum.uniq(Map.values(env)) == [:unknown]
@@ -129,18 +129,18 @@ defmodule StatifierExamples.Signup.PathTest do
     end
 
     # R10d, and the reason the finding names blocks rather than screens: one
-    # screen shown twice reaches its answer keys twice, and the second visit
+    # screen shown twice reaches its response keys twice, and the second visit
     # overwrites what the first one collected. Note what is NOT reported:
     # the account screen's `account_heading`, `account_intro`,
     # `account_greeting` and `account_continue` keys are duplicated just as
-    # really, and `answer_keys/1` reads `text_question` nodes only. That gap
+    # really, and `response_keys/1` reads `text_question` nodes only. That gap
     # is the moduledoc's last paragraph and finding 8 of the spike document.
-    test "a screen shown twice duplicates its element keys and its outcomes" do
+    test "a screen shown twice duplicates its response keys and its outcomes" do
       document = repoint("blk_sp_confirm", "account")
 
       assert Path.validate(document) == [
-               {:duplicate_answer_key, "email", ["blk_sp_account", "blk_sp_confirm"]},
-               {:duplicate_answer_key, "first_name", ["blk_sp_account", "blk_sp_confirm"]},
+               {:duplicate_response_key, "email", ["blk_sp_account", "blk_sp_confirm"]},
+               {:duplicate_response_key, "first_name", ["blk_sp_account", "blk_sp_confirm"]},
                {:duplicate_outcome, "account_submitted", ["blk_sp_account", "blk_sp_confirm"]}
              ]
     end
