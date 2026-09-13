@@ -115,8 +115,9 @@ defmodule StatifierExamples.Signup.Validation do
   # `StatifierExamples.Signup.Journey.submit/3` hands this module the form's
   # own strings, which is the right way round. A digits-only response does
   # become an integer elsewhere - `resolve/2` coerces its draft on the way to
-  # the nodes this check is then handed, and `pressed/5` coerces again for the
-  # payload - but neither coercion reaches the `responses` argument here, and
+  # the nodes this check is then handed, and `submit/3` coerces again on the
+  # way into `pressed/5`, for the payload - but neither reaches the
+  # `responses` argument here, and
   # that is deliberate: `required` and `format` are rules about what was **typed**
   # and a check that saw `5` where the reader wrote `5` has learned nothing
   # extra. So the string clauses are the ones `Journey` exercises. The
