@@ -27,10 +27,17 @@ defmodule StatifierExamples.Signup.ScreensTest do
   end
 
   describe "resolve/2 per element type" do
-    # Sabotage: `fill_node/2` falling through for "heading" (dropping the
-    # type from its `when type in [...]` guard) leaves the node untouched,
-    # and this goes red on any heading whose text carries a slot. Run as part
-    # of the `fill_node/2` mutation below, which covers both arms.
+    # Sabotage: `resolve/2` returning `[]` leaves `resolved_node/3` nothing
+    # to find, and all three assertions here read off `nil`. Confirmed red,
+    # then reverted from a copy.
+    #
+    # What does NOT discriminate here, since the shape invites the guess:
+    # dropping "heading" from `fill_node/2`'s `when type in [...]` guard
+    # leaves this case green. That mutation only stops slots being filled,
+    # and no heading in `priv/fixtures/signup_screens.json` carries one -
+    # there are four, and this one's text is the literal "Create your
+    # account". The heading arm of the guard is therefore uncovered by any
+    # case in this file; the `text` arm is covered by the case below.
     test "a heading keeps its level and its text" do
       node = resolved_node("account", @answered, "account_heading")
 
@@ -49,10 +56,18 @@ defmodule StatifierExamples.Signup.ScreensTest do
       refute node["text"] =~ "{{"
     end
 
-    # Sabotage: `resolve/2` dropping its `Enum.map(&fill_node/2)` returns
-    # the document's nodes unresolved; this case still reads `label` off a
-    # node the filter kept, so it is the `shown?/2` mutation below that this
-    # case goes red under. Kept for the type's shape rather than its
+    # Sabotage: `resolve/2` returning `[]` leaves `resolved_node/3` nothing
+    # to find, and all three assertions here read off `nil`. Confirmed red,
+    # then reverted from a copy.
+    #
+    # Two nearer mutations do NOT discriminate this case. Dropping
+    # `resolve/2`'s `Enum.map(&fill_node/2)` leaves it green: a
+    # `text_question` falls through `fill_node/2` untouched anyway, and
+    # `label`, `placeholder` and `required` hold no slots. And `shown?/2`
+    # returning true for a non-true evaluation leaves it green too, because
+    # `first_name` carries no `condition` and is kept either way - the
+    # `shown?/2` mutation is discriminated by the condition cases below,
+    # not by this one. Kept for the type's shape rather than its
     # resolution.
     test "a text_question carries its label, placeholder and required flag" do
       node = resolved_node("account", @answered, "first_name")
