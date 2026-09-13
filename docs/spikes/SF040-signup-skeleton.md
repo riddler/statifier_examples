@@ -966,16 +966,18 @@ Residue in this app, filed by the conductor and open here:
 |---|---|
 | `se-3nf` | two sabotage notes in `screens_test.exs` overclaim their discriminating mutation (k1) |
 | `se-zq7` | the coverage floor sits at 70 while the tree measures 82.2% (k1) |
-| `se-kbq` | three prose stragglers after the k2 cure, one of which is this file's "What k2 shipped" row calling `validate/1` the R10d uniqueness check (k2) |
+| `se-kbq` | three prose stragglers after the k2 cure - this file's "What k2 shipped" row overclaiming `validate/1`, the `writes/1` comment, and a `path_test.exs` test name - folded into and landed by `se-ah4` (k2) |
 | `se-3e4` | the two capture tests assert at config level, not the compiled emission (k2) |
 | `se-w4i` | `Charts.Durable.resume/1` discards the `MachineState` it built, so `current/1` walks storage twice per view (k3) |
 | `se-u9a` | pass-2 residue on the Journey: a stale doc row, an unguarded `resolve/2` call, a hand-duplicated status union, two prose imprecisions (k3) |
-| `se-ah4` | the rename this document's Vocabulary note describes: `answers` -> `responses`, `answer_options` on questions, `context` as the host root |
+| `se-ah4` | **landed** - the rename this document's Vocabulary note describes: `answers` -> `responses`, `answer_options` on questions, `context` as the host root |
 
 `se-kbq` is deliberately not fixed here even though its third straggler is in
 this file: this section adds, it does not rewrite, and a docs-only PR that
 edited a merged sibling's prose would make the two changes indistinguishable
-in review.
+in review. That was k4's call at the time; `se-ah4` is the later PR the
+Vocabulary section's own exception clause authorized to rewrite this file,
+and it is what folded `se-kbq`'s stragglers in and landed them.
 
 ### Riddler asks
 
