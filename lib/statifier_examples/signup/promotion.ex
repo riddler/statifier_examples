@@ -25,9 +25,9 @@ defmodule StatifierExamples.Signup.Promotion do
 
   A chunk's start job is at-least-once, so this can be asked twice for the
   same chunk. The run id is derived from the descriptor
-  (`StatifierExamples.Signup.Invites.promoted_run_id/1`), so the second
-  ask reaches the storage layer's atomic `:run_exists` refusal and is
-  reported as `{:existing, run_id}` rather than starting a second run -
+  (`StatifierExamples.Signup.Invites.promoted_execution_id/1`), so the second
+  ask reaches the storage layer's atomic `:execution_exists` refusal and is
+  reported as `{:existing, execution_id}` rather than starting a second run -
   the same shape, and the same honesty, as
   `StatifierExamples.Signup.Accounts.provision/1`'s
   `{:created, _} | {:existing, _}`.
@@ -71,12 +71,16 @@ defmodule StatifierExamples.Signup.Promotion do
 
   @spec start_run(String.t(), String.t()) :: {:ok, outcome()} | {:error, term()}
   defp start_run(chunk_id, email) do
-    run_id = Invites.promoted_run_id(chunk_id)
+    execution_id = Invites.promoted_execution_id(chunk_id)
 
     with {:ok, fixture} <- Charts.fixture(@wizard),
          {:ok, compiled} <-
            Durable.compile(fixture.document, fixture.declare, fixture.datamodel) do
-      started(Durable.start(compiled, fixture.document, run_id, @wizard), run_id, email)
+      started(
+        Durable.start(compiled, fixture.document, execution_id, @wizard),
+        execution_id,
+        email
+      )
     else
       :error -> {:error, :chart_unknown}
       {:error, _findings} = error -> error
@@ -85,21 +89,21 @@ defmodule StatifierExamples.Signup.Promotion do
 
   @spec started({:ok, term()} | {:error, term()}, String.t(), String.t()) ::
           {:ok, outcome()} | {:error, term()}
-  defp started({:ok, _driven}, run_id, email) do
-    Logger.info("promoted #{email} to its own run #{run_id}")
+  defp started({:ok, _driven}, execution_id, email) do
+    Logger.info("promoted #{email} to its own run #{execution_id}")
 
-    {:ok, {:started, run_id}}
+    {:ok, {:started, execution_id}}
   end
 
   # The atomic refusal, not a pre-check: a second delivery of the same
   # chunk asks for the same derived run id and the adapter says the row is
   # already there. That is the promotion being idempotent, so it is an
   # answer rather than an error.
-  defp started({:error, :run_exists}, run_id, email) do
-    Logger.info("promotion of #{email} found its run #{run_id} already started")
+  defp started({:error, :execution_exists}, execution_id, email) do
+    Logger.info("promotion of #{email} found its run #{execution_id} already started")
 
-    {:ok, {:existing, run_id}}
+    {:ok, {:existing, execution_id}}
   end
 
-  defp started({:error, reason}, _run_id, _email), do: {:error, reason}
+  defp started({:error, reason}, _execution_id, _email), do: {:error, reason}
 end

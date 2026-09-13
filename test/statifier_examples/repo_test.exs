@@ -51,14 +51,14 @@ defmodule StatifierExamples.RepoTest do
   end
 
   # Sabotage: change the AddStatifierPersistence migration to
-  # `up(for: ..., version: 1)` -> red, `statifier_runs` gains no `metadata`
+  # `up(for: ..., version: 1)` -> red, `statifier_executions` gains no `metadata`
   # column and the SELECT below fails with "no such column: metadata".
   # Verified red, reverted.
   test "the package tables carry every column its schemas select, V02 included" do
-    for table <- ~w(statifier_charts statifier_positions statifier_runs) do
+    for table <- ~w(statifier_charts statifier_positions statifier_executions) do
       assert %{rows: [[0]]} = SQL.query!(Repo, "SELECT count(*) FROM #{table}", [])
     end
 
-    assert %{rows: []} = SQL.query!(Repo, "SELECT metadata FROM statifier_runs", [])
+    assert %{rows: []} = SQL.query!(Repo, "SELECT metadata FROM statifier_executions", [])
   end
 end

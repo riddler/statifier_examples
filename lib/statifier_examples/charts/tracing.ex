@@ -19,7 +19,7 @@ defmodule StatifierExamples.Charts.Tracing do
       `statifier.macrostep` spans and every effect and trace event on
       them;
     * `OpentelemetryStatifier.Persistence.setup/1` - the durable
-      stepper's, whose `statifier_persistence.run.step` span is the one
+      stepper's, whose `statifier_persistence.execution.step` span is the one
       paired seam in the family and the span a durable macrostep nests
       inside;
     * `OpentelemetryStatifier.Oban.setup/1` - the durable timer and

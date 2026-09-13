@@ -832,7 +832,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     #
     # se-dh0 retired the assertion that used to live here, that the block
     # whose call came back carries `data-invoke-outcome="done"`. That mark
-    # was the host's, pushed from `Run.invoke`, which knew what this process
+    # was the host's, pushed from `Execution.invoke`, which knew what this process
     # had watched happen; a run seated in the pane derives its invoke mark
     # from the trace instead, and `StatifierBlocks.Runtime.Marks.from_trace/2`
     # marks a call that is still OUT with no outcome (`{block_id, nil}`) and
@@ -1021,14 +1021,14 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       run(view)
 
-      assert_patch(view) =~ "run="
+      assert_patch(view) =~ "execution="
     end
 
     # The restart, as the page sees it: a second mount that shares nothing
     # with the first but the URL, and comes up on the configuration the run
     # was left in.
     #
-    # Sabotage: made `restore_run/2` ignore its run id and answer the
+    # Sabotage: made `restore_execution/2` ignore its run id and answer the
     # socket unchanged; the marks were gone and this went red, then
     # reverted.
     test "reloading the run URL resumes the stored run", %{conn: conn} do
@@ -1119,10 +1119,11 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # Sabotage: made `adopt/2`'s error clause answer the socket unchanged;
     # this went red, then reverted.
     test "a run id nobody stored is refused on the page", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/editor?#{[doc: "signup_wizard", run: "no-such-run"]}")
+      {:ok, _view, html} =
+        live(conn, ~p"/editor?#{[doc: "signup_wizard", execution: "no-such-execution"]}")
 
       assert html =~ "run refused"
-      assert html =~ "run_not_found"
+      assert html =~ "execution_not_found"
     end
 
     # Stop is the host's own terminal transition, and the page stops naming
@@ -1139,7 +1140,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       html = view |> element(~s(button[phx-click="run-stop"])) |> render_click()
 
       refute html =~ "data-run-status"
-      refute assert_patch(view) =~ "run="
+      refute assert_patch(view) =~ "execution="
     end
   end
 

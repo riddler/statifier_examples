@@ -6,7 +6,7 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   around it.
 
   Not async: durable runs step through the application's named
-  `StatifierExamples.Charts.RunLock`, and the jobs are rows.
+  `StatifierExamples.Charts.ExecutionLock`, and the jobs are rows.
   """
 
   use ExUnit.Case, async: false
@@ -15,7 +15,7 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Durable, Run, Timers}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, Timers}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Accounts, User}
   alias StatifierPersistence.Storage
@@ -40,7 +40,7 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   setup do
     :ok = Sandbox.checkout(Repo)
 
-    %{run_id: "async-#{System.unique_integer([:positive])}"}
+    %{execution_id: "async-#{System.unique_integer([:positive])}"}
   end
 
   defp wizard do
@@ -53,19 +53,19 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # Drives a fresh run as far as the asynchronous call and leaves it there.
   # The fixture key is passed because a cold answer rebuilds the chart from
   # it, exactly as a fired timer does.
-  defp park!(run_id) do
+  defp park!(execution_id) do
     {compiled, document, key} = wizard()
-    {:ok, {durable, run}} = Durable.start(compiled, document, run_id, key)
+    {:ok, {durable, run}} = Durable.start(compiled, document, execution_id, key)
     {:ok, driven} = Durable.send_event(durable, run, @wait)
 
     driven
   end
 
-  defp jobs(run_id) do
+  defp jobs(execution_id) do
     from(job in "oban_jobs", select: %{worker: job.worker, state: job.state, args: job.args})
     |> Repo.all()
     |> Enum.map(&decode_args/1)
-    |> Enum.filter(&(&1.args["scope"] == run_id))
+    |> Enum.filter(&(&1.args["scope"] == execution_id))
   end
 
   defp decode_args(%{args: args} = job) when is_binary(args),
@@ -73,13 +73,14 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
 
   defp decode_args(job), do: job
 
-  defp invoke_jobs(run_id), do: Enum.filter(jobs(run_id), &(&1.worker == @invoke_worker))
+  defp invoke_jobs(execution_id),
+    do: Enum.filter(jobs(execution_id), &(&1.worker == @invoke_worker))
 
   # The invocation's own id, read off the stored job rather than guessed:
   # it is the string the chart, the job and both re-entry doors all name
   # the same invocation by.
-  defp invoke_id!(run_id) do
-    [job] = invoke_jobs(run_id)
+  defp invoke_id!(execution_id) do
+    [job] = invoke_jobs(execution_id)
 
     job.args["invoke_id"]
   end
@@ -90,8 +91,8 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
     store
   end
 
-  defp record!(run_id) do
-    {:ok, record} = Storage.fetch_run(store!(), run_id)
+  defp record!(execution_id) do
+    {:ok, record} = Storage.fetch_execution(store!(), execution_id)
 
     record
   end
@@ -99,21 +100,21 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # The stored position, decoded the way a cold node decodes it: recompile
   # the shipped fixture, then load. Nothing of the run that wrote it is in
   # reach here, which is the point.
-  defp position!(run_id) do
+  defp position!(execution_id) do
     {compiled, _document, _key} = wizard()
     {:ok, machine} = Statifier.compile(compiled.scxml)
-    {:ok, machine_state} = Storage.load_run_position(store!(), run_id, machine)
+    {:ok, machine_state} = Storage.load_execution_position(store!(), execution_id, machine)
 
     machine_state
   end
 
-  defp accounts(run_id) do
-    email = Accounts.email_for(run_id)
+  defp accounts(execution_id) do
+    email = Accounts.email_for(execution_id)
 
     Repo.one!(from(u in User, where: u.email == ^email, select: count()))
   end
 
-  defp details(run), do: run |> Run.entries() |> Enum.map(& &1.detail)
+  defp details(run), do: run |> Execution.entries() |> Enum.map(& &1.detail)
 
   # A bare invoke effect, for the two functions that take one without a run
   # behind them. The position row is zeros because nothing here reads it -
@@ -195,18 +196,18 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # `:pending` but no job was ever stored; the run rested on a call nobody
   # was running and this went red on the job. Reverted from a backup copy.
   test "a run rests mid-invocation: an active record, a live invocation, a stored job",
-       %{run_id: run_id} do
-    {_durable, run} = park!(run_id)
+       %{execution_id: execution_id} do
+    {_durable, run} = park!(execution_id)
 
     assert run.status == :running
     assert run.active == @resting
-    assert record!(run_id).status == :active
+    assert record!(execution_id).status == :active
 
-    invoke_id = invoke_id!(run_id)
+    invoke_id = invoke_id!(execution_id)
 
-    assert position!(run_id).active_invocations |> Map.values() == [invoke_id]
+    assert position!(execution_id).active_invocations |> Map.values() == [invoke_id]
 
-    assert [job] = invoke_jobs(run_id)
+    assert [job] = invoke_jobs(execution_id)
     assert job.state == "available"
     assert job.args["type"] == "myapp:signup"
     assert job.args["handler"] == "Elixir.StatifierExamples.Charts.AsyncCalls"
@@ -218,8 +219,8 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # Sabotage: made the driver's `pending/3` skip its `note/4` call; the
   # `Invoke dispatched` row stood alone and this went red. Reverted from a
   # backup copy.
-  test "the feed says the call was started rather than performed", %{run_id: run_id} do
-    {_durable, run} = park!(run_id)
+  test "the feed says the call was started rather than performed", %{execution_id: execution_id} do
+    {_durable, run} = park!(execution_id)
 
     details = Enum.filter(details(run), &is_binary/1)
 
@@ -243,20 +244,21 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # success, the run stayed `:active` and this went red on the status.
   # Reverted from a backup copy.
   test "the job answers the invocation from a cold process and the run completes",
-       %{run_id: run_id} do
-    park!(run_id)
+       %{execution_id: execution_id} do
+    park!(execution_id)
 
-    :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(run_id))
+    :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(execution_id))
 
-    assert position!(run_id).active_invocations != %{}
-    assert accounts(run_id) == 0
+    assert position!(execution_id).active_invocations != %{}
+    assert accounts(execution_id) == 0
 
     assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
 
-    assert record!(run_id).status == :completed
-    assert accounts(run_id) == 1
+    assert record!(execution_id).status == :completed
+    assert accounts(execution_id) == 1
 
-    assert_receive {:run_advanced, ^run_id, {%Durable{}, %Run{status: :done} = run}}
+    assert_receive {:execution_advanced, ^execution_id,
+                    {%Durable{}, %Execution{status: :done} = run}}
 
     assert Enum.any?(details(run), fn detail ->
              is_binary(detail) and detail =~ "myapp:provision"
@@ -272,14 +274,16 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # Sabotage: made `Durable.answer/3` report the driver's
   # `{:discarded, _}` as a delivery; this went red on the second answer,
   # and so did the cancel-race test below it. Reverted from a backup copy.
-  test "answering the same invocation twice is discarded the second time", %{run_id: run_id} do
-    park!(run_id)
-    invoke_id = invoke_id!(run_id)
+  test "answering the same invocation twice is discarded the second time", %{
+    execution_id: execution_id
+  } do
+    park!(execution_id)
+    invoke_id = invoke_id!(execution_id)
 
-    assert Durable.complete_invocation(run_id, invoke_id, %{}) == :delivered
-    assert record!(run_id).status == :completed
+    assert Durable.complete_invocation(execution_id, invoke_id, %{}) == :delivered
+    assert record!(execution_id).status == :completed
 
-    assert Durable.complete_invocation(run_id, invoke_id, %{}) == {:discarded, :completed}
+    assert Durable.complete_invocation(execution_id, invoke_id, %{}) == {:discarded, :completed}
   end
 
   # The timeout beat. Nothing in the document authors a cancel: the
@@ -293,16 +297,16 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # through to the catch-all `:ok`; the job stayed `available` and this
   # went red on the state. Reverted from a backup copy.
   test "the abandonment deadline cancels the invocation and routes the outcome",
-       %{run_id: run_id} do
-    park!(run_id)
+       %{execution_id: execution_id} do
+    park!(execution_id)
 
-    assert [%{state: "available"}] = invoke_jobs(run_id)
+    assert [%{state: "available"}] = invoke_jobs(execution_id)
 
-    assert Durable.deliver(run_id, @deadline) == :delivered
+    assert Durable.deliver(execution_id, @deadline) == :delivered
 
-    assert [%{state: "cancelled"}] = invoke_jobs(run_id)
-    assert record!(run_id).status == :completed
-    assert position!(run_id).active_invocations == %{}
+    assert [%{state: "cancelled"}] = invoke_jobs(execution_id)
+    assert record!(execution_id).status == :completed
+    assert position!(execution_id).active_invocations == %{}
   end
 
   # The race the seam was granted to make safe, from the losing side: the
@@ -318,13 +322,15 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # Sabotage: made `Durable.answer/3` report the driver's
   # `{:discarded, _}` as a delivery; this went red on the tuple. Reverted
   # from a backup copy.
-  test "a completion that arrives after the deadline fired is discarded", %{run_id: run_id} do
-    park!(run_id)
-    invoke_id = invoke_id!(run_id)
+  test "a completion that arrives after the deadline fired is discarded", %{
+    execution_id: execution_id
+  } do
+    park!(execution_id)
+    invoke_id = invoke_id!(execution_id)
 
-    assert Durable.deliver(run_id, @deadline) == :delivered
+    assert Durable.deliver(execution_id, @deadline) == :delivered
 
-    assert Durable.complete_invocation(run_id, invoke_id, %{}) == {:discarded, :completed}
+    assert Durable.complete_invocation(execution_id, invoke_id, %{}) == {:discarded, :completed}
   end
 
   # The other door. A permanently failed invocation - the host's retries
@@ -338,19 +344,19 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # outcome and this went red on both assertions. Reverted from a backup
   # copy.
   test "a permanently failed invocation reaches the chart as error.communication",
-       %{run_id: run_id} do
-    park!(run_id)
-    invoke_id = invoke_id!(run_id)
+       %{execution_id: execution_id} do
+    park!(execution_id)
+    invoke_id = invoke_id!(execution_id)
 
-    :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(run_id))
+    :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(execution_id))
 
-    assert Durable.fail_invocation(run_id, invoke_id,
+    assert Durable.fail_invocation(execution_id, invoke_id,
              reason: "run_failed",
              attempts: 3,
              detail: "the vendor never answered"
            ) == :delivered
 
-    assert_receive {:run_advanced, ^run_id, {%Durable{}, %Run{} = run}}
+    assert_receive {:execution_advanced, ^execution_id, {%Durable{}, %Execution{} = run}}
 
     details = Enum.filter(details(run), &is_binary/1)
 
@@ -366,12 +372,12 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   #
   # Sabotage: renamed the reason `Durable.answer/3` gives a `fixture_for/1`
   # miss; this went red on the tuple. Reverted from a backup copy.
-  test "an answer for a run with no chart to rebuild is discarded", %{run_id: run_id} do
+  test "an answer for a run with no chart to rebuild is discarded", %{execution_id: execution_id} do
     {compiled, document, _key} = wizard()
-    {:ok, {durable, run}} = Durable.start(compiled, document, run_id)
+    {:ok, {durable, run}} = Durable.start(compiled, document, execution_id)
     {:ok, _driven} = Durable.send_event(durable, run, @wait)
 
-    assert Durable.complete_invocation(run_id, invoke_id!(run_id), %{}) ==
+    assert Durable.complete_invocation(execution_id, invoke_id!(execution_id), %{}) ==
              {:discarded, :chart_unknown}
   end
 
@@ -381,7 +387,8 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   # Sabotage: made `Durable.answer/3` discard every storage error under one
   # constant reason; this went red on the tuple. Reverted from a backup
   # copy.
-  test "an answer for a run that was never stored is discarded", %{run_id: run_id} do
-    assert Durable.complete_invocation(run_id, "inv_1", %{}) == {:discarded, :run_not_found}
+  test "an answer for a run that was never stored is discarded", %{execution_id: execution_id} do
+    assert Durable.complete_invocation(execution_id, "inv_1", %{}) ==
+             {:discarded, :execution_not_found}
   end
 end

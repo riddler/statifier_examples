@@ -119,7 +119,7 @@ defmodule StatifierExamples.MixProject do
       # The requirement moves to the 0.4 line to keep the reference
       # embedder on what is published, not because this app consumes
       # 0.4.0's durable subcharts (ADR-0008) yet - it does not. 0.4.0 is
-      # breaking for a storage adapter that encodes `run_status/0` by an
+      # breaking for a storage adapter that encodes `execution_status/0` by an
       # exhaustive match, since it gains a fourth terminal value
       # `:cancelled`. `StatifierExamples.Persistence` delegates every
       # status-bearing callback to the package's own Ecto adapter and
@@ -136,7 +136,7 @@ defmodule StatifierExamples.MixProject do
       # reach `src` - the document id it resolves the child chart by -
       # and `StatifierBlocks.Runtime.DurableSubchart` raises rather than
       # guess. sp-i21 then landed ADR-0009's storage-phase telemetry, and
-      # `[:statifier_persistence, :run, :step, :start | :stop]` is the
+      # `[:statifier_persistence, :execution, :step, :start | :stop]` is the
       # one paired seam in the family - the span every macrostep of a
       # durable step nests inside, and what the capstone's trace graph is
       # built out of. On 0.4.0 the durable subchart cannot resolve its
@@ -145,8 +145,8 @@ defmodule StatifierExamples.MixProject do
       #
       # Everything else the durable subchart needs (the dispatch fun's
       # `{:start_child, _, _}` arm, the `chart_resolver:` option,
-      # `parent_link/2`, `answer_parent/3`, `Runs.cascade_cancel/3`,
-      # `list_runs_by_metadata/2` on the storage behaviour) was already in
+      # `parent_link/2`, `answer_parent/3`, `Executions.cascade_cancel/3`,
+      # `list_executions_by_metadata/2` on the storage behaviour) was already in
       # 0.4.0. The two interim git pins this arm carried across
       # campaign 026 are retired here (se-p22's pattern).
       #
@@ -186,7 +186,7 @@ defmodule StatifierExamples.MixProject do
       # false off Postgres, which is a refusal at open for a durable
       # subchart rather than a raise from inside one.
       # `StatifierExamples.Persistence` answers that callback for itself
-      # now, on the same grounds it already wrote `list_runs_by_metadata/2`
+      # now, on the same grounds it already wrote `list_executions_by_metadata/2`
       # in Elixir on.
       #
       # The LOCK moves to 0.7.2 under that same `~> 0.7` requirement.
@@ -200,7 +200,7 @@ defmodule StatifierExamples.MixProject do
       #
       # The requirement moves to the 0.8 line. 0.8.0 is what lets a chart
       # fail its own run: settling in a top-level `<final>` whose
-      # `<donedata>` carries `statifier_persistence:run_status` set to
+      # `<donedata>` carries `statifier_persistence:execution_status` set to
       # `"failed"` persists the run as `:failed` with the failure string
       # `"failed_final"`, so a `:first_error` fan-out cancels the failed
       # child's siblings with no host in the loop (ADR-0008's amendment,
@@ -234,7 +234,7 @@ defmodule StatifierExamples.MixProject do
       # 0.9.0 is REQUIRED rather than tidy. It carries the input log
       # itself - `supports_input_log?/1`, `append_input/3` and
       # `list_inputs/2` on the storage-adapter behaviour, with
-      # `StatifierPersistence.Runs.inputs/2` and
+      # `StatifierPersistence.Executions.inputs/2` and
       # `Storage.input_log_supported?/1` reading it back, and migration V05
       # as the table they write to. That log is the only door to the
       # ordered `%Statifier.Event{}` entries `StatifierExamples.Charts.Replay`
@@ -251,15 +251,15 @@ defmodule StatifierExamples.MixProject do
       # `{:error, :metadata_unsupported}` off Postgres instead of raising
       # from the driver - `StatifierExamples.Persistence` issues neither,
       # answering `supports_metadata?/1` for itself and writing
-      # `list_runs_by_metadata/2` in Elixir, as it has since 0.7.1.
+      # `list_executions_by_metadata/2` in Elixir, as it has since 0.7.1.
       #
       # The floor moves to `~> 0.10` for the outside-fail seam. A durable
       # subchart child failed from OUTSIDE the interpreter used to leave
-      # its parent's `<invoke>` pending forever; `Runs.fail/4` now takes a
+      # its parent's `<invoke>` pending forever; `Executions.fail/4` now takes a
       # `driver:` option and answers the parent itself, with
       # `Driver.resolve_and_answer_parent/3` as the public form of that
       # answer for a caller holding no drive of the child. The option is
-      # OPT-IN and this app does not take it: its one `Runs.fail/4` call
+      # OPT-IN and this app does not take it: its one `Executions.fail/4` call
       # is `Charts.Durable.abandon/1`, which stops a run the host owns and
       # then cascade-cancels that run's children rather than answering a
       # parent of its own. Passing `driver:` there would change which word
@@ -269,7 +269,24 @@ defmodule StatifierExamples.MixProject do
       # hand-written DDL; this app's migrations delegate to
       # `Ecto.Migrations.up/1` and `down/1`, so the version it is on is the
       # one the package wrote.
-      {:statifier_persistence, "~> 0.10"},
+      #
+      # se-20j takes a COMMITTED GIT PIN here rather than a Hex
+      # requirement. `execution` is the durable noun as of sp-ADR-0011:
+      # the modules (`StatifierPersistence.Execution`, `.Executions`,
+      # `.Execution.Linkage`), the seven adapter callbacks
+      # (`insert_execution/2` through `list_execution_states_by_metadata/2`),
+      # the `Serialization.with_execution/3` callback, the telemetry
+      # prefix `[:statifier_persistence, :execution, ...]`, the donedata
+      # key `statifier_persistence:execution_status` and the
+      # `statifier_executions` table all moved in one release, and this
+      # app is the largest consumer of every one of them. The rename is
+      # on `main` and unpublished, so the pin is what lets the reference
+      # embedder be written against it before 0.12.0 exists; `se-h6v`
+      # re-pins to `~> 0.12` once the operator publishes. The ref is the
+      # commit that carried the V06 table rename.
+      {:statifier_persistence,
+       git: "https://github.com/riddler/statifier_persistence.git",
+       ref: "71537dc7bd5a44bd905d7361ea92dbe821449f6e"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -343,7 +360,13 @@ defmodule StatifierExamples.MixProject do
       # where it returned a bare `:ok`, which reaches nothing here: this
       # app is called BY that function through the starter behaviour and
       # never calls it, and the three other return shapes are unchanged.
-      {:statifier_oban, "~> 0.9"},
+      #
+      # The floor moves to `~> 0.10`, which is published. 0.10.0 renames
+      # `StatifierOban.Invoke.ChildStarter`'s parent argument to the
+      # execution noun; the callback is positional, so this app's
+      # implementation compiles unchanged and takes the release for the
+      # vocabulary rather than for a behaviour change.
+      {:statifier_oban, "~> 0.10"},
 
       # The OTel bridge for the family, and the app's telemetry consumer.
       # This app had no dependency on it before se-opg: nothing here
@@ -381,7 +404,20 @@ defmodule StatifierExamples.MixProject do
       # events describe, so the bridge is what puts its fan-out in the
       # trace at all. The `statifier_oban` requirement 0.5.0 states is
       # test-only and reaches nothing here.
-      {:opentelemetry_statifier, "~> 0.5"},
+      #
+      # se-20j pins this one by COMMITTED GIT REF too, for the same
+      # reason and in lockstep with `statifier_persistence`: the bridge
+      # names the persistence span `statifier_persistence.execution.step`
+      # and carries the `statifier_persistence.execution_id`,
+      # `.parent_execution_id` and `.child_execution_id` attributes, and
+      # this app's trace assertions read exactly those keys. Renaming the
+      # telemetry prefix with no dual emit (sp-ADR-0011 decision 5) means
+      # a bridge one release behind subscribes to events nobody emits, so
+      # the two pins move together or neither does. `se-h6v` re-pins to
+      # `~> 0.6` once the operator publishes.
+      {:opentelemetry_statifier,
+       git: "https://github.com/riddler/opentelemetry_statifier.git",
+       ref: "e0204e9c8db739bd21e844436e5dcada1ebd4bf0"},
 
       # The SDK behind that bridge. `opentelemetry_statifier` depends only
       # on `opentelemetry_api` on purpose - a bridge that dragged an SDK
@@ -644,7 +680,7 @@ defmodule StatifierExamples.MixProject do
   # The half this app was waiting for is the failure seam: a block
   # type may class one of its outcomes as a failure through the new
   # `failure_outcomes/1` callback, and the compiler stamps the
-  # reserved `statifier_persistence:run_status` `<donedata>` param on
+  # reserved `statifier_persistence:execution_status` `<donedata>` param on
   # that outcome's top-level `<final>`. At 0.21.0 `core.map` and
   # `core.subchart` classed their `error` outcome and every other type
   # classed nothing - `core.invoke` included - which is what kept the
@@ -682,7 +718,7 @@ defmodule StatifierExamples.MixProject do
   # its `error` outcome as a failure like `core.map` and `core.subchart`
   # do, and an unhandled failure-classed completion is carried to the
   # document's top-level `<final>`, which is what stamps the reserved
-  # `statifier_persistence:run_status` param on the chunk chart's error
+  # `statifier_persistence:execution_status` param on the chunk chart's error
   # final. That is what let `se-cqr` delete the host-side translation
   # `StatifierExamples.Charts.Durable` used to do instead.
   #
@@ -968,13 +1004,24 @@ defmodule StatifierExamples.MixProject do
   # This app overrides no `expression_component`, mounts the editor
   # read-write, and passes `use StatifierBlocks.Composite` no option it did
   # not already pass.
+  # `se-20j`: the floor moves to `~> 0.28`, which is PUBLISHED, so this
+  # arm stays a Hex requirement and takes no git pin and no ledger entry.
+  # 0.28.0 carries two changes this app reads. The compiled chart of a
+  # document whose final is failure-classed now emits the
+  # `statifier_persistence:execution_status` `<donedata>` param rather
+  # than the old key - `statifier_persistence` at the pin above reads
+  # both for one release, so a chart compiled by either version is
+  # persisted the same way. And a capture pair whose source is absent
+  # from `_event.data` now leaves its destination UNWRITTEN rather than
+  # writing `:undefined` into it (sb-ADR-0002's capture Note, N2), which
+  # is what `StatifierExamples.Signup.JourneyTest` asserts by absence.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.27"}
+        {:statifier_blocks, "~> 0.28"}
     end
   end
 

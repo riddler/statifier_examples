@@ -26,9 +26,9 @@ defmodule StatifierExamples.Charts.Durable do
   One press of an event button is: step, perform each call the chart made,
   step again with each answer, repeat until the chart asks for nothing
   more. `Statifier.Session` runs that loop for a live session and
-  `StatifierPersistence.Driver` runs it over `StatifierPersistence.Runs`,
+  `StatifierPersistence.Driver` runs it over `StatifierPersistence.Executions`,
   which is what this module calls. Every turn of it leaves a row in
-  `statifier_runs` that survives the process.
+  `statifier_executions` that survives the process.
 
   This app wrote that loop itself until se-4dt.3, and getting it out of
   here was worth more than the lines it saved: the app's hand-built answer
@@ -74,10 +74,10 @@ defmodule StatifierExamples.Charts.Durable do
   the invocation live, exactly as it does for an asynchronous call below.
 
   The child is an ordinary run in every way that matters to this app. It
-  has its own row in `statifier_runs`, its own position, its own status,
+  has its own row in `statifier_executions`, its own position, its own status,
   and a run id a reader can put in the page URL - `resume/3` picks it up
   with no idea it is anybody's child. What makes it a child is one key in
-  its metadata, `StatifierPersistence.Run.Linkage`'s, naming the parent
+  its metadata, `StatifierPersistence.Execution.Linkage`'s, naming the parent
   run, the invocation, and the child's own content hash.
 
   Two things follow from the linkage and this module does both. When the
@@ -102,7 +102,7 @@ defmodule StatifierExamples.Charts.Durable do
   says why this app has one such call and which one.
 
   Both report through the driving process' own mailbox. They are called
-  synchronously, inside the driver's own `Runs.create/4` and `Runs.step/5`,
+  synchronously, inside the driver's own `Executions.create/4` and `Executions.step/5`,
   in this very process, so a message tagged with the run id and drained
   with a zero timeout is an ordered buffer that needs no second process and
   cannot outlive the drive that filled it. It is drained once, after the
@@ -129,12 +129,12 @@ defmodule StatifierExamples.Charts.Durable do
 
   ## Serialization
 
-  The driver is built with `serialization: {RunLock, RunLock}` and
+  The driver is built with `serialization: {ExecutionLock, ExecutionLock}` and
   `abandon/1`, which does not go through it, passes the same pair by hand.
-  They have to: the default strategy asks the adapter for `lock_run/3` and
+  They have to: the default strategy asks the adapter for `lock_execution/3` and
   `StatifierExamples.Persistence` does not export it, so the default
   refuses with `{:error, {:serialization, :not_supported}}` before
-  anything runs. `StatifierExamples.Charts.RunLock`'s moduledoc has the
+  anything runs. `StatifierExamples.Charts.ExecutionLock`'s moduledoc has the
   reasoning; this module is the caller that would otherwise get the
   refusal.
   """
@@ -149,17 +149,17 @@ defmodule StatifierExamples.Charts.Durable do
 
   alias StatifierExamples.Charts.{
     AsyncCalls,
+    Execution,
+    ExecutionLock,
     FanOut,
     Fixture,
-    Run,
-    RunLock,
     Subchart,
     Timers,
     Tracing
   }
 
-  alias StatifierPersistence.{Driver, Runs, Storage}
-  alias StatifierPersistence.Run.Linkage
+  alias StatifierPersistence.{Driver, Executions, Storage}
+  alias StatifierPersistence.Execution.Linkage
 
   # The run-record metadata key that says which shipped fixture a run is a
   # run OF. It is the only thing a fired timer job carries back into a
@@ -174,35 +174,35 @@ defmodule StatifierExamples.Charts.Durable do
   @subcharts_key "subcharts"
 
   @type t :: %__MODULE__{
-          run_id: String.t(),
+          execution_id: String.t(),
           store: Storage.t(),
           machine: Machine.t()
         }
 
-  @enforce_keys [:run_id, :store, :machine]
-  defstruct [:run_id, :store, :machine]
+  @enforce_keys [:execution_id, :store, :machine]
+  defstruct [:execution_id, :store, :machine]
 
   @typedoc "A driver and the reading it produced, threaded together."
-  @type driven :: {t(), Run.t()}
+  @type driven :: {t(), Execution.t()}
 
   # One entry in a drive's buffer: an effect the stepper produced, or a row
   # the host wrote about a call it performed. Both shapes travel the one
   # mailbox so the feed reads in the order things actually happened.
   # The note's fifth element is the durable child run the row is about, or
   # `nil` for a row about this run's own work: see
-  # `StatifierExamples.Charts.Run`'s `entry` type for why a child's rows
+  # `StatifierExamples.Charts.Execution`'s `entry` type for why a child's rows
   # are marked rather than left to read as the parent's.
   @typep buffered ::
            {:effect, Statifier.Effect.t()}
-           | {:note, Run.entry_kind(), String.t(), String.t(), String.t() | nil}
+           | {:note, Execution.entry_kind(), String.t(), String.t(), String.t() | nil}
 
   @doc """
   Starts a durable run of `compiled` and drives it to its first rest.
 
-  `run_id` is the caller's opaque key (ADR-0004 decision 2) and this app
+  `execution_id` is the caller's opaque key (ADR-0004 decision 2) and this app
   puts it in the page URL, which is what makes a run something a reader
   can come back to. Creating one that already exists is the adapter's
-  atomic `:run_exists` refusal, not a pre-check.
+  atomic `:execution_exists` refusal, not a pre-check.
 
   `fixture_key` is recorded in the run's metadata, and it is what
   `deliver/2` reads to rebuild the chart when a timer fires on a node
@@ -229,51 +229,56 @@ defmodule StatifierExamples.Charts.Durable do
   """
   @spec start(Compiled.t(), Document.t(), String.t(), String.t() | nil) ::
           {:ok, driven()} | {:error, term()}
-  def start(compiled, document, run_id, fixture_key \\ nil)
+  def start(compiled, document, execution_id, fixture_key \\ nil)
 
-  def start(%Compiled{} = compiled, %Document{} = document, run_id, fixture_key)
-      when is_binary(run_id) do
+  def start(%Compiled{} = compiled, %Document{} = document, execution_id, fixture_key)
+      when is_binary(execution_id) do
     with {:ok, machine} <- Statifier.compile(compiled.scxml),
          {:ok, store} <- store() do
-      durable = %__MODULE__{run_id: run_id, store: store, machine: machine}
-      run = Run.reading(machine, compiled, document, run_id)
-      run = Run.note(run, :started, "Run started", run_id)
+      durable = %__MODULE__{execution_id: execution_id, store: store, machine: machine}
+      run = Execution.reading(machine, compiled, document, execution_id)
+      run = Execution.note(run, :started, "Run started", execution_id)
 
       settle(
         durable,
         run,
-        Driver.create(driver(durable), run_id, create_opts(fixture_key, document))
+        Driver.create(driver(durable), execution_id, create_opts(fixture_key, document))
       )
     end
   end
 
   @doc """
   Picks a stored run back up: the same document, the same run id, a fresh
-  process, and whatever the last step left in `statifier_runs`.
+  process, and whatever the last step left in `statifier_executions`.
 
   Nothing is stepped. The position is loaded so the page can paint the
   marks the run is actually sitting on, and the reading opens with a row
   saying where it came from. Continuing is the reader's next press.
 
-  A run id nobody stored is `{:error, :run_not_found}`. A document edited
+  A run id nobody stored is `{:error, :execution_not_found}`. A document edited
   since the run started is `{:error, {:identity_mismatch, stored,
   supplied}}` out of the storage layer's own guard, which is the answer
   this app wants: resuming a run on a chart that is no longer the chart it
   ran on is exactly the thing chart identity exists to refuse.
   """
   @spec resume(Compiled.t(), Document.t(), String.t()) :: {:ok, driven()} | {:error, term()}
-  def resume(%Compiled{} = compiled, %Document{} = document, run_id) when is_binary(run_id) do
+  def resume(%Compiled{} = compiled, %Document{} = document, execution_id)
+      when is_binary(execution_id) do
     with {:ok, machine} <- Statifier.compile(compiled.scxml),
          {:ok, store} <- store(),
-         {:ok, record} <- Storage.fetch_run(store, run_id),
-         {:ok, machine_state} <- Storage.load_run_position(store, run_id, machine) do
-      durable = %__MODULE__{run_id: run_id, store: store, machine: machine}
+         {:ok, record} <- Storage.fetch_execution(store, execution_id),
+         {:ok, machine_state} <- Storage.load_execution_position(store, execution_id, machine) do
+      durable = %__MODULE__{execution_id: execution_id, store: store, machine: machine}
 
       run =
         machine
-        |> Run.reading(compiled, document, run_id)
-        |> Run.note(:started, "Run resumed from storage", "#{run_id} (#{record.status})")
-        |> Run.absorb({:effect, {:trace, stable(machine_state)}})
+        |> Execution.reading(compiled, document, execution_id)
+        |> Execution.note(
+          :started,
+          "Run resumed from storage",
+          "#{execution_id} (#{record.status})"
+        )
+        |> Execution.absorb({:effect, {:trace, stable(machine_state)}})
         |> resumed_status(record.status)
 
       {:ok, {durable, run}}
@@ -302,11 +307,11 @@ defmodule StatifierExamples.Charts.Durable do
   ships; everything else is `resume/3`'s.
   """
   @spec resume(String.t()) :: {:ok, {driven(), Document.t()}} | {:error, term()}
-  def resume(run_id) when is_binary(run_id) do
+  def resume(execution_id) when is_binary(execution_id) do
     with {:ok, store} <- store(),
-         {:ok, record} <- Storage.fetch_run(store, run_id),
+         {:ok, record} <- Storage.fetch_execution(store, execution_id),
          {:ok, {compiled, document}} <- chart_for(record),
-         {:ok, driven} <- resume(compiled, document, run_id) do
+         {:ok, driven} <- resume(compiled, document, execution_id) do
       {:ok, {driven, document}}
     else
       :error -> {:error, :chart_unknown}
@@ -316,7 +321,7 @@ defmodule StatifierExamples.Charts.Durable do
 
   @doc """
   Creates child `index` of `count` for a fan-out invocation of
-  `parent_run_id`, seeded with `params`.
+  `parent_execution_id`, seeded with `params`.
 
   The host half of `StatifierOban.Invoke.ChildStarter`, one layer down:
   `StatifierExamples.Charts.FanOut` decides *which* descriptor index
@@ -343,7 +348,7 @@ defmodule StatifierExamples.Charts.Durable do
   A child whose one call is refused settles itself, and there is no host
   half to this any more. `core.invoke` classes its `error` outcome as a
   failure, the compiler stamps the reserved
-  `statifier_persistence:run_status` `<donedata>` param on the top-level
+  `statifier_persistence:execution_status` `<donedata>` param on the top-level
   `<final>` an unhandled failure-classed completion reaches, and the
   driver's own automatic path persists the run `:failed` and answers the
   parent on that step. This module used to read the child's status back
@@ -361,22 +366,22 @@ defmodule StatifierExamples.Charts.Durable do
         ) ::
           :ok | {:refused, term()}
   def start_child_at(
-        parent_run_id,
+        parent_execution_id,
         %Statifier.Effect.Invoke{} = invoke,
         params,
         index,
         count,
         opts
       )
-      when is_binary(parent_run_id) and is_map(params) do
-    with {:ok, document} <- Subchart.resolve_chart(invoke.src, child_ctx(parent_run_id)),
+      when is_binary(parent_execution_id) and is_map(params) do
+    with {:ok, document} <- Subchart.resolve_chart(invoke.src, child_ctx(parent_execution_id)),
          {:ok, %Compiled{scxml: scxml}} <- Subchart.child_compile(document),
          {:ok, machine} <- Statifier.compile(scxml),
          {:ok, store} <- store() do
-      durable = %__MODULE__{run_id: parent_run_id, store: store, machine: machine}
+      durable = %__MODULE__{execution_id: parent_execution_id, store: store, machine: machine}
       resolved = %{invoke | content: scxml, params: params}
 
-      Driver.start_child_at(driver(durable), parent_run_id, resolved, index, count, opts)
+      Driver.start_child_at(driver(durable), parent_execution_id, resolved, index, count, opts)
     else
       :error -> {:refused, :unknown_document}
       {:error, reason} -> {:refused, reason}
@@ -387,8 +392,12 @@ defmodule StatifierExamples.Charts.Durable do
   # typed against. This app's resolver reads only the document id, but the
   # shape is the engine's and a bare map is not it.
   @spec child_ctx(String.t()) :: Statifier.Invoke.Handler.ctx()
-  defp child_ctx(run_id) do
-    %{session_id: run_id, invoke_types: invoke_types(), invoke_handlers: Charts.invoke_handlers()}
+  defp child_ctx(execution_id) do
+    %{
+      session_id: execution_id,
+      invoke_types: invoke_types(),
+      invoke_handlers: Charts.invoke_handlers()
+    }
   end
 
   @doc """
@@ -413,12 +422,12 @@ defmodule StatifierExamples.Charts.Durable do
   `resume/1` gives, because it is the same walk.
   """
   @spec machine_state(String.t()) :: {:ok, Statifier.MachineState.t()} | {:error, term()}
-  def machine_state(run_id) when is_binary(run_id) do
+  def machine_state(execution_id) when is_binary(execution_id) do
     with {:ok, store} <- store(),
-         {:ok, record} <- Storage.fetch_run(store, run_id),
+         {:ok, record} <- Storage.fetch_execution(store, execution_id),
          {:ok, {%Compiled{scxml: scxml}, _document}} <- chart_for(record),
          {:ok, machine} <- Statifier.compile(scxml) do
-      Storage.load_run_position(store, run_id, machine)
+      Storage.load_execution_position(store, execution_id, machine)
     else
       :error -> {:error, :chart_unknown}
       {:error, _reason} = error -> error
@@ -456,15 +465,15 @@ defmodule StatifierExamples.Charts.Durable do
   it is exactly the host contract `docs/spikes/SF040-signup-skeleton.md`
   records as unstated in both documents.
   """
-  @spec send_event(t(), Run.t(), String.t(), map() | :undefined) ::
+  @spec send_event(t(), Execution.t(), String.t(), map() | :undefined) ::
           {:ok, driven()} | {:error, term()}
   def send_event(durable, run, name, data \\ :undefined)
 
-  def send_event(%__MODULE__{} = durable, %Run{} = run, name, data)
+  def send_event(%__MODULE__{} = durable, %Execution{} = run, name, data)
       when is_binary(name) and (is_map(data) or data == :undefined) do
     event = Event.external(name, data: data, caller_context: Tracing.caller_context())
 
-    settle(durable, run, Driver.send_event(driver(durable), durable.run_id, event))
+    settle(durable, run, Driver.send_event(driver(durable), durable.execution_id, event))
   end
 
   @doc """
@@ -478,8 +487,8 @@ defmodule StatifierExamples.Charts.Durable do
   A run stopped by its host while a `core.subchart` child is live would
   otherwise leave that child `active` forever: nothing is holding it, its
   parent will never be answered, and no press anywhere reaches it. So this
-  walks the child subtree too, with `StatifierPersistence.Runs.cascade_cancel/3`
-  over `StatifierPersistence.Run.Linkage.parent_match/1` - *every* child
+  walks the child subtree too, with `StatifierPersistence.Executions.cascade_cancel/3`
+  over `StatifierPersistence.Execution.Linkage.parent_match/1` - *every* child
   this run ever started, across every invocation, and every run linked to
   those, recursively (sp ADR-0008 decision 5).
 
@@ -504,7 +513,9 @@ defmodule StatifierExamples.Charts.Durable do
   @spec abandon(t()) :: :ok
   def abandon(%__MODULE__{} = durable) do
     _result =
-      Runs.fail(durable.store, durable.run_id, "host:stopped", serialization: serialization())
+      Executions.fail(durable.store, durable.execution_id, "host:stopped",
+        serialization: serialization()
+      )
 
     _cancelled = cascade(durable)
 
@@ -513,7 +524,7 @@ defmodule StatifierExamples.Charts.Durable do
 
   # Guarded on the store's own answer rather than on knowledge about this
   # app's adapter: `child_listing_supported?/1` is how the package asks
-  # whether an adapter exports `list_runs_by_metadata/2`, and it is the same
+  # whether an adapter exports `list_executions_by_metadata/2`, and it is the same
   # guard `StatifierPersistence.Driver` puts in front of its own cascade.
   # `StatifierExamples.Persistence` does export it - that is what opts this
   # app into durable subcharts at all - so the false arm is not dead code
@@ -522,7 +533,7 @@ defmodule StatifierExamples.Charts.Durable do
   @spec cascade(t()) :: {:ok, non_neg_integer()} | {:error, term()} | :unsupported
   defp cascade(%__MODULE__{} = durable) do
     if Storage.child_listing_supported?(durable.store) do
-      Runs.cascade_cancel(durable.store, Linkage.parent_match(durable.run_id),
+      Executions.cascade_cancel(durable.store, Linkage.parent_match(durable.execution_id),
         serialization: serialization()
       )
     else
@@ -534,8 +545,8 @@ defmodule StatifierExamples.Charts.Durable do
   A fresh run id. A UUID's worth of randomness, hex, no dashes: it goes in
   a URL and in a fictional email address, and both read better without.
   """
-  @spec new_run_id() :: String.t()
-  def new_run_id, do: 16 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+  @spec new_execution_id() :: String.t()
+  def new_execution_id, do: 16 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
 
   @doc """
   The one compile recipe a durable run's chart identity is keyed on.
@@ -596,14 +607,14 @@ defmodule StatifierExamples.Charts.Durable do
   it. Nothing here depends on anyone listening.
   """
   @spec deliver(String.t(), String.t()) :: :delivered | {:discarded, term()}
-  def deliver(run_id, event) when is_binary(run_id) and is_binary(event) do
+  def deliver(execution_id, event) when is_binary(execution_id) and is_binary(event) do
     with {:ok, store} <- store(),
-         {:ok, record} <- Storage.fetch_run(store, run_id),
+         {:ok, record} <- Storage.fetch_execution(store, execution_id),
          :active <- record.status,
          {:ok, {compiled, document}} <- chart_for(record),
-         {:ok, driven} <- resume(compiled, document, run_id),
+         {:ok, driven} <- resume(compiled, document, execution_id),
          {:ok, {durable, run}} <- continue(driven, event) do
-      broadcast(run_id, {durable, run})
+      broadcast(execution_id, {durable, run})
 
       :delivered
     else
@@ -657,9 +668,9 @@ defmodule StatifierExamples.Charts.Durable do
   the chart left the invoking state on the first answer.
   """
   @spec complete_invocation(String.t(), String.t(), term()) :: :delivered | {:discarded, term()}
-  def complete_invocation(run_id, invoke_id, donedata)
-      when is_binary(run_id) and is_binary(invoke_id) do
-    answer(run_id, invoke_id, {:done, donedata})
+  def complete_invocation(execution_id, invoke_id, donedata)
+      when is_binary(execution_id) and is_binary(invoke_id) do
+    answer(execution_id, invoke_id, {:done, donedata})
   end
 
   @doc """
@@ -677,9 +688,9 @@ defmodule StatifierExamples.Charts.Durable do
   Returns and discards are `complete_invocation/3`'s.
   """
   @spec fail_invocation(String.t(), String.t(), keyword()) :: :delivered | {:discarded, term()}
-  def fail_invocation(run_id, invoke_id, failure)
-      when is_binary(run_id) and is_binary(invoke_id) and is_list(failure) do
-    answer(run_id, invoke_id, {:failed, failure})
+  def fail_invocation(execution_id, invoke_id, failure)
+      when is_binary(execution_id) and is_binary(invoke_id) and is_list(failure) do
+    answer(execution_id, invoke_id, {:failed, failure})
   end
 
   @doc """
@@ -690,7 +701,7 @@ defmodule StatifierExamples.Charts.Durable do
   both ends already have.
   """
   @spec topic(String.t()) :: String.t()
-  def topic(run_id) when is_binary(run_id), do: "run:" <> run_id
+  def topic(execution_id) when is_binary(execution_id), do: "execution:" <> execution_id
 
   @spec continue(driven(), String.t()) :: {:ok, driven()} | {:error, term()}
   defp continue({durable, run}, event), do: send_event(durable, run, event)
@@ -711,13 +722,13 @@ defmodule StatifierExamples.Charts.Durable do
   # counts.
   @spec answer(String.t(), String.t(), {:done, term()} | {:failed, keyword()}) ::
           :delivered | {:discarded, term()}
-  defp answer(run_id, invoke_id, outcome) do
+  defp answer(execution_id, invoke_id, outcome) do
     with {:ok, store} <- store(),
-         {:ok, record} <- Storage.fetch_run(store, run_id),
+         {:ok, record} <- Storage.fetch_execution(store, execution_id),
          {:ok, {compiled, document}} <- chart_for(record),
-         {:ok, driven} <- resume(compiled, document, run_id),
+         {:ok, driven} <- resume(compiled, document, execution_id),
          {:ok, {durable, run}} <- reenter(driven, invoke_id, outcome) do
-      broadcast(run_id, {durable, run})
+      broadcast(execution_id, {durable, run})
 
       :delivered
     else
@@ -733,7 +744,7 @@ defmodule StatifierExamples.Charts.Durable do
     settle_answer(
       durable,
       run,
-      Driver.done_invocation(driver(durable), durable.run_id, invoke_id, donedata)
+      Driver.done_invocation(driver(durable), durable.execution_id, invoke_id, donedata)
     )
   end
 
@@ -741,7 +752,7 @@ defmodule StatifierExamples.Charts.Durable do
     settle_answer(
       durable,
       run,
-      Driver.failed_invocation(driver(durable), durable.run_id, invoke_id, failure)
+      Driver.failed_invocation(driver(durable), durable.execution_id, invoke_id, failure)
     )
   end
 
@@ -751,29 +762,29 @@ defmodule StatifierExamples.Charts.Durable do
   # drained and thrown away on both non-delivering arms, for the reason
   # `settle/3` gives - a drive that stopped part way through has still
   # filled it.
-  @spec settle_answer(t(), Run.t(), Driver.result()) ::
+  @spec settle_answer(t(), Execution.t(), Driver.result()) ::
           {:ok, driven()} | {:discarded, term()} | {:error, term()}
   defp settle_answer(durable, run, {:ok, record, _machine_state}),
     do: rest(durable, run, record.status)
 
   defp settle_answer(durable, _run, {:discarded, record}) do
-    _discarded = drain(durable.run_id, [])
+    _discarded = drain(durable.execution_id, [])
 
     {:discarded, record.status}
   end
 
   defp settle_answer(durable, _run, {:error, reason}) do
-    _discarded = drain(durable.run_id, [])
+    _discarded = drain(durable.execution_id, [])
 
     {:error, reason}
   end
 
   @spec broadcast(String.t(), driven()) :: :ok
-  defp broadcast(run_id, driven) do
+  defp broadcast(execution_id, driven) do
     Phoenix.PubSub.broadcast(
       StatifierExamples.PubSub,
-      topic(run_id),
-      {:run_advanced, run_id, driven}
+      topic(execution_id),
+      {:execution_advanced, execution_id, driven}
     )
   end
 
@@ -850,8 +861,8 @@ defmodule StatifierExamples.Charts.Durable do
   @spec driver(t()) :: Driver.t()
   defp driver(%__MODULE__{} = durable) do
     Driver.new(durable.store, durable.machine,
-      dispatch: dispatch(durable.run_id),
-      effects: executor(durable.run_id),
+      dispatch: dispatch(durable.execution_id),
+      effects: executor(durable.execution_id),
       invoke_types: invoke_types(),
       serialization: serialization(),
       chart_resolver: &resolve_chart/1,
@@ -956,20 +967,20 @@ defmodule StatifierExamples.Charts.Durable do
   # reads it - the page keeps the reading it had - and a drive that failed
   # part way through has still filled it, so leaving it would let a later
   # drive in this process narrate a run that is over.
-  @spec settle(t(), Run.t(), Driver.result()) :: {:ok, driven()} | {:error, term()}
+  @spec settle(t(), Execution.t(), Driver.result()) :: {:ok, driven()} | {:error, term()}
   defp settle(durable, run, {:ok, record, _machine_state}), do: rest(durable, run, record.status)
   defp settle(durable, run, {:discarded, record}), do: rest(durable, run, record.status)
 
   defp settle(durable, _run, {:error, reason}) do
-    _discarded = drain(durable.run_id, [])
+    _discarded = drain(durable.execution_id, [])
 
     {:error, reason}
   end
 
-  @spec rest(t(), Run.t(), atom()) :: {:ok, driven()}
+  @spec rest(t(), Execution.t(), atom()) :: {:ok, driven()}
   defp rest(durable, run, status) do
     run =
-      durable.run_id
+      durable.execution_id
       |> drain([])
       |> Enum.reduce(run, &fold(&2, &1))
       |> finish(status)
@@ -977,11 +988,11 @@ defmodule StatifierExamples.Charts.Durable do
     {:ok, {durable, run}}
   end
 
-  @spec fold(Run.t(), buffered()) :: Run.t()
-  defp fold(run, {:effect, effect}), do: Run.absorb(run, {:effect, effect})
+  @spec fold(Execution.t(), buffered()) :: Execution.t()
+  defp fold(run, {:effect, effect}), do: Execution.absorb(run, {:effect, effect})
 
   defp fold(run, {:note, kind, label, detail, source}),
-    do: Run.note(run, kind, label, detail, source)
+    do: Execution.note(run, kind, label, detail, source)
 
   # ------------------------------------------------------ the host's funs
 
@@ -990,24 +1001,24 @@ defmodule StatifierExamples.Charts.Durable do
   # module would have to be handed some other way.
   # The two run ids `dispatch/1` describes, in the other fun. A durable
   # subchart child runs on this same executor, so a stored timer job keyed
-  # on the closed-over `run_id` would arm the CHILD's 24-hour wait and its
+  # on the closed-over `execution_id` would arm the CHILD's 24-hour wait and its
   # abandonment reminder against the PARENT's run: they would fire, be
   # delivered to a chart with no such event, and the child would wait
-  # forever for a clock nobody was holding for it. `context.run_id` is the
+  # forever for a clock nobody was holding for it. `context.execution_id` is the
   # run the effect belongs to, and it is what both consumers get.
   #
-  # The buffer tag stays the drive's own `run_id`, for `dispatch/1`'s
+  # The buffer tag stays the drive's own `execution_id`, for `dispatch/1`'s
   # reason: it is what `drain/2` matches on.
   @spec executor(String.t()) :: StatifierPersistence.Executor.t()
-  defp executor(run_id) do
+  defp executor(execution_id) do
     reader = self()
 
     fn effect, context ->
-      :ok = Timers.consume(context.run_id, effect)
-      :ok = AsyncCalls.consume(context.run_id, effect)
-      :ok = FanOut.consume(context.run_id, effect)
+      :ok = Timers.consume(context.execution_id, effect)
+      :ok = AsyncCalls.consume(context.execution_id, effect)
+      :ok = FanOut.consume(context.execution_id, effect)
 
-      send(reader, {:durable_buffered, run_id, {:effect, effect}})
+      send(reader, {:durable_buffered, execution_id, {:effect, effect}})
 
       :ok
     end
@@ -1030,7 +1041,7 @@ defmodule StatifierExamples.Charts.Durable do
   # therefore in play whenever a subchart is running, and they are not
   # interchangeable:
   #
-  #   * `run_id`, closed over here, is the run whose *drive* this is - the
+  #   * `execution_id`, closed over here, is the run whose *drive* this is - the
   #     one being narrated. The feed buffer is tagged with it, because
   #     `drain/2` matches on that tag and a row tagged with a child's id
   #     would sit in the mailbox until some later drive in this process
@@ -1038,7 +1049,7 @@ defmodule StatifierExamples.Charts.Durable do
   #     steps in the parent's feed is also what a reader watching the
   #     parent wants: it is what the child is doing on the parent's behalf.
   #
-  #   * `context.run_id`, handed in per call, is the run the invocation
+  #   * `context.execution_id`, handed in per call, is the run the invocation
   #     actually BELONGS to. Everything with a consequence keys on it -
   #     which run an account row is written for, which run an asynchronous
   #     job is scoped to - because a child's `myapp:provision` writing under
@@ -1047,25 +1058,25 @@ defmodule StatifierExamples.Charts.Durable do
   #
   # The same split is in `executor/1` for the same reason.
   @spec dispatch(String.t()) :: Driver.dispatch()
-  defp dispatch(run_id) do
+  defp dispatch(execution_id) do
     reader = self()
 
     fn type, params, dispatch_context ->
       cond do
         type == Runtime.Subchart.invoke_type() ->
-          start_child(reader, run_id, type, params, dispatch_context)
+          start_child(reader, execution_id, type, params, dispatch_context)
 
         FanOut.fan_out?(type) ->
-          fan_out(reader, run_id, type)
+          fan_out(reader, execution_id, type)
 
         AsyncCalls.async?(type, params(params)) ->
-          pending(reader, run_id, type)
+          pending(reader, execution_id, type)
 
         true ->
           perform(
             reader,
-            run_id,
-            %{run_id: dispatch_context.run_id},
+            execution_id,
+            %{execution_id: dispatch_context.execution_id},
             type,
             params(params)
           )
@@ -1096,15 +1107,15 @@ defmodule StatifierExamples.Charts.Durable do
   @spec start_child(pid(), String.t(), String.t(), term(), map()) ::
           {:start_child, Statifier.Effect.Invoke.t(), {:invoke, Statifier.Effect.Invoke.t()}}
           | {:error, keyword()}
-  defp start_child(reader, run_id, type, params, dispatch_context) do
+  defp start_child(reader, execution_id, type, params, dispatch_context) do
     case DurableSubchart.dispatch(type, params, dispatch_context, Subchart) do
       {:start_child, _resolved, {:invoke, invoke}} = instruction ->
         note(
           reader,
-          run_id,
+          execution_id,
           "Child chart started",
-          child_detail(run_id, invoke),
-          child_run_id(run_id, invoke)
+          child_detail(execution_id, invoke),
+          child_execution_id(execution_id, invoke)
         )
 
         instruction
@@ -1113,14 +1124,14 @@ defmodule StatifierExamples.Charts.Durable do
         # No child run id to name: the child was refused before one was
         # constructed. The chart it would have been is what the row is
         # about, so that is what marks it.
-        note(reader, run_id, "Child chart refused", "#{type}: #{failure[:reason]}", type)
+        note(reader, execution_id, "Child chart refused", "#{type}: #{failure[:reason]}", type)
 
         refusal
     end
   end
 
   # The child's run id, said in the feed at the moment it is started. It is
-  # `StatifierPersistence.Run.Linkage.child_run_id/3`'s deterministic
+  # `StatifierPersistence.Execution.Linkage.child_execution_id/3`'s deterministic
   # construction rather than a value read back out of storage, because at
   # this point the child does not exist yet - the driver creates it when
   # this drive's dispatch fun returns. It is what a reader types into the
@@ -1128,16 +1139,16 @@ defmodule StatifierExamples.Charts.Durable do
   # point of a durable subchart, so the feed says it rather than making
   # someone query for it.
   @spec child_detail(String.t(), Statifier.Effect.Invoke.t()) :: String.t()
-  defp child_detail(run_id, invoke) do
-    "#{invoke.src} as run #{child_run_id(run_id, invoke)}"
+  defp child_detail(execution_id, invoke) do
+    "#{invoke.src} as run #{child_execution_id(execution_id, invoke)}"
   end
 
   # The same construction, read twice: once into the row's sentence and
   # once into the mark that says the row is a child's. One function so the
   # two cannot name different runs.
-  @spec child_run_id(String.t(), Statifier.Effect.Invoke.t()) :: String.t()
-  defp child_run_id(run_id, invoke) do
-    Linkage.child_run_id(run_id, invoke.invoke_id, 0)
+  @spec child_execution_id(String.t(), Statifier.Effect.Invoke.t()) :: String.t()
+  defp child_execution_id(execution_id, invoke) do
+    Linkage.child_execution_id(execution_id, invoke.invoke_id, 0)
   end
 
   # The asynchronous arm. The job was stored by the executor a moment ago
@@ -1156,31 +1167,31 @@ defmodule StatifierExamples.Charts.Durable do
   # answers it is the settlement of the last child, once, on behalf of all
   # N, through `StatifierPersistence.Driver`'s own door.
   @spec fan_out(pid(), String.t(), String.t() | nil) :: :pending
-  defp fan_out(reader, run_id, type) do
-    note(reader, run_id, "Fan-out started", "#{type}: children to follow, answer to follow")
+  defp fan_out(reader, execution_id, type) do
+    note(reader, execution_id, "Fan-out started", "#{type}: children to follow, answer to follow")
 
     :pending
   end
 
   @spec pending(pid(), String.t(), String.t() | nil) :: :pending
-  defp pending(reader, run_id, type) do
-    note(reader, run_id, "Call started", "#{type}: running as a job, answer to follow")
+  defp pending(reader, execution_id, type) do
+    note(reader, execution_id, "Call started", "#{type}: running as a job, answer to follow")
 
     :pending
   end
 
   @spec perform(pid(), String.t(), Charts.call_context(), String.t() | nil, map()) ::
           {:ok, map()} | {:error, keyword()}
-  defp perform(reader, run_id, context, type, params) do
+  defp perform(reader, execution_id, context, type, params) do
     case Charts.dispatch(type, params, context) do
       {:ok, donedata} ->
-        note(reader, run_id, "Performed", performed(type, donedata))
+        note(reader, execution_id, "Performed", performed(type, donedata))
 
         {:ok, donedata}
 
       {:error, refusal} ->
         reason = reason(refusal)
-        note(reader, run_id, "Call refused", "#{type}: #{reason}")
+        note(reader, execution_id, "Call refused", "#{type}: #{reason}")
 
         {:error, [reason: reason]}
     end
@@ -1232,8 +1243,8 @@ defmodule StatifierExamples.Charts.Durable do
   defp reason({:chunk_refused, _detail}), do: "chunk_refused"
 
   @spec note(pid(), String.t(), String.t(), String.t(), String.t() | nil) :: :ok
-  defp note(reader, run_id, label, detail, source \\ nil) do
-    send(reader, {:durable_buffered, run_id, {:note, :performed, label, detail, source}})
+  defp note(reader, execution_id, label, detail, source \\ nil) do
+    send(reader, {:durable_buffered, execution_id, {:note, :performed, label, detail, source}})
 
     :ok
   end
@@ -1244,9 +1255,9 @@ defmodule StatifierExamples.Charts.Durable do
   # is taken, so a `Performed` row keeps its place beside the effects of
   # the turn it belongs to.
   @spec drain(String.t(), [buffered()]) :: [buffered()]
-  defp drain(run_id, acc) do
+  defp drain(execution_id, acc) do
     receive do
-      {:durable_buffered, ^run_id, item} -> drain(run_id, [item | acc])
+      {:durable_buffered, ^execution_id, item} -> drain(execution_id, [item | acc])
     after
       0 -> Enum.reverse(acc)
     end
@@ -1255,7 +1266,7 @@ defmodule StatifierExamples.Charts.Durable do
   # ------------------------------------------------------------- readings
 
   # The stepper reports the run's status; the reading speaks the vocabulary
-  # `Run.absorb/2`'s `{:halted, reason}` message uses, so a durable run and
+  # `Execution.absorb/2`'s `{:halted, reason}` message uses, so a durable run and
   # a session run finish with the same row and the same status word.
   #
   # There are FOUR stored statuses, not three: `statifier_persistence` 0.4.0
@@ -1273,13 +1284,13 @@ defmodule StatifierExamples.Charts.Durable do
   # called both "cancelled" would hide exactly the distinction the example
   # is about. A browser capture of the strict document found it, the way
   # se-6ag's capture found the missing clause.
-  @spec finish(Run.t(), atom()) :: Run.t()
-  defp finish(run, :completed), do: Run.absorb(run, {:halted, :done})
-  defp finish(run, :failed), do: Run.absorb(run, {:halted, :failed})
-  defp finish(run, :cancelled), do: Run.absorb(run, {:halted, :cancelled})
+  @spec finish(Execution.t(), atom()) :: Execution.t()
+  defp finish(run, :completed), do: Execution.absorb(run, {:halted, :done})
+  defp finish(run, :failed), do: Execution.absorb(run, {:halted, :failed})
+  defp finish(run, :cancelled), do: Execution.absorb(run, {:halted, :cancelled})
   defp finish(run, :active), do: run
 
-  @spec resumed_status(Run.t(), atom()) :: Run.t()
+  @spec resumed_status(Execution.t(), atom()) :: Execution.t()
   defp resumed_status(run, :active), do: run
   defp resumed_status(run, status), do: finish(run, status)
 
@@ -1317,7 +1328,7 @@ defmodule StatifierExamples.Charts.Durable do
   defp store, do: Storage.new(StatifierExamples.Persistence, [])
 
   @spec serialization() :: {module(), GenServer.server()}
-  defp serialization, do: {RunLock, RunLock}
+  defp serialization, do: {ExecutionLock, ExecutionLock}
 
   @spec invoke_types() :: Types.t()
   defp invoke_types, do: Types.new(types: Charts.invoke_types())

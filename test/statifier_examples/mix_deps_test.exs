@@ -115,7 +115,7 @@ defmodule StatifierExamples.MixDepsTest do
   # The half this app asked for is the failure seam. A block type may
   # class one of its outcomes as a failure through the new optional
   # `failure_outcomes/1` callback, and the compiler stamps a reserved
-  # `statifier_persistence:run_status` `<donedata>` param on that
+  # `statifier_persistence:execution_status` `<donedata>` param on that
   # outcome's top-level `<final>` under both compile options - which is
   # what `statifier_persistence` 0.8.0 reads to mark the run `:failed`.
   # At 0.21.0 `core.map` and `core.subchart` classed their `error`
@@ -326,7 +326,7 @@ defmodule StatifierExamples.MixDepsTest do
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.27"} in deps
+    assert {:statifier_blocks, "~> 0.28"} in deps
 
     lock_line =
       "mix.lock"
@@ -335,7 +335,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.27.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.28.)
     refute lock_line =~ ":git,"
   end
 
@@ -620,12 +620,12 @@ defmodule StatifierExamples.MixDepsTest do
   # the whole effect being dispatched, without which a dispatch fun cannot
   # reach `src` and `StatifierBlocks.Runtime.DurableSubchart` raises rather
   # than guess. sp-i21 then landed ADR-0009's storage-phase telemetry, and
-  # `[:statifier_persistence, :run, :step, :start | :stop]` is the span
+  # `[:statifier_persistence, :execution, :step, :start | :stop]` is the span
   # every durable macrostep nests inside and the one the capstone's trace
   # graph is built out of. Both are in 0.5.0 and neither is in 0.4.0.
   #
   # 0.4.0 was also breaking for a storage adapter that encodes
-  # `run_status/0` by an exhaustive match, since it gains a fourth terminal
+  # `execution_status/0` by an exhaustive match, since it gains a fourth terminal
   # value `:cancelled`. `StatifierExamples.Persistence` delegates every
   # status-bearing callback to the package's own Ecto adapter and matches no
   # status itself, so it rides the library's encoding.
@@ -667,12 +667,12 @@ defmodule StatifierExamples.MixDepsTest do
   # delegated that callback, so taking 0.7.1 unchanged would have refused
   # every durable subchart this app starts, at open, with
   # `:child_listing_unsupported`. It now answers `true` for itself, on the
-  # same grounds it already wrote `list_runs_by_metadata/2` in Elixir on:
+  # same grounds it already wrote `list_executions_by_metadata/2` in Elixir on:
   # this adapter issues none of that SQL. The durable subchart cases in
   # `durable_test.exs` are what hold that.
   #
   # The two capabilities a Tier A fan-out needs at open -
-  # `supports_run_outcome?/1` and `list_run_states_by_metadata/2` - are
+  # `supports_execution_outcome?/1` and `list_execution_states_by_metadata/2` - are
   # exported here as of se-j87, and the guards they satisfy are asserted
   # in `StatifierExamples.PersistenceTest`. Without them
   # `Driver.start_child_at/6` refuses a fan-out at open rather than
@@ -700,7 +700,7 @@ defmodule StatifierExamples.MixDepsTest do
   #
   # 0.8.0 is REQUIRED rather than tidy, on two counts. A chart can now
   # fail its own run: settling in a top-level `<final>` whose `<donedata>`
-  # carries `statifier_persistence:run_status` set to `"failed"` persists
+  # carries `statifier_persistence:execution_status` set to `"failed"` persists
   # the run as `:failed` with the failure string `"failed_final"`, so a
   # `:first_error` fan-out cancels the failed child's siblings with no
   # host-side translation (ADR-0008's amendment, accepted). And
@@ -727,7 +727,7 @@ defmodule StatifierExamples.MixDepsTest do
   #
   # 0.9.0 is REQUIRED rather than tidy. It carries ADR-0010's durable
   # per-run input log: the three optional storage-adapter callbacks
-  # `StatifierExamples.Persistence` exports, `Runs.inputs/2` and
+  # `StatifierExamples.Persistence` exports, `Executions.inputs/2` and
   # `Storage.input_log_supported?/1` to read it back, and migration V05
   # as the table. That log is the only history a stored run has ever had,
   # and without it `StatifierExamples.Charts.Replay` has nothing to
@@ -745,10 +745,23 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.8.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.9.0 entry against the mutated expectation.
   # Reverted from a backup copy.
-  test "the statifier_persistence dep is the Hex requirement, with no override" do
+  # `se-20j` INVERTS this case for one release. The execution rename is on
+  # `statifier_persistence` `main` and unpublished, so the arm is a
+  # committed git pin and the assertion is the pin rather than the absence
+  # of one: the SHA is what the campaign's linkage ledger records, and
+  # reading it out of `mix.lock` is how a re-resolve that quietly moved the
+  # pin goes red here rather than in the durable cases. `se-h6v` restores
+  # the Hex spelling of this case - `{:statifier_persistence, "~> 0.12"}`,
+  # a `{:hex, ...}` lock line and `refute lock_line =~ ":git,"` - once the
+  # operator has published 0.12.0.
+  @statifier_persistence_pin "71537dc7bd5a44bd905d7361ea92dbe821449f6e"
+
+  test "the statifier_persistence dep is the committed git pin se-20j took" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.10"} in deps
+    assert {:statifier_persistence,
+            git: "https://github.com/riddler/statifier_persistence.git",
+            ref: @statifier_persistence_pin} in deps
 
     lock_line =
       "mix.lock"
@@ -757,8 +770,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.10.)
-    refute lock_line =~ ":git,"
+    assert lock_line =~ ":git,"
+    assert lock_line =~ @statifier_persistence_pin
   end
 
   # The durable-timer package. An earlier
@@ -839,7 +852,7 @@ defmodule StatifierExamples.MixDepsTest do
   test "the statifier_oban dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_oban, "~> 0.9"} in deps
+    assert {:statifier_oban, "~> 0.10"} in deps
 
     lock_line =
       "mix.lock"
@@ -848,7 +861,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_oban": )))
 
     assert lock_line, "statifier_oban has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_oban, "0.9.)
+    assert lock_line =~ ~s({:hex, :statifier_oban, "0.10.)
     refute lock_line =~ ":git,"
   end
 
@@ -874,10 +887,19 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.3.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.4.0 entry against the mutated expectation.
   # Reverted from a backup copy.
-  test "the opentelemetry_statifier dep is the Hex requirement" do
+  # `se-20j` inverts this case too, and for the same release: the bridge
+  # moves in lockstep with `statifier_persistence` because the telemetry
+  # prefix changed with no dual emit, so a Hex bridge against a pinned
+  # persistence would subscribe to events nobody emits. `se-h6v` restores
+  # the Hex spelling once 0.6.0 is published.
+  @opentelemetry_statifier_pin "e0204e9c8db739bd21e844436e5dcada1ebd4bf0"
+
+  test "the opentelemetry_statifier dep is the committed git pin se-20j took" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:opentelemetry_statifier, "~> 0.5"} in deps
+    assert {:opentelemetry_statifier,
+            git: "https://github.com/riddler/opentelemetry_statifier.git",
+            ref: @opentelemetry_statifier_pin} in deps
 
     lock_line =
       "mix.lock"
@@ -886,8 +908,8 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "opentelemetry_statifier": )))
 
     assert lock_line, "opentelemetry_statifier has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :opentelemetry_statifier, "0.5.)
-    refute lock_line =~ ":git,"
+    assert lock_line =~ ":git,"
+    assert lock_line =~ @opentelemetry_statifier_pin
   end
 
   # The SDK behind the bridge. `opentelemetry_statifier` depends only on

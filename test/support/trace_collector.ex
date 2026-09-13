@@ -182,9 +182,9 @@ defmodule StatifierExamples.TraceCollector do
   # (which the bridge already aliases onto `statifier.session_id`).
   @correlation ~w(
     statifier.session_id
-    statifier_persistence.run_id
-    statifier_persistence.parent_run_id
-    statifier_persistence.child_run_id
+    statifier_persistence.execution_id
+    statifier_persistence.parent_execution_id
+    statifier_persistence.child_execution_id
     statifier_oban.scope
   )
 
@@ -269,8 +269,8 @@ defmodule StatifierExamples.TraceCollector do
   # checking is identity and linkage.
   @navigational ~w(
     statifier.session_id statifier.trigger statifier.outcome statifier.driver
-    statifier_persistence.run_id statifier_persistence.parent_run_id
-    statifier_persistence.child_run_id statifier_persistence.invoke_id
+    statifier_persistence.execution_id statifier_persistence.parent_execution_id
+    statifier_persistence.child_execution_id statifier_persistence.invoke_id
     statifier_oban.scope statifier_oban.send_id statifier_oban.job_id
   )
 

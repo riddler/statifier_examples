@@ -91,16 +91,16 @@ defmodule StatifierExamples.Signup.HandlersTest do
   # `StatifierExamples.Signup.AccountsTest`'s subject; what this asserts is
   # that the handler routes on the context rather than ignoring it.
   #
-  # Sabotage: narrowed the `%{run_id: run_id}` clause's guard to
-  # `is_atom(run_id)`, so the call fell through to the run-less clause;
+  # Sabotage: narrowed the `%{execution_id: execution_id}` clause's guard to
+  # `is_atom(execution_id)`, so the call fell through to the run-less clause;
   # this went red, then reverted.
-  test "myapp:provision with a run provisions the account and reports it", %{run: run_id} do
+  test "myapp:provision with a run provisions the account and reports it", %{run: execution_id} do
     log =
       capture_log(fn ->
         assert {:ok, %{"account" => account, "provisioned" => "created"}} =
-                 Handlers.handle("myapp:provision", %{}, %{run_id: run_id})
+                 Handlers.handle("myapp:provision", %{}, %{execution_id: execution_id})
 
-        assert account == Accounts.email_for(run_id)
+        assert account == Accounts.email_for(execution_id)
       end)
 
     assert log =~ "created the account"

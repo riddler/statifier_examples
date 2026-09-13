@@ -1,10 +1,10 @@
-defmodule StatifierExamples.Charts.RunLockTest do
+defmodule StatifierExamples.Charts.ExecutionLockTest do
   use ExUnit.Case, async: true
 
-  alias StatifierExamples.Charts.RunLock
+  alias StatifierExamples.Charts.ExecutionLock
 
   setup do
-    lock = start_supervised!({RunLock, name: :"lock-#{System.unique_integer([:positive])}"})
+    lock = start_supervised!({ExecutionLock, name: :"lock-#{System.unique_integer([:positive])}"})
 
     %{lock: lock}
   end
@@ -24,7 +24,7 @@ defmodule StatifierExamples.Charts.RunLockTest do
 
     first =
       Task.async(fn ->
-        RunLock.with_run(lock, "run", fn ->
+        ExecutionLock.with_execution(lock, "run", fn ->
           send(marks, :first_in)
           Process.sleep(50)
           send(marks, :first_out)
@@ -37,7 +37,7 @@ defmodule StatifierExamples.Charts.RunLockTest do
 
     second =
       Task.async(fn ->
-        RunLock.with_run(lock, "run", fn ->
+        ExecutionLock.with_execution(lock, "run", fn ->
           send(marks, :second_in)
           send(marks, :second_out)
         end)
@@ -71,7 +71,7 @@ defmodule StatifierExamples.Charts.RunLockTest do
 
     held =
       Task.async(fn ->
-        RunLock.with_run(lock, "one", fn ->
+        ExecutionLock.with_execution(lock, "one", fn ->
           send(marks, :holding)
           assert_receive :release, 1_000
         end)
@@ -79,19 +79,20 @@ defmodule StatifierExamples.Charts.RunLockTest do
 
     assert_receive :holding, 1_000
 
-    assert {:ok, :ran} = RunLock.with_run(lock, "two", fn -> :ran end)
+    assert {:ok, :ran} = ExecutionLock.with_execution(lock, "two", fn -> :ran end)
 
     send(held.pid, :release)
     Task.await(held)
   end
 
   # The body's value comes back inside the strategy's own envelope, which
-  # is what `StatifierPersistence.Runs` unwraps.
+  # is what `StatifierPersistence.Executions` unwraps.
   #
-  # Sabotage: made `with_run/3` return the bare `fun.()`; this went red,
+  # Sabotage: made `with_execution/3` return the bare `fun.()`; this went red,
   # then reverted.
   test "the body's value comes back in the strategy envelope", %{lock: lock} do
-    assert RunLock.with_run(lock, "run", fn -> {:ok, :whatever} end) == {:ok, {:ok, :whatever}}
+    assert ExecutionLock.with_execution(lock, "run", fn -> {:ok, :whatever} end) ==
+             {:ok, {:ok, :whatever}}
   end
 
   # A holder that dies mid-body must hand the lock on rather than strand
@@ -104,7 +105,7 @@ defmodule StatifierExamples.Charts.RunLockTest do
 
     holder =
       spawn(fn ->
-        RunLock.with_run(lock, "run", fn ->
+        ExecutionLock.with_execution(lock, "run", fn ->
           send(marks, :holding)
           Process.sleep(:infinity)
         end)
@@ -113,7 +114,7 @@ defmodule StatifierExamples.Charts.RunLockTest do
     assert_receive :holding, 1_000
     Process.exit(holder, :kill)
 
-    assert {:ok, :ran} = RunLock.with_run(lock, "run", fn -> :ran end)
+    assert {:ok, :ran} = ExecutionLock.with_execution(lock, "run", fn -> :ran end)
   end
 
   # A body that raises must still release: the `after` clause is what makes
@@ -123,9 +124,9 @@ defmodule StatifierExamples.Charts.RunLockTest do
   # went red on the second acquire timing out, then reverted.
   test "a body that raises releases the lock", %{lock: lock} do
     assert_raise RuntimeError, fn ->
-      RunLock.with_run(lock, "run", fn -> raise "boom" end)
+      ExecutionLock.with_execution(lock, "run", fn -> raise "boom" end)
     end
 
-    assert {:ok, :ran} = RunLock.with_run(lock, "run", fn -> :ran end)
+    assert {:ok, :ran} = ExecutionLock.with_execution(lock, "run", fn -> :ran end)
   end
 end

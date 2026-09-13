@@ -4,7 +4,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
   screen nobody answers, and the create-account call the run ends on.
 
   Not async: durable runs step through the application's named
-  `StatifierExamples.Charts.RunLock`, and the timers are rows.
+  `StatifierExamples.Charts.ExecutionLock`, and the timers are rows.
 
   ## The acceptance line, and where it could not be met literally
 
@@ -31,9 +31,9 @@ defmodule StatifierExamples.Signup.JourneyTest do
   setup do
     :ok = Sandbox.checkout(Repo)
 
-    {:ok, run_id} = Journey.start("journey-#{System.unique_integer([:positive])}")
+    {:ok, execution_id} = Journey.start("journey-#{System.unique_integer([:positive])}")
 
-    %{run_id: run_id}
+    %{execution_id: execution_id}
   end
 
   defp key(%{screen: nil}), do: nil
@@ -43,15 +43,15 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   # Everything a run's own reader can see of it, loaded the way a page
   # loads it: from the id and nothing else.
-  defp seen(run_id) do
-    {:ok, view} = Journey.current(run_id)
+  defp seen(execution_id) do
+    {:ok, view} = Journey.current(execution_id)
 
     view
   end
 
   describe "the run starts on the first screen" do
-    test "and the screen is resolved against an empty datamodel", %{run_id: run_id} do
-      view = seen(run_id)
+    test "and the screen is resolved against an empty datamodel", %{execution_id: execution_id} do
+      view = seen(execution_id)
 
       assert key(view) == "account"
       assert view.status == :running
@@ -74,7 +74,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # case was not among them: a run that does not exist has no screen to
     # miss. Reverted from a copy.
     test "a run id nobody stored is a refusal, not an empty page" do
-      assert Journey.current("no-such-run") == {:error, :run_not_found}
+      assert Journey.current("no-such-run") == {:error, :execution_not_found}
     end
   end
 
@@ -86,16 +86,18 @@ defmodule StatifierExamples.Signup.JourneyTest do
     #
     # Sabotage: made `pressed/5` send the outcome event with no payload
     # (`Durable.send_event/4`'s default). Five cases went red, this one at
-    # its first assertion about `answers`: every capture wrote `:undefined`,
+    # its first assertion about `answers`: no capture wrote anything at all,
     # so the branch on `answers.plan` took neither arm and three cases that
     # only wanted a run somewhere down the business arm fell over too.
     # Reverted from a copy.
-    test "drive the run from the first screen to the created account", %{run_id: run_id} do
-      assert {:ok, plan} = Journey.submit(run_id, "account_submitted", @account)
+    test "drive the run from the first screen to the created account", %{
+      execution_id: execution_id
+    } do
+      assert {:ok, plan} = Journey.submit(execution_id, "account_submitted", @account)
       assert key(plan) == "plan"
       assert plan.answers == %{"first_name" => "Ada", "email" => "ada@example.com"}
 
-      assert {:ok, confirm} = Journey.submit(run_id, "personal_chosen", %{"seats" => "1"})
+      assert {:ok, confirm} = Journey.submit(execution_id, "personal_chosen", %{"seats" => "1"})
       assert key(confirm) == "confirm"
       assert confirm.answers["plan"] == "personal"
 
@@ -109,16 +111,31 @@ defmodule StatifierExamples.Signup.JourneyTest do
       assert Enum.find(confirm.nodes, &(&1["key"] == "confirm_summary"))["text"] =~
                "ada@example.com"
 
-      assert {:ok, done} = Journey.submit(run_id, "signup_confirmed", %{})
+      assert {:ok, done} = Journey.submit(execution_id, "signup_confirmed", %{})
       assert done.status == :done
       assert key(done) == nil
 
       # The stub create-account call, and the proof it was handed the
       # answers rather than a step name: it echoes the address back.
+      # Four, not the five this counted before `statifier_blocks` 0.28.0.
+      # `collected` is `map_size(answers)`, and the confirm screen demands
+      # nothing, so its own capture pair has no source in `_event.data`.
+      # Under sb-ADR-0002's capture Note (N2) that pair now leaves its
+      # destination UNWRITTEN, where it used to write the interpreter's
+      # `:undefined` into it and be counted. The four that remain are the
+      # two the account screen collected, the plan the button recorded and
+      # the coerced seat count - measured, not relaxed.
+      assert done.answers == %{
+               "first_name" => "Ada",
+               "email" => "ada@example.com",
+               "plan" => "personal",
+               "seats" => 1
+             }
+
       assert done.datamodel["created"] == %{
                "created" => true,
                "email" => "ada@example.com",
-               "collected" => 5
+               "collected" => 4
              }
     end
 
@@ -128,27 +145,27 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # process, a live invocation - and the job's answer is what moves it on.
     #
     # Sabotage: made `payload/2` ignore the button's `payload` map. Five
-    # cases went red, this one on the `screen: nil` rest: `answers.plan` came
-    # back `:undefined`, the branch took neither arm, and no call was ever
+    # cases went red, this one on the `screen: nil` rest: `answers.plan` was
+    # never written, the branch took neither arm, and no call was ever
     # made. Reverted from a copy.
-    test "the business arm rests durably on an asynchronous call", %{run_id: run_id} do
-      {:ok, _plan} = Journey.submit(run_id, "account_submitted", @account)
+    test "the business arm rests durably on an asynchronous call", %{execution_id: execution_id} do
+      {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
 
-      assert {:ok, mid_call} = Journey.submit(run_id, "business_chosen", %{"seats" => "5"})
+      assert {:ok, mid_call} = Journey.submit(execution_id, "business_chosen", %{"seats" => "5"})
       assert key(mid_call) == nil
       assert mid_call.status == :running
       assert mid_call.answers["plan"] == "business"
 
       assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
 
-      resumed = seen(run_id)
+      resumed = seen(execution_id)
       assert key(resumed) == "confirm"
 
       # Five seats turns the confirm screen's conditional half on.
       assert "referral" in keys(resumed)
 
       assert {:ok, done} =
-               Journey.submit(run_id, "signup_confirmed", %{"referral" => "A colleague"})
+               Journey.submit(execution_id, "signup_confirmed", %{"referral" => "A colleague"})
 
       assert done.status == :done
       assert done.datamodel["created"]["created"] == true
@@ -165,8 +182,8 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # `lib/` to break that would make it pass. What it would catch is a
     # future arm that quietly started a session to keep a run warm, which is
     # exactly the regression it is here for.
-    test "with nothing holding it", %{run_id: run_id} do
-      view = seen(run_id)
+    test "with nothing holding it", %{execution_id: execution_id} do
+      view = seen(execution_id)
 
       assert Registry.count(Statifier.Registry) == 0
       refute Enum.any?(Map.values(view), &is_pid/1)
@@ -174,21 +191,21 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
     # And it resumes in a process that has never seen it. The submit runs in
     # a task with its own everything; all it is given is the id.
-    test "and resumes in a process that has never seen it", %{run_id: run_id} do
+    test "and resumes in a process that has never seen it", %{execution_id: execution_id} do
       owner = self()
 
       task =
         Task.async(fn ->
           Sandbox.allow(Repo, owner, self())
 
-          Journey.submit(run_id, "account_submitted", @account)
+          Journey.submit(execution_id, "account_submitted", @account)
         end)
 
       assert {:ok, plan} = Task.await(task)
       assert key(plan) == "plan"
 
       # And the move is in storage, not in that task's memory.
-      assert key(seen(run_id)) == "plan"
+      assert key(seen(execution_id)) == "plan"
     end
   end
 
@@ -204,21 +221,23 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # document. `core.await` writes no deadline send without one, the drain
     # found only the Path's own reminder, the run stayed on the account
     # screen, and exactly this case went red. Reverted from a copy.
-    test "times out, takes the timed_out slot, and the Path goes on", %{run_id: run_id} do
-      assert key(seen(run_id)) == "account"
+    test "times out, takes the timed_out slot, and the Path goes on", %{
+      execution_id: execution_id
+    } do
+      assert key(seen(execution_id)) == "account"
 
-      :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(run_id))
+      :ok = Phoenix.PubSub.subscribe(StatifierExamples.PubSub, Durable.topic(execution_id))
 
       # Two jobs are due: this screen's deadline and the Path's own reminder.
       assert %{success: 2, failure: 0} =
                Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
 
-      assert key(seen(run_id)) == "plan"
+      assert key(seen(execution_id)) == "plan"
 
       # Nothing was captured, because a timeout captures nothing.
-      assert seen(run_id).answers == %{}
+      assert seen(execution_id).answers == %{}
 
-      assert timed_out?(run_id)
+      assert timed_out?(execution_id)
     end
 
     # The deadline's own event, named by the compiler rather than by this
@@ -226,12 +245,12 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # transitions to its `timed_out` final on it. Asserted through the feed
     # the deadline's own drive produced, which is what a page watching the
     # run would have drawn.
-    defp timed_out?(run_id) do
-      assert_receive {:run_advanced, ^run_id, {%Durable{}, reading}}
+    defp timed_out?(execution_id) do
+      assert_receive {:execution_advanced, ^execution_id, {%Durable{}, reading}}
 
       Enum.any?(reading.entries, fn entry ->
         entry.kind == :outcome and entry.detail == "timed_out on blk_sp_account_park"
-      end) or timed_out?(run_id)
+      end) or timed_out?(execution_id)
     end
   end
 
@@ -244,8 +263,9 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # cases went red, this one and the page's own refusal case: the run moved
     # to the plan screen on a form holding one malformed address. Reverted
     # from a copy.
-    test "sends nothing and leaves the run where it was", %{run_id: run_id} do
-      assert {:invalid, view} = Journey.submit(run_id, "account_submitted", %{"email" => "ada"})
+    test "sends nothing and leaves the run where it was", %{execution_id: execution_id} do
+      assert {:invalid, view} =
+               Journey.submit(execution_id, "account_submitted", %{"email" => "ada"})
 
       assert key(view) == "account"
 
@@ -254,8 +274,8 @@ defmodule StatifierExamples.Signup.JourneyTest do
                {"email", "must look like an email address"}
              ]
 
-      assert key(seen(run_id)) == "account"
-      assert seen(run_id).answers == %{}
+      assert key(seen(execution_id)) == "account"
+      assert seen(execution_id).answers == %{}
     end
 
     # Back is a button like any other, and that is the k2 finding happening:
@@ -269,20 +289,26 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # the reason it could not be sabotaged: the plan screen demands nothing,
     # so no press of Back can be refused, and a check that cannot fail cannot
     # be broken either. Recorded as an ask rather than shipped.
-    test "Back abandons the screen and the Path goes on without a plan", %{run_id: run_id} do
-      {:ok, _plan} = Journey.submit(run_id, "account_submitted", @account)
+    test "Back abandons the screen and the Path goes on without a plan", %{
+      execution_id: execution_id
+    } do
+      {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
 
-      assert {:ok, moved} = Journey.submit(run_id, "went_back", %{})
+      assert {:ok, moved} = Journey.submit(execution_id, "went_back", %{})
 
       # The branch on `answers.plan` takes neither arm, and the run lands on
       # the confirm screen having gone nowhere near a plan.
       assert key(moved) == "confirm"
       refute Map.has_key?(moved.answers, "plan")
 
-      # And the seat count the reader never typed is written all the same, as
-      # `:undefined`: a capture map's destination is written whether or not
-      # the payload carries its source. Finding 2 of the k3 section.
-      assert moved.answers["seats"] == :undefined
+      # And the seat count the reader never typed is not written at all. A
+      # capture pair whose source is absent from `_event.data` leaves its
+      # destination UNWRITTEN as of `statifier_blocks` 0.28.0 (sb-ADR-0002's
+      # capture Note, N2); before that release the destination was written
+      # with the interpreter's `:undefined`, which is what finding 2 of the
+      # k3 section recorded. Absence is the assertion, exactly as the `plan`
+      # line two above it already reads.
+      refute Map.has_key?(moved.answers, "seats")
     end
   end
 
@@ -295,24 +321,24 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # instead of the resolved ones. Exactly this case went red: the run
     # advanced on a button no reader could have seen, and the refusal it
     # asserts never came. Reverted from a copy.
-    test "is refused rather than sent", %{run_id: run_id} do
-      {:ok, _plan} = Journey.submit(run_id, "account_submitted", @account)
+    test "is refused rather than sent", %{execution_id: execution_id} do
+      {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
 
-      assert Journey.submit(run_id, "business_chosen", %{"seats" => "1"}) ==
+      assert Journey.submit(execution_id, "business_chosen", %{"seats" => "1"}) ==
                {:error, {:unknown_outcome, "business_chosen"}}
 
-      assert Journey.submit(run_id, "not_an_outcome", %{}) ==
+      assert Journey.submit(execution_id, "not_an_outcome", %{}) ==
                {:error, {:unknown_outcome, "not_an_outcome"}}
 
       # The same press with the seat count that makes the button appear.
-      assert {:ok, _mid_call} = Journey.submit(run_id, "business_chosen", %{"seats" => "5"})
+      assert {:ok, _mid_call} = Journey.submit(execution_id, "business_chosen", %{"seats" => "5"})
     end
 
-    test "and so is a press against a run that is not on a screen", %{run_id: run_id} do
-      {:ok, _plan} = Journey.submit(run_id, "account_submitted", @account)
-      {:ok, _mid_call} = Journey.submit(run_id, "business_chosen", %{"seats" => "5"})
+    test "and so is a press against a run that is not on a screen", %{execution_id: execution_id} do
+      {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
+      {:ok, _mid_call} = Journey.submit(execution_id, "business_chosen", %{"seats" => "5"})
 
-      assert Journey.submit(run_id, "signup_confirmed", %{}) == {:error, :not_on_a_screen}
+      assert Journey.submit(execution_id, "signup_confirmed", %{}) == {:error, :not_on_a_screen}
     end
   end
 
@@ -326,8 +352,8 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # unchanged. Eight cases went red, this one on both button assertions and
     # the rest on the plan screen becoming a screen with no way off it - six
     # of them could not reach a plan at all. Reverted from a copy.
-    test "a typed answer changes what the screen offers", %{run_id: run_id} do
-      {:ok, plan} = Journey.submit(run_id, "account_submitted", @account)
+    test "a typed answer changes what the screen offers", %{execution_id: execution_id} do
+      {:ok, plan} = Journey.submit(execution_id, "account_submitted", @account)
 
       refute "plan_personal" in keys(plan)
       refute "plan_business" in keys(plan)
@@ -336,17 +362,17 @@ defmodule StatifierExamples.Signup.JourneyTest do
       assert "plan_business" in keys(Journey.resolve(plan, %{"seats" => "5"}))
     end
 
-    test "a draft is never written to the run", %{run_id: run_id} do
-      view = seen(run_id)
+    test "a draft is never written to the run", %{execution_id: execution_id} do
+      view = seen(execution_id)
 
       _drafted = Journey.resolve(view, %{"first_name" => "Ada"})
 
-      assert seen(run_id).answers == %{}
+      assert seen(execution_id).answers == %{}
     end
 
-    test "a view with no screen resolves to itself", %{run_id: run_id} do
-      {:ok, _plan} = Journey.submit(run_id, "account_submitted", @account)
-      {:ok, mid_call} = Journey.submit(run_id, "business_chosen", %{"seats" => "5"})
+    test "a view with no screen resolves to itself", %{execution_id: execution_id} do
+      {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
+      {:ok, mid_call} = Journey.submit(execution_id, "business_chosen", %{"seats" => "5"})
 
       assert Journey.resolve(mid_call, %{"anything" => "at all"}) == mid_call
     end

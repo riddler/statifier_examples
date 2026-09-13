@@ -1,8 +1,8 @@
 defmodule StatifierExamples.Repo.Migrations.AddStatifierPersistenceInputLog do
   @moduledoc """
   V04 and V05 of `statifier_persistence`'s DDL. V05 is the one this app
-  wants: the per-run input log table its ADR-0010 adds - `run_id`, `seq`,
-  `door`, `input_blob`, with a unique index on `(run_id, seq)` - which is
+  wants: the per-run input log table its ADR-0010 adds - `execution_id`, `seq`,
+  `door`, `input_blob`, with a unique index on `(execution_id, seq)` - which is
   what makes a stored run replayable and so what the editor page's Run
   pane reads a run back through (`StatifierExamples.Charts.Replay`).
 
@@ -36,13 +36,34 @@ defmodule StatifierExamples.Repo.Migrations.AddStatifierPersistenceInputLog do
   than only the log write - the append is inside the run's serialized
   unit, and a failed append fails the step (ADR-0010 decision 5). The
   reverse order is safe: a V05 table nobody appends to is an empty table.
+
+  se-20j CAPS both bounds at V05, which they were not when this migration
+  was written: `up(from: 4)` with no ceiling took every version the package
+  knew, and the package knew no more than V05 then. It knows V06 now, so
+  uncapped this migration would rename the table on a fresh clone and the
+  V06 migration beside it would then find nothing to rename and no
+  migration recorded for the version it is for. Capping here and giving
+  V06 its own migration gives a fresh clone and this app's existing
+  databases the same steps in the same order - the same reason
+  `20260830210002_add_statifier_persistence.exs` is capped at V02 and
+  `20260905120001_add_statifier_persistence_outcome_blob.exs` at V03.
   """
 
   use Ecto.Migration
 
   def up,
-    do: StatifierPersistence.Ecto.Migrations.up(for: StatifierExamples.Persistence, from: 4)
+    do:
+      StatifierPersistence.Ecto.Migrations.up(
+        for: StatifierExamples.Persistence,
+        from: 4,
+        version: 5
+      )
 
   def down,
-    do: StatifierPersistence.Ecto.Migrations.down(for: StatifierExamples.Persistence, version: 4)
+    do:
+      StatifierPersistence.Ecto.Migrations.down(
+        for: StatifierExamples.Persistence,
+        from: 5,
+        version: 4
+      )
 end

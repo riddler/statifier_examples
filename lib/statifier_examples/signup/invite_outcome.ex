@@ -23,8 +23,8 @@ defmodule StatifierExamples.Signup.InviteOutcome do
           chunk_id: String.t() | nil,
           email: String.t() | nil,
           status: String.t() | nil,
-          run_id: String.t() | nil,
-          promoted_run_id: String.t() | nil,
+          execution_id: String.t() | nil,
+          promoted_execution_id: String.t() | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -33,8 +33,8 @@ defmodule StatifierExamples.Signup.InviteOutcome do
     field(:chunk_id, :string)
     field(:email, :string)
     field(:status, :string)
-    field(:run_id, :string)
-    field(:promoted_run_id, :string)
+    field(:execution_id, :string)
+    field(:promoted_execution_id, :string)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -51,8 +51,8 @@ defmodule StatifierExamples.Signup.InviteOutcome do
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(outcome, attrs) do
     outcome
-    |> cast(attrs, [:chunk_id, :email, :status, :run_id, :promoted_run_id])
-    |> validate_required([:chunk_id, :email, :status, :run_id])
+    |> cast(attrs, [:chunk_id, :email, :status, :execution_id, :promoted_execution_id])
+    |> validate_required([:chunk_id, :email, :status, :execution_id])
     |> unique_constraint([:chunk_id, :email])
   end
 end

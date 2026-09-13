@@ -39,7 +39,7 @@ defmodule StatifierExamples.Signup.Handlers do
   something stable. Nothing in the chart is: it carries no datamodel and
   no identity. The *run* is, and a durable driver passes it in the call
   context `StatifierExamples.Charts.dispatch/3` takes - which is why the
-  provisioning clause matches on `%{run_id: run_id}` and every other
+  provisioning clause matches on `%{execution_id: execution_id}` and every other
   driver gets the clause that says so. A `Statifier.Session` is one of
   those: the adapter hands a handler the engine's plan context, which
   names a session and never a run, because a session has none.
@@ -133,8 +133,9 @@ defmodule StatifierExamples.Signup.Handlers do
     {:ok, answers(step)}
   end
 
-  def handle("myapp:provision", _params, %{run_id: run_id}) when is_binary(run_id) do
-    {result, user} = Accounts.provision(run_id)
+  def handle("myapp:provision", _params, %{execution_id: execution_id})
+      when is_binary(execution_id) do
+    {result, user} = Accounts.provision(execution_id)
 
     Logger.info("myapp:provision #{result} the account #{user.email}")
 
@@ -154,17 +155,17 @@ defmodule StatifierExamples.Signup.Handlers do
     {:ok, %{"provisioned" => "skipped"}}
   end
 
-  def handle("myapp:process_rows", %{"chunk" => chunk_id}, %{run_id: run_id})
-      when is_binary(chunk_id) and is_binary(run_id) do
+  def handle("myapp:process_rows", %{"chunk" => chunk_id}, %{execution_id: execution_id})
+      when is_binary(chunk_id) and is_binary(execution_id) do
     with {:ok, promotion} <- Promotion.promote(chunk_id),
-         {:ok, rows} <- Invites.record(chunk_id, run_id, promoted_run_id(promotion)) do
+         {:ok, rows} <- Invites.record(chunk_id, execution_id, promoted_execution_id(promotion)) do
       Logger.info("myapp:process_rows processed #{rows} rows of #{chunk_id}")
 
       {:ok,
        %{
          "chunk" => chunk_id,
          "rows" => rows,
-         "promoted" => promoted_run_id(promotion)
+         "promoted" => promoted_execution_id(promotion)
        }}
     else
       :error -> {:error, {:unknown_chunk, chunk_id}}
@@ -186,10 +187,10 @@ defmodule StatifierExamples.Signup.Handlers do
   # or found the one an earlier delivery of the same chunk started - the
   # row records the run either way, because the row is about the invitee
   # and not about which delivery got there first.
-  @spec promoted_run_id(Promotion.outcome()) :: String.t() | nil
-  defp promoted_run_id({:started, run_id}), do: run_id
-  defp promoted_run_id({:existing, run_id}), do: run_id
-  defp promoted_run_id(:none), do: nil
+  @spec promoted_execution_id(Promotion.outcome()) :: String.t() | nil
+  defp promoted_execution_id({:started, execution_id}), do: execution_id
+  defp promoted_execution_id({:existing, execution_id}), do: execution_id
+  defp promoted_execution_id(:none), do: nil
 
   # What each step of the wizard comes back with.
   #

@@ -1,6 +1,6 @@
 defmodule StatifierExamples.Charts.ReplayTest do
   # Not async: a replay reads a durable run, and a durable run steps
-  # through the application's named `StatifierExamples.Charts.RunLock` and
+  # through the application's named `StatifierExamples.Charts.ExecutionLock` and
   # writes to the repo.
   use ExUnit.Case, async: false
 
@@ -14,7 +14,7 @@ defmodule StatifierExamples.Charts.ReplayTest do
   setup do
     :ok = Sandbox.checkout(Repo)
 
-    %{run_id: "run-#{System.unique_integer([:positive])}"}
+    %{execution_id: "run-#{System.unique_integer([:positive])}"}
   end
 
   # The wizard compiled exactly as the editor page compiles it. The
@@ -33,9 +33,9 @@ defmodule StatifierExamples.Charts.ReplayTest do
     {compiled, fixture.document}
   end
 
-  defp started(run_id) do
+  defp started(execution_id) do
     {compiled, document} = signup()
-    {:ok, {durable, run}} = Durable.start(compiled, document, run_id, "signup_wizard")
+    {:ok, {durable, run}} = Durable.start(compiled, document, execution_id, "signup_wizard")
 
     {compiled, durable, run}
   end
@@ -44,10 +44,12 @@ defmodule StatifierExamples.Charts.ReplayTest do
     assert Replay.supported?()
   end
 
-  test "a started run replays to a state whose stream opens with the manifest", %{run_id: run_id} do
-    {compiled, _durable, _run} = started(run_id)
+  test "a started run replays to a state whose stream opens with the manifest", %{
+    execution_id: execution_id
+  } do
+    {compiled, _durable, _run} = started(execution_id)
 
-    assert {:ok, %State{} = state} = Replay.state(run_id, compiled)
+    assert {:ok, %State{} = state} = Replay.state(execution_id, compiled)
 
     [manifest | _rest] = state.messages
     assert manifest.type == "session.start"
@@ -55,15 +57,15 @@ defmodule StatifierExamples.Charts.ReplayTest do
   end
 
   test "a run driven by an event replays with more macrosteps than a run that only started",
-       %{run_id: run_id} do
-    {compiled, durable, run} = started(run_id)
-    {_compiled, _durable, _run} = started(run_id <> "-quiet")
+       %{execution_id: execution_id} do
+    {compiled, durable, run} = started(execution_id)
+    {_compiled, _durable, _run} = started(execution_id <> "-quiet")
 
-    assert {:ok, at_start} = Replay.state(run_id <> "-quiet", compiled)
+    assert {:ok, at_start} = Replay.state(execution_id <> "-quiet", compiled)
 
     {:ok, {_durable, _run}} = Durable.send_event(durable, run, "signup.email_verified")
 
-    assert {:ok, advanced} = Replay.state(run_id, compiled)
+    assert {:ok, advanced} = Replay.state(execution_id, compiled)
 
     assert macrosteps(advanced) > macrosteps(at_start)
   end
@@ -83,12 +85,12 @@ defmodule StatifierExamples.Charts.ReplayTest do
   # went from 103 messages over 4 macrosteps to 14 over 2 - both invocation
   # answers gone. This went red on the first `assert`. Reverted from a
   # backup copy.
-  test "the invocation answers survive the replay", %{run_id: run_id} do
-    {compiled, durable, run} = started(run_id)
+  test "the invocation answers survive the replay", %{execution_id: execution_id} do
+    {compiled, durable, run} = started(execution_id)
     {:ok, {_durable, _run}} = Durable.send_event(durable, run, "signup.email_verified")
 
     {:ok, machine} = Statifier.compile(compiled.scxml)
-    assert {:ok, messages} = Replay.messages(run_id, machine)
+    assert {:ok, messages} = Replay.messages(execution_id, machine)
 
     assert dequeued?(messages, "done.invoke.s_blk_su_account__running.inv_1")
     assert dequeued?(messages, "done.invoke.s_blk_su_send_verification__running.inv_2")
@@ -102,10 +104,10 @@ defmodule StatifierExamples.Charts.ReplayTest do
     end)
   end
 
-  test "a persisted stream carries no subscriber stats", %{run_id: run_id} do
-    {compiled, _durable, _run} = started(run_id)
+  test "a persisted stream carries no subscriber stats", %{execution_id: execution_id} do
+    {compiled, _durable, _run} = started(execution_id)
 
-    assert {:ok, %State{stats: nil}} = Replay.state(run_id, compiled)
+    assert {:ok, %State{stats: nil}} = Replay.state(execution_id, compiled)
   end
 
   test "a run nobody stored is refused rather than replayed as empty" do

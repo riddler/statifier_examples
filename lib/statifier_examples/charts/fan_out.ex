@@ -51,7 +51,7 @@ defmodule StatifierExamples.Charts.FanOut do
 
   `first_error` cancels the rest as soon as one child fails, and the two
   halves live in two packages because they can. A child that exists is a
-  run, cancelled by `StatifierPersistence.Runs.cascade_cancel/3` inside
+  run, cancelled by `StatifierPersistence.Executions.cascade_cancel/3` inside
   the settlement section. An index whose start job has not run yet has no
   run record at all, so it is invisible there - and
   `StatifierOban.Invoke.FanOut.cancel_unstarted/3` is the other door,
@@ -156,8 +156,8 @@ defmodule StatifierExamples.Charts.FanOut do
   """
   @impl StatifierOban.Invoke.Handler
   @spec run(Invoke.t(), map()) :: {:fan_out, list()} | {:error, term()}
-  def run(%Invoke{} = invoke, %{scope: parent_run_id}) do
-    case descriptors(parent_run_id, invoke) do
+  def run(%Invoke{} = invoke, %{scope: parent_execution_id}) do
+    case descriptors(parent_execution_id, invoke) do
       {:ok, descriptors} ->
         Logger.info("fanning #{invoke.invoke_id} out over #{length(descriptors)} items")
 
@@ -169,11 +169,11 @@ defmodule StatifierExamples.Charts.FanOut do
   end
 
   @doc """
-  Creates child `index` of `count` for `invoke`, under `parent_run_id`.
+  Creates child `index` of `count` for `invoke`, under `parent_execution_id`.
 
   `StatifierOban.Invoke.ChildStarter`'s callback. It is called from an
   Oban job and therefore at least once per index, and it is idempotent on
-  `{parent_run_id, invoke.invoke_id, index}` because
+  `{parent_execution_id, invoke.invoke_id, index}` because
   `StatifierPersistence.Driver.start_child_at/6` is: the child's run id is
   derived from that triple, and a second call adopts the child the first
   one created.
@@ -187,10 +187,10 @@ defmodule StatifierExamples.Charts.FanOut do
   @impl StatifierOban.Invoke.ChildStarter
   @spec start_child(String.t(), Invoke.t(), non_neg_integer(), pos_integer(), keyword()) ::
           :ok | {:error, term()}
-  def start_child(parent_run_id, %Invoke{} = invoke, index, count, opts) do
-    with {:ok, descriptors} <- descriptors(parent_run_id, invoke),
+  def start_child(parent_execution_id, %Invoke{} = invoke, index, count, opts) do
+    with {:ok, descriptors} <- descriptors(parent_execution_id, invoke),
          {:ok, descriptor} <- at(descriptors, index) do
-      parent_run_id
+      parent_execution_id
       |> Durable.start_child_at(invoke, %{"chunk" => descriptor}, index, count, opts)
       |> started()
     else
@@ -210,8 +210,8 @@ defmodule StatifierExamples.Charts.FanOut do
   """
   @spec canceller() :: (String.t(), String.t(), [non_neg_integer()] -> :ok)
   def canceller do
-    fn parent_run_id, invoke_id, _unstarted_indices ->
-      {:ok, cancelled} = Scheduling.cancel_unstarted(config(), parent_run_id, invoke_id)
+    fn parent_execution_id, invoke_id, _unstarted_indices ->
+      {:ok, cancelled} = Scheduling.cancel_unstarted(config(), parent_execution_id, invoke_id)
 
       Logger.info("cancelled #{cancelled} unstarted children of #{invoke_id}")
 
@@ -220,11 +220,11 @@ defmodule StatifierExamples.Charts.FanOut do
   end
 
   @doc """
-  Consumes one effect on behalf of the run named by `run_id`.
+  Consumes one effect on behalf of the run named by `execution_id`.
 
   `AsyncCalls.consume/2`'s twin, for the one effect this module claims:
   a `{:invoke, %Invoke{}}` whose type is a `core.map`'s becomes one
-  stored fan-out job, keyed on `{run_id, invoke_id, macrostep}` by the
+  stored fan-out job, keyed on `{execution_id, invoke_id, macrostep}` by the
   base. A `{:cancel_invoke, _}` is handed to the base as well - the
   invoking state exiting has to take the fan-out job with it - and a
   cancel matching nothing is a no-op by the base's own contract.
@@ -234,35 +234,36 @@ defmodule StatifierExamples.Charts.FanOut do
   `{:error, _}`, and "this effect is not a fan-out" is not an error.
   """
   @spec consume(String.t(), Statifier.Effect.t()) :: :ok
-  def consume(run_id, {:invoke, %Invoke{} = invoke}) when is_binary(run_id) do
+  def consume(execution_id, {:invoke, %Invoke{} = invoke}) when is_binary(execution_id) do
     if fan_out?(invoke.type) do
-      start!(run_id, invoke)
+      start!(execution_id, invoke)
     else
       :ok
     end
   end
 
-  def consume(run_id, {:cancel_invoke, %CancelInvoke{} = effect}) when is_binary(run_id) do
-    case Handler.perform_cancel(__MODULE__, effect.invoke_id, ctx(run_id)) do
+  def consume(execution_id, {:cancel_invoke, %CancelInvoke{} = effect})
+      when is_binary(execution_id) do
+    case Handler.perform_cancel(__MODULE__, effect.invoke_id, ctx(execution_id)) do
       :ok ->
         :ok
 
       {:error, reason} ->
-        raise "could not cancel the fan-out #{effect.invoke_id} for #{run_id}: " <>
+        raise "could not cancel the fan-out #{effect.invoke_id} for #{execution_id}: " <>
                 inspect(reason)
     end
   end
 
-  def consume(run_id, _other) when is_binary(run_id), do: :ok
+  def consume(execution_id, _other) when is_binary(execution_id), do: :ok
 
   @spec start!(String.t(), Invoke.t()) :: :ok
-  defp start!(run_id, %Invoke{} = invoke) do
-    case Handler.perform_start(__MODULE__, invoke, ctx(run_id)) do
+  defp start!(execution_id, %Invoke{} = invoke) do
+    case Handler.perform_start(__MODULE__, invoke, ctx(execution_id)) do
       :ok ->
         :ok
 
       {:error, reason} ->
-        raise "could not start the fan-out #{invoke.invoke_id} for #{run_id}: " <>
+        raise "could not start the fan-out #{invoke.invoke_id} for #{execution_id}: " <>
                 inspect(reason)
     end
   end
@@ -270,9 +271,9 @@ defmodule StatifierExamples.Charts.FanOut do
   # The descriptor list, evaluated out of the parent run's own persisted
   # datamodel at the path the block's `items` names.
   @spec descriptors(String.t(), Invoke.t()) :: {:ok, list()} | {:error, term()}
-  defp descriptors(parent_run_id, %Invoke{} = invoke) do
+  defp descriptors(parent_execution_id, %Invoke{} = invoke) do
     with {:ok, path} <- items_path(invoke),
-         {:ok, machine_state} <- machine_state(parent_run_id) do
+         {:ok, machine_state} <- machine_state(parent_execution_id) do
       resolve(machine_state.datamodel, path)
     end
   end
@@ -284,8 +285,8 @@ defmodule StatifierExamples.Charts.FanOut do
   defp items_path(%Invoke{invoke_id: invoke_id}), do: {:error, {:items_missing, invoke_id}}
 
   @spec machine_state(String.t()) :: {:ok, Statifier.MachineState.t()} | {:error, term()}
-  defp machine_state(parent_run_id) do
-    case Durable.machine_state(parent_run_id) do
+  defp machine_state(parent_execution_id) do
+    case Durable.machine_state(parent_execution_id) do
       {:ok, machine_state} -> {:ok, machine_state}
       {:error, reason} -> {:error, {:parent_unreadable, reason}}
     end
@@ -321,7 +322,7 @@ defmodule StatifierExamples.Charts.FanOut do
   # and for its reason: this host has no session, so the run id is what
   # goes in the field a session host puts its session id in.
   @spec ctx(String.t()) :: Statifier.Invoke.Handler.ctx()
-  defp ctx(run_id) do
-    %{session_id: run_id, invoke_types: Types.new(types: []), invoke_handlers: %{}}
+  defp ctx(execution_id) do
+    %{session_id: execution_id, invoke_types: Types.new(types: []), invoke_handlers: %{}}
   end
 end

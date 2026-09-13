@@ -7,7 +7,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
   """
 
   # Not async: durable runs step through the application's own
-  # `StatifierExamples.Charts.RunLock`, which is named, shared state, and
+  # `StatifierExamples.Charts.ExecutionLock`, which is named, shared state, and
   # they write to the repo and to the Oban jobs table.
   use ExUnit.Case, async: false
 
@@ -23,20 +23,20 @@ defmodule StatifierExamples.Charts.FanOutTest do
   setup do
     :ok = Sandbox.checkout(Repo)
 
-    %{run_id: "fan-#{System.unique_integer([:positive])}"}
+    %{execution_id: "fan-#{System.unique_integer([:positive])}"}
   end
 
-  defp start!(key, run_id) do
+  defp start!(key, execution_id) do
     {:ok, fixture} = Charts.fixture(key)
     {:ok, compiled} = Durable.compile(fixture.document, fixture.declare)
 
-    {:ok, {_durable, run}} = Durable.start(compiled, fixture.document, run_id, key)
+    {:ok, {_durable, run}} = Durable.start(compiled, fixture.document, execution_id, key)
 
     run
   end
 
-  defp datamodel(run_id) do
-    {:ok, machine_state} = Durable.machine_state(run_id)
+  defp datamodel(execution_id) do
+    {:ok, machine_state} = Durable.machine_state(execution_id)
 
     machine_state.datamodel
   end
@@ -71,13 +71,15 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # Sabotage: made the dispatch fun's fan-out arm answer `{:ok, %{}}`
   # instead of `:pending`; this went red - the parent completed with no
   # job stored. Reverted.
-  test "the parent rests with one fan-out job stored and no children", %{run_id: run_id} do
-    run = start!("signup_bulk_invites", run_id)
+  test "the parent rests with one fan-out job stored and no children", %{
+    execution_id: execution_id
+  } do
+    run = start!("signup_bulk_invites", execution_id)
 
     assert run.status == :running
     assert start_jobs() == []
     assert Repo.aggregate(Oban.Job, :count) == 1
-    assert Repo.aggregate(from(r in "statifier_runs", select: r.run_id), :count) == 1
+    assert Repo.aggregate(from(r in "statifier_executions", select: r.execution_id), :count) == 1
   end
 
   # The whole shape, once: ten descriptors in, ten chunk children, ten
@@ -99,15 +101,17 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # row count while the assembled list stayed green - which is the
   # boundary being real rather than asserted, since the chart's answer
   # and the data plane's rows are two different writes. Reverted.
-  test "on: all fans out over ten descriptors and assembles ten answers", %{run_id: run_id} do
-    start!("signup_bulk_invites", run_id)
+  test "on: all fans out over ten descriptors and assembles ten answers", %{
+    execution_id: execution_id
+  } do
+    start!("signup_bulk_invites", execution_id)
 
     assert %{success: 1} = drain()
     assert length(start_jobs()) == 10
 
     assert %{success: 10} = drain()
 
-    results = Map.fetch!(datamodel(run_id), "results")
+    results = Map.fetch!(datamodel(execution_id), "results")
 
     assert length(results) == 10
     assert Enum.map(results, & &1["index"]) == Enum.to_list(0..9)
@@ -126,8 +130,8 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # Sabotage: made `FanOut.start_child/5` seed `Enum.at(descriptors, 0)`
   # for every index; this went red - every chunk's rows named child 0.
   # Reverted.
-  test "each descriptor is seeded into the child at its own index", %{run_id: run_id} do
-    start!("signup_bulk_invites", run_id)
+  test "each descriptor is seeded into the child at its own index", %{execution_id: execution_id} do
+    start!("signup_bulk_invites", execution_id)
 
     assert %{success: 1} = drain()
     assert %{success: 10} = drain()
@@ -137,7 +141,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
       rows = Invites.for_chunk(chunk)
 
       assert length(rows) == 25
-      assert Enum.all?(rows, &(&1.run_id == "#{run_id}/blk_bi_chunks/#{index}"))
+      assert Enum.all?(rows, &(&1.execution_id == "#{execution_id}/blk_bi_chunks/#{index}"))
     end
   end
 
@@ -148,8 +152,8 @@ defmodule StatifierExamples.Charts.FanOutTest do
   #
   # Sabotage: made `Promotion.promote/1` answer `{:ok, :none}` for every
   # chunk; this went red on the promoted row count. Reverted.
-  test "exactly one row is promoted to a run of its own", %{run_id: run_id} do
-    start!("signup_bulk_invites", run_id)
+  test "exactly one row is promoted to a run of its own", %{execution_id: execution_id} do
+    start!("signup_bulk_invites", execution_id)
 
     assert %{success: 1} = drain()
     assert %{success: 10} = drain()
@@ -158,7 +162,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
     assert promoted.chunk_id == "su-c07"
     assert promoted.email == "invitee-su-c07-3@example.com"
     assert promoted.status == "promoted"
-    assert promoted.promoted_run_id == "promoted-su-c07"
+    assert promoted.promoted_execution_id == "promoted-su-c07"
 
     assert {:ok, {{_durable, run}, document}} = Durable.resume("promoted-su-c07")
     assert document.id == "bdoc_signup_demo"
@@ -171,23 +175,27 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # run is adopted rather than created twice, the rows are one set rather
   # than two, and the promoted invitee has one run and not a second.
   #
-  # Sabotage: made `Invites.promoted_run_id/1` mint a fresh id per call;
+  # Sabotage: made `Invites.promoted_execution_id/1` mint a fresh id per call;
   # this went red - the second delivery started a second wizard run.
   # Reverted.
-  test "a redelivered chunk start is idempotent", %{run_id: run_id} do
-    start!("signup_bulk_invites", run_id)
+  test "a redelivered chunk start is idempotent", %{execution_id: execution_id} do
+    start!("signup_bulk_invites", execution_id)
 
     assert %{success: 1} = drain()
     assert %{success: 10} = drain()
 
     before_rows = Invites.count()
-    before_runs = Repo.aggregate(from(r in "statifier_runs", select: r.run_id), :count)
+
+    before_executions =
+      Repo.aggregate(from(r in "statifier_executions", select: r.execution_id), :count)
 
     job = Enum.find(start_jobs(), &(&1.args["index"] == 6))
     assert :ok = ChildStartWorker.perform(job)
 
     assert Invites.count() == before_rows
-    assert Repo.aggregate(from(r in "statifier_runs", select: r.run_id), :count) == before_runs
+
+    assert Repo.aggregate(from(r in "statifier_executions", select: r.execution_id), :count) ==
+             before_executions
   end
 
   # `first_error` cancels the rest, and the half only a host can reach is
@@ -204,8 +212,8 @@ defmodule StatifierExamples.Charts.FanOutTest do
   #
   # Sabotage: dropped `child_canceller:` from the driver; this went red -
   # the nine sibling start jobs stayed `available`. Reverted.
-  test "on: first_error cancels the siblings that never started", %{run_id: run_id} do
-    start!("signup_bulk_invites_strict", run_id)
+  test "on: first_error cancels the siblings that never started", %{execution_id: execution_id} do
+    start!("signup_bulk_invites_strict", execution_id)
 
     assert %{success: 1} = drain()
     assert length(start_jobs()) == 10
@@ -224,7 +232,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
 
     assert %{success: 0} = drain()
 
-    results = Map.fetch!(datamodel(run_id), "results")
+    results = Map.fetch!(datamodel(execution_id), "results")
 
     assert length(results) == 10
     assert Enum.map(results, & &1["index"]) == Enum.to_list(0..9)
@@ -243,8 +251,8 @@ defmodule StatifierExamples.Charts.FanOutTest do
   #
   # Sabotage: pointed `finish(run, :failed)` back at `{:halted,
   # :cancelled}`; this went red on the first assertion. Reverted.
-  test "a failed chunk reads failed, not cancelled", %{run_id: run_id} do
-    start!("signup_bulk_invites_strict", run_id)
+  test "a failed chunk reads failed, not cancelled", %{execution_id: execution_id} do
+    start!("signup_bulk_invites_strict", execution_id)
 
     assert %{success: 1} = drain()
 
@@ -252,7 +260,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
     assert :ok = ChildStartWorker.perform(refused)
 
     assert {:ok, {{_durable, child}, _document}} =
-             Durable.resume("#{run_id}/blk_bi_chunks/3")
+             Durable.resume("#{execution_id}/blk_bi_chunks/3")
 
     assert child.status == :failed
   end
@@ -260,7 +268,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # The chunk chart settles its own index now. `core.invoke` classes its
   # `error` outcome as a failure (`sb-hxs5`), the compiler carries an
   # unhandled failure-classed completion out to the document's top-level
-  # `<final>`, and the reserved `statifier_persistence:run_status` param
+  # `<final>`, and the reserved `statifier_persistence:execution_status` param
   # on that final is what the storage layer reads to persist the run
   # `:failed`. Compiled through `Subchart.child_compile/1` rather than
   # `Durable.compile/3` because that is the recipe a fan-out child is
@@ -276,7 +284,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # the emitted bytes at all. Reverted from a backup copy. (Dropping
   # `known_invoke_types:` instead does NOT move these bytes - it was
   # tried first and stayed green.)
-  test "the chunk chart's error final carries the reserved run_status param" do
+  test "the chunk chart's error final carries the reserved execution_status param" do
     {:ok, fixture} = Charts.fixture("signup_invite_chunk")
 
     {:ok, compiled} = Subchart.child_compile(fixture.document)
@@ -284,7 +292,7 @@ defmodule StatifierExamples.Charts.FanOutTest do
     assert compiled.scxml =~
              ~s(<final id="s_blk_ic_root__child_failed"><donedata>) <>
                ~s(<param expr="'error'" name="outcome"/>) <>
-               ~s(<param expr="'failed'" name="statifier_persistence:run_status"/>) <>
+               ~s(<param expr="'failed'" name="statifier_persistence:execution_status"/>) <>
                ~s(</donedata></final>)
   end
 
@@ -301,15 +309,15 @@ defmodule StatifierExamples.Charts.FanOutTest do
   # Sabotage: pointed the assertion at the retired host reason; it went
   # red reporting `failed_final`. Reverted from a backup copy.
   test "the failed index names the engine's reason, not a host-invented one",
-       %{run_id: run_id} do
-    start!("signup_bulk_invites_strict", run_id)
+       %{execution_id: execution_id} do
+    start!("signup_bulk_invites_strict", execution_id)
 
     assert %{success: 1} = drain()
 
     refused = Enum.find(start_jobs(), &(&1.args["index"] == 3))
     assert :ok = ChildStartWorker.perform(refused)
 
-    failed = Enum.at(Map.fetch!(datamodel(run_id), "results"), 3)
+    failed = Enum.at(Map.fetch!(datamodel(execution_id), "results"), 3)
 
     assert %{"status" => "failed", "failure" => %{"reason" => "failed_final"}} = failed
 

@@ -1,4 +1,4 @@
-defmodule StatifierExamples.Charts.ChildRunRowsTest do
+defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
   @moduledoc """
   How a parent's reading of a run says anything about a durable child of
   it - the question `se-0ay` asked of the deleted feed, asked again of the
@@ -21,26 +21,26 @@ defmodule StatifierExamples.Charts.ChildRunRowsTest do
   stylesheet keyed on. The pane's log renders wire-format messages, and a
   message about an invocation answer carries the `invoke_id` rather than
   the child's run id, so there is nothing for a chip to say. The
-  `entry.source` field `se-0ay` added to `StatifierExamples.Charts.Run`
+  `entry.source` field `se-0ay` added to `StatifierExamples.Charts.Execution`
   stays where it is and stays covered here: the driver still writes it,
-  and it is still what a reader of a `%Run{}` reads.
+  and it is still what a reader of a `%Execution{}` reads.
   """
 
   # Not async: the second half drives a durable subchart, which steps
-  # through the application's named `StatifierExamples.Charts.RunLock` and
+  # through the application's named `StatifierExamples.Charts.ExecutionLock` and
   # writes to the repo.
   use ExUnit.Case, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Durable, Replay, Run, Subchart}
+  alias StatifierExamples.Charts.{Durable, Execution, Replay, Subchart}
   alias StatifierExamples.Repo
-  alias StatifierPersistence.Run.Linkage
+  alias StatifierPersistence.Execution.Linkage
 
   setup do
     :ok = Sandbox.checkout(Repo)
 
-    %{run_id: "run-#{System.unique_integer([:positive])}"}
+    %{execution_id: "run-#{System.unique_integer([:positive])}"}
   end
 
   describe "the reading" do
@@ -52,15 +52,15 @@ defmodule StatifierExamples.Charts.ChildRunRowsTest do
 
       run =
         run
-        |> Run.note(:started, "Run started", "run_parent")
-        |> Run.note(
+        |> Execution.note(:started, "Run started", "run_parent")
+        |> Execution.note(
           :performed,
           "Child chart started",
           "bdoc_child as run run_parent-c0",
           "run_parent-c0"
         )
 
-      assert [own, child] = Run.entries(run)
+      assert [own, child] = Execution.entries(run)
 
       assert own.source == nil
       assert child.source == "run_parent-c0"
@@ -96,15 +96,17 @@ defmodule StatifierExamples.Charts.ChildRunRowsTest do
     # (an `autoforward`, a `cancel_invoke` against a still-live id) and not
     # in this one. The mapping follows the record because the record is the
     # contract, not because this test could tell.
-    test "holds the child's answer, at the door the child re-entered by", %{run_id: run_id} do
+    test "holds the child's answer, at the door the child re-entered by", %{
+      execution_id: execution_id
+    } do
       {:ok, parent} = Charts.fixture("signup_onboarding")
       {:ok, compiled} = Durable.compile(parent.document, parent.declare)
-      {:ok, _driven} = Durable.start(compiled, parent.document, run_id, "signup_onboarding")
+      {:ok, _driven} = Durable.start(compiled, parent.document, execution_id, "signup_onboarding")
 
-      finish_child!(run_id)
+      finish_child!(execution_id)
 
       {:ok, machine} = Statifier.compile(compiled.scxml)
-      {:ok, messages} = Replay.messages(run_id, machine)
+      {:ok, messages} = Replay.messages(execution_id, machine)
 
       assert Enum.any?(messages, &answered?(&1, "blk_so_wizard"))
     end
@@ -118,15 +120,15 @@ defmodule StatifierExamples.Charts.ChildRunRowsTest do
     # rather than a value this app computes. It is here as the statement of
     # the boundary, and `replay_test.exs` is where the mapping itself is
     # driven.
-    test "does not hold the child's own inputs", %{run_id: run_id} do
+    test "does not hold the child's own inputs", %{execution_id: execution_id} do
       {:ok, parent} = Charts.fixture("signup_onboarding")
       {:ok, compiled} = Durable.compile(parent.document, parent.declare)
-      {:ok, _driven} = Durable.start(compiled, parent.document, run_id, "signup_onboarding")
+      {:ok, _driven} = Durable.start(compiled, parent.document, execution_id, "signup_onboarding")
 
-      finish_child!(run_id)
+      finish_child!(execution_id)
 
       {:ok, machine} = Statifier.compile(compiled.scxml)
-      {:ok, messages} = Replay.messages(run_id, machine)
+      {:ok, messages} = Replay.messages(execution_id, machine)
 
       refute Enum.any?(messages, &names_event?(&1, "statifier_blocks.wait.blk_su_verify_wait"))
     end
@@ -151,36 +153,38 @@ defmodule StatifierExamples.Charts.ChildRunRowsTest do
     # of an entry; the replay refused outright and this went red on the
     # `{:ok, messages}` match. Reverted from a backup copy.
     test "narrates the fan-out's answer, which is one invocation and not ten",
-         %{run_id: run_id} do
+         %{execution_id: execution_id} do
       {:ok, fixture} = Charts.fixture("signup_bulk_invites")
       {:ok, compiled} = Durable.compile(fixture.document, fixture.declare)
-      {:ok, _driven} = Durable.start(compiled, fixture.document, run_id, "signup_bulk_invites")
+
+      {:ok, _driven} =
+        Durable.start(compiled, fixture.document, execution_id, "signup_bulk_invites")
 
       assert %{success: 1} = Oban.drain_queue(queue: Charts.AsyncCalls.queue())
       assert %{success: 10} = Oban.drain_queue(queue: Charts.AsyncCalls.queue())
 
       {:ok, machine} = Statifier.compile(compiled.scxml)
-      {:ok, messages} = Replay.messages(run_id, machine)
+      {:ok, messages} = Replay.messages(execution_id, machine)
 
       assert Enum.any?(messages, &answered?(&1, "blk_bi_chunks"))
 
-      results = Durable.machine_state(run_id) |> elem(1) |> Map.fetch!(:datamodel)
+      results = Durable.machine_state(execution_id) |> elem(1) |> Map.fetch!(:datamodel)
 
       assert length(Map.fetch!(results, "results")) == 10
     end
   end
 
-  # Drives the child of `run_id` to its own end, cold, the way
+  # Drives the child of `execution_id` to its own end, cold, the way
   # `DurableTest` does: the child is an ordinary run, so it resumes by id
   # and answers its parent through the driver rather than through anything
   # this test calls.
-  defp finish_child!(run_id) do
+  defp finish_child!(execution_id) do
     {:ok, child} = Charts.fixture("signup_wizard")
     {:ok, child_compiled} = Subchart.child_compile(child.document)
-    child_run_id = Linkage.child_run_id(run_id, "blk_so_wizard", 0)
+    child_execution_id = Linkage.child_execution_id(execution_id, "blk_so_wizard", 0)
 
     {:ok, {child_durable, child_run}} =
-      Durable.resume(child_compiled, child.document, child_run_id)
+      Durable.resume(child_compiled, child.document, child_execution_id)
 
     {:ok, {_durable, _run}} =
       Durable.send_event(child_durable, child_run, "statifier_blocks.wait.blk_su_verify_wait")
@@ -215,9 +219,9 @@ defmodule StatifierExamples.Charts.ChildRunRowsTest do
   # given. So the struct is built directly rather than by compiling and
   # running a chart, which is the same reason `absorb/2` is tested by
   # feeding it effects.
-  @spec reading() :: Run.t()
+  @spec reading() :: Execution.t()
   defp reading do
-    %Run{
+    %Execution{
       session_id: "run_parent",
       machine: nil,
       provenance: nil,

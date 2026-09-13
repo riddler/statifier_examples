@@ -90,27 +90,30 @@ defmodule StatifierExamples.Charts.Timers do
   def oban, do: @oban
 
   @doc """
-  Consumes one effect on behalf of the run named by `run_id`.
+  Consumes one effect on behalf of the run named by `execution_id`.
 
   Answers `:ok` for every effect, including the ones it does nothing
   with: the caller is an executor, whose whole vocabulary is `:ok` and
   `{:error, _}`, and "this effect is not a timer" is not an error.
   """
   @spec consume(String.t(), Statifier.Effect.t()) :: :ok
-  def consume(run_id, {:send_delayed, %SendDelayed{target: nil} = effect})
-      when is_binary(run_id) do
-    case Timer.schedule(config(), run_id, effect) do
-      {:ok, %Oban.Job{}} -> :ok
-      {:error, reason} -> raise "could not arm #{effect.event} for #{run_id}: #{inspect(reason)}"
+  def consume(execution_id, {:send_delayed, %SendDelayed{target: nil} = effect})
+      when is_binary(execution_id) do
+    case Timer.schedule(config(), execution_id, effect) do
+      {:ok, %Oban.Job{}} ->
+        :ok
+
+      {:error, reason} ->
+        raise "could not arm #{effect.event} for #{execution_id}: #{inspect(reason)}"
     end
   end
 
-  def consume(run_id, {:cancel, %Cancel{} = effect}) when is_binary(run_id) do
-    case Timer.cancel(config(), run_id, effect) do
+  def consume(execution_id, {:cancel, %Cancel{} = effect}) when is_binary(execution_id) do
+    case Timer.cancel(config(), execution_id, effect) do
       {:ok, count} when is_integer(count) -> :ok
       {:error, reason} -> raise "could not cancel #{effect.send_id}: #{inspect(reason)}"
     end
   end
 
-  def consume(run_id, _other) when is_binary(run_id), do: :ok
+  def consume(execution_id, _other) when is_binary(execution_id), do: :ok
 end
