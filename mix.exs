@@ -105,6 +105,20 @@ defmodule StatifierExamples.MixProject do
       # resolves alongside the durable timers this app arms.
       {:statifier, "~> 2.5"},
 
+      # A note on every `statifier_persistence` name below, added with
+      # se-20j. These comments record why each floor moved, release by
+      # release, and several of them describe releases that shipped before
+      # ADR-0011 renamed the durable noun. They name every surface by its
+      # CURRENT spelling all the same - `execution_status/0`,
+      # `Executions.inputs/2`, `list_executions_by_metadata/2`,
+      # `statifier_persistence:execution_status` - because a reader
+      # following one of these names is looking it up in the package as it
+      # is today, where the old spellings resolve to nothing. Read "0.9.0
+      # carries `Executions.inputs/2`" as "0.9.0 is the release that added
+      # the function now called `Executions.inputs/2`", which is what the
+      # floor was moved for; the name is the pointer, not a claim about
+      # the release's own vocabulary.
+      #
       # The durable stepper, and `StatifierPersistence.Driver` - the
       # run-to-quiescence loop `StatifierExamples.Charts.Durable` used to
       # write for itself (se-4dt.3). 0.3.0 is the floor: the first release
