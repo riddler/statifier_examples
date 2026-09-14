@@ -471,8 +471,16 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # the host's to offer; this case covers it against a button held as data
     # rather than a shipped one.
     #
-    # A pure case; the sabotage for the behaviour is on the business arm
-    # above.
+    # A pure case, and the only one that covers the merge itself: the arm
+    # the business case above sabotages is the fixture's, not this one.
+    #
+    # Sabotage (2026-09-14): dropped the merge in `payload/2`, so its
+    # `%{} = literals` arm returned `typed` unchanged instead of
+    # `Map.merge(typed, literals)`, from a copy of
+    # `lib/statifier_examples/signup/journey.ex`. The first assertion below
+    # went red - `%{"seats" => 1}` where `%{"seats" => 1, "k" => "v"}` was
+    # expected - and no other case in this file moved, because no shipped
+    # button declares a `payload` map. Reverted from the copy.
     test "is the form's responses plus the button's own literals" do
       declared = %{"type" => "button", "key" => "x", "outcome" => "x", "payload" => %{"k" => "v"}}
 

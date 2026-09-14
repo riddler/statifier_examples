@@ -336,7 +336,12 @@ defmodule StatifierExamples.Charts.Durable do
   got.
 
   `{:error, :chart_unknown}` for an execution of a chart this app no longer
-  ships; everything else is `resume/3`'s.
+  ships. Every other error is the one `resume/3` returns, because both
+  arities reach it through the same private `resume_fetched/6` after the same
+  compile and fetch steps, not because one calls the other: a compile
+  error, a store error, `{:error, :execution_not_found}` for an id nobody
+  stored, and `{:error, {:identity_mismatch, stored, supplied}}` for a
+  document edited since the execution started.
   """
   @spec resume(String.t()) :: {:ok, {driven(), Document.t()}} | {:error, term()}
   def resume(execution_id) when is_binary(execution_id) do

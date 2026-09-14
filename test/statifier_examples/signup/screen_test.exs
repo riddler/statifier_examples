@@ -159,6 +159,13 @@ defmodule StatifierExamples.Signup.ScreenTest do
     # is no longer what carries it, and the plan buttons declare no `payload`
     # map at all. `Screen`'s `writes/1` still passes the map through as it
     # stands - the shape is the package's to read, not this app's to branch on.
+    #
+    # Sabotage (2026-09-14): reverted both plan buttons' `writes` pairs in
+    # `priv/fixtures/signup_screens.json` to the string form
+    # `{"responses.plan": "plan"}` from a copy. This case went red on the
+    # first assertion - `capture["responses.plan"]` read back `"plan"`
+    # instead of `["const", "personal"]` - and so did the compiled-bytes case
+    # below and the whole-map case above it. Reverted from the copy.
     test "each plan button captures its own literal, so the press says which fired" do
       [personal, business, _back] = expansion(@plan).slots["interrupts"]
 

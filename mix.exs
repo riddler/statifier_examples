@@ -1081,6 +1081,11 @@ defmodule StatifierExamples.MixProject do
   # pinned here, and `mix.lock` is committed at the Hex resolution - and
   # `override: true` is what lets it win over `statifier_blocks`'
   # optional `~> 0.9` requirement on the same package.
+  #
+  # The git arm's second line runs 86 columns and keeps its width
+  # (se-br5, 2026-09-14): the formatter's `line_length` is 98 and it
+  # rejoins any manual split of this tuple, so 80 columns here and a
+  # clean `mix format --check-formatted` cannot both hold.
   defp statifier_ui_dep do
     case System.get_env("STATIFIER_UI_REF") do
       ref when is_binary(ref) and ref != "" ->
@@ -1105,8 +1110,15 @@ defmodule StatifierExamples.MixProject do
       "ecto.setup": ["ecto.create --quiet", "ecto.migrate --quiet"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind statifier_examples", "esbuild statifier_examples"],
+      "assets.setup": [
+        "tailwind.install --if-missing",
+        "esbuild.install --if-missing"
+      ],
+      "assets.build": [
+        "compile",
+        "tailwind statifier_examples",
+        "esbuild statifier_examples"
+      ],
       # The JavaScript half of assets.build, self-contained enough for CI to
       # run as one command. It is esbuild only on purpose: what CI is here to
       # catch is a dependency's assets/js that no longer bundles - a syntax
@@ -1126,7 +1138,12 @@ defmodule StatifierExamples.MixProject do
         "esbuild statifier_examples --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "test"
+      ]
     ]
   end
 end
