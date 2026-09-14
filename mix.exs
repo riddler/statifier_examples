@@ -1042,13 +1042,31 @@ defmodule StatifierExamples.MixProject do
   # from `_event.data` now leaves its destination UNWRITTEN rather than
   # writing `:undefined` into it (sb-ADR-0002's capture Note, N2), which
   # is what `StatifierExamples.Signup.JourneyTest` asserts by absence.
+  #
+  # `RQ-RF047-5` (2026-09-14): the floor moves to `~> 0.30.0`, which is
+  # PUBLISHED, so this arm stays a Hex requirement and takes no git pin and
+  # no ledger entry. The `.0` form is the one the package's own README
+  # recommends for its install snippet. What 0.30.0 carries that this app
+  # reads is sb `ADR-0002`'s `C6` and `C7`: a composite that declares
+  # `outcomes` compiles to a state of its own with one `<final>` per
+  # declared name, and the enclosing body routes its completion through a
+  # derived `on_<name>` slot. This app's `myapp.screen` declares no
+  # `outcomes`, so nothing it compiles today moves - the composite still
+  # answers the single derived `done` its expansion root gives it, which is
+  # what `StatifierExamples.Signup.ScreenTest` asserts and what the screen's
+  # own moduledoc records. Beside those, 0.30.0 refuses a `core.on_event`
+  # `capture` literal carrying a raw control character and refuses a
+  # pass-through slot named after a declared outcome; this app authors
+  # neither. Moving this floor also moves `predicator` in `mix.lock` from
+  # 9.4.0 to 9.4.1, because 0.30.0 inherits 0.29.0's `~> 9.4.1`
+  # requirement - this app pins no `predicator` of its own.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.28"}
+        {:statifier_blocks, "~> 0.30.0"}
     end
   end
 

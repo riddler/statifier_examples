@@ -326,7 +326,7 @@ defmodule StatifierExamples.MixDepsTest do
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.28"} in deps
+    assert {:statifier_blocks, "~> 0.30.0"} in deps
 
     lock_line =
       "mix.lock"
@@ -335,7 +335,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.28.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.30.)
     refute lock_line =~ ":git,"
   end
 
