@@ -21,6 +21,12 @@ defmodule StatifierExamples.Signup.PathTest do
   alias StatifierExamples.Charts
   alias StatifierExamples.Signup.{Path, Screen, Screens}
 
+  # `path.ex`'s examples were prose until now: no test module ran them, so
+  # the `validate(document()) == []` example could have gone stale without
+  # anything going red. The back-edge rule is stated in an example, and an
+  # example stating a rule has to be a test.
+  doctest Path
+
   defp document, do: Path.document()
   defp palette, do: Charts.palette()
 
@@ -128,6 +134,71 @@ defmodule StatifierExamples.Signup.PathTest do
       assert {:unknown_screen, "blk_sp_confirm", "not_a_screen"} in Path.validate(document)
     end
 
+    # ARM ONE of the back-edge rule. A Back button sends the reader to a
+    # screen they have already seen, on purpose, and the block it sends them
+    # to is a new block with a new id - it has to be, ids being
+    # document-unique - so nothing in a flat list of `{block id, screen key}`
+    # pairs can tell it from two questions racing for one response key. The
+    # slot can: it sits inside the plan screen's declared `on_went_back`.
+    #
+    # Sabotage: made `back_edge?/2` answer `false` for every block, which is
+    # the validator as it stood before the rule. THIS CASE WENT RED with the
+    # three findings a Path answers when its account screen is shown twice,
+    # and so did the back-edge doctest and "a forward-line duplicate still
+    # answers ...". Reverted from a copy.
+    test "a re-visit reached through a declared back edge is not a duplicate" do
+      assert Path.validate(back_edge("blk_sp_plan", "on_went_back", "account")) == []
+    end
+
+    test "the re-visiting block is still one of the Path's screen blocks" do
+      refs = Path.screen_refs(back_edge("blk_sp_plan", "on_went_back", "account"))
+
+      assert {"blk_revisit_account", "account"} in refs
+    end
+
+    # ARM TWO. The drop is aimed at the repeat, not at the slot: a block in
+    # an `on_` slot is dropped only when an EARLIER block named its screen
+    # key, so a Path that has a back edge still answers for the duplicate
+    # its forward line carries. Here the account screen is named three
+    # times - once forward, once through the back edge, once by a confirm
+    # block pointed at it - and exactly the back edge is spent.
+    #
+    # Sabotage: dropped every ref whose key had been seen, back edge or not
+    # (`drop_revisits/2` without its `back_edge?/2` conjunct). THIS CASE WENT
+    # RED, and with it "a screen shown twice duplicates its response keys and
+    # its outcomes" - the whole of the old rule - and the on_-slot-first case
+    # below. Reverted from a copy.
+    test "a forward-line duplicate still answers on a Path that also has a back edge" do
+      document =
+        "blk_sp_plan"
+        |> back_edge("on_went_back", "account")
+        |> repoint("blk_sp_confirm", "account")
+
+      assert Path.validate(document) == [
+               {:duplicate_response_key, "email", ["blk_sp_account", "blk_sp_confirm"]},
+               {:duplicate_response_key, "first_name", ["blk_sp_account", "blk_sp_confirm"]},
+               {:duplicate_outcome, "account_submitted", ["blk_sp_account", "blk_sp_confirm"]}
+             ]
+    end
+
+    # ARM THREE, the other direction. Going back to a screen nobody has been
+    # shown yet is not going back, so a block in an `on_` slot naming a
+    # screen the forward line reaches LATER is kept and the pair is
+    # reported - against the two blocks, in the order the Path visits them.
+    #
+    # Sabotage: made `drop_revisits/2` drop an `on_` slot ref whose key
+    # appeared anywhere else in the document rather than earlier in it -
+    # the one rewrite the other two cases cannot see. THIS CASE WENT RED
+    # alone, answering `[]`. Reverted from a copy.
+    test "an on_ slot showing a screen the forward line reaches later is a defect" do
+      document = back_edge("blk_sp_plan", "on_went_back", "confirm")
+
+      assert Path.validate(document) == [
+               {:duplicate_response_key, "referral", ["blk_revisit_confirm", "blk_sp_confirm"]},
+               {:duplicate_outcome, "signup_confirmed", ["blk_revisit_confirm", "blk_sp_confirm"]}
+             ]
+    end
+
     # R10d, and the reason the finding names blocks rather than screens: one
     # screen shown twice reaches its response keys twice, and the second visit
     # overwrites what the first one collected. Note what is NOT reported:
@@ -152,11 +223,32 @@ defmodule StatifierExamples.Signup.PathTest do
         do: Screen.outcome_event(outcome)
   end
 
+  # The shipped Path with a screen block added inside one of another screen
+  # block's declared outcome slots: the back edge the fixture itself will
+  # grow when the screen composite can route its outcomes. Built on a copy,
+  # through `StatifierBlocks.Edit` like everything else here, so
+  # `priv/fixtures/signup_path.json` stays exactly as it ships.
+  defp back_edge(parent_id, slot, screen_key),
+    do: back_edge(document(), parent_id, slot, screen_key)
+
+  defp back_edge(document, parent_id, slot, screen_key) do
+    block =
+      Block.new("myapp.screen",
+        id: "blk_revisit_" <> screen_key,
+        config: %{"screen" => screen_key, "timeout" => "1d"}
+      )
+
+    {:ok, edited, _inverse} = Edit.apply(document, {:insert, {parent_id, slot, 0}, block})
+
+    edited
+  end
+
   # The shipped Path with one screen block pointed at another screen, built
   # through `StatifierBlocks.Edit` so the result is a document the editor
   # could itself have produced.
-  defp repoint(block_id, screen_key) do
-    document = document()
+  defp repoint(block_id, screen_key), do: repoint(document(), block_id, screen_key)
+
+  defp repoint(document, block_id, screen_key) do
     %Block{config: config} = Enum.find(Document.blocks(document), &(&1.id == block_id))
 
     {:ok, edited, _inverse} =
