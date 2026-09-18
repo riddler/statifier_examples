@@ -67,9 +67,9 @@ defmodule StatifierExamples.Signup.Journey do
 
   ## The button's own literal map, and why it is gone (2026-09-18, RQ-RF050-A3)
 
-  There was a second half. `payload/2` merged the firing button's own
-  declared literal map over the typed responses, which was how a press
-  could say something about *itself*. The two plan buttons used it,
+  There was a second half. The function now called `responses/1` merged the
+  firing button's own declared literal map over the typed responses, which
+  was how a press could say something about *itself*. The two plan buttons used it,
   declaring a literal plan value for a `writes` pair whose string source
   read it straight back out.
 
@@ -263,17 +263,25 @@ defmodule StatifierExamples.Signup.Journey do
   end
 
   @doc """
-  What the press of `button` sends, for the responses `typed`: the responses.
+  What a press sends, for the responses `typed`: the responses.
 
   Public because it **is** the host contract the moduledoc describes, and a
-  contract nothing can read is a contract nobody can check. `button` is
-  taken and ignored: it could once name its own press through a literal map
-  of its own, and since 2026-09-18 (RQ-RF050-A3) it says what it records
-  through its `writes` pair instead, out of the document. `submit/3` is its
-  only caller in this app; the spike document quotes it.
+  contract nothing can read is a contract nobody can check. The firing
+  button is not an argument here and contributes nothing to what is sent.
+  It could once name its own press through a literal map of its own; since
+  2026-09-13 it says what it records through its `writes` pair instead, out
+  of the document, and on 2026-09-18 the merge of that literal map over the
+  typed responses stopped being read at all. `submit/3` is its only caller
+  in `lib/`; `JourneyTest` calls it directly, which is what being public is
+  for, and the spike document quotes it.
+
+  Renamed 2026-09-18: this function used to be called payload and took the
+  firing button as a first argument its body ignored. That name is a
+  retired spelling, and since the literal-map arm was dropped it no longer
+  said what the function answers.
   """
-  @spec payload(Screens.node_doc(), %{optional(String.t()) => term()}) :: map()
-  def payload(button, typed) when is_map(button) and is_map(typed), do: typed
+  @spec responses(%{optional(String.t()) => term()}) :: map()
+  def responses(typed) when is_map(typed), do: typed
 
   # The press itself. `Screen.outcome_event/1` is the event the compiled
   # `core.on_event` for this button is listening for, and what it sends is
@@ -290,7 +298,7 @@ defmodule StatifierExamples.Signup.Journey do
   defp pressed(%Durable{machine_state: settled} = durable, run, execution_id, button, typed) do
     event = Screen.outcome_event(Map.fetch!(button, "outcome"))
 
-    case Durable.send_event(durable, run, event, payload(button, typed)) do
+    case Durable.send_event(durable, run, event, responses(typed)) do
       {:ok, {%Durable{machine_state: moved_state}, moved}} ->
         {:ok, view(execution_id, moved, moved_state.datamodel)}
 

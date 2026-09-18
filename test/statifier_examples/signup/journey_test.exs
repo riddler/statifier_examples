@@ -223,9 +223,10 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # `screen: nil` rest: with no `payload` map on the button and no path in
     # the pressed event to read, `responses.plan` was never written, the
     # branch took neither arm, and no call was ever made. Reverted from the
-    # copy. (The sabotage this note used to carry - making `payload/2` ignore
-    # the button's own declared map - is not a mutation any more: se-bzx
-    # dropped that merge, and `payload/2` is covered directly below.)
+    # copy. (The sabotage this note used to carry - making the function that
+    # builds a press ignore the button's own declared map - is not a mutation
+    # any more: se-bzx dropped that merge, and `responses/1` is covered
+    # directly below.)
     test "the business arm rests durably on an asynchronous call", %{execution_id: execution_id} do
       {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
 
@@ -531,7 +532,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
     end
   end
 
-  describe "payload/2, the host contract" do
+  describe "responses/1, the host contract" do
     # The contract stated in code because neither document states it and
     # neither can check it (`docs/spikes/SF040-signup-skeleton.md`): what a
     # press sends is the form's responses, keyed by element key. Every
@@ -540,26 +541,43 @@ defmodule StatifierExamples.Signup.JourneyTest do
     #
     # There was a second half - a button's own declared literal map, merged
     # over the typed responses, the only way a press could once say anything
-    # about itself. se-bzx (RQ-RF050-A3, 2026-09-18) dropped it. No button
-    # this app ships had declared one since se-luu (RQ-RF046-4, 2026-09-13),
-    # where the plan buttons started recording which of them fired through
-    # the `["const", value]` capture form, out of the document; and this
-    # module's own moduledoc argues elsewhere that a field no shipped screen
-    # can exercise is a field no test can defend. So the case below is the
-    # inverse of the one it replaces: a button held as data that DOES
-    # declare such a map is ignored, and the press is the typed responses.
+    # about itself. se-bzx dropped it on 2026-09-18. No button this app ships
+    # had declared one since se-luu on 2026-09-13, where the plan buttons
+    # started recording which of them fired through the `["const", value]`
+    # capture form, out of the document; and this module's own moduledoc
+    # argues elsewhere that a field no shipped screen can exercise is a field
+    # no test can defend.
     #
-    # Sabotage (2026-09-18): restored the merge in `payload/2` - the
-    # `%{} = literals -> Map.merge(typed, literals)` arm it used to carry -
-    # from a copy of `lib/statifier_examples/signup/journey.ex`. The first
-    # assertion below went red, `%{"seats" => 1, "k" => "v"}` where
-    # `%{"seats" => 1}` was expected, and no other case in this file moved,
-    # because no shipped button declares such a map. Reverted from the copy.
-    test "is the form's responses alone, and a button's own literals are ignored" do
-      declared = %{"type" => "button", "key" => "x", "outcome" => "x", "payload" => %{"k" => "v"}}
+    # se-a1q renamed the function on 2026-09-18 and dropped the firing button
+    # with the name: the body had ignored that argument since the merge went,
+    # so a button held as data is now ignored structurally - it never reaches
+    # here to be ignored on purpose. What is left to pin is the contract
+    # itself, which is that the press is the typed responses, unchanged.
+    #
+    # Sabotage (2026-09-18): replaced the body of `responses/1` with
+    # `Map.drop(typed, ["seats"])`, from a copy of
+    # `lib/statifier_examples/signup/journey.ex`. The first assertion below
+    # went red (`%{}` where `%{"seats" => 1}` was expected), and two
+    # end-to-end cases went red with it - "drive the run from the first
+    # screen to the created account" and "the business arm rests durably on
+    # an asynchronous call" - because a seat count that never leaves the host
+    # is a branch that never chooses. Three failures of twenty-one. Reverted
+    # from the copy.
+    test "is the form's typed responses, unchanged" do
+      assert Journey.responses(%{"seats" => 1}) == %{"seats" => 1}
+      assert Journey.responses(%{}) == %{}
+    end
 
-      assert Journey.payload(declared, %{"seats" => 1}) == %{"seats" => 1}
-      assert Journey.payload(Map.delete(declared, "payload"), %{"seats" => 5}) == %{"seats" => 5}
+    # The guard is all the dropped `button` argument added on its own account
+    # - a non-map raised `FunctionClauseError` and nothing else - and the one
+    # argument left still guards that way.
+    #
+    # Sabotage (2026-09-18): dropped the `when is_map(typed)` guard from a
+    # copy of `lib/statifier_examples/signup/journey.ex`. This case went red
+    # (no `FunctionClauseError` raised) and no other case in this file moved.
+    # Reverted from the copy.
+    test "refuses a press that is not a map of responses" do
+      assert_raise FunctionClauseError, fn -> Journey.responses("seats=1") end
     end
 
     # se-luu: the fact the two end-to-end cases above rest on. No button this
