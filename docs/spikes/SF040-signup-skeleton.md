@@ -476,6 +476,19 @@ with no way off it. The draft is never persisted and never sent.
    6 above records. `JourneyTest` now asserts the inverse: a button held as
    data that declares such a map is ignored.
 
+   **Dated 2026-09-18 (`se-a1q`, `se-2zb`), by addition: nothing above this
+   line is edited.** Two clarifications the paragraph above leaves open.
+   First, "the close on finding 6 above" is **k2's** finding 6 - the one
+   saying a `capture` value is a path inside `_event.data` and never a
+   literal - and not k3's finding 6, which this document also carries.
+   Second, the function that paragraph names, and that the file tables
+   further down list as part of the loop, has been renamed: it is
+   `Journey.responses/1` now. It no longer takes the firing button (the body
+   had ignored that argument since the merge went) and its old name was a
+   retired spelling that, once the literal-map arm was dropped, no longer
+   described what the function answers. Every mention of the old name above
+   and below stands as written, as the history it is.
+
 2. **A capture writes its destination whether or not the payload carries the
    source.** Press Back on the plan screen without typing a seat count and
    `responses.seats` is written as `:undefined` rather than left absent. Every
