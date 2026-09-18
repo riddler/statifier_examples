@@ -244,6 +244,34 @@ defmodule StatifierExamples.Charts.DurableTest do
     assert record.position_blob == stored.position_blob
   end
 
+  # The third answer `send_event/4` owes a host, and the reason it is not
+  # `{:ok, _}`: a driver that refuses the event leaves the position exactly
+  # where it was, so a flattened `{:ok, driven()}` reads as a drive that
+  # happened to go nowhere. The reason is the record's own status, which is
+  # what the cold doors already report and the only word the driver's
+  # `{:discarded, run}` makes available.
+  #
+  # Sabotage: put `settle/3` back in `send_event/4`'s body in place of
+  # `settle_answer/3`. This case went red at the equality - the refused send
+  # came back `{:ok, {durable, run}}` - and the Journey's discarded case and
+  # the editor page's went red with it. Reverted from a copy.
+  test "a send the driver refuses is reported rather than flattened", %{
+    execution_id: execution_id
+  } do
+    {compiled, document} = signup()
+    {:ok, {durable, run}} = Durable.start(compiled, document, execution_id)
+    stored = record!(execution_id)
+
+    assert :ok = Durable.abandon(durable)
+
+    assert Durable.send_event(durable, run, "statifier_blocks.wait.blk_su_verify_wait") ==
+             {:discarded, :failed}
+
+    # And nothing was written: the position the refused send did not decode
+    # is the position storage still holds.
+    assert record!(execution_id).position_blob == stored.position_blob
+  end
+
   # Sabotage: dropped the `%{execution_id: execution_id}` context from the driver's
   # dispatch, so the handler took its execution-less clause; this went red on the
   # row count, then reverted.

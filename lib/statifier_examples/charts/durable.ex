@@ -508,16 +508,35 @@ defmodule StatifierExamples.Charts.Durable do
   hands over is the map the chart reads - because deciding what belongs in
   it is exactly the host contract `docs/spikes/SF040-signup-skeleton.md`
   records as unstated in both documents.
+
+  ## A refused send says so, rather than reading like a drive
+
+  `{:discarded, reason}` when the driver would not take the event: the
+  execution is no longer live, or the position it holds is terminal. This
+  is the same third answer the cold doors already give - `settle_answer/3`
+  reports it and `complete_invocation/3`'s doc walks the reasons - and it
+  is here for the same reason it is there. The driver's own
+  `{:discarded, run}` carries no reason of its own, so the reason is the
+  stored execution's own status, which is this app's house rule for every
+  door that can be refused.
+
+  It matters to a host that wants to show what happened. Until this said
+  so, a discarded send answered `{:ok, driven()}` holding the position the
+  driver already had, which is indistinguishable from a real drive that
+  went nowhere - and a host reading that would report a press as accepted
+  when the chart never saw it. The position the driver holds is still the
+  right one to show; what was missing was the word for why it did not
+  move.
   """
   @spec send_event(t(), Execution.t(), String.t(), map() | :undefined) ::
-          {:ok, driven()} | {:error, term()}
+          {:ok, driven()} | {:discarded, term()} | {:error, term()}
   def send_event(durable, run, name, data \\ :undefined)
 
   def send_event(%__MODULE__{} = durable, %Execution{} = run, name, data)
       when is_binary(name) and (is_map(data) or data == :undefined) do
     event = Event.external(name, data: data, caller_context: Tracing.caller_context())
 
-    settle(durable, run, Driver.send_event(driver(durable), durable.execution_id, event))
+    settle_answer(durable, run, Driver.send_event(driver(durable), durable.execution_id, event))
   end
 
   @doc """
@@ -662,6 +681,12 @@ defmodule StatifierExamples.Charts.Durable do
 
       :delivered
     else
+      # `continue/2`'s own refusal, which the `:active` pre-check above
+      # cannot rule out: the execution can go terminal between that read and
+      # the driver's. Without this clause it would leave the `with` as an
+      # unmatched else and raise `WithClauseError` on a case that is
+      # ordinary.
+      {:discarded, reason} -> {:discarded, reason}
       :error -> {:discarded, :chart_unknown}
       {:error, reason} -> {:discarded, reason}
       status when is_atom(status) -> {:discarded, status}
@@ -747,7 +772,8 @@ defmodule StatifierExamples.Charts.Durable do
   @spec topic(String.t()) :: String.t()
   def topic(execution_id) when is_binary(execution_id), do: "execution:" <> execution_id
 
-  @spec continue(driven(), String.t()) :: {:ok, driven()} | {:error, term()}
+  @spec continue(driven(), String.t()) ::
+          {:ok, driven()} | {:discarded, term()} | {:error, term()}
   defp continue({durable, run}, event), do: send_event(durable, run, event)
 
   # The cold half both re-entry doors share, and `deliver/2`'s own `with`
@@ -800,12 +826,18 @@ defmodule StatifierExamples.Charts.Durable do
     )
   end
 
-  # `settle/3` for the doors, and it differs in exactly one place:
+  # `settle/3` for everything a caller can be refused - the two cold doors
+  # and `send_event/4` - and it differs in exactly one place:
   # `{:discarded, record}` is an answer nobody wanted rather than an execution to
   # keep reading, so it is reported rather than folded. The buffer is
   # drained and thrown away on both non-delivering arms, for the reason
   # `settle/3` gives - a drive that stopped part way through has still
   # filled it.
+  #
+  # `settle/3` itself stays where the return cannot widen: `start/4` answers
+  # a freshly created execution, which has nothing to discard, and widening
+  # there would put a third arm on every caller of it for a case that
+  # cannot arise.
   @spec settle_answer(t(), Execution.t(), Driver.result()) ::
           {:ok, driven()} | {:discarded, term()} | {:error, term()}
   defp settle_answer(durable, run, {:ok, record, machine_state}),
