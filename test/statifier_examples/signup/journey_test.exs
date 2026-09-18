@@ -224,8 +224,8 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # the pressed event to read, `responses.plan` was never written, the
     # branch took neither arm, and no call was ever made. Reverted from the
     # copy. (The sabotage this note used to carry - making `payload/2` ignore
-    # the button's `payload` map - no longer discriminates here, because no
-    # shipped button declares one; `payload/2` is covered directly below.)
+    # the button's own declared map - is not a mutation any more: se-bzx
+    # dropped that merge, and `payload/2` is covered directly below.)
     test "the business arm rests durably on an asynchronous call", %{execution_id: execution_id} do
       {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
 
@@ -458,33 +458,32 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   describe "payload/2, the host contract" do
     # The contract stated in code because neither document states it and
-    # neither can check it (`docs/spikes/SF040-signup-skeleton.md`). The half
-    # this app still leans on is the form's responses: every question's
-    # capture pair is a string source, so a press that omits a typed answer
-    # writes nothing at that destination.
+    # neither can check it (`docs/spikes/SF040-signup-skeleton.md`): what a
+    # press sends is the form's responses, keyed by element key. Every
+    # question's capture pair is a string source, so a press that omits a
+    # typed answer writes nothing at that destination.
     #
-    # The other half - a button's own `payload` map, the only way a press
-    # could once say anything about itself - is offered and unused since
-    # se-luu (RQ-RF046-4, 2026-09-13): the plan buttons record which of them
-    # fired through the `["const", value]` capture form, out of the document,
-    # so they declare no `payload`. The merge stays because the contract is
-    # the host's to offer; this case covers it against a button held as data
-    # rather than a shipped one.
+    # There was a second half - a button's own declared literal map, merged
+    # over the typed responses, the only way a press could once say anything
+    # about itself. se-bzx (RQ-RF050-A3, 2026-09-18) dropped it. No button
+    # this app ships had declared one since se-luu (RQ-RF046-4, 2026-09-13),
+    # where the plan buttons started recording which of them fired through
+    # the `["const", value]` capture form, out of the document; and this
+    # module's own moduledoc argues elsewhere that a field no shipped screen
+    # can exercise is a field no test can defend. So the case below is the
+    # inverse of the one it replaces: a button held as data that DOES
+    # declare such a map is ignored, and the press is the typed responses.
     #
-    # A pure case, and the only one that covers the merge itself: the arm
-    # the business case above sabotages is the fixture's, not this one.
-    #
-    # Sabotage (2026-09-14): dropped the merge in `payload/2`, so its
-    # `%{} = literals` arm returned `typed` unchanged instead of
-    # `Map.merge(typed, literals)`, from a copy of
-    # `lib/statifier_examples/signup/journey.ex`. The first assertion below
-    # went red - `%{"seats" => 1}` where `%{"seats" => 1, "k" => "v"}` was
-    # expected - and no other case in this file moved, because no shipped
-    # button declares a `payload` map. Reverted from the copy.
-    test "is the form's responses plus the button's own literals" do
+    # Sabotage (2026-09-18): restored the merge in `payload/2` - the
+    # `%{} = literals -> Map.merge(typed, literals)` arm it used to carry -
+    # from a copy of `lib/statifier_examples/signup/journey.ex`. The first
+    # assertion below went red, `%{"seats" => 1, "k" => "v"}` where
+    # `%{"seats" => 1}` was expected, and no other case in this file moved,
+    # because no shipped button declares such a map. Reverted from the copy.
+    test "is the form's responses alone, and a button's own literals are ignored" do
       declared = %{"type" => "button", "key" => "x", "outcome" => "x", "payload" => %{"k" => "v"}}
 
-      assert Journey.payload(declared, %{"seats" => 1}) == %{"seats" => 1, "k" => "v"}
+      assert Journey.payload(declared, %{"seats" => 1}) == %{"seats" => 1}
       assert Journey.payload(Map.delete(declared, "payload"), %{"seats" => 5}) == %{"seats" => 5}
     end
 

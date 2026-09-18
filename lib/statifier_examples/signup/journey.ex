@@ -51,31 +51,40 @@ defmodule StatifierExamples.Signup.Journey do
   finished. Both answer `screen: nil`, and the page says so rather than
   guessing.
 
-  ## The payload is this host's contract, and nothing checks it
+  ## The host contract is the form's responses, and nothing checks it
 
   A `capture` map's value whose shape is a **string** is a path inside
   `_event.data`, so what lands at `responses.<key>` for such a pair is
-  whatever **the host** put in the event's payload. This module is that
-  host, so the contract is stated here in code:
+  whatever **the host** put in the event's data. This module is that host,
+  so the contract is stated here in code:
 
-      payload = the form's responses, keyed by element key,
-                merged with the firing button's own `payload` map
+      the press = the form's responses, keyed by element key
 
-  The first half feeds every question's capture pair (destination
-  `responses.<key>`, source `<key>`), and that half is the whole of the
-  contract this app still leans on. Neither document states it and neither
-  can check it; `docs/spikes/SF040-signup-skeleton.md` carries it as the ask.
+  That feeds every question's capture pair (destination `responses.<key>`,
+  source `<key>`), and it is the whole of the contract this app leans on.
+  Neither document states it and neither can check it;
+  `docs/spikes/SF040-signup-skeleton.md` carries it as the ask.
 
-  The second half is how a press could say something about *itself*, and no
-  screen this app ships uses it any more. The plan buttons did, declaring
-  `"payload": {"plan": "business"}` and `{"plan": "personal"}` for a
-  `writes` pair whose string source read them back out. Since 2026-09-13
-  (RQ-RF046-4) those buttons declare the literal capture form instead -
-  `{"responses.plan": ["const", "business"]}` - which the compiled chart
-  writes out of the **document**, so the press records itself with nothing
-  in the payload at all. `StatifierExamples.Signup.Screen`'s moduledoc has
-  the shape rule and the history; `payload/2` keeps the merge because the
-  contract is a host's to offer, not a screen's to have used once.
+  ## The button's own literal map, and why it is gone (2026-09-18, RQ-RF050-A3)
+
+  There was a second half. `payload/2` merged the firing button's own
+  declared literal map over the typed responses, which was how a press
+  could say something about *itself*. The two plan buttons used it,
+  declaring a literal plan value for a `writes` pair whose string source
+  read it straight back out.
+
+  Since 2026-09-13 (RQ-RF046-4) those buttons declare the literal capture
+  form instead - `{"responses.plan": ["const", "business"]}` - which the
+  compiled chart writes out of the **document**, so a press records which
+  button fired without the host having to send anything for it.
+  `StatifierExamples.Signup.Screen`'s moduledoc has the shape rule and the
+  history.
+
+  From that date no screen this app shipped could exercise the merge, and
+  the section below makes exactly this argument about a different field: a
+  field no shipped screen can exercise is a field no test can defend. So
+  the merge is gone. A button that declares such a map is ignored, and what
+  the press sends is the form's typed responses alone.
 
   ## Every button validates, and one of them should not
 
@@ -225,23 +234,21 @@ defmodule StatifierExamples.Signup.Journey do
   end
 
   @doc """
-  The payload the press of `button` sends, for the responses `typed`.
+  What the press of `button` sends, for the responses `typed`: the responses.
 
   Public because it **is** the host contract the moduledoc describes, and a
-  contract nothing can read is a contract nobody can check. `submit/3` is
-  its only caller in this app; the spike document quotes it.
+  contract nothing can read is a contract nobody can check. `button` is
+  taken and ignored: it could once name its own press through a literal map
+  of its own, and since 2026-09-18 (RQ-RF050-A3) it says what it records
+  through its `writes` pair instead, out of the document. `submit/3` is its
+  only caller in this app; the spike document quotes it.
   """
   @spec payload(Screens.node_doc(), %{optional(String.t()) => term()}) :: map()
-  def payload(button, typed) when is_map(button) and is_map(typed) do
-    case Map.get(button, "payload") do
-      %{} = literals -> Map.merge(typed, literals)
-      _absent -> typed
-    end
-  end
+  def payload(button, typed) when is_map(button) and is_map(typed), do: typed
 
   # The press itself. `Screen.outcome_event/1` is the event the compiled
-  # `core.on_event` for this button is listening for, and the payload is
-  # what its `capture` map reads out of.
+  # `core.on_event` for this button is listening for, and what it sends is
+  # what that handler's `capture` map reads out of.
   @spec pressed(Durable.t(), Execution.t(), String.t(), Screens.node_doc(), map()) ::
           {:ok, view()} | {:error, term()}
   defp pressed(durable, run, execution_id, button, typed) do
