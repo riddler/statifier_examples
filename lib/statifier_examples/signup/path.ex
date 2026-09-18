@@ -40,6 +40,32 @@ defmodule StatifierExamples.Signup.Path do
   spectacular, and it is the same shape of mistake, so it is the same
   check.
 
+  ## A re-visit through a declared back edge is not a duplicate
+
+  A screen reached twice is not always two questions racing for one
+  response key. A Back button is the Path deliberately showing a reader a
+  screen they have already seen so they can change what they answered, and
+  the overwrite that follows is the point of pressing it rather than the
+  hazard this module is about.
+
+  What tells the two apart is **where the second block sits**. A block
+  inside a declared `on_<outcome>` slot - the slot a block type opens for
+  one of its outcomes, `statifier_blocks`' `on_` naming - is on a branch
+  the Path took off its forward line, so a `myapp.screen` block there
+  naming a screen key an **earlier** block already named is a *re-visit*,
+  and `validate/1` drops it before either uniqueness rule runs. It is the
+  screen key that decides, not the block id: the re-visiting block is its
+  own block with its own id, and has to be, which is exactly why the flat
+  walk `screen_refs/1` answers cannot see the difference on its own.
+
+  Only the repeat is dropped, and only backwards. The first block to name
+  a key is never dropped, so two screens racing for one response key or
+  one outcome are still reported however they are nested; a screen shown
+  twice on the forward line, with no `on_` slot between it and the Path's
+  spine, is still reported; and a block in an `on_` slot naming a screen
+  that is only shown *later* is kept, because going back to a screen
+  nobody has been shown yet is not going back.
+
   ## What this does not check
 
   Whether a key is *spelled* the way a datamodel document declares it -
@@ -54,6 +80,11 @@ defmodule StatifierExamples.Signup.Path do
   alias StatifierExamples.Signup.Screens
 
   @screen_type "myapp.screen"
+
+  # `statifier_blocks` names the slot a block type opens for one of its
+  # outcomes `on_<outcome>` (`StatifierBlocks.Core.Subchart`'s slot prefix,
+  # and the lookup the compiler does for a composite's outcome slots).
+  @outcome_slot_prefix "on_"
 
   @typedoc """
   One thing wrong with a Path.
@@ -70,6 +101,10 @@ defmodule StatifierExamples.Signup.Path do
   is the same hazard as two screens sharing a key and it is reported the
   same way - which a finding naming screens could not do, both visits
   having the same screen's name.
+
+  A second visit reached through a declared `on_<outcome>` slot is not one
+  of them: it is a re-visit, and no finding names it at all. The
+  moduledoc's back-edge section says why.
   """
   @type finding ::
           {:unknown_screen, block_id :: String.t(), screen_key :: String.t()}
@@ -80,8 +115,11 @@ defmodule StatifierExamples.Signup.Path do
   The screen keys `document`'s `myapp.screen` blocks name, in document
   order, with the block id each came from.
 
-  Duplicated keys are kept: a Path that shows one screen twice is a Path
-  this reports on rather than one it quietly de-duplicates.
+  Duplicated keys are kept, and so are the blocks inside `on_<outcome>`
+  slots: this walk de-duplicates nothing and knows nothing about back
+  edges. Which repeat is a defect and which is a reader going back is
+  `validate/1`'s question, and it needs the slot each block sits in, which
+  a flat list of pairs has already thrown away.
   """
   @spec screen_refs(Document.t()) :: [{String.t(), String.t()}]
   def screen_refs(%Document{} = document) do
@@ -92,15 +130,35 @@ defmodule StatifierExamples.Signup.Path do
   @doc """
   Every finding about `document` as a Path, or `[]`.
 
+  Re-visits reached through a declared back edge are dropped before any
+  rule runs - the moduledoc's back-edge section is the rule, and the
+  second example here is it.
+
   ## Examples
 
       iex> document = StatifierExamples.Signup.Path.document()
       iex> StatifierExamples.Signup.Path.validate(document)
       []
+
+  A back edge to a screen already shown answers nothing, even though the
+  block in the `on_went_back` slot is its own block with its own id:
+
+      iex> alias StatifierBlocks.{Block, Document}
+      iex> back = Block.new("myapp.screen", id: "blk_back", config: %{"screen" => "account"})
+      iex> plan =
+      ...>   Block.new("myapp.screen",
+      ...>     id: "blk_plan",
+      ...>     config: %{"screen" => "plan"},
+      ...>     slots: %{"on_went_back" => [back]}
+      ...>   )
+      iex> account = Block.new("myapp.screen", id: "blk_account", config: %{"screen" => "account"})
+      iex> root = Block.new("core.sequence", id: "blk_root", slots: %{"body" => [account, plan]})
+      iex> StatifierExamples.Signup.Path.validate(Document.new(root))
+      []
   """
   @spec validate(Document.t()) :: [finding()]
   def validate(%Document{} = document) do
-    refs = screen_refs(document)
+    refs = document |> screen_refs() |> drop_revisits(document)
     {known, unknown} = Enum.split_with(refs, fn {_id, key} -> Screens.screen(key) end)
 
     Enum.map(unknown, fn {id, key} -> {:unknown_screen, id, key} end) ++
@@ -117,6 +175,44 @@ defmodule StatifierExamples.Signup.Path do
       Enum.find(StatifierExamples.Signup.fixtures(), &(&1.key == "signup_path"))
 
     document
+  end
+
+  # The refs left once the back edges are spent: a screen ref whose screen
+  # key an earlier ref already named, and whose block sits inside a
+  # declared `on_<outcome>` slot, is a re-visit and takes part in no rule.
+  # The first ref naming a key always survives - dropping it too would
+  # hide a second, different screen that shares one of its keys, and the
+  # walk is pre-order so "first" is the Path's own order.
+  @spec drop_revisits([{String.t(), String.t()}], Document.t()) :: [{String.t(), String.t()}]
+  defp drop_revisits(refs, document) do
+    {kept, _seen} =
+      Enum.reduce(refs, {[], MapSet.new()}, fn {id, key} = ref, {kept, seen} ->
+        if MapSet.member?(seen, key) and back_edge?(document, id) do
+          {kept, seen}
+        else
+          {[ref | kept], MapSet.put(seen, key)}
+        end
+      end)
+
+    Enum.reverse(kept)
+  end
+
+  # Whether the block carrying `id` sits anywhere inside a slot named for
+  # an outcome. `Document.fetch_path/2` answers with every
+  # `{parent block id, slot name, index}` step taken to reach the block, so
+  # the whole ancestry is in the answer and a screen nested further down
+  # inside a back-edge slot counts as one too.
+  @spec back_edge?(Document.t(), String.t()) :: boolean()
+  defp back_edge?(document, id) do
+    case Document.fetch_path(document, id) do
+      {:ok, path} ->
+        Enum.any?(path, fn {_parent_id, slot, _index} ->
+          String.starts_with?(slot, @outcome_slot_prefix)
+        end)
+
+      :error ->
+        false
+    end
   end
 
   # One pass for both rules: the names `read` pulls off the screen each
