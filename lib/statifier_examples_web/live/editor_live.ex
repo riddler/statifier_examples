@@ -490,14 +490,25 @@ defmodule StatifierExamplesWeb.EditorLive do
   # is the one a reader will actually meet - it means the document was
   # edited after the execution started - and a page that quietly showed no execution
   # would be hiding the guard doing its job.
-  @spec adopt(Phoenix.LiveView.Socket.t(), {:ok, Durable.driven()} | {:error, term()}) ::
-          Phoenix.LiveView.Socket.t()
+  @spec adopt(
+          Phoenix.LiveView.Socket.t(),
+          {:ok, Durable.driven()} | {:discarded, term()} | {:error, term()}
+        ) :: Phoenix.LiveView.Socket.t()
   defp adopt(socket, {:ok, {durable, run}}) do
     socket
     |> watch_run(durable.execution_id)
     |> assign(:durable, durable)
     |> assign(:run, run)
     |> assign(:run_error, nil)
+  end
+
+  # A send the chart would not take. The page keeps the execution it is
+  # showing - the driver's position is still what storage holds, and
+  # forgetting it would blank a reading the reader can still read - and only
+  # says why the press did nothing. `{:error, _}` below forgets because
+  # there the execution itself could not be loaded.
+  defp adopt(socket, {:discarded, reason}) do
+    assign(socket, :run_error, "event discarded: #{inspect(reason)}")
   end
 
   defp adopt(socket, {:error, reason}) do

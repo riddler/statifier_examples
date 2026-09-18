@@ -1102,6 +1102,41 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert render_until(view, ~s(data-run-status="done"))
     end
 
+    # The page's own version of a press that arrived too late: the execution was
+    # stopped out of band while this socket still held it `running`, so the
+    # driver refuses the event. `adopt/2` has a clause for that now, and
+    # without one the refusal would leave `send_run_event/2`'s call
+    # unmatched and raise on a case that is ordinary.
+    #
+    # It keeps the execution rather than forgetting it, which is the
+    # difference from the refusal case below: there the execution could not be
+    # loaded at all, here the position the page is showing is still the
+    # position storage holds.
+    #
+    # Sabotage: dropped `adopt/2`'s `{:discarded, reason}` clause. This case
+    # went red with a `FunctionClauseError` out of the press - which is the
+    # crash the clause exists to prevent - and nothing else moved. Reverted
+    # from a copy.
+    test "a press against a run stopped elsewhere says so and keeps the run", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
+
+      run(view)
+      execution_id = URI.decode_query(URI.parse(assert_patch(view)).query)["execution"]
+
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      html =
+        view
+        |> element(~s(button[phx-value-event="signup.abandoned"]))
+        |> render_click()
+
+      assert html =~ "event discarded: :failed"
+
+      # The reading is still on the page: only the word for the press changed.
+      assert html =~ ~s(data-run-status=)
+    end
+
     # A link that outlived its execution, or one somebody typed. The page says so
     # rather than showing an empty canvas and letting a reader guess.
     #

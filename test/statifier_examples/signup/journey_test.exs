@@ -390,6 +390,81 @@ defmodule StatifierExamples.Signup.JourneyTest do
     end
   end
 
+  describe "a press the chart refused" do
+    # The execution went terminal between the page being drawn and the button
+    # being pressed - here by an explicit abandon, on a live wizard by the
+    # abandonment deadline firing. Nothing the reader typed was wrong and
+    # there is a real position to show, so this is neither `{:error, _}` nor
+    # `{:invalid, _}`: it is the last settled position with the word for why
+    # it did not move.
+    #
+    # `:failed` is the record's own status, which is the only reason
+    # available - the driver's `{:discarded, run}` carries none - and it is
+    # the same word `Durable.complete_invocation/3` reports for the same
+    # reason.
+    #
+    # Sabotage: put `settle/3` back in `Durable.send_event/4`'s body, which
+    # is the flattening this bead removed. This case went red on
+    # `view.discarded` (the refused send came back `{:ok, _}` and the key was
+    # never put), together with the driver's own case and the editor page's.
+    # Reverted from a copy.
+    test "answers the last settled position and says so", %{execution_id: execution_id} do
+      assert {:ok, plan} = Journey.submit(execution_id, "account_submitted", @account)
+      assert key(plan) == "plan"
+
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      assert {:ok, view} = Journey.submit(execution_id, "personal_chosen", %{"seats" => "1"})
+
+      assert view.discarded == :failed
+
+      # The plan screen, not the confirm screen the press was reaching for,
+      # and holding everything the chart had already collected.
+      assert key(view) == "plan"
+      assert view.status == :failed
+      assert view.responses == @account
+      refute Map.has_key?(view.responses, "plan")
+    end
+
+    # The key's absence is the information, so a press that DID move has to
+    # be missing it. Without this a page could read `Map.get(view,
+    # :discarded)` on every view and never notice the key had become
+    # permanent.
+    #
+    # Sabotage: made `pressed/5` put `:discarded` on the drive arm too, with
+    # `nil`. This case went red and nothing else did, which is the point of
+    # having it. Reverted from a copy.
+    test "and a press that moved carries no such key", %{execution_id: execution_id} do
+      assert {:ok, plan} = Journey.submit(execution_id, "account_submitted", @account)
+
+      refute Map.has_key?(plan, :discarded)
+    end
+
+    # se-ihi, counted rather than read, with the helper `current/1`'s own pin
+    # uses. THE NUMBER IS THIS BEAD'S: there was no pin on `submit/3` before
+    # it, and the count was NINE - `submit/3` resumed and then walked storage
+    # again through `Durable.machine_state/1` for the datamodel, and
+    # `pressed/5` walked it a third time after the send. Both walks returned
+    # rows a driver in hand was already holding, and both are gone: the
+    # resume's driver answers the pre-send datamodel and the send's driver
+    # answers the moved one.
+    #
+    # What is left belongs to the two loads a press genuinely needs - the
+    # resume before it and the drive itself - and pinning it is what keeps a
+    # fourth walk from growing back unnoticed, which is exactly how the
+    # first three arrived.
+    #
+    # Sabotage: restored `defp datamodel/1` and its call in `submit/3`. This
+    # case went red at 7 reads and nothing else moved, which is the same
+    # invisibility `current/1`'s pin was written for. Reverted from a copy.
+    test "walks storage five times, not nine", %{execution_id: execution_id} do
+      assert reads_during(fn ->
+               assert {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
+             end) == 5
+    end
+  end
+
   describe "a press the screen is not offering" do
     # A hidden button is not a button anyone pressed. Both plan buttons are
     # conditional on the seat count, so a press that arrives without one came

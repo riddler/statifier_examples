@@ -121,15 +121,24 @@ defmodule StatifierExamples.Signup.Journey do
   and `nodes` is then empty. `responses` is what the chart has collected so
   far, keyed by element key; `findings` is empty except in the
   `{:invalid, view}` a refused `submit/3` answers with.
+
+  `discarded` is the one key that is not always there, and its absence is
+  the information: a view carries it only when the press it answers was
+  refused by the chart, and it holds the reason
+  `StatifierExamples.Charts.Durable.send_event/4` gave. A page can
+  therefore tell "this is where the execution is" from "this is where the
+  execution is and your press did not move it" without comparing two
+  readings.
   """
   @type view :: %{
-          execution_id: String.t(),
-          screen: Screens.screen() | nil,
-          nodes: [Screens.node_doc()],
-          datamodel: map(),
-          responses: %{optional(String.t()) => term()},
-          status: Execution.status(),
-          findings: [Validation.finding()]
+          :execution_id => String.t(),
+          :screen => Screens.screen() | nil,
+          :nodes => [Screens.node_doc()],
+          :datamodel => map(),
+          :responses => %{optional(String.t()) => term()},
+          :status => Execution.status(),
+          :findings => [Validation.finding()],
+          optional(:discarded) => term()
         }
 
   @doc """
@@ -212,6 +221,25 @@ defmodule StatifierExamples.Signup.Journey do
   an execution that could not be loaded, or an outcome no button on the current
   screen declares.
 
+  ## A press the chart refused is still `{:ok, view}`
+
+  An execution that has gone terminal - abandoned, or finished elsewhere -
+  between the page being drawn and the button being pressed takes no event.
+  That is not an error and it is not an invalid screen: nothing about what
+  the reader typed was wrong, and there is a real position to show. So the
+  answer is `{:ok, view}` at the **last settled position**, carrying
+  `discarded` with the reason. The position is the one the resume already
+  loaded, because a refused send writes nothing and decodes nothing, so
+  what the driver holds is still what storage holds.
+
+  ## One load, not three
+
+  The reading and the datamodel both come off the driver `Durable.resume/1`
+  hands back, as `current/1` does. Until this drew them from there, `submit/3`
+  paid for a `Durable.machine_state/1` walk before the send and `pressed/5`
+  paid for a second one after it - four extra reads of the execution table
+  on every press, all four returning rows the driver was already holding.
+
   The responses are merged into what the chart already holds before the
   screen is resolved for validation, because a question can be conditional
   on a response given on this very screen - the plan screen's business hint
@@ -222,9 +250,10 @@ defmodule StatifierExamples.Signup.Journey do
           {:ok, view()} | {:invalid, view()} | {:error, term()}
   def submit(execution_id, outcome, responses)
       when is_binary(execution_id) and is_binary(outcome) and is_map(responses) do
-    with {:ok, {{durable, run}, _document}} <- Durable.resume(execution_id),
-         {:ok, datamodel} <- datamodel(execution_id),
-         {:ok, drafted} <- parked_on(resolve(view(execution_id, run, datamodel), responses)),
+    with {:ok, {{%Durable{machine_state: state} = durable, run}, _document}} <-
+           Durable.resume(execution_id),
+         {:ok, drafted} <-
+           parked_on(resolve(view(execution_id, run, state.datamodel), responses)),
          {:ok, button} <- button(drafted.nodes, outcome) do
       case Validation.validate(drafted.nodes, responses) do
         [] -> pressed(durable, run, execution_id, button, coerce(responses))
@@ -249,15 +278,27 @@ defmodule StatifierExamples.Signup.Journey do
   # The press itself. `Screen.outcome_event/1` is the event the compiled
   # `core.on_event` for this button is listening for, and what it sends is
   # what that handler's `capture` map reads out of.
+  #
+  # Both the moved reading and the refused one come off a driver already in
+  # hand: the one the send answers with on the drive arm, the one that was
+  # passed in on the discard arm. A refused send neither decodes a position
+  # nor writes one, so the driver `submit/3` resumed is still holding what
+  # storage holds - which is what makes the last settled position free to
+  # report rather than something to go and read again.
   @spec pressed(Durable.t(), Execution.t(), String.t(), Screens.node_doc(), map()) ::
           {:ok, view()} | {:error, term()}
-  defp pressed(durable, run, execution_id, button, typed) do
+  defp pressed(%Durable{machine_state: settled} = durable, run, execution_id, button, typed) do
     event = Screen.outcome_event(Map.fetch!(button, "outcome"))
 
-    with {:ok, {_durable, moved}} <-
-           Durable.send_event(durable, run, event, payload(button, typed)),
-         {:ok, datamodel} <- datamodel(execution_id) do
-      {:ok, view(execution_id, moved, datamodel)}
+    case Durable.send_event(durable, run, event, payload(button, typed)) do
+      {:ok, {%Durable{machine_state: moved_state}, moved}} ->
+        {:ok, view(execution_id, moved, moved_state.datamodel)}
+
+      {:discarded, reason} ->
+        {:ok, Map.put(view(execution_id, run, settled.datamodel), :discarded, reason)}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -314,15 +355,6 @@ defmodule StatifierExamples.Signup.Journey do
   @spec merged(map(), map()) :: map()
   defp merged(datamodel, typed) do
     Map.put(datamodel, "responses", Map.merge(Map.get(datamodel, "responses") || %{}, typed))
-  end
-
-  # The execution's own persisted datamodel, which is where the responses a screen
-  # resolves against live once a chart is holding them.
-  @spec datamodel(String.t()) :: {:ok, map()} | {:error, term()}
-  defp datamodel(execution_id) do
-    with {:ok, state} <- Durable.machine_state(execution_id) do
-      {:ok, state.datamodel}
-    end
   end
 
   @spec document() :: StatifierBlocks.Document.t()
