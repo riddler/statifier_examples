@@ -466,6 +466,16 @@ with no way off it. The draft is never persisted and never sent.
    and the run reaches the confirm screen having chosen nothing. That is
    asserted, both ways, in `JourneyTest`.
 
+   **The button half is gone for this app 2026-09-18 (`se-bzx`, RQ-RF050-A3).**
+   `Journey.payload/2` no longer merges the firing button's own declared
+   literal map over the typed responses: after `se-luu` no screen this app
+   ships declared one, and a field no shipped screen can exercise is a field
+   no test can defend. What a press sends is the form's responses alone, and
+   `responses.plan` is written out of the **document** by the two plan
+   buttons' `["const", value]` capture pairs, exactly as the close on finding
+   6 above records. `JourneyTest` now asserts the inverse: a button held as
+   data that declares such a map is ignored.
+
 2. **A capture writes its destination whether or not the payload carries the
    source.** Press Back on the plan screen without typing a seat count and
    `responses.seats` is written as `:undefined` rather than left absent. Every
