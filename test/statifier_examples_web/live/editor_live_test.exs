@@ -1113,10 +1113,12 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # loaded at all, here the position the page is showing is still the
     # position storage holds.
     #
-    # Sabotage: dropped `adopt/2`'s `{:discarded, reason}` clause. This case
-    # went red with a `FunctionClauseError` out of the press - which is the
-    # crash the clause exists to prevent - and nothing else moved. Reverted
-    # from a copy.
+    # Two sabotages, one per half of what this case pins, each reverted from
+    # a copy. Dropped `adopt/2`'s `{:discarded, reason}` clause: red with a
+    # `FunctionClauseError` out of the press, which is the crash the clause
+    # exists to prevent. Dropped the `readopt/2` line from that clause, so
+    # the stale `:running` run is kept: red on the status below, and nothing
+    # else moved either time.
     test "a press against a run stopped elsewhere says so and keeps the run", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 
@@ -1133,8 +1135,15 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       assert html =~ "event discarded: :failed"
 
-      # The reading is still on the page: only the word for the press changed.
-      assert html =~ ~s(data-run-status=)
+      # The reading is still on the page - and it is the CURED one. The
+      # execution went terminal out of band, so the header has to say `failed`
+      # rather than the `running` this socket last heard. An assertion on the
+      # bare attribute name passed for any status at all, which is how the
+      # regression this pins went green: `adopt/2` kept the stale `:running`
+      # run, nothing broadcasts an abandon, and the header sat on `running`
+      # for good - with `send_run_event/2` guarding on `status: :running`,
+      # every later press re-sent and was discarded again.
+      assert html =~ ~s(data-run-status="failed")
     end
 
     # A link that outlived its execution, or one somebody typed. The page says so

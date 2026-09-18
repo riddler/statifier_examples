@@ -504,11 +504,26 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   # A send the chart would not take. The page keeps the execution it is
   # showing - the driver's position is still what storage holds, and
-  # forgetting it would blank a reading the reader can still read - and only
-  # says why the press did nothing. `{:error, _}` below forgets because
+  # forgetting it would blank a reading the reader can still read - and adds
+  # why the press did nothing. `{:error, _}` below forgets instead, because
   # there the execution itself could not be loaded.
+  #
+  # It RE-RESUMES rather than keeping the assigns untouched, and that is the
+  # whole of it: the reason a send is refused is that the execution went
+  # terminal somewhere else, so the `running` this socket last heard is
+  # precisely the stale fact. Nothing broadcasts an out-of-band abandon, so
+  # a page that kept its assigns would sit on `running` for good - and
+  # because `send_run_event/2` guards on `status: :running`, every later
+  # press would re-send and be discarded again. One storage read on a path
+  # that is already the rare one buys the header the truth.
+  #
+  # The re-resume goes through this function's own `{:ok, _}` clause, which
+  # clears `run_error`, so the discard message is assigned after it rather
+  # than before.
   defp adopt(socket, {:discarded, reason}) do
-    assign(socket, :run_error, "event discarded: #{inspect(reason)}")
+    socket
+    |> readopt(execution_id(socket))
+    |> assign(:run_error, "event discarded: #{inspect(reason)}")
   end
 
   defp adopt(socket, {:error, reason}) do
@@ -516,6 +531,22 @@ defmodule StatifierExamplesWeb.EditorLive do
     |> forget_run()
     |> assign(:run_error, "execution refused: #{inspect(reason)}")
   end
+
+  # The re-read a discard needs, and the one place a failed re-read is not
+  # worth reporting: the page already has a position to show and a reason to
+  # show beside it, so a storage refusal on a read nobody asked for leaves
+  # the reading the page had rather than blanking it. `adopt/2`'s
+  # `{:error, _}` clause forgets the execution, which is right when a reader
+  # asked for one and wrong here.
+  @spec readopt(Phoenix.LiveView.Socket.t(), String.t() | nil) :: Phoenix.LiveView.Socket.t()
+  defp readopt(socket, execution_id) when is_binary(execution_id) do
+    case resumed(execution_id) do
+      {:ok, driven} -> adopt(socket, {:ok, driven})
+      {:error, _reason} -> socket
+    end
+  end
+
+  defp readopt(socket, _absent), do: socket
 
   @spec execution_id(Phoenix.LiveView.Socket.t()) :: String.t() | nil
   defp execution_id(%{assigns: %{durable: %Durable{execution_id: execution_id}}}),
