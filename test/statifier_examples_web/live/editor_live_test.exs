@@ -10,7 +10,9 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   # private list of decisions or open questions kept outside this
   # repository, and it names nothing a public reader can follow. The codes
   # stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  # a new one, so a new citation writes the substance instead.
+  # a new code of the shapes it matches; some codes here are a bare letter
+  # and number with no ruling or question word beside it, a shape it does
+  # not match, so for those only a reviewer stops a new one.
 
   import Phoenix.LiveViewTest
 

@@ -31,6 +31,8 @@ defmodule StatifierExamples.PrivateIdTest do
       (see `@private_id`). Some of the existing ids are of that shape, and
       so are ordinary things this repository writes - an ADR's numbered
       sections, a quarter.
+    * A bare decision number: `D` and digits with no dash and no second
+      number, whatever word is beside it.
     * An author who adds a baseline line beside a new id. Nothing
       mechanical stops that; the baseline's own header says a new id is
       refused, not added there, and a reviewer reads the diff.
