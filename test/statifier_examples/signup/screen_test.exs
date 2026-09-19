@@ -1,14 +1,17 @@
 defmodule StatifierExamples.Signup.ScreenTest do
   @moduledoc """
-  `myapp.screen`: what the composite expands to, and the two limits the
-  spike found by trying to build it (`docs/spikes/SF040-signup-skeleton.md`).
+  `myapp.screen`: what the composite expands to, and what each of its
+  blocks declares it finishes as.
 
   The expansion cases are the ordinary obligation a composite carries - the
   arrangement is derived from the params and the element document, and it is
   read here out of `StatifierBlocks.Composite.expand/2` rather than
-  transcribed. The last two cases are the spike's own: they assert what the
-  type **does** answer where the bead asked for something else, so that a
-  package change that lifted either limit would go red here and be noticed.
+  transcribed. The declaration cases are the answer to the first of the two
+  limits the spike found by trying to build it
+  (`docs/spikes/SF040-signup-skeleton.md`): since `statifier_blocks` 0.32.0
+  each block declares its own buttons' outcomes and `timed_out`, read from
+  its own config. The data-declared twin still answers what the spike found,
+  because the per-instance spelling is a module composite's only.
 
   A pure test: nothing here names LiveView.
   """
@@ -18,7 +21,7 @@ defmodule StatifierExamples.Signup.ScreenTest do
   alias StatifierBlocks.{Block, BlockType, Compiled, Compiler, Composite, Palette}
   alias StatifierBlocks.Composite.Data
   alias StatifierExamples.Charts
-  alias StatifierExamples.Signup.{Path, Screen, Screens}
+  alias StatifierExamples.Signup.{Path, Screen}
 
   @plan %{"screen" => "plan", "timeout" => "1d"}
 
@@ -42,6 +45,9 @@ defmodule StatifierExamples.Signup.ScreenTest do
     end
 
     # `RQ-SF037-3`: a composite in this campaign exposes no slot of its own.
+    # 2026-09-18: it still declares no pass-through slot, and a config naming
+    # no screen opens nothing; a named screen's `on_<name>` slots are the
+    # declaration cases' below.
     test "it exposes no slot of its own" do
       assert Screen.slots(%{}) == []
     end
@@ -103,6 +109,25 @@ defmodule StatifierExamples.Signup.ScreenTest do
              ]
 
       assert Enum.all?(handlers, &(&1.config["outcome"] == "abandon"))
+    end
+
+    # Each handler abandons the group AND names what it finishes as, under
+    # `core.on_event`'s `finish_as` key, which is what makes a button's
+    # outcome one its block can raise and so declare.
+    #
+    # Sabotage (2026-09-18): deleted the `"finish_as"` pair from `handler/3`.
+    # This case went red, and so did every case that compiles the Path -
+    # `StatifierExamples.Signup.PathTest`'s "green, with no warnings" among
+    # them, answering `{:error, _}` with `:outcome_not_raisable` findings
+    # for the declared button outcomes. Reverted from a copy.
+    test "each handler finishes as its button's outcome" do
+      handlers = expansion(@plan).slots["interrupts"]
+
+      assert Enum.map(handlers, & &1.config["finish_as"]) == [
+               "personal_chosen",
+               "business_chosen",
+               "went_back"
+             ]
     end
 
     # R10d: the destination is `responses.<element_key>` and the source for a
@@ -231,26 +256,70 @@ defmodule StatifierExamples.Signup.ScreenTest do
     end
   end
 
-  describe "the two limits the spike found" do
-    # THE BEAD ASKED FOR: one outcome slot per declared button, plus
-    # `timed_out` (D13). WHAT THE PACKAGE ANSWERS: `done`, and only `done`.
+  describe "what each block declares it finishes as" do
+    # One outcome per button on the block's own screen, in document order,
+    # then `timed_out` - read from the block's config through
+    # `declared_outcomes/1`, so the three screens declare three different
+    # lists and none declares a button another screen owns. A screen the
+    # element document does not declare is a non-declaring block.
     #
-    # `StatifierBlocks.Composite.derived_outcomes/2` expands the subtree and
-    # reads the outcomes of the expansion **root** alone - it descends no
-    # further - so a composite rooted at `core.group` declares exactly what
-    # `core.group` declares. The plan screen has three buttons; none of them
-    # reaches this list.
-    test "its outcomes are the group root's, not one per button" do
-      assert BlockType.outcomes(ref(), @plan) == [{"done", "Done"}]
-      assert length(Screens.outcomes(Screens.screen("plan"))) == 3
+    # Sabotage (2026-09-18): made `declared_outcomes/1` answer the union of
+    # every screen's buttons whatever the config. This case went red, and so
+    # did the Path's compile in `StatifierExamples.Signup.PathTest`:
+    # `{:error, _}` with ten `:outcome_not_raisable` findings - four, two and
+    # four against the account, plan and confirm blocks, each refused the
+    # names another screen owns. Reverted from a copy.
+    test "each screen declares its own buttons and timed_out" do
+      assert Screen.declared_outcomes(%{"screen" => "account"}) ==
+               ["account_submitted", "timed_out"]
+
+      assert Screen.declared_outcomes(@plan) ==
+               ["personal_chosen", "business_chosen", "went_back", "timed_out"]
+
+      assert Screen.declared_outcomes(%{"screen" => "confirm"}) ==
+               ["signup_confirmed", "timed_out"]
+
+      assert Screen.declared_outcomes(%{"screen" => "not_a_screen"}) == []
+      assert Screen.declared_outcomes(%{}) == []
     end
 
-    # And the same declaration held as data answers the same way, which is
-    # the half of the question the bead asked to be tried rather than
-    # assumed: `Data.outcomes/2` delegates to the same
-    # `Composite.derived_outcomes/2`, so the data shape is not a way around
-    # the root-only rule. An await-rooted twin is, and it is here to show
-    # what the arrangement would have to be given up to get `timed_out`.
+    # What a reader of the block sees: the declared names as its outcomes,
+    # each labelled by the member that raises it (a button's name is its own
+    # label, the await's `timed_out` is "Timed out"), and one derived
+    # `on_<name>` slot per name - the slot the Path's back edge sits in.
+    #
+    # Sabotage (2026-09-18): dropped the `++ ["timed_out"]` from
+    # `declared_outcomes/1`. This case went red on both lists, the one above
+    # went red, and so did the Journey's "a screen nobody answers": an
+    # undeclared `timed_out` routes nowhere, so the timed-out screen no
+    # longer moves the Path on. Reverted from a copy.
+    test "its outcomes and its on_ slots are that block's own" do
+      assert BlockType.outcomes(ref(), @plan) == [
+               {"personal_chosen", "personal_chosen"},
+               {"business_chosen", "business_chosen"},
+               {"went_back", "went_back"},
+               {"timed_out", "Timed out"}
+             ]
+
+      assert Screen.slots(@plan) == [
+               {"on_personal_chosen", :zero_or_one, "personal_chosen"},
+               {"on_business_chosen", :zero_or_one, "business_chosen"},
+               {"on_went_back", :zero_or_one, "went_back"},
+               {"on_timed_out", :zero_or_one, "Timed out"}
+             ]
+
+      assert Enum.map(Screen.slots(%{"screen" => "account"}), &elem(&1, 0)) ==
+               ["on_account_submitted", "on_timed_out"]
+    end
+
+    # The data-declared twin is NOT a way around the root-only rule, and it
+    # stays that way: a declaration held as data cannot hold a function, so
+    # the per-instance spelling the module above uses is a module
+    # composite's only (sb `ADR-0002`'s per-instance Amendment, `C9e`).
+    # `Data.outcomes/2` delegates to `Composite.derived_outcomes/2`, which
+    # for a non-declaring composite reads the expansion root's outcomes
+    # alone. An await-rooted twin is shown beside it for what the
+    # arrangement would have to give up to surface `timed_out` that way.
     #
     # The group-rooted twin carries a real `core.await` in its `body` - the
     # member whose `timed_out` the bead wanted surfaced. That is what makes
