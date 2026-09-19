@@ -73,7 +73,9 @@ defmodule StatifierExamples.Signup.Path do
   element keys that carry no response, which the moduledoc's last paragraph
   is about. A screen the block document names but the element document does
   not declare is answered as a separate `:unknown_screen` finding rather
-  than folded into either uniqueness rule.
+  than folded into either uniqueness rule, and the back-edge drop never
+  spends one: a block in an `on_` slot naming an undeclared screen is
+  reported however many earlier blocks named the same key.
   """
 
   alias StatifierBlocks.{Block, Document}
@@ -82,8 +84,10 @@ defmodule StatifierExamples.Signup.Path do
   @screen_type "myapp.screen"
 
   # `statifier_blocks` names the slot a block type opens for one of its
-  # outcomes `on_<outcome>` (`StatifierBlocks.Core.Subchart`'s slot prefix,
-  # and the lookup the compiler does for a composite's outcome slots).
+  # outcomes `on_<outcome>`. `myapp.screen` is a composite, so its slots
+  # are named by `StatifierBlocks.Composite.outcome_slot/1` (0.32.0, the
+  # version `mix.lock` resolves), whose prefix is spelled after
+  # `StatifierBlocks.Core.Subchart`'s `@slot_prefix`.
   @outcome_slot_prefix "on_"
 
   @typedoc """
@@ -130,9 +134,11 @@ defmodule StatifierExamples.Signup.Path do
   @doc """
   Every finding about `document` as a Path, or `[]`.
 
-  Re-visits reached through a declared back edge are dropped before any
-  rule runs - the moduledoc's back-edge section is the rule, and the
-  second example here is it.
+  Re-visits reached through a declared back edge are dropped before
+  either uniqueness rule runs - the moduledoc's back-edge section is the
+  rule, and the second example here is it. The drop spends known screens
+  only: every block naming a screen the element document does not
+  declare is reported as `:unknown_screen`, a back edge included.
 
   ## Examples
 
@@ -158,8 +164,10 @@ defmodule StatifierExamples.Signup.Path do
   """
   @spec validate(Document.t()) :: [finding()]
   def validate(%Document{} = document) do
-    refs = document |> screen_refs() |> drop_revisits(document)
-    {known, unknown} = Enum.split_with(refs, fn {_id, key} -> Screens.screen(key) end)
+    {known, unknown} =
+      document |> screen_refs() |> Enum.split_with(fn {_id, key} -> Screens.screen(key) end)
+
+    known = drop_revisits(known, document)
 
     Enum.map(unknown, fn {id, key} -> {:unknown_screen, id, key} end) ++
       duplicates(known, :duplicate_response_key, &Screens.response_keys/1) ++
@@ -177,8 +185,8 @@ defmodule StatifierExamples.Signup.Path do
     document
   end
 
-  # The refs left once the back edges are spent: a screen ref whose screen
-  # key an earlier ref already named, and whose block sits inside a
+  # The known refs left once the back edges are spent: a screen ref whose
+  # screen key an earlier ref already named, and whose block sits inside a
   # declared `on_<outcome>` slot, is a re-visit and takes part in no rule.
   # The first ref naming a key always survives - dropping it too would
   # hide a second, different screen that shares one of its keys, and the

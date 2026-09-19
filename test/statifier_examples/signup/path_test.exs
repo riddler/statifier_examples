@@ -150,6 +150,29 @@ defmodule StatifierExamples.Signup.PathTest do
       assert {:unknown_screen, "blk_sp_confirm", "not_a_screen"} in Path.validate(document)
     end
 
+    # The back-edge drop spends only KNOWN screens. The shipped back edge
+    # and the block it goes back to are both pointed at a screen the
+    # element document does not declare, so the back edge repeats a key an
+    # earlier block named: were the drop to run before the known/unknown
+    # split, it would spend the back edge and only the first block would
+    # be reported. Both blocks point at nothing, and both are named.
+    #
+    # Sabotage (2026-09-18): moved `drop_revisits/2` back ahead of the
+    # split in `validate/1`, where it stood before this case. THIS CASE WENT
+    # RED alone in `test/statifier_examples/signup/`, answering only the
+    # `blk_sp_account` finding. Reverted from a copy.
+    test "a back edge to an unknown screen is an unknown screen too" do
+      document =
+        "blk_sp_account"
+        |> repoint("not_a_screen")
+        |> repoint("blk_sp_back_to_account", "not_a_screen")
+
+      assert Path.validate(document) == [
+               {:unknown_screen, "blk_sp_account", "not_a_screen"},
+               {:unknown_screen, "blk_sp_back_to_account", "not_a_screen"}
+             ]
+    end
+
     # ARM ONE of the back-edge rule. A Back button sends the reader to a
     # screen they have already seen, on purpose, and the block it sends them
     # to is a new block with a new id - it has to be, ids being
