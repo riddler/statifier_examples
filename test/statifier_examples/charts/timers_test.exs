@@ -245,6 +245,29 @@ defmodule StatifierExamples.Charts.TimersTest do
     assert Durable.deliver(execution_id, @reminder) == {:discarded, :completed}
   end
 
+  # The refusal `deliver/2`'s `:active` pre-check cannot rule out: a record
+  # that reads `:active` over a position that has already finished. The
+  # storage layer's own backstop discards the event when it loads that
+  # position and repairs the record, so the refusal comes back from the
+  # driver rather than from the pre-check. The record is written through
+  # `Storage.update_execution_status/4`, the storage layer's public writer,
+  # and nothing in `Durable` is replaced.
+  #
+  # Sabotage: deleted `deliver/2`'s `{:discarded, reason}` else clause. Red
+  # with a `WithClauseError` out of the call. Reverted from a copy.
+  test "a reminder the driver refuses past the pre-check is discarded",
+       %{execution_id: execution_id} do
+    {durable, run} = start!(execution_id)
+    {:ok, _driven} = Durable.send_event(durable, run, @wait)
+    assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
+
+    {:ok, store} = Storage.new(StatifierExamples.Persistence, [])
+    :ok = Storage.update_execution_status(store, execution_id, :active)
+
+    assert Durable.deliver(execution_id, @reminder) == {:discarded, :completed}
+    assert record!(execution_id).status == :completed
+  end
+
   # An execution this app can no longer name a chart for is a discard too, with
   # the reason saying so. Started without a fixture key, which is what an
   # execution of a document that is not a shipped fixture looks like.
