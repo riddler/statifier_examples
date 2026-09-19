@@ -135,7 +135,9 @@ defmodule StatifierExamplesWeb.PlanLive do
   on a private list of decisions or open questions kept outside this
   repository, and it names nothing a public reader can follow. The codes
   stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
+  a new code of the shapes it matches, but the shape this module uses -
+  a bare letter and number with no ruling or question word beside it -
+  is not one of them, so here only a reviewer stops a new one.
   """
 
   use StatifierExamplesWeb, :live_view
