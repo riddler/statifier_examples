@@ -19,6 +19,15 @@ defmodule StatifierExamples.Charts.SubchartTest do
   in `session_opts/0` below - see it for why the engine defaults it off.
   The pair of tests around `@child_first_state` and `@child_verify_group`
   is that difference, driven both ways round.
+
+  ## The ruling and question numbers in this module (2026-09-19)
+
+  Where this module cites a ruling or a question by a short code of
+  letters and numbers instead of by what it says, the code is a number
+  on a private list of decisions or open questions kept outside this
+  repository, and it names nothing a public reader can follow. The codes
+  stay as written. `test/statifier_examples/private_id_test.exs` refuses
+  a new one, so a new citation writes the substance instead.
   """
 
   # Not async: a session registers under the application's own

@@ -52,6 +52,15 @@ defmodule StatifierExamples.Signup.Screens do
   A slot whose path the datamodel does not hold renders as the empty string.
   A half-written sentence is a visible bug; a raised exception on a screen
   whose questions have not been answered yet is a broken app.
+
+  ## The ruling and question numbers in this module (2026-09-19)
+
+  Where this module cites a ruling or a question by a short code of
+  letters and numbers instead of by what it says, the code is a number
+  on a private list of decisions or open questions kept outside this
+  repository, and it names nothing a public reader can follow. The codes
+  stay as written. `test/statifier_examples/private_id_test.exs` refuses
+  a new one, so a new citation writes the substance instead.
   """
 
   alias StatifierExamples.Signup.Screens
