@@ -748,3 +748,11 @@ with its evidence, or are left for the operator with the reason.
       from a live run of the code on this branch, but whether a picture
       shows what a paragraph claims is exactly the judgement an agent
       should not make for itself.
+
+## Note (2026-09-19): the ruling and question numbers in this document
+
+Where this document cites a ruling or a question by a short code of
+letters and numbers instead of by what it says, the code is a number on a
+private list of decisions or open questions kept outside this repository,
+and it names nothing a public reader can follow. The codes stay as
+written; a new one is not added.

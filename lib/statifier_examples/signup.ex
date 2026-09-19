@@ -46,6 +46,15 @@ defmodule StatifierExamples.Signup do
   level deep, now as a choice about this example set rather than a limit:
   see `StatifierExamples.Charts.Subchart` on that, and on what a durable
   execution does with a subchart.
+
+  ## The ruling and question numbers in this module (2026-09-19)
+
+  Where this module cites a ruling or a question by a short code of
+  letters and numbers instead of by what it says, the code is a number
+  on a private list of decisions or open questions kept outside this
+  repository, and it names nothing a public reader can follow. The codes
+  stay as written. `test/statifier_examples/private_id_test.exs` refuses
+  a new one, so a new citation writes the substance instead.
   """
 
   alias StatifierBlocks.{Block, Decode, Document, Edit}

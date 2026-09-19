@@ -1185,3 +1185,11 @@ a faithful compression of the bead's real title; `git diff origin/main...HEAD`
 over this file shows zero removed lines, so k1, k2 and k3 are untouched; and
 the file is plain ASCII throughout and carries no employer or product
 terminology.
+
+## Note (2026-09-19): the ruling and question numbers in this document
+
+Where this document cites a ruling or a question by a short code of
+letters and numbers instead of by what it says, the code is a number on a
+private list of decisions or open questions kept outside this repository,
+and it names nothing a public reader can follow. The codes stay as
+written; a new one is not added.

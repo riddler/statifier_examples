@@ -1,0 +1,45 @@
+# Private ruling and question ids already present in lib/ and test/.
+# Read by the "no lib/ or test/ file gains a private ruling or question id"
+# test in test/statifier_examples/private_id_test.exs, which defines the id
+# shapes. One line per file and id: the file, the first sixteen hex
+# characters of the id's SHA-256 (never the id itself), and how many times
+# the file carries it, tab-separated. A new id is refused, not added here; a
+# line is lowered or deleted when an id leaves its file.
+lib/statifier_examples/card_auth/authorize_with_deadline.ex	260b2d176efc9f72	1
+lib/statifier_examples/charts/durable.ex	5e2bb587df94805a	3
+lib/statifier_examples/charts/subchart.ex	5e2bb587df94805a	1
+lib/statifier_examples/charts/subchart.ex	7972e26d025493a4	2
+lib/statifier_examples/signup.ex	5e24ffc5fe7fbb41	1
+lib/statifier_examples/signup/guarded_step.ex	260b2d176efc9f72	1
+lib/statifier_examples/signup/journey.ex	10dcb6c0a675208f	1
+lib/statifier_examples/signup/journey.ex	21b084982d2c5ef9	1
+lib/statifier_examples/signup/journey.ex	65f5995b968df671	1
+lib/statifier_examples/signup/path.ex	4f1792a01f8023f0	2
+lib/statifier_examples/signup/path.ex	5e24ffc5fe7fbb41	1
+lib/statifier_examples/signup/screen.ex	21b084982d2c5ef9	1
+lib/statifier_examples/signup/screen.ex	4f1792a01f8023f0	1
+lib/statifier_examples/signup/screen.ex	5e24ffc5fe7fbb41	1
+lib/statifier_examples/signup/screens.ex	4f1792a01f8023f0	2
+lib/statifier_examples/signup/screens.ex	5e24ffc5fe7fbb41	1
+lib/statifier_examples/signup/screens.ex	fed5e5f18daedb3b	1
+lib/statifier_examples/signup/validation.ex	4f1792a01f8023f0	1
+lib/statifier_examples/signup/validation.ex	faa68174d8b83803	1
+test/statifier_examples/charts/durable_test.exs	5e2bb587df94805a	1
+test/statifier_examples/charts/one_trace_test.exs	58f43233c9614953	1
+test/statifier_examples/charts/subchart_test.exs	7972e26d025493a4	2
+test/statifier_examples/collapse_walk_test.exs	260b2d176efc9f72	1
+test/statifier_examples/composites_test.exs	260b2d176efc9f72	1
+test/statifier_examples/composites_test.exs	4d9ba9d8e59a6e4f	1
+test/statifier_examples/composites_test.exs	b0f63684f5f6ca30	1
+test/statifier_examples/signup/journey_test.exs	21b084982d2c5ef9	1
+test/statifier_examples/signup/path_test.exs	4f1792a01f8023f0	1
+test/statifier_examples/signup/screen_test.exs	21b084982d2c5ef9	1
+test/statifier_examples/signup/screen_test.exs	260b2d176efc9f72	1
+test/statifier_examples/signup/screen_test.exs	4f1792a01f8023f0	1
+test/statifier_examples/signup/validation_test.exs	faa68174d8b83803	1
+test/statifier_examples/view_model_pin_test.exs	260b2d176efc9f72	2
+test/statifier_examples/view_model_pin_test.exs	4d9ba9d8e59a6e4f	1
+test/statifier_examples/view_model_pin_test.exs	b3dae982c37e2f8e	1
+test/statifier_examples_web/live/editor_live_test.exs	2f810a29daec88ff	1
+test/statifier_examples_web/live/plan_live_test.exs	260b2d176efc9f72	1
+test/statifier_examples_web/live/plan_live_test.exs	4d9ba9d8e59a6e4f	1
