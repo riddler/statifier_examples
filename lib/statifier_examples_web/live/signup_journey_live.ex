@@ -45,6 +45,17 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   reminder and each screen's deadline are stored jobs too. `Durable`
   broadcasts every out-of-band advance on `Durable.topic/1`, so the page
   redraws when the execution moves rather than showing a screen the execution has left.
+
+  ## A press that did not land
+
+  An execution stopped somewhere else - abandoned, or finished - takes no
+  more events, and a press that reaches it is refused. `Journey` answers
+  that with the last settled position and a `discarded` key, and the
+  position is the screen the reader was already on. Drawn alone it would
+  read as a press that did nothing, so the page says in words that the
+  press was not recorded. The notice is worded for the person filling in
+  the form rather than for a developer: the reason `Journey` carries is
+  the execution's status, which the line above it already shows.
   """
 
   use StatifierExamplesWeb, :live_view
@@ -142,6 +153,16 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
         <div :if={@view} class="flex flex-col gap-6">
           <p id="execution-id" class="font-mono text-xs opacity-60">
             execution {@view.execution_id} - {@view.status}
+          </p>
+
+          <p
+            :if={Map.has_key?(@view, :discarded)}
+            id="press-discarded"
+            role="status"
+            class="alert alert-warning text-sm"
+          >
+            This signup had already ended, so your last press was not recorded.
+            The page shows where it stopped.
           </p>
 
           <ul

@@ -13,6 +13,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Signup.Journey
 
   @account %{"first_name" => "Ada", "email" => "ada@example.com"}
@@ -174,6 +175,36 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       html = live |> element("#plan_personal") |> render_click()
 
       assert html =~ "Confirm and finish"
+    end
+
+    # The execution was stopped out of band while this page still showed the
+    # plan screen, so the chart refuses the press. `Journey` answers with the
+    # last settled position and the reason; the page has to say that the
+    # press did not land, because the screen it draws is the one the reader
+    # was already on and would otherwise read as a press that did nothing.
+    # The ordinary press before the stop is where the notice's absence is
+    # pinned.
+    #
+    # Sabotage: removed the `#press-discarded` paragraph from `render/1`. Red
+    # on the notice assertion. Made its `:if` always true instead: red on the
+    # refute after the ordinary press. Both reverted from a copy.
+    test "the chart refused says so and stays where the execution stopped", %{conn: conn} do
+      %{live: live, execution_id: execution_id} = started(conn)
+
+      live |> form("#journey-responses", responses: @account) |> render_change()
+      live |> element("#account_continue") |> render_click()
+
+      refute has_element?(live, "#press-discarded")
+
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      live |> form("#journey-responses", responses: %{"seats" => "1"}) |> render_change()
+      html = live |> element("#plan_personal") |> render_click()
+
+      assert has_element?(live, "#press-discarded", "your last press was not recorded")
+      assert html =~ "Pick a plan"
+      refute html =~ "Confirm and finish"
     end
   end
 
