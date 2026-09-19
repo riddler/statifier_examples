@@ -19,7 +19,8 @@ defmodule StatifierExamples.Signup.Screen do
           core.send   present the screen
           core.await  park, with the deadline
         interrupts
-          core.on_event  one per button: capture the responses, abandon
+          core.on_event  one per button: capture the responses, abandon,
+                         finish as the button's outcome
 
   Two params: which screen (a key in `priv/fixtures/signup_screens.json`)
   and how long before an unattended screen is abandoned. Everything else -
@@ -87,28 +88,59 @@ defmodule StatifierExamples.Signup.Screen do
 
   ## What the deadline actually does, which is less than it sounds
 
-  It abandons **the group**, not the execution. The `timed_out` final is emitted
-  at the end of the group's `body`, so a screen that times out completes
-  exactly as a screen a button abandoned does: the Path advances to the
-  next block and nothing downstream can tell the two apart - which is what
-  `StatifierBlocks.Core.Await`'s own moduledoc says about two abandons on
-  one rail. The difference is only in what was captured, and a timeout
-  captures nothing. The param is labelled "Abandon after" because that is
-  what it does to the group; read it as "stop waiting after", not as
-  "end the signup". The same reading applies to a `Back` button: it
-  abandons the group like any other, so it moves the Path *forward*.
-  Giving a screen a real back edge, or an execution a real give-up, needs the
-  outcome surface finding 1 of the spike document says a composite does
-  not have.
+  It abandons **the group**, not the execution. A screen that times out
+  finishes as `timed_out`, one of the outcomes its block declares (the
+  next section), and a timeout captures nothing. The Path routes
+  `timed_out` through the block's `on_timed_out` slot, and the shipped Path
+  leaves that slot empty, so an unanswered screen moves the Path on to its
+  next block. The param is labelled "Abandon after" because that is what it
+  does to the group; read it as "stop waiting after", not as "end the
+  signup".
 
-  ## Its outcomes are `core.group`'s, and that is not what was wanted
+  ## Each block declares its own outcomes, and Back goes back (2026-09-18)
 
-  A composite answers the outcomes of its expansion **root** and nothing
-  deeper (`StatifierBlocks.Composite.derived_outcomes/2`), so this type
-  declares one outcome, `done`. It was meant to declare one per button plus
-  `timed_out`; it cannot, and neither can the same declaration held as
-  `StatifierBlocks.Composite.Data`. `StatifierExamples.Signup.ScreenTest`
-  asserts what it actually answers and the spike document carries the ask.
+  `declared_outcomes/1` answers, from a block's own config, one outcome per
+  button on its screen, in document order, and then `timed_out`. It is the
+  per-instance declaration `statifier_blocks` 0.32.0 added (sb `ADR-0002`'s
+  per-instance Amendment, `C9`), so the account, plan and confirm blocks
+  declare three different lists and none declares a button another screen
+  owns. Each handler names its button's outcome under `core.on_event`'s
+  `finish_as` key (`C8`, `statifier_blocks` 0.31.0), which is what makes
+  that outcome one its block can raise. A block therefore finishes as the
+  button that was pressed or as `timed_out`, and opens one `on_<name>` slot
+  per name for whatever should happen next.
+
+  The shipped Path uses one of those slots. The plan block's `on_went_back`
+  holds a second block showing the account screen, so pressing Back on the
+  plan screen shows the account screen again and writes no `responses.plan`.
+  It does not return to the plan screen: once the account screen shown
+  again is submitted, the plan block has finished as `went_back`, and the
+  Path goes on past it to the branch, which takes neither arm. A loop back
+  to the plan screen is a navigation no core block expresses, and it is
+  left open. `StatifierExamples.Signup.JourneyTest` presses Back and pins
+  both halves.
+
+  **What this replaced, and what was true of it.** Until this date the
+  deadline section above ended: "The same reading applies to a `Back`
+  button: it abandons the group like any other, so it moves the Path
+  *forward*. Giving a screen a real back edge, or an execution a real
+  give-up, needs the outcome surface finding 1 of the spike document says a
+  composite does not have." It also said that a screen that times out
+  "completes exactly as a screen a button abandoned does: the Path advances
+  to the next block and nothing downstream can tell the two apart". And a
+  section headed "Its outcomes are `core.group`'s, and that is not what was
+  wanted" said: "A composite answers the outcomes of its expansion **root**
+  and nothing deeper (`StatifierBlocks.Composite.derived_outcomes/2`), so
+  this type declares one outcome, `done`. It was meant to declare one per
+  button plus `timed_out`; it cannot, and neither can the same declaration
+  held as `StatifierBlocks.Composite.Data`." All three were true at
+  `statifier_blocks` 0.30.0, when a handler could not name the outcome it
+  finished with and a composite's declared outcomes were one list for the
+  whole type. They are confined here to that version. Two parts still hold:
+  a declaration held as `StatifierBlocks.Composite.Data` has no
+  per-instance spelling, and an execution still has no real give-up.
+  `docs/spikes/SF040-signup-skeleton.md` carries the finding and this answer
+  to it.
   """
 
   use StatifierBlocks.Composite,
@@ -148,7 +180,9 @@ defmodule StatifierExamples.Signup.Screen do
 
   Outcome names are unique across the Path - `StatifierExamples.Signup.Path`
   is what holds them to it - so the event needs no screen in it, and a
-  reader of a compiled chart sees the name the button was authored with.
+  reader of a compiled chart sees the name the button was authored with. A
+  screen shown again through a back edge is the same screen listening for
+  the same events, not a second owner of them.
   """
   @spec outcome_event(String.t()) :: String.t()
   def outcome_event(outcome) when is_binary(outcome), do: "signup." <> outcome
@@ -229,6 +263,25 @@ defmodule StatifierExamples.Signup.Screen do
     ]
   end
 
+  @doc """
+  The outcomes this block declares: one per button on its screen, in
+  document order, and then `timed_out`.
+
+  Read from the block's own config, so each screen declares the buttons it
+  has and no others. A screen the element document does not declare answers
+  `[]` - a non-declaring instance, which is what the editor draws for a
+  screen key that is still being typed.
+  """
+  @impl StatifierBlocks.Composite
+  def declared_outcomes(%{"screen" => key}) when is_binary(key) do
+    case Screens.screen(key) do
+      nil -> []
+      screen -> Screens.outcomes(screen) ++ ["timed_out"]
+    end
+  end
+
+  def declared_outcomes(_config), do: []
+
   @spec handlers(Screens.screen() | nil) :: [Block.t()]
   defp handlers(nil), do: []
 
@@ -250,6 +303,7 @@ defmodule StatifierExamples.Signup.Screen do
         "payload" => "",
         "cond" => "",
         "outcome" => "abandon",
+        "finish_as" => Map.fetch!(button, "outcome"),
         "capture" => Map.merge(capture, writes(button))
       }
     )

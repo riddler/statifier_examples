@@ -357,37 +357,45 @@ defmodule StatifierExamples.Signup.JourneyTest do
       assert seen(execution_id).responses == %{}
     end
 
-    # Back is a button like any other, and that is the k2 finding happening:
-    # `core.on_event` abandons the group, so the Path moves FORWARD. There is
-    # no back edge here to give a reader, and there cannot be one until a
-    # composite can declare an outcome per button (finding 1 of the spike
-    # document).
+    # Back goes back (2026-09-18). The plan screen's `went_back` is an
+    # outcome its block declares, and the Path routes it through the plan
+    # block's `on_went_back` slot, which shows the account screen again. The
+    # plan the reader never chose is not written, and neither is the seat
+    # count they never typed: a capture pair whose source is absent from
+    # `_event.data` leaves its destination UNWRITTEN (sb `ADR-0002`'s capture
+    # Note, N2).
     #
-    # Sabotage: none available. The obvious one - making `submit/3` skip
-    # validation for this button - is the field this bead removed for exactly
-    # the reason it could not be sabotaged: the plan screen demands nothing,
-    # so no press of Back can be refused, and a check that cannot fail cannot
-    # be broken either. Recorded as an ask rather than shipped.
-    test "Back abandons the screen and the Path goes on without a plan", %{
+    # And what happens next, which is the half still open: when the account
+    # screen shown again is submitted, the slot's child has completed, so the
+    # plan block has finished as `went_back` and the Path goes on PAST the
+    # plan screen - the branch takes neither arm and the reader lands on
+    # confirm. Going back to the plan screen itself would need a loop no
+    # core block expresses.
+    #
+    # Sabotage (2026-09-18): emptied `blk_sp_plan`'s `on_went_back` slot in
+    # `priv/fixtures/signup_path.json` from a copy. This case went red on the
+    # first `key(moved)` assertion. Reverted from the copy.
+    test "Back shows the account screen again and writes no plan", %{
       execution_id: execution_id
     } do
       {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
 
       assert {:ok, moved} = Journey.submit(execution_id, "went_back", %{})
 
-      # The branch on `responses.plan` takes neither arm, and the execution lands on
-      # the confirm screen having gone nowhere near a plan.
-      assert key(moved) == "confirm"
+      assert key(moved) == "account"
       refute Map.has_key?(moved.responses, "plan")
-
-      # And the seat count the reader never typed is not written at all. A
-      # capture pair whose source is absent from `_event.data` leaves its
-      # destination UNWRITTEN as of `statifier_blocks` 0.28.0 (sb-ADR-0002's
-      # capture Note, N2); before that release the destination was written
-      # with the interpreter's `:undefined`, which is what finding 2 of the
-      # k3 section recorded. Absence is the assertion, exactly as the `plan`
-      # line two above it already reads.
       refute Map.has_key?(moved.responses, "seats")
+
+      # The same screen, so the same answers overwrite what it collected.
+      assert {:ok, again} =
+               Journey.submit(execution_id, "account_submitted", %{
+                 @account
+                 | "first_name" => "Ida"
+               })
+
+      assert key(again) == "confirm"
+      assert again.responses["first_name"] == "Ida"
+      refute Map.has_key?(again.responses, "plan")
     end
   end
 

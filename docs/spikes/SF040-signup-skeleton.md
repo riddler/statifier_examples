@@ -877,6 +877,24 @@ about this app:
   button ends the screen still writes all of that screen's ANSWERED
   response paths.
 
+**Back goes back for this app 2026-09-18 (`se-dva`), by addition: nothing
+above this line is edited.** At `statifier_blocks` 0.32.0 each `myapp.screen`
+block declares its own outcomes from its own config - one per button on its
+screen, then `timed_out` (sb ADR-0002's per-instance Amendment, `C9`) - and
+each handler names its button's outcome under `finish_as` (`C8`), so
+`went_back` is an outcome the plan block raises and routes through its own
+`on_went_back` slot. The shipped Path puts a second account-screen block in
+that slot: pressing Back on the plan screen shows the account screen again
+and writes no `responses.plan`, and submitting it again overwrites the
+account answers, which is the overwrite rule this section's heading names,
+exercised at last
+(`JourneyTest`, "Back shows the account screen again and writes no plan").
+What stays open: once that slot's block completes, the plan block has
+finished as `went_back` and the Path goes on **past** the plan screen, to a
+branch that takes neither arm and then to confirm. A loop back to the plan
+screen itself is a navigation no core block expresses, and it is not
+decided here.
+
 So Q17's open half - flat versus namespaced, and how back navigation and
 re-asks overwrite - gets one input from this spike and it is not the one the
 question expects: **before the layout question can be answered, a Path needs a

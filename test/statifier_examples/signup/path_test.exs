@@ -44,10 +44,25 @@ defmodule StatifierExamples.Signup.PathTest do
       assert record.chart_identity.content_hash =~ "sha256:"
     end
 
+    # Three screens in four screen blocks: the fourth is the plan screen's
+    # back edge, which shows the account screen again from inside the plan
+    # block's `on_went_back` slot.
+    #
+    # Sabotage (2026-09-18): emptied `blk_sp_plan`'s `on_went_back` slot in
+    # `priv/fixtures/signup_path.json` from a copy. This case went red on
+    # the block count, and so did the screen-ref walk below, the view-model
+    # outline pin and the Journey's Back case. Reverted from the copy.
     test "it holds three screens, a branch and a timer" do
-      types = for %Block{type: type} <- Document.blocks(document()), do: type
+      blocks = Document.blocks(document())
+      types = for %Block{type: type} <- blocks, do: type
 
-      assert Enum.count(types, &(&1 == "myapp.screen")) == 3
+      assert Enum.count(types, &(&1 == "myapp.screen")) == 4
+
+      assert blocks
+             |> Enum.filter(&(&1.type == "myapp.screen"))
+             |> Enum.map(& &1.config["screen"])
+             |> Enum.uniq() == ["account", "plan", "confirm"]
+
       assert Enum.count(types, &(&1 == "core.branch")) == 1
       assert Enum.count(types, &(&1 == "core.send")) == 1
     end
@@ -124,6 +139,7 @@ defmodule StatifierExamples.Signup.PathTest do
       assert Path.screen_refs(document()) == [
                {"blk_sp_account", "account"},
                {"blk_sp_plan", "plan"},
+               {"blk_sp_back_to_account", "account"},
                {"blk_sp_confirm", "confirm"}
              ]
     end
@@ -217,15 +233,20 @@ defmodule StatifierExamples.Signup.PathTest do
     end
   end
 
+  # One pass per SCREEN, not per screen block: the back edge shows the
+  # account screen a second time, and a screen shown again listens for the
+  # events it listened for the first time. That is a re-visit, not two
+  # screens racing for one event, and `Path.validate/1` says the same.
   defp path_events do
-    for {_id, key} <- Path.screen_refs(document()),
+    for {_id, key} <- Enum.uniq_by(Path.screen_refs(document()), &elem(&1, 1)),
         outcome <- Screens.outcomes(Screens.screen(key)),
         do: Screen.outcome_event(outcome)
   end
 
   # The shipped Path with a screen block added inside one of another screen
-  # block's declared outcome slots: the back edge the fixture itself will
-  # grow when the screen composite can route its outcomes. Built on a copy,
+  # block's declared outcome slots. The shipped fixture carries one back
+  # edge of its own (2026-09-18: `blk_sp_back_to_account`, in the plan
+  # block's `on_went_back`); this builds another beside it, on a copy,
   # through `StatifierBlocks.Edit` like everything else here, so
   # `priv/fixtures/signup_path.json` stays exactly as it ships.
   defp back_edge(parent_id, slot, screen_key),

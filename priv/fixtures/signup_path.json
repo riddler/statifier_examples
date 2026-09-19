@@ -48,6 +48,19 @@
           "config": {
             "screen": "plan",
             "timeout": "1d"
+          },
+          "slots": {
+            "on_went_back": [
+              {
+                "type": "myapp.screen",
+                "id": "blk_sp_back_to_account",
+                "type_version": 1,
+                "config": {
+                  "screen": "account",
+                  "timeout": "1d"
+                }
+              }
+            ]
           }
         },
         {

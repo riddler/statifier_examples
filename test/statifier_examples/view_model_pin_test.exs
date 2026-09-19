@@ -123,7 +123,11 @@ defmodule StatifierExamples.ViewModelPinTest do
     # screen stands for is why that matters here more than it did there.
     # `se-7wt` added the seventh step: the `core.invoke` the finished Path
     # ends on, which hands the collected responses to `myapp:signup`.
-    "signup_path" => {9, %{step: 7, arm: 2}}
+    # 2026-09-18: the tenth row is the plan screen's back edge, the account
+    # screen shown again from the plan block's `on_went_back` slot. It walks
+    # as an ARM, not a step: a declared outcome slot is drawn the way a
+    # branch's arm is, one level beneath the block that opens it.
+    "signup_path" => {10, %{step: 7, arm: 3}}
   }
 
   # The two fixtures whose prose is pinned as well as counted, as

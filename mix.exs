@@ -1060,13 +1060,27 @@ defmodule StatifierExamples.MixProject do
   # neither. Moving this floor also moves `predicator` in `mix.lock` from
   # 9.4.0 to 9.4.1, because 0.30.0 inherits 0.29.0's `~> 9.4.1`
   # requirement - this app pins no `predicator` of its own.
+  #
+  # 2026-09-18: the floor moves to `~> 0.32.0`, which is PUBLISHED, so this
+  # arm stays a Hex requirement and takes no git pin and no ledger entry.
+  # What 0.31.0 and 0.32.0 carry that this app reads is sb `ADR-0002`'s
+  # `C8` and `C9`. `C8` (0.31.0) lets a `core.on_event` handler name the
+  # outcome it finishes with under `finish_as`; `C9` (0.32.0) lets a
+  # composite answer `declared_outcomes/1` from each block's own config.
+  # `myapp.screen` now does both, so each screen block declares its own
+  # buttons' outcomes and `timed_out`, compiles to a state of its own, and
+  # opens one `on_<name>` slot per name - which is what lets the signup
+  # Path hold a real back edge. The one breaking change, the arity of
+  # `Composite.unraisable_outcomes`, reaches nothing here: this app does
+  # not call it. Moving this floor also moves `phoenix_live_view` in
+  # `mix.lock` from 1.2.11 to 1.2.12, inside this app's own `~> 1.2.0`.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.30.0"}
+        {:statifier_blocks, "~> 0.32.0"}
     end
   end
 
