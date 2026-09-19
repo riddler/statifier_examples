@@ -1072,8 +1072,10 @@ defmodule StatifierExamples.MixProject do
   # opens one `on_<name>` slot per name - which is what lets the signup
   # Path hold a real back edge. The one breaking change, the arity of
   # `Composite.unraisable_outcomes`, reaches nothing here: this app does
-  # not call it. Moving this floor also moves `phoenix_live_view` in
-  # `mix.lock` from 1.2.11 to 1.2.12, inside this app's own `~> 1.2.0`.
+  # not call it. The dependency update also took `phoenix_live_view` from
+  # 1.2.11 to 1.2.12 in `mix.lock`, which the floor does not require: both
+  # 0.30.0 and 0.32.0 ask for `~> 1.0` (optional), this app pins
+  # `~> 1.2.0`, and 1.2.11 satisfies all three.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
