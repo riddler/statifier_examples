@@ -1138,12 +1138,15 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
       assert :ok = Durable.abandon(durable)
 
+      discards = discard_events(execution_id)
+
       html =
         view
         |> element(~s(button[phx-value-event="signup.abandoned"]))
         |> render_click()
 
       assert html =~ "event discarded: :failed"
+      assert_received {:discarded, ^discards}
 
       # The reading is still on the page - and it is the CURED one. The
       # execution went terminal out of band, so the header has to say `failed`
@@ -1154,6 +1157,80 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       # for good - with `send_run_event/2` guarding on `status: :running`,
       # every later press re-sent and was discarded again.
       assert html =~ ~s(data-run-status="failed")
+
+      # A second press sends nothing at all: the re-read put the run on
+      # `failed`, and `send_run_event/2` sends only for a `running` one. The
+      # page cannot show the difference - a re-sent press is discarded and
+      # re-read into the same markup - so the pin is the storage layer's own
+      # discard event, which a re-send would emit and which the first press
+      # above is seen to emit.
+      #
+      # Sabotage: dropped `status: :running` from `send_run_event/2`'s first
+      # clause. Red on the `refute_receive` below, and the markup assertion
+      # stayed green, which is why the event is the pin. Reverted from a
+      # copy.
+      assert render_click(view, "run-send", %{"event" => "signup.abandoned"}) =~
+               "event discarded: :failed"
+
+      refute_receive {:discarded, ^discards}
+    end
+
+    # The same late press, on a run whose re-read is refused. The canvas holds
+    # an edited copy of the wizard, and the run records the fixture key the
+    # page was opened on. Re-reading by id rebuilds the SHIPPED fixture from
+    # that key, and the storage layer's identity guard refuses it, because
+    # the run is of the edited document. So `readopt/2` meets a refusal on a
+    # read nobody asked for, and keeps the run the page already had rather
+    # than forgetting it.
+    #
+    # What the header says after the press is not pinned here. The page's
+    # own replay of the run (`push_run/1`) reads by id too, is refused the
+    # same way, and writes that refusal over the discard message. That is the
+    # same refusal a Run press on an edited document meets before any
+    # discard, which is a gap of its own rather than this arm's. If re-reading
+    # an edited document's run by id is ever made to work, the
+    # `identity_mismatch` assertion below goes red and this case needs
+    # another way to refuse the re-read.
+    #
+    # Sabotage: deleted `readopt/2`'s `{:error, _reason}` arm. Red with a
+    # `CaseClauseError` that took the page down with the press. Made the arm
+    # forget the run instead: red on the status below. Both reverted from a
+    # copy.
+    test "a press against a stopped run whose re-read is refused keeps the reading",
+         %{conn: conn} do
+      {:ok, fixture} = Charts.fixture("signup_wizard")
+
+      # One delay lengthened, which changes the compiled chart and nothing a
+      # button on the page names.
+      {:ok, edited} =
+        Regex.replace(~r/"delay":"[^"]+"/, Document.to_json(fixture.document), ~s("delay":"7d"),
+          global: false
+        )
+        |> Document.from_json()
+
+      refute edited == fixture.document
+      :ok = Documents.put(fixture.key, edited)
+
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
+
+      view |> element(~s(button[phx-click="run-start"])) |> render_click()
+      execution_id = URI.decode_query(URI.parse(assert_patch(view)).query)["execution"]
+
+      assert {:error, {:identity_mismatch, _stored, _supplied}} = Durable.resume(execution_id)
+
+      {:ok, compiled} = Durable.compile(edited, fixture.declare, fixture.datamodel)
+      {:ok, {durable, _run}} = Durable.resume(compiled, edited, execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      discards = discard_events(execution_id)
+
+      html =
+        view
+        |> element(~s(button[phx-value-event="signup.abandoned"]))
+        |> render_click()
+
+      assert_received {:discarded, ^discards}
+      assert html =~ ~s(data-run-status="running")
     end
 
     # A link that outlived its execution, or one somebody typed. The page says so
@@ -1765,6 +1842,32 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     view |> element(~s(button[phx-click="run-start"])) |> render_click()
 
     render_until(view, ~s(data-run-active="true"))
+  end
+
+  # Listens for the storage layer's discard of an event sent to
+  # `execution_id` and forwards each one to this test process as
+  # `{:discarded, ref}`, with the ref this returns. The handler runs in the
+  # page's process, which is where the send happens, so it carries the
+  # test's pid rather than reading `self()` when it fires.
+  @spec discard_events(String.t()) :: reference()
+  defp discard_events(execution_id) do
+    ref = make_ref()
+    test = self()
+    handler = "editor-discards-#{inspect(ref)}"
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:statifier_persistence, :execution, :discarded],
+        fn _event, _measurements, metadata, _config ->
+          if metadata.execution_id == execution_id, do: send(test, {:discarded, ref})
+        end,
+        nil
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    ref
   end
 
   @spec render_until(Phoenix.LiveViewTest.View.t(), String.t(), non_neg_integer()) :: String.t()

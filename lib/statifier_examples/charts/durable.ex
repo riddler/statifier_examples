@@ -695,6 +695,14 @@ defmodule StatifierExamples.Charts.Durable do
       # the driver's. Without this clause it would leave the `with` as an
       # unmatched else and raise `WithClauseError` on a case that is
       # ordinary.
+      #
+      # The race itself is not one a test can stage, but the clause has a
+      # second way in that is: a record reading `:active` over a position
+      # that has already finished. The storage layer discards the event
+      # when it loads that position and repairs the record's status, so the
+      # refusal arrives here past a pre-check that passed.
+      # `StatifierExamples.Charts.TimersTest` writes that record and pins
+      # this clause with it.
       {:discarded, reason} -> {:discarded, reason}
       :error -> {:discarded, :chart_unknown}
       {:error, reason} -> {:discarded, reason}
@@ -845,8 +853,10 @@ defmodule StatifierExamples.Charts.Durable do
   #
   # `settle/3` itself stays where the return cannot widen: `start/4` answers
   # a freshly created execution, which has nothing to discard, and widening
-  # there would put a third arm on every caller of it for a case that
-  # cannot arise.
+  # there would put a third arm on every caller of it for a case only a
+  # second writer inside the create's own drive can produce. `settle/3`'s
+  # `{:discarded, record}` clause says what that case is and folds it
+  # instead.
   @spec settle_answer(t(), Execution.t(), Driver.result()) ::
           {:ok, driven()} | {:discarded, term()} | {:error, term()}
   defp settle_answer(durable, run, {:ok, record, machine_state}),
@@ -1058,6 +1068,18 @@ defmodule StatifierExamples.Charts.Durable do
 
   # A discarded drive never decoded a position, so the driver keeps the one
   # it already held: it is still what storage holds.
+  #
+  # `start/4` is this function's only caller, and a create has no stored
+  # execution to refuse, so this clause is close to dead - but not dead by
+  # the driver's contract, which is why it stays. `Driver.create/3`'s drive
+  # goes on past the create: every invocation answer the first step
+  # buffered is stepped in turn, and each of those steps checks the stored
+  # record's status the way a sent event's step does. An abandon by id from
+  # another process, landing between the create and one of those steps,
+  # comes back here as `{:discarded, record}`. Without this clause that
+  # raises `FunctionClauseError` out of `start/4`; with it, the caller gets
+  # the execution it created, resting on the status the other writer set.
+  # No test stages it, because it takes a second writer inside one drive.
   defp settle(durable, run, {:discarded, record}), do: rest(durable, run, record.status)
 
   defp settle(durable, _run, {:error, reason}) do
