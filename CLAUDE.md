@@ -149,8 +149,16 @@ anything that lands here - code, docs, ADRs, commit messages, branch names,
 pull-request text, or beads. The beads database syncs to a public remote, so a
 bead is as public as a commit.
 
-The example domains are the two canonical ones and nothing else: credit-card
-processing and a signup wizard. Example invoke types are spelled `myapp:*`
+The example domains are the family's three teaching domains and nothing else:
+the library loan and patron registration, which share one world (patron, copy,
+loan, hold, branch), and parcel delivery, a parcel scanned on its way from a
+depot to a doorstep. Every new example, fixture and piece of prose uses one of
+those. Credit-card processing, the signup wizard with A/B testing and the
+advertising impression-and-click join are fixture-only: this repo's card and
+signup fixtures under `priv/fixtures/`, and the tests, cases and documents
+built on them, stay exactly as they are and keep passing - nothing in them is
+migrated, renamed or deleted - but no new prose, example or fixture is written
+in those domains. Example invoke types are spelled `myapp:*`
 (`myapp:authorize`, `myapp:capture`, `myapp:signup`). Where a host has to be
 named in prose, it is "a production CQRS/Oban host", "a multi-tenant host
 app", never a product.
