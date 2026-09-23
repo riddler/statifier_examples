@@ -1,0 +1,105 @@
+{
+  "case": "dropped_consumed_outcome",
+  "world": "parcel_delivery",
+  "summary": "A delivery routes on the doorstep attempt finishing refused, and the published attempt chart no longer finishes that way.",
+  "host": {
+    "block_types": [],
+    "send_types": [
+      "myapp:sink"
+    ],
+    "routes": [
+      "depot_updates"
+    ],
+    "bindings": [],
+    "published": [
+      {
+        "schema_version": 1,
+        "id": "bdoc_doorstep_attempt",
+        "revision": 2,
+        "metadata": {
+          "name": "Doorstep attempt",
+          "domain": "parcel_delivery"
+        },
+        "root": {
+          "type": "core.await",
+          "id": "blk_da_signature",
+          "type_version": 1,
+          "config": {
+            "event": "parcel.signed",
+            "timeout": "1d"
+          }
+        }
+      }
+    ]
+  },
+  "document": {
+    "schema_version": 1,
+    "id": "bdoc_parcel_delivery",
+    "revision": 1,
+    "metadata": {
+      "name": "Parcel delivery",
+      "domain": "parcel_delivery"
+    },
+    "root": {
+      "type": "core.sequence",
+      "id": "blk_dl_root",
+      "type_version": 1,
+      "slots": {
+        "body": [
+          {
+            "type": "core.subchart",
+            "id": "blk_dl_attempt",
+            "type_version": 1,
+            "config": {
+              "chart": "bdoc_doorstep_attempt",
+              "outcomes": "refused"
+            },
+            "slots": {
+              "on_refused": [
+                {
+                  "type": "core.wait",
+                  "id": "blk_dl_back_to_depot",
+                  "type_version": 1,
+                  "config": {
+                    "duration": "1d"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publish": {
+    "stage": "graph",
+    "check": "graph",
+    "anchor": [
+      "config",
+      "blk_dl_attempt",
+      "outcomes"
+    ]
+  },
+  "runtime": {
+    "twin": "unconditioned_arm",
+    "deliver": {
+      "to": "child",
+      "event": "parcel.signed",
+      "data": {
+        "signed_by": "front desk"
+      }
+    },
+    "expect": {
+      "raised": [
+        {
+          "event": "done.invoke.blk_dl_attempt",
+          "data": {
+            "outcome": "received"
+          }
+        }
+      ],
+      "reached": "s_blk_dl_back_to_depot",
+      "quiet": true
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "case": "unregistered_route",
+  "world": "library_loan",
+  "summary": "An overdue loan hands its notice to the router under a route name the host never registered.",
+  "host": {
+    "block_types": [
+      "myapp.typed_send"
+    ],
+    "send_types": [
+      "myapp:sink"
+    ],
+    "routes": [
+      "branch_notices"
+    ],
+    "bindings": [],
+    "published": []
+  },
+  "document": {
+    "schema_version": 1,
+    "id": "bdoc_loan_overdue",
+    "revision": 1,
+    "metadata": {
+      "name": "Overdue loan",
+      "domain": "library_loan"
+    },
+    "root": {
+      "type": "core.sequence",
+      "id": "blk_lo_root",
+      "type_version": 1,
+      "slots": {
+        "body": [
+          {
+            "type": "myapp.typed_send",
+            "id": "blk_lo_notice",
+            "type_version": 1,
+            "config": {
+              "type": "myapp:sink",
+              "target": "overdue_notices",
+              "event": "loan.overdue"
+            }
+          },
+          {
+            "type": "core.wait",
+            "id": "blk_lo_grace",
+            "type_version": 1,
+            "config": {
+              "duration": "7d"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publish": {
+    "stage": "routes",
+    "check": "unregistered_route",
+    "anchor": [
+      "scxml"
+    ]
+  },
+  "runtime": {
+    "twin": "error.communication",
+    "deliver": null,
+    "expect": {
+      "handler_answer": [
+        "unregistered_route",
+        "overdue_notices"
+      ],
+      "raised": [
+        {
+          "event": "error.communication",
+          "sendid": true
+        }
+      ]
+    }
+  }
+}

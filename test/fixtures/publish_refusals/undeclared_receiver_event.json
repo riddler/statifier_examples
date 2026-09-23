@@ -1,0 +1,102 @@
+{
+  "case": "undeclared_receiver_event",
+  "world": "parcel_delivery",
+  "summary": "A parcel's chart declares the two events it takes, and the host's depot binding routes a third to it.",
+  "host": {
+    "block_types": [],
+    "send_types": [
+      "myapp:sink"
+    ],
+    "routes": [
+      "depot_updates"
+    ],
+    "bindings": [
+      {
+        "id": "depot_lost",
+        "source": "depot_feed",
+        "match": "event.kind == 'lost'",
+        "key": "event.parcel_id",
+        "document": "bdoc_parcel",
+        "event": "parcel.lost"
+      }
+    ],
+    "published": []
+  },
+  "document": {
+    "schema_version": 1,
+    "id": "bdoc_parcel",
+    "revision": 1,
+    "metadata": {
+      "name": "Parcel",
+      "domain": "parcel_delivery"
+    },
+    "accepts": [
+      "parcel.scanned",
+      "parcel.delivered"
+    ],
+    "root": {
+      "type": "core.group",
+      "id": "blk_pa_root",
+      "type_version": 1,
+      "slots": {
+        "body": [
+          {
+            "type": "core.wait",
+            "id": "blk_pa_in_transit",
+            "type_version": 1,
+            "config": {
+              "duration": "10d"
+            }
+          }
+        ],
+        "interrupts": [
+          {
+            "type": "core.on_event",
+            "id": "blk_pa_scanned",
+            "type_version": 1,
+            "config": {
+              "event": "parcel.scanned",
+              "outcome": "resume"
+            }
+          },
+          {
+            "type": "core.on_event",
+            "id": "blk_pa_delivered",
+            "type_version": 1,
+            "config": {
+              "event": "parcel.delivered",
+              "outcome": "abandon"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publish": {
+    "stage": "contracts",
+    "check": "undeclared",
+    "anchor": [
+      "binding",
+      "depot_lost"
+    ]
+  },
+  "runtime": {
+    "twin": "discarded",
+    "deliver": {
+      "to": "execution",
+      "event": "parcel.lost",
+      "data": {
+        "parcel_id": "pcl-0042"
+      }
+    },
+    "expect": {
+      "raised": [
+        {
+          "event": "parcel.lost"
+        }
+      ],
+      "unchanged_configuration": true,
+      "quiet": true
+    }
+  }
+}

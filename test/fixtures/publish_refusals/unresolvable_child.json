@@ -1,0 +1,72 @@
+{
+  "case": "unresolvable_child",
+  "world": "library_loan",
+  "summary": "A hold on a copy runs the branch's pickup chart as a child, and no pickup chart is published.",
+  "host": {
+    "block_types": [],
+    "send_types": [
+      "myapp:sink"
+    ],
+    "routes": [
+      "branch_notices"
+    ],
+    "bindings": [],
+    "published": []
+  },
+  "document": {
+    "schema_version": 1,
+    "id": "bdoc_hold",
+    "revision": 1,
+    "metadata": {
+      "name": "Hold",
+      "domain": "library_loan"
+    },
+    "root": {
+      "type": "core.sequence",
+      "id": "blk_ho_root",
+      "type_version": 1,
+      "slots": {
+        "body": [
+          {
+            "type": "core.subchart",
+            "id": "blk_ho_pickup",
+            "type_version": 1,
+            "config": {
+              "chart": "bdoc_hold_pickup",
+              "outcomes": "collected"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publish": {
+    "stage": "graph",
+    "check": "graph",
+    "anchor": [
+      "config",
+      "blk_ho_pickup",
+      "chart"
+    ]
+  },
+  "runtime": {
+    "twin": "error.communication.invoke",
+    "deliver": null,
+    "expect": {
+      "raised": [
+        {
+          "event": "error.communication.invoke.blk_ho_pickup",
+          "data": {
+            "reason": "unknown_document",
+            "detail": {
+              "chart": "bdoc_hold_pickup"
+            }
+          }
+        },
+        {
+          "event": "done.outcome.s_blk_ho_pickup.error"
+        }
+      ]
+    }
+  }
+}
