@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_patron_registration",
+  "revision": 1,
+  "metadata": {
+    "name": "Patron registration",
+    "description": "A new patron waits up to a week for the branch to verify their email address. The verification handler captures a field its declared payload does not carry.",
+    "domain": "patron_registration"
+  },
+  "datamodel": [
+    {
+      "id": "patron",
+      "description": "The patron being registered: the verification handler writes the verified address here."
+    }
+  ],
+  "accepts": ["email.verified"],
+  "root": {
+    "type": "core.group",
+    "id": "blk_pr_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.wait",
+          "id": "blk_pr_verify_window",
+          "type_version": 1,
+          "config": {
+            "duration": "7d"
+          }
+        }
+      ],
+      "interrupts": [
+        {
+          "type": "core.on_event",
+          "id": "blk_pr_verified",
+          "type_version": 1,
+          "config": {
+            "event": "email.verified",
+            "outcome": "resume",
+            "payload": [
+              {"name": "patron_id", "type": "string"},
+              {"name": "branch", "type": "string"}
+            ],
+            "capture": {
+              "patron.email": "email"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
