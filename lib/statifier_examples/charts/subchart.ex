@@ -57,8 +57,7 @@ defmodule StatifierExamples.Charts.Subchart do
   its first step. On, the child answers them. This app opts in where it
   starts a root session, so the shipped embed runs to depth 2: the wizard
   child dispatches its own `myapp:signup` calls, advances through its own
-  steps and ends with an outcome the parent's `on_done` and `on_abandon`
-  slots route on. `StatifierExamples.Charts.SubchartTest` drives both
+  steps and ends with the outcome the parent's `on_done` slot routes on. `StatifierExamples.Charts.SubchartTest` drives both
   positions, which is what keeps the sentence above honest.
 
   That the option is opt-in rather than the default is the engine's

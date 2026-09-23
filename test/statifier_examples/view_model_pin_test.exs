@@ -112,7 +112,7 @@ defmodule StatifierExamples.ViewModelPinTest do
     "card_processing_sketch" => {8, %{step: 7, tray: 1}},
     "signup_wizard" => {20, %{step: 12, arm: 4, rail: 4}},
     "signup_invitations" => {11, %{step: 9, rail: 2}},
-    "signup_onboarding" => {5, %{step: 2, arm: 2, rail: 1}},
+    "signup_onboarding" => {4, %{step: 3, rail: 1}},
     "signup_bulk_invites" => {5, %{step: 4, rail: 1}},
     "signup_bulk_invites_strict" => {5, %{step: 4, rail: 1}},
     "signup_invite_chunk" => {2, %{step: 2}},
