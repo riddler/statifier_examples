@@ -630,7 +630,7 @@ defmodule StatifierExamples.Charts.DurableTest do
   # PENDING answer: the child is created inside the parent's own exclusion
   # and then the parent reaches quiescence with the invocation still live,
   # exactly as it does for an asynchronous call. So the parent is `active`
-  # and has taken neither its `on_done` nor its `on_abandon` slot, and the
+  # and has not taken its `on_done` slot, and the
   # `on_error` slot it used to take on the refusal is not taken either.
   #
   # The feed row is asserted beside it because it is what the demo points
@@ -640,6 +640,12 @@ defmodule StatifierExamples.Charts.DurableTest do
   # Sabotage: made `start_child/5` answer `{:error, [reason: "no"]}` instead
   # of returning the instruction; this went red - the parent completed down
   # `on_error` and the child row was missing - then reverted.
+  #
+  # The `on_error` refusal reads the parent's own `error` outcome row: the
+  # label of the slot's block also appears on the child's calls, which the
+  # feed names against the parent's states. The same sabotage with the two
+  # assertions above removed went red on that refute alone. Reverted from a
+  # copy.
   test "the parent rests on the live child rather than answering it", %{
     execution_id: execution_id
   } do
@@ -649,7 +655,7 @@ defmodule StatifierExamples.Charts.DurableTest do
 
     assert record!(execution_id).status == :active
     assert Enum.any?(details, &(&1 =~ "bdoc_signup_demo as execution #{child_id(execution_id)}"))
-    refute Enum.any?(details, &(&1 =~ "Tell the owner the child chart refused"))
+    refute "error on blk_so_wizard" in details
   end
 
   # The second thing a browser capture found. Opening the child by URL is

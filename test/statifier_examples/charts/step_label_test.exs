@@ -111,7 +111,7 @@ defmodule StatifierExamples.Charts.StepLabelTest do
              "signup_guarded_section" => {1, 0},
              "signup_guarded_step" => {0, 0},
              "signup_invite_chunk" => {0, 0},
-             "signup_onboarding" => {3, 0},
+             "signup_onboarding" => {2, 0},
              "signup_path" => {2, 0},
              "signup_wizard" => {7, 0}
            }

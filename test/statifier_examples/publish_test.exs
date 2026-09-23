@@ -117,8 +117,8 @@ defmodule StatifierExamples.PublishTest do
 
     # Sabotage: made verdict/2 refuse on a :warning as well as an :error;
     # this went red, and so did the warning case below. Reverted from a copy.
-    test "every one but signup_onboarding publishes, with its accepts", %{config: config} do
-      for fixture <- Charts.fixtures(), fixture.key != "signup_onboarding" do
+    test "every one publishes, with its accepts", %{config: config} do
+      for fixture <- Charts.fixtures() do
         assert {:ok, %Compiled{} = compiled, accepts, warnings} =
                  Publish.check(fixture.document, host(fixture, config)),
                "#{fixture.key} was refused"
@@ -127,22 +127,6 @@ defmodule StatifierExamples.PublishTest do
         assert accepts == compiled.accepts
         assert Enum.all?(warnings, &match?(%{check: _, anchor: _, message: _}, &1))
       end
-    end
-
-    # Sabotage: dropped graph_stage/2 from check/2; this went red, and so did
-    # the warning case below. Reverted from a copy.
-    test "signup_onboarding is refused at the graph stage: the wizard never finishes abandon",
-         %{config: config} do
-      {:ok, fixture} = Charts.fixture("signup_onboarding")
-
-      assert {:refused, %{stage: :graph, findings: [finding]}} =
-               Publish.check(fixture.document, host(fixture, config))
-
-      assert %{check: :graph, anchor: {:config, "blk_so_wizard", "outcomes"}, message: message} =
-               finding
-
-      assert message =~ ~s("bdoc_signup_demo")
-      assert message =~ ~s("abandon")
     end
   end
 
