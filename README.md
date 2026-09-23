@@ -924,6 +924,15 @@ unresolvable type in the shipped document masked every stage after
 resolution, and the reference embedder is worth more compiling clean than it
 is demonstrating a package's chrome.
 
+`test/fixtures/publish_refusals/` is the refusal suite, and it is the set a
+host can vendor: six charts in the library and parcel worlds, one JSON file
+each, that this app's publish step (`StatifierExamples.Publish.check/2`)
+refuses, each beside what the engine does when the same chart runs anyway -
+the matching run-time refusal where the engine has one, and today's
+behaviour, asserted, where it has none. The `README.md` beside the files
+documents their shape and says which refusal each case proves, and
+`test/statifier_examples/publish_refusals_test.exs` runs them.
+
 Every fixture, seed and example value in this repository is fictional.
 
 ## The rules that are not in this file

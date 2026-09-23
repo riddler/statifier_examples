@@ -1,0 +1,77 @@
+{
+  "case": "unregistered_send_type",
+  "world": "parcel_delivery",
+  "summary": "A parcel leaving the depot tells the courier through a send processor the host never registered.",
+  "host": {
+    "block_types": [
+      "myapp.typed_send"
+    ],
+    "send_types": [
+      "myapp:sink"
+    ],
+    "routes": [
+      "depot_updates"
+    ],
+    "bindings": [],
+    "published": []
+  },
+  "document": {
+    "schema_version": 1,
+    "id": "bdoc_parcel_dispatch",
+    "revision": 1,
+    "metadata": {
+      "name": "Parcel dispatch",
+      "domain": "parcel_delivery"
+    },
+    "root": {
+      "type": "core.sequence",
+      "id": "blk_pd_root",
+      "type_version": 1,
+      "slots": {
+        "body": [
+          {
+            "type": "myapp.typed_send",
+            "id": "blk_pd_tell_courier",
+            "type_version": 1,
+            "config": {
+              "type": "myapp:courier",
+              "target": "van_7",
+              "event": "parcel.loaded"
+            }
+          },
+          {
+            "type": "core.wait",
+            "id": "blk_pd_in_transit",
+            "type_version": 1,
+            "config": {
+              "duration": "2d"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publish": {
+    "stage": "send_types",
+    "check": "unsupported_send_type",
+    "anchor": [
+      "scxml"
+    ]
+  },
+  "runtime": {
+    "twin": "error.execution",
+    "deliver": null,
+    "expect": {
+      "raised": [
+        {
+          "event": "error.execution",
+          "data": [
+            "unsupported_type",
+            "myapp:courier"
+          ],
+          "sendid": true
+        }
+      ]
+    }
+  }
+}
