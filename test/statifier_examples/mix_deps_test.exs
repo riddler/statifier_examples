@@ -327,12 +327,19 @@ defmodule StatifierExamples.MixDepsTest do
   # implements. Sabotage: pointed the LOCK assertion back at `"0.30.` and
   # left `mix.lock` alone; it went red reporting the resolved 0.32.0 entry.
   # Reverted from a copy.
+  #
+  # 2026-09-22: both halves move to 0.33, the release carrying
+  # `StatifierBlocks.Publish.findings/3` and `StatifierBlocks.Graph.check/2`,
+  # which `StatifierExamples.Publish.check/2` runs as its first and last
+  # stages. Sabotage: pointed the LOCK assertion back at `"0.32.` and left
+  # `mix.lock` alone; it went red reporting the resolved 0.33.0 entry.
+  # Reverted from a copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.32.0"} in deps
+    assert {:statifier_blocks, "~> 0.33.0"} in deps
 
     lock_line =
       "mix.lock"
@@ -341,7 +348,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.32.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.33.)
     refute lock_line =~ ":git,"
   end
 
@@ -595,10 +602,17 @@ defmodule StatifierExamples.MixDepsTest do
   # previous floor `"~> 2.4"` and left `mix.exs` alone; the membership
   # assertion went red reporting `"~> 2.5"` against the mutated
   # expectation. Reverted from a backup copy.
+  #
+  # 2026-09-22: the engine moves to the 2.7 line, and 2.7.0 is REQUIRED:
+  # `StatifierExamples.Publish.check/2` calls `Statifier.Chart.check_accepts/2`,
+  # which 2.7.0 is the first release to carry, and `statifier_router` 0.3.0
+  # states `{:statifier, "~> 2.7"}`. Sabotage: pointed the LOCK assertion
+  # back at `"2.5.` and left `mix.lock` alone; it went red reporting the
+  # resolved 2.7.0 entry. Reverted from a copy.
   test "the statifier dep is the Hex requirement, with no override" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier, "~> 2.5"} in deps
+    assert {:statifier, "~> 2.7"} in deps
 
     lock_line =
       "mix.lock"
@@ -607,7 +621,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier": )))
 
     assert lock_line, "statifier has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier, "2.5.)
+    assert lock_line =~ ~s({:hex, :statifier, "2.7.)
   end
 
   # The durable stepper. 0.3.0 was the floor two release lines back, as
@@ -793,10 +807,18 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.11.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.12.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # 2026-09-22: the requirement moves to the 0.13 line, and 0.13.0 is
+  # REQUIRED: `statifier_router` 0.3.0 states
+  # `{:statifier_persistence, "~> 0.13"}`, and this app's V07 migration
+  # (`priv/repo/migrations/20260922120001_add_statifier_persistence_chart_retirement.exs`)
+  # runs a version the 0.12 line does not have. Sabotage: pointed the LOCK
+  # assertion back at `"0.12.` and left `mix.lock` alone; it went red
+  # reporting the resolved 0.13.0 entry. Reverted from a copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.12"} in deps
+    assert {:statifier_persistence, "~> 0.13"} in deps
 
     lock_line =
       "mix.lock"
@@ -805,7 +827,32 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.12.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.13.)
+    refute lock_line =~ ":git,"
+  end
+
+  # The router, for its two pure publish-time checks: `StatifierExamples.Publish`
+  # calls `StatifierRouter.Routes.unregistered/2` and
+  # `StatifierRouter.Contracts.check/3`, and 0.3.0 is the first release
+  # carrying the second. A Hex requirement from the start, never a pin.
+  #
+  # Sabotage: pointed the LOCK assertion at the real-but-wrong previous
+  # release line (`"0.2.`) and left `mix.lock` alone; it went red reporting
+  # the resolved 0.3.0 entry against the mutated expectation. Reverted from
+  # a copy.
+  test "the statifier_router dep is the Hex requirement" do
+    deps = Mix.Project.config()[:deps]
+
+    assert {:statifier_router, "~> 0.3.0"} in deps
+
+    lock_line =
+      "mix.lock"
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_router": )))
+
+    assert lock_line, "statifier_router has no mix.lock entry"
+    assert lock_line =~ ~s({:hex, :statifier_router, "0.3.)
     refute lock_line =~ ":git,"
   end
 

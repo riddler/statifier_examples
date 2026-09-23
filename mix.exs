@@ -103,7 +103,13 @@ defmodule StatifierExamples.MixProject do
       # `%Statifier.Effect.Invoke{}.caller_context` and
       # `Statifier.Invoke.Answer.done/4` - so the 2.4 line no longer
       # resolves alongside the durable timers this app arms.
-      {:statifier, "~> 2.5"},
+      #
+      # The requirement moves to the 2.7 line, and 2.7.0 is REQUIRED:
+      # `StatifierExamples.Publish.check/2` calls `Statifier.Chart.check_accepts/2`
+      # and `Statifier.Send.Types.unsupported_sends/2`, and 2.7.0 is the first
+      # release carrying the first of them; `statifier_router` 0.3.0 states
+      # `{:statifier, "~> 2.7"}` as well.
+      {:statifier, "~> 2.7"},
 
       # A note on every `statifier_persistence` name below, added with
       # se-20j. These comments record why each floor moved, release by
@@ -310,7 +316,15 @@ defmodule StatifierExamples.MixProject do
       # this app's `Storage.Adapter` implementation, its `Charts.Execution`
       # and `execution_lock` callers and its telemetry assertions do not
       # compile against it, let alone pass.
-      {:statifier_persistence, "~> 0.12"},
+      #
+      # The requirement moves to the 0.13 line, and 0.13.0 is REQUIRED rather
+      # than tidy: `statifier_router` 0.3.0, below, states
+      # `{:statifier_persistence, "~> 0.13"}`. This app retires no chart, but
+      # the release's generated chart schema reads the two columns its V07
+      # adds, so V07 arrives in a migration of its own in
+      # `priv/repo/migrations`, and a database left at V06 fails the first
+      # read of a stored chart.
+      {:statifier_persistence, "~> 0.13"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -455,6 +469,18 @@ defmodule StatifierExamples.MixProject do
       # The authoring layer this app is the reference embedder for.
       # `phoenix_live_view` is optional there and supplied by this app above.
       statifier_blocks_dep(),
+
+      # The router, for its two pure publish-time checks and nothing else.
+      # `StatifierExamples.Publish.check/2` calls
+      # `StatifierRouter.Routes.unregistered/2` and
+      # `StatifierRouter.Contracts.check/3` over the host's own route
+      # registry and bindings; this app starts no router process and
+      # configures no binding at runtime. The `.0` form is the one the
+      # package recommends for its install snippet, and 0.3.0 is the first
+      # release carrying `Contracts.check/3`. It states requirements on
+      # `statifier ~> 2.7` and `statifier_persistence ~> 0.13`, which is
+      # what moves both of those lines in `mix.lock` with it.
+      {:statifier_router, "~> 0.3.0"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
@@ -1083,13 +1109,20 @@ defmodule StatifierExamples.MixProject do
   # 1.2.11 to 1.2.12 in `mix.lock`, which the floor does not require: both
   # 0.30.0 and 0.32.0 ask for `~> 1.0` (optional), this app pins
   # `~> 1.2.0`, and 1.2.11 satisfies all three.
+  #
+  # 2026-09-22: the floor moves to `~> 0.33.0`, which is PUBLISHED, so this
+  # arm stays a Hex requirement and takes no git pin and no ledger entry.
+  # 0.33.0 is REQUIRED rather than tidy: it carries
+  # `StatifierBlocks.Publish.findings/3` and `StatifierBlocks.Graph.check/2`,
+  # the first and last stages of `StatifierExamples.Publish.check/2`, and the
+  # `interface` field on the compiled artifact the second reads.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.32.0"}
+        {:statifier_blocks, "~> 0.33.0"}
     end
   end
 
