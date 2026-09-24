@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_hold_pickup",
+  "revision": 1,
+  "metadata": {
+    "name": "Hold pickup",
+    "description": "A patron's hold on a copy: the branch sets the copy aside on the hold shelf, then the hold waits out its pickup window. The first-workflow guide runs it end to end.",
+    "domain": "library_loan"
+  },
+  "datamodel": [
+    {
+      "id": "hold",
+      "description": "The hold this execution was opened for: the patron, the copy and the branch."
+    },
+    {
+      "id": "shelved",
+      "description": "The branch's answer to the set-aside call: which shelf the copy is on."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_hp_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.invoke",
+          "id": "blk_hp_set_aside",
+          "type_version": 1,
+          "config": {
+            "invoke_type": "myapp:set_aside",
+            "assign_to": "shelved",
+            "params": "hold=hold"
+          }
+        },
+        {
+          "type": "core.wait",
+          "id": "blk_hp_pickup_window",
+          "type_version": 1,
+          "config": {
+            "duration": "1s"
+          }
+        }
+      ]
+    }
+  }
+}

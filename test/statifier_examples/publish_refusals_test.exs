@@ -90,8 +90,12 @@ defmodule StatifierExamples.PublishRefusalsTest do
   defmodule NoAddressRows do
     @moduledoc false
 
-    # The one repo call the send handler's refusal path makes.
+    # The repo calls the send handler's refusal path makes: the address
+    # read, and from `statifier_router` 0.4.0 the transaction and the
+    # savepoint statements that bracket it (se-1tro).
     def one(_query), do: nil
+    def transaction(fun), do: {:ok, fun.()}
+    def query!(_statement), do: %{rows: [], num_rows: 0}
   end
 
   defmodule RouterSends do
