@@ -212,6 +212,35 @@ defmodule StatifierExamples.Charts.Execution do
     |> append(:invoked, "Invoke dispatched", "#{invoke.type} on #{name(run, block_id)}")
   end
 
+  # A call made by an execution other than the one this reading is of,
+  # folded into this reading's feed. It happens because a durable subchart
+  # child runs on its parent's driver, so the child's effects reach the
+  # parent's buffer (and a finishing child's answer steps the parent inside
+  # the child's drive). The `state_index` such an invoke carries is the
+  # OTHER execution's, so it is read against that execution's own reading
+  # (`nil` when the driver could not resolve its chart), the row carries
+  # that execution's id as its `source`, and this reading's invoke mark is
+  # left alone: the call is not one this execution's canvas made (se-29d).
+  def absorb(
+        %__MODULE__{} = run,
+        {:effect_of, execution_id, other, {:invoke, %Invoke{} = invoke}}
+      ) do
+    label =
+      case other do
+        %__MODULE__{} -> name(other, block_at(other, invoke.state_index))
+        nil -> name(run, nil)
+      end
+
+    append(run, :invoked, "Invoke dispatched", "#{invoke.type} on #{label}", execution_id)
+  end
+
+  # Every other effect of another execution is folded as the reading's own,
+  # as it was before the invoke clause above existed. A delayed send and a
+  # log name no block. A trace does, but a durable child is created without
+  # tracing, so no child's trace reaches a parent's reading.
+  def absorb(%__MODULE__{} = run, {:effect_of, _execution_id, _other, effect}),
+    do: absorb(run, {:effect, effect})
+
   def absorb(%__MODULE__{} = run, {:effect, {:send_delayed, %SendDelayed{} = send}}) do
     append(run, :delayed, "Delayed send", "#{send.event} in #{send.delay_ms} ms")
   end

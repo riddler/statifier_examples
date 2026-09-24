@@ -641,9 +641,10 @@ defmodule StatifierExamples.Charts.DurableTest do
   # of returning the instruction; this went red - the parent completed down
   # `on_error` and the child row was missing - then reverted.
   #
-  # The `on_error` refusal reads the parent's own `error` outcome row: the
-  # label of the slot's block also appears on the child's calls, which the
-  # feed names against the parent's states. The same sabotage with the two
+  # The `on_error` refusal reads the parent's own `error` outcome row: when
+  # this was written the feed named the child's calls against the parent's
+  # states, which put the slot's block label on one of them (se-29d now
+  # names them from the child's own blocks). The same sabotage with the two
   # assertions above removed went red on that refute alone. Reverted from a
   # copy.
   test "the parent rests on the live child rather than answering it", %{
