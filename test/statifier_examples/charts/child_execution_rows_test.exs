@@ -67,6 +67,46 @@ defmodule StatifierExamples.Charts.ChildExecutionRowsTest do
     end
   end
 
+  describe "a durable child's calls in the parent's reading" do
+    # se-29d. The child runs on the parent's driver, so its effects reach
+    # the parent's buffer, and an `Invoke dispatched` row names the block
+    # whose `<invoke>` fired by its `state_index`. That index is the
+    # CHILD's: it has to be read against the child execution's own block
+    # table. Read against the parent's, `signup_onboarding`'s wizard calls
+    # came out as calls on `blk_so_wizard` and on the parent's `on_error`
+    # slot, and the parent's invoke mark moved onto that slot while the
+    # parent was still waiting on its subchart.
+    #
+    # Sabotage: reverted `Durable` and `Execution` to the code before the
+    # fix; this went red on the rows, which read `myapp:signup on
+    # blk_so_wizard` and `... on Tell the owner the child chart refused`
+    # with no source. Then made only `Execution.absorb/2`'s `:effect_of`
+    # clause read the index against the parent's reading; red on the same
+    # two labels. Both restored from a copy.
+    test "are named from the child's own blocks and marked as the child's", %{
+      execution_id: execution_id
+    } do
+      {:ok, parent} = Charts.fixture("signup_onboarding")
+      {:ok, compiled} = Durable.compile(parent.document, parent.declare)
+
+      {:ok, {_durable, run}} =
+        Durable.start(compiled, parent.document, execution_id, "signup_onboarding")
+
+      child_execution_id = Linkage.child_execution_id(execution_id, "blk_so_wizard", 0)
+
+      child_calls =
+        for %{kind: :invoked, detail: "myapp:" <> _call} = entry <- Execution.entries(run),
+            do: {entry.detail, entry.source}
+
+      assert child_calls == [
+               {"myapp:signup on Collect email and password", child_execution_id},
+               {"myapp:signup on Send the verification email", child_execution_id}
+             ]
+
+      assert run.invoke == "blk_so_wizard"
+    end
+  end
+
   describe "the parent's replayed log" do
     # The criterion the pane took over from the feed: a parent whose child
     # has answered narrates the answer, out of the parent's own stored

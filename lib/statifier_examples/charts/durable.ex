@@ -214,8 +214,11 @@ defmodule StatifierExamples.Charts.Durable do
   # `nil` for a row about this execution's own work: see
   # `StatifierExamples.Charts.Execution`'s `entry` type for why a child's rows
   # are marked rather than left to read as the parent's.
+  # An `:effect_of` is an effect of an execution other than the drive's
+  # own, with that execution's id and content hash: see `executor/1`.
   @typep buffered ::
            {:effect, Statifier.Effect.t()}
+           | {:effect_of, String.t(), String.t(), Statifier.Effect.t()}
            | {:note, Execution.entry_kind(), String.t(), String.t(), String.t() | nil}
 
   @doc """
@@ -1090,20 +1093,65 @@ defmodule StatifierExamples.Charts.Durable do
 
   @spec rest(t(), Execution.t(), atom()) :: {:ok, driven()}
   defp rest(durable, run, status) do
-    run =
+    {run, _readings} =
       durable.execution_id
       |> drain([])
-      |> Enum.reduce(run, &fold(&2, &1))
-      |> finish(status)
+      |> Enum.reduce({run, %{}}, fn item, {run, readings} -> fold(run, item, readings) end)
 
-    {:ok, {durable, run}}
+    {:ok, {durable, finish(run, status)}}
   end
 
-  @spec fold(Execution.t(), buffered()) :: Execution.t()
-  defp fold(run, {:effect, effect}), do: Execution.absorb(run, {:effect, effect})
+  # `readings` holds the reading of every other execution this drive has
+  # folded a call of, by content hash, so each chart is resolved once per
+  # drive rather than once per call. Only an invoke is resolved: it is the
+  # one effect of another execution the reading names a block for.
+  @spec fold(Execution.t(), buffered(), map()) :: {Execution.t(), map()}
+  defp fold(run, {:effect, effect}, readings),
+    do: {Execution.absorb(run, {:effect, effect}), readings}
 
-  defp fold(run, {:note, kind, label, detail, source}),
-    do: Execution.note(run, kind, label, detail, source)
+  defp fold(run, {:effect_of, execution_id, content_hash, {:invoke, _invoke} = effect}, readings) do
+    readings = Map.put_new_lazy(readings, content_hash, fn -> other_reading(content_hash) end)
+    other = Map.fetch!(readings, content_hash)
+
+    {Execution.absorb(run, {:effect_of, execution_id, other, effect}), readings}
+  end
+
+  defp fold(run, {:effect_of, execution_id, _content_hash, effect}, readings),
+    do: {Execution.absorb(run, {:effect_of, execution_id, nil, effect}), readings}
+
+  defp fold(run, {:note, kind, label, detail, source}, readings),
+    do: {Execution.note(run, kind, label, detail, source), readings}
+
+  # The reading of another execution's chart, for naming its blocks. The
+  # chart is found by content hash across both compiles of every shipped
+  # document, for `resolve_chart/1`'s reason, comparing the hash of each
+  # compile's source the way `child_chart/1` does, so only the match is
+  # compiled into a machine. `nil` for a hash this app does not ship, which
+  # the reading says as an unmapped state. The execution id a reading is
+  # built with is not read by the naming, so the content hash stands in
+  # for it.
+  @spec other_reading(String.t()) :: Execution.t() | nil
+  defp other_reading(content_hash) do
+    Enum.find_value(Charts.fixtures(), fn fixture ->
+      [
+        compile(fixture.document, fixture.declare, fixture.datamodel),
+        Subchart.child_compile(fixture.document)
+      ]
+      |> Enum.find_value(&reading_of(&1, fixture.document, content_hash))
+    end)
+  end
+
+  @spec reading_of(term(), Document.t(), String.t()) :: Execution.t() | nil
+  defp reading_of({:ok, %Compiled{scxml: scxml} = compiled}, document, content_hash) do
+    with true <- Identity.of_source(scxml).content_hash == content_hash,
+         {:ok, machine} <- Statifier.compile(scxml) do
+      Execution.reading(machine, compiled, document, content_hash)
+    else
+      _other -> nil
+    end
+  end
+
+  defp reading_of(_uncompilable, _document, _content_hash), do: nil
 
   # ------------------------------------------------------ the host's funs
 
@@ -1119,7 +1167,12 @@ defmodule StatifierExamples.Charts.Durable do
   # execution the effect belongs to, and it is what both consumers get.
   #
   # The buffer tag stays the drive's own `execution_id`, for `dispatch/1`'s
-  # reason: it is what `drain/2` matches on.
+  # reason: it is what `drain/2` matches on. What the buffered item says is
+  # whose effect it is: an effect of another execution - a child running on
+  # this driver, or a parent its finishing child answered - is buffered with
+  # that execution's id and content hash, because an invoke's `state_index`
+  # is an index into THAT execution's chart, and `fold/3` reads it there
+  # (se-29d).
   @spec executor(String.t()) :: StatifierPersistence.Executor.t()
   defp executor(execution_id) do
     reader = self()
@@ -1129,11 +1182,20 @@ defmodule StatifierExamples.Charts.Durable do
       :ok = AsyncCalls.consume(context.execution_id, effect)
       :ok = FanOut.consume(context.execution_id, effect)
 
-      send(reader, {:durable_buffered, execution_id, {:effect, effect}})
+      send(
+        reader,
+        {:durable_buffered, execution_id, buffered_effect(execution_id, effect, context)}
+      )
 
       :ok
     end
   end
+
+  @spec buffered_effect(String.t(), Statifier.Effect.t(), map()) :: buffered()
+  defp buffered_effect(execution_id, effect, %{execution_id: execution_id}), do: {:effect, effect}
+
+  defp buffered_effect(_execution_id, effect, context),
+    do: {:effect_of, context.execution_id, context.content_hash, effect}
 
   # Performs one call and says so in the feed. What the *chart* is told is
   # `StatifierPersistence.Driver`'s to build, from `Statifier.Session`'s own
