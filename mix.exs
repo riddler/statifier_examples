@@ -109,7 +109,16 @@ defmodule StatifierExamples.MixProject do
       # and `Statifier.Send.Types.unsupported_sends/2`, and 2.7.0 is the first
       # release carrying the first of them; `statifier_router` 0.3.0 states
       # `{:statifier, "~> 2.7"}` as well.
-      {:statifier, "~> 2.7"},
+      #
+      # 2026-09-24: the requirement moves to the 2.8 line with se-1tro, to
+      # keep the reference embedder on what is published:
+      # `docs/guides/first-workflow.md` names the pins it runs on, and 2.8.1
+      # is the one it names. statifier-ex's host upgrade page says NONE for
+      # every release from 2.7.0 to 2.8.1; this app calls neither
+      # `Statifier.Chart.diff/3` nor `Statifier.Position.compatible_at?/3`,
+      # and no chart here spells the slash-less SCXML invoke type 2.8.1
+      # starts a child for.
+      {:statifier, "~> 2.8"},
 
       # A note on every `statifier_persistence` name below, added with
       # se-20j. These comments record why each floor moved, release by
@@ -324,7 +333,23 @@ defmodule StatifierExamples.MixProject do
       # adds, so V07 arrives in a migration of its own in
       # `priv/repo/migrations`, and a database left at V06 fails the first
       # read of a stored chart.
-      {:statifier_persistence, "~> 0.13"},
+      #
+      # 2026-09-24: the requirement moves to the 0.17 line with se-1tro, and
+      # 0.17.0 is REQUIRED: the release's generated execution schema reads
+      # `ended_at` on every query, so V08 arrives in a migration of its own
+      # in `priv/repo/migrations`, and the first-workflow task reads the
+      # stamp back (`StatifierPersistence.Executions.ended?/1`). The steps
+      # between cost this app one line: 0.14.0 adds the `:needs_migration`
+      # status, which `StatifierExamples.Persistence`'s status projection
+      # reads with a clause of its own because it has no fall-through by
+      # design. This app parks nothing, migrates nothing and passes no
+      # option `create/4` stopped accepting. `StatifierExamples.Persistence`
+      # delegates `update_execution/2` to the package's Ecto adapter, which
+      # keeps the first `ended_at` stamp as 0.17.0's storage contract asks,
+      # and exports neither optional pruning callback, so
+      # `StatifierPersistence.Retention.prune/3` answers
+      # `{:error, :execution_pruning_unsupported}` here.
+      {:statifier_persistence, "~> 0.17"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -404,7 +429,17 @@ defmodule StatifierExamples.MixProject do
       # execution noun; the callback is positional, so this app's
       # implementation compiles unchanged and takes the release for the
       # vocabulary rather than for a behaviour change.
-      {:statifier_oban, "~> 0.10"},
+      #
+      # 2026-09-24: the requirement moves to the 0.13 line with se-1tro, and
+      # 0.13.0 is REQUIRED: the first-workflow task builds its
+      # `StatifierOban.Config` with `:invoke_timeout`, the run-time bound on
+      # an invoke job, which no earlier release accepts. 0.11.0 and 0.12.0
+      # are additive here - `StatifierOban.Timer.pending_for/2` and the
+      # optional `StatifierOban.Timer.PinSource`, whose `statifier_persistence`
+      # requirement of `~> 0.13` the 0.17 line satisfies - and every option
+      # 0.13.0 adds defaults to what 0.12.0 did, `:unresolved_handler`
+      # included at `:retry`.
+      {:statifier_oban, "~> 0.13"},
 
       # The OTel bridge for the family, and the app's telemetry consumer.
       # This app had no dependency on it before se-opg: nothing here
@@ -480,7 +515,14 @@ defmodule StatifierExamples.MixProject do
       # release carrying `Contracts.check/3`. It states requirements on
       # `statifier ~> 2.7` and `statifier_persistence ~> 0.13`, which is
       # what moves both of those lines in `mix.lock` with it.
-      {:statifier_router, "~> 0.3.0"},
+      #
+      # 2026-09-24: the requirement moves to `~> 0.4.1` with se-1tro, the
+      # form the package recommends for its install snippet. 0.4.0 changes
+      # what `StatifierRouter.SendHandler` answers, and this app never calls
+      # it. 0.4.1 reports a delayed `<send>` to the execution target as a
+      # `Contracts.check/3` finding with reason `:delay`, which
+      # `StatifierExamples.Publish` surfaces as one more contracts finding.
+      {:statifier_router, "~> 0.4.1"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
@@ -1116,13 +1158,19 @@ defmodule StatifierExamples.MixProject do
   # `StatifierBlocks.Publish.findings/3` and `StatifierBlocks.Graph.check/2`,
   # the first and last stages of `StatifierExamples.Publish.check/2`, and the
   # `interface` field on the compiled artifact the second reads.
+  #
+  # 2026-09-24: the floor moves to `~> 0.35.0` with se-1tro, published, so
+  # the arm stays a Hex requirement. statifier_blocks' host upgrade page
+  # says NONE for 0.34.0, and 0.35.0 adds `StatifierBlocks.Plan.expressible/3`
+  # and `expressible?/3`, which the first-workflow task calls against the
+  # palette before it publishes; nothing else in the release reaches here.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.33.0"}
+        {:statifier_blocks, "~> 0.35.0"}
     end
   end
 

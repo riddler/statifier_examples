@@ -42,6 +42,11 @@ The path arm rewrites `mix.lock` when deps resolve under it, and a hand-edited
 dep would rewrite `mix.exs`: **neither change is ever committed.** CI sets
 neither variable, so a CI run always resolves `statifier_blocks` from Hex.
 
+To see one durable workflow from document to finished execution without the
+editor, run `mix ecto.migrate` and then `mix statifier_examples.first_workflow`.
+[`docs/guides/first-workflow.md`](docs/guides/first-workflow.md) walks what
+it does, step by step, and names the package versions it runs on.
+
 ## Opening a document in the editor
 
 1. Click a document on the home page, or go to `/editor?doc=<key>` directly.
@@ -854,6 +859,7 @@ tree, so `git checkout mix.lock && mix deps.get` afterwards to come back to Hex.
 | `StatifierExamples.Charts.FanOut` | the fan-out host half: the job that starts one, the seam that creates each child, the door that cancels the unstarted |
 | `StatifierExamples.Charts.ExecutionLock` | the per-execution serialization strategy durable steps run inside |
 | `StatifierExamples.Persistence` | the storage adapter and the `statifier_persistence` host declaration |
+| `StatifierExamples.FirstWorkflow` | the first-workflow guide's recipe, which `mix statifier_examples.first_workflow` runs |
 
 Both domains are filled. `StatifierExamples.Charts` also carries the shared
 messaging block type `myapp.notify`, which belongs to neither domain, and

@@ -32,11 +32,11 @@ defmodule StatifierExamples.PersistenceTest do
     %{opts: store.opts}
   end
 
-  defp insert!(opts, execution_id, metadata) do
+  defp insert!(opts, execution_id, metadata, status \\ :active) do
     :ok =
       Persistence.insert_execution(opts, %{
         execution_id: execution_id,
-        status: :active,
+        status: status,
         content_hash: "sha256:persistence-test",
         identity_blob: <<1, 2, 3>>,
         position_blob: <<7, 8, 9>>,
@@ -198,6 +198,22 @@ defmodule StatifierExamples.PersistenceTest do
              })
 
     assert state == %{execution_id: "run-g", status: :active, child_index: nil}
+  end
+
+  # `needs_migration` is the fifth status the storage contract defines, from
+  # `statifier_persistence` 0.14.0. This app parks nothing, but the
+  # projection has no fall-through, so it reads the fifth like the other
+  # four rather than raising on a row the contract can hold (se-1tro).
+  #
+  # Sabotage: dropped the `status("needs_migration")` clause; this went red
+  # with a `FunctionClauseError`. Reverted from a copy.
+  test "list_execution_states_by_metadata reads a parked execution's status", %{opts: opts} do
+    insert!(opts, "run-h", %{"fixture" => "parked"}, :needs_migration)
+
+    assert {:ok, [state]} =
+             Persistence.list_execution_states_by_metadata(opts, %{"fixture" => "parked"})
+
+    assert state == %{execution_id: "run-h", status: :needs_migration, child_index: nil}
   end
 
   # The same refusal `list_executions_by_metadata/2` makes, for a worse reason:

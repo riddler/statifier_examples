@@ -366,14 +366,18 @@ defmodule StatifierExamples.Persistence do
     {:ok, states}
   end
 
-  # The four statuses `StatifierPersistence.Storage.Adapter` defines, read
+  # The five statuses `StatifierPersistence.Storage.Adapter` defines, read
   # off the string column the schema stores them in. No fall-through: see
-  # the callback's doc.
+  # the callback's doc. `needs_migration` is the fifth, from
+  # `statifier_persistence` 0.14.0: a parked execution this app never
+  # writes, since it calls no `migrate/4`, but one the storage contract
+  # can hand back, so it is read like the other four (se-1tro).
   @spec status(String.t()) :: Adapter.execution_status()
   defp status("active"), do: :active
   defp status("completed"), do: :completed
   defp status("failed"), do: :failed
   defp status("cancelled"), do: :cancelled
+  defp status("needs_migration"), do: :needs_migration
 
   # The child's own index, out of the linkage the package writes under its
   # reserved metadata key. `nil` for an execution carrying no linkage at all -
