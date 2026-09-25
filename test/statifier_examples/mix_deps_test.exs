@@ -664,7 +664,7 @@ defmodule StatifierExamples.MixDepsTest do
   # status-bearing callback to the package's own Ecto adapter and matches no
   # status itself, so it rides the library's encoding.
   #
-  # The two interim git pins this arm carried across campaign 026 are
+  # The two interim git pins this arm carried before are
   # retired, and the `refute` below is what says neither came back.
   #
   # It moves to the 0.6 line as of se-vrq. 0.6.0 emits statifier's own

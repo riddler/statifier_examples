@@ -4,8 +4,8 @@ defmodule StatifierExamples.CompositesTest do
   makes a composite safe to put in front of an author.
 
   A composite is a block type derived from **params** plus a **pure subtree**
-  (sb ADR-0002 decision 5's amendment of 2026-09-07). Consent clause 6 of
-  campaign SF037 states the obligation as prose: the compiled chart of a
+  (sb ADR-0002 decision 5's amendment of 2026-09-07). The operator's ruling of
+  2026-09-07 states the obligation as prose: the compiled chart of a
   document holding a composite is byte-identical to the chart of the same
   document after that composite has been expanded in place. The package
   proves it for its own worked examples; this file proves it for the three
@@ -24,15 +24,6 @@ defmodule StatifierExamples.CompositesTest do
   the assertion about the code and not about a hand-written second copy.
 
   A pure test: nothing here names LiveView, so it compiles and runs headless.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   use ExUnit.Case, async: true
@@ -88,11 +79,11 @@ defmodule StatifierExamples.CompositesTest do
       end
     end
 
-    # `RQ-SF037-3` answered a campaign ago that a composite exposes no slot of
-    # its own; `RQ-SF038-5` gives it one, for the composite that declares it
-    # and for no other. Both halves are asserted, per module, because what is
-    # worth being told about is a slot appearing on a composite that declared
-    # none.
+    # An operator ruling (2026-09-07) said a composite exposes no slot of its
+    # own; a later ruling the same day gives it one, for the composite that
+    # declares it and for no other. Both halves are asserted, per module,
+    # because what is worth being told about is a slot appearing on a
+    # composite that declared none.
     #
     # `slots/1` is derived by `use StatifierBlocks.Composite` from the
     # declaration's `:slots` and is one of the callbacks the macro
@@ -336,9 +327,9 @@ defmodule StatifierExamples.CompositesTest do
 
       assert notify["template"] == "provision_failed"
 
-      # `RQ-SF037-5`'s other half: each expanded block is blamed on the one
-      # param whose value it carries, which is the key a re-anchored finding
-      # is drawn beneath.
+      # The other half of the operator's ruling of 2026-09-07: each expanded
+      # block is blamed on the one param whose value it carries, which is the
+      # key a re-anchored finding is drawn beneath.
       assert param_map == %{
                "blk_gs_step_call" => "invoke_type",
                "blk_gs_step_notify" => "failure_template"

@@ -112,7 +112,7 @@ defmodule StatifierExamples.Signup.Handlers do
   # known - that the account was created, for whom, and how much was
   # collected.
   #
-  # Stub in the sense the spike needs (`docs/spikes/SF040-signup-skeleton.md`):
+  # Stub in the sense the spike needs (`docs/spikes/signup-skeleton-spike.md`):
   # it writes nothing. `myapp:provision` is this app's call that does, and it
   # is idempotent on the execution id for the reason its own clause gives.
   def handle("myapp:signup", %{"responses" => responses}, _context) when is_map(responses) do

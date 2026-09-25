@@ -13,15 +13,6 @@ defmodule StatifierExamples.Signup.PathTest do
   and every one of them is `:unknown`.
 
   A pure test: nothing here names LiveView.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   use ExUnit.Case, async: true
@@ -119,7 +110,7 @@ defmodule StatifierExamples.Signup.PathTest do
     # `capture` map "writes `:unknown` at each of its keys, one per pair",
     # and its `capture_writes/1` builds that `:unknown` unconditionally, so
     # no declaration on this side can improve it. The ask is recorded in
-    # `docs/spikes/SF040-signup-skeleton.md`; this case is what would go red
+    # `docs/spikes/signup-skeleton-spike.md`; this case is what would go red
     # if the package ever answered otherwise.
     test "every responses path is present, and every one is :unknown" do
       env = Environment.at(palette(), document(), {"blk_sp_root", "body", 4})
@@ -247,13 +238,14 @@ defmodule StatifierExamples.Signup.PathTest do
              ]
     end
 
-    # R10d, and the reason the finding names blocks rather than screens: one
-    # screen shown twice reaches its response keys twice, and the second visit
-    # overwrites what the first one collected. Note what is NOT reported:
-    # the account screen's `account_heading`, `account_intro`,
-    # `account_greeting` and `account_continue` keys are duplicated just as
-    # really, and `response_keys/1` reads `text_question` nodes only. That gap
-    # is the moduledoc's last paragraph and finding 8 of the spike document.
+    # The response-key rule, and the reason the finding names blocks rather
+    # than screens: one screen shown twice reaches its response keys twice,
+    # and the second visit overwrites what the first one collected. Note what
+    # is NOT reported: the account screen's `account_heading`,
+    # `account_intro`, `account_greeting` and `account_continue` keys are
+    # duplicated just as really, and `response_keys/1` reads `text_question`
+    # nodes only. That gap is the moduledoc's last paragraph and finding 8 of
+    # the spike document.
     test "a screen shown twice duplicates its response keys and its outcomes" do
       document = repoint("blk_sp_confirm", "account")
 

@@ -1,0 +1,7 @@
+# Exact strings this repository itself defines that match a planning-id
+# shape. One string per line; an entry allows a match only where it covers it.
+#
+# test/statifier_examples/private_id_test.exs: negative cases for the
+# private-id pattern - an ADR-local numbered heading and a quarter.
+### R1. What `src` is
+Q3 authorization

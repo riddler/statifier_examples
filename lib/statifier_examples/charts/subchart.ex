@@ -21,8 +21,8 @@ defmodule StatifierExamples.Charts.Subchart do
   currently publishes for that document. This app publishes exactly the
   documents it ships in `priv/fixtures/`, so the resolution is a find over
   the fixture list by `document.id`, and a name nobody ships is `:error` -
-  the handler's `unknown_document` refusal, one of campaign-023 ruling
-  R-b's three.
+  the handler's `unknown_document` refusal, one of the three an
+  operator ruling set.
 
   Documents are handed back **uncompiled**, which is the arm that lets the
   package compile them itself with `child_use: true` and with the invoke
@@ -97,15 +97,6 @@ defmodule StatifierExamples.Charts.Subchart do
   says which child revision this execution was *created* against, at create; the
   child execution's own linkage carries the hash the driver actually started,
   at dispatch. They agree, and a reader with both can say so.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   use StatifierBlocks.Runtime.Subchart
@@ -122,7 +113,7 @@ defmodule StatifierExamples.Charts.Subchart do
   The document `document_id` names, out of the shipped fixture list.
 
   `:error` for a name nothing ships, which the package refuses as
-  `unknown_document` (campaign-023 ruling R-b).
+  `unknown_document` (ruled by the operator).
   """
   @impl StatifierBlocks.Runtime.Subchart
   @spec resolve_chart(String.t(), Handler.ctx()) :: {:ok, Document.t()} | :error
@@ -156,7 +147,7 @@ defmodule StatifierExamples.Charts.Subchart do
   The chart identity this host currently publishes for each document
   `document` names as a child: `%{document id => content hash}`.
 
-  Campaign-023 ruling R-d, and the host-provenance pattern
+  An operator ruling, and the host-provenance pattern
   `StatifierBlocks.Core.Subchart` names - "pinning a *particular* child
   revision at publish time is a host provenance concern, carried in run
   metadata; the compiler does not do it". `src` is a document id, so an execution

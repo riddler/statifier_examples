@@ -4,14 +4,6 @@ defmodule StatifierExamples.Charts.DurableTest do
   # they write to the repo.
   use ExUnit.Case, async: false
 
-  # The ruling and question numbers in this file (2026-09-19). Where a
-  # comment here cites a ruling or a question by a short code of letters
-  # and numbers instead of by what it says, the code is a number on a
-  # private list of decisions or open questions kept outside this
-  # repository, and it names nothing a public reader can follow. The codes
-  # stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  # a new one, so a new citation writes the substance instead.
-
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Adapters.SQL.Sandbox
@@ -503,14 +495,14 @@ defmodule StatifierExamples.Charts.DurableTest do
            end)
   end
 
-  # Campaign-023 ruling R-d: what an execution records about the children its chart
-  # names. `core.subchart` names a child by DOCUMENT id, which is stable
+  # Ruled by the operator: what an execution records about the children its
+  # chart names. `core.subchart` names a child by DOCUMENT id, which is stable
   # across every revision of that child, so without this the execution record
-  # would say nothing about which revision actually ran. The pin is written
-  # at create, beside the fixture key, and it is a content hash of the
-  # child compiled exactly as the handler compiles it - so the value is
-  # re-derived here from the child fixture rather than read back out of the
-  # code under test.
+  # would say nothing about which revision actually ran. The pin is written at
+  # create, beside the fixture key, and it is a content hash of the child
+  # compiled exactly as the handler compiles it - so the value is re-derived
+  # here from the child fixture rather than read back out of the code under
+  # test.
   #
   # That the pin names the chart a live child session actually runs on is
   # asserted in `StatifierExamples.Charts.SubchartTest`, against a real

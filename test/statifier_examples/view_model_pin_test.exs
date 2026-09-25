@@ -59,14 +59,6 @@ defmodule StatifierExamples.ViewModelPinTest do
 
   use ExUnit.Case, async: true
 
-  # The ruling and question numbers in this file (2026-09-19). Where a
-  # comment here cites a ruling or a question by a short code of letters
-  # and numbers instead of by what it says, the code is a number on a
-  # private list of decisions or open questions kept outside this
-  # repository, and it names nothing a public reader can follow. The codes
-  # stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  # a new one, so a new citation writes the substance instead.
-
   alias StatifierBlocks.Block
   alias StatifierBlocks.Composite
   alias StatifierBlocks.Document
@@ -191,10 +183,11 @@ defmodule StatifierExamples.ViewModelPinTest do
   ]
 
   # The two composite fixtures, pinned the same way. A composite is ONE row
-  # (`RQ-SF037-3`: it exposes no slot, so `outline/1` has nothing to descend
-  # into), and the row's words are the declaration's `sentence` template with
-  # the block's own params filled in - so a param renamed, a template
-  # reworded, or an expansion that leaked into the walk all land here.
+  # (as ruled on 2026-09-07, it exposes no slot, so `outline/1` has nothing to
+  # descend into), and the row's words are the declaration's `sentence`
+  # template with the block's own params filled in - so a param renamed, a
+  # template reworded, or an expansion that leaked into the walk all land
+  # here.
   #
   # Pinned as prose and not only as the {2, %{step: 2}} counts above because
   # the count alone cannot tell a composite drawn as itself from a composite
@@ -337,10 +330,11 @@ defmodule StatifierExamples.ViewModelPinTest do
   end
 
   describe "the three composite fixtures read as one row each, plus the author's own" do
-    # `RQ-SF037-3`: a composite exposes no slot of its own, so the walk has
-    # nothing to descend into and the arrangement `subtree/1` describes is
-    # not in the outline at all. What an author sees is the declaration's
-    # sentence with this block's params in it, at the block's own depth.
+    # Ruled by the operator, 2026-09-07: a composite exposes no slot of its
+    # own, so the walk has nothing to descend into and the arrangement
+    # `subtree/1` describes is not in the outline at all. What an author sees
+    # is the declaration's sentence with this block's params in it, at the
+    # block's own depth.
     #
     # Sabotage: changed `AuthorizeWithDeadline`'s `sentence` template from
     # "else {outcome}" to "otherwise {outcome}" (restored from a copy); this
@@ -355,10 +349,11 @@ defmodule StatifierExamples.ViewModelPinTest do
       assert steps_of("signup_guarded_step") == @signup_guarded_step_steps
     end
 
-    # `RQ-SF038-5` at the walk: a composite that DOES declare a slot draws its
-    # own row and then, beneath it, the rows of the blocks the author put in
-    # that slot - at their own ids, one depth deeper, with their own
-    # sentences. Nothing about the expansion is in the outline either way.
+    # The pass-through ruling (2026-09-07) at the walk: a composite that DOES
+    # declare a slot draws its own row and then, beneath it, the rows of the
+    # blocks the author put in that slot - at their own ids, one depth deeper,
+    # with their own sentences. Nothing about the expansion is in the outline
+    # either way.
     #
     # Sabotage: emptied the fixture block's `body` slot, which is an author who
     # has not filled the interior yet; this went red on the missing third line
@@ -406,7 +401,7 @@ defmodule StatifierExamples.ViewModelPinTest do
     end
 
     # What a plan view draws under the row. The composite's `config_schema/1`
-    # is its params (`RQ-SF037-15` leaves it there), and `hidden?` is the
+    # is its params (an operator ruling leaves it there), and `hidden?` is the
     # only thing that takes one off the surface - so this is the set
     # `StatifierExamplesWeb.PlanLive` renders, asserted where the view model
     # produces it rather than only where the page consumes it.

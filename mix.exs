@@ -77,7 +77,7 @@ defmodule StatifierExamples.MixProject do
 
       # Persistence. SQLite keeps `mix setup` zero-service: the database is a
       # file under `priv/`, so a fresh clone needs no server to run the suite
-      # or the dev app (se-cnv, campaign-021 ruling R11).
+      # or the dev app (se-cnv, ruled by the operator).
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.22"},
 
@@ -180,8 +180,8 @@ defmodule StatifierExamples.MixProject do
       # `{:start_child, _, _}` arm, the `chart_resolver:` option,
       # `parent_link/2`, `answer_parent/3`, `Executions.cascade_cancel/3`,
       # `list_executions_by_metadata/2` on the storage behaviour) was already in
-      # 0.4.0. The two interim git pins this arm carried across
-      # campaign 026 are retired here (se-p22's pattern).
+      # 0.4.0. The two interim git pins this arm carried
+      # before are retired here (se-p22's pattern).
       #
       # The requirement moves to the 0.6 line to keep the reference embedder on
       # what is published. 0.6.0 emits statifier's own
@@ -1118,7 +1118,7 @@ defmodule StatifierExamples.MixProject do
   # repository, and it names nothing a public reader can follow. The codes
   # stay as written.
   #
-  # `RQ-RF047-5` (2026-09-14): the floor moves to `~> 0.30.0`, which is
+  # Ruled by the operator, 2026-09-14: the floor moves to `~> 0.30.0`, which is
   # PUBLISHED, so this arm stays a Hex requirement and takes no git pin and
   # no ledger entry. The `.0` form is the one the package's own README
   # recommends for its install snippet. What 0.30.0 carries that this app

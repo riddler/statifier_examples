@@ -17,15 +17,6 @@ defmodule StatifierExamples.Signup.JourneyTest do
   "a screen nobody answers" beside it - and the divergence is recorded here
   rather than papered over by a test that drives both in one function and
   calls itself one execution.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   use ExUnit.Case, async: false
@@ -155,12 +146,13 @@ defmodule StatifierExamples.Signup.JourneyTest do
     # answered with. The seat count decides the branch: one seat is the
     # personal arm, which this app answers synchronously.
     #
-    # se-luu (RQ-RF046-4, 2026-09-13): the plan press below carries the typed
-    # seat count and NOTHING ELSE - no `plan` field, and `plan_personal`
-    # declares no `payload` map for one to be merged in from. `responses.plan`
-    # still comes back `"personal"`, because the button's capture pair is the
-    # literal `["const", "personal"]` and the compiled assign writes it out of
-    # the document. That is the acceptance this case carries.
+    # se-luu (ruled by the operator, 2026-09-13): the plan press below carries
+    # the typed seat count and NOTHING ELSE - no `plan` field, and
+    # `plan_personal` declares no `payload` map for one to be merged in from.
+    # `responses.plan` still comes back `"personal"`, because the button's
+    # capture pair is the literal `["const", "personal"]` and the compiled
+    # assign writes it out of the document. That is the acceptance this case
+    # carries.
     #
     # Sabotage, re-run at se-luu: made `pressed/5` send the outcome event with
     # no payload at all (`Durable.send_event/4`'s default). THREE cases went
@@ -551,7 +543,7 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   describe "responses/1, the host contract" do
     # The contract stated in code because neither document states it and
-    # neither can check it (`docs/spikes/SF040-signup-skeleton.md`): what a
+    # neither can check it (`docs/spikes/signup-skeleton-spike.md`): what a
     # press sends is the form's responses, keyed by element key. Every
     # question's capture pair is a string source, so a press that omits a
     # typed answer writes nothing at that destination.

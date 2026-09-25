@@ -4,16 +4,6 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   # store in `setup` - two async cases clear it under each other mid-test.
   use StatifierExamplesWeb.ConnCase
 
-  # The ruling and question numbers in this file (2026-09-19). Where a
-  # comment here cites a ruling or a question by a short code of letters
-  # and numbers instead of by what it says, the code is a number on a
-  # private list of decisions or open questions kept outside this
-  # repository, and it names nothing a public reader can follow. The codes
-  # stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  # a new code of the shapes it matches; some codes here are a bare letter
-  # and number with no ruling or question word beside it, a shape it does
-  # not match, so for those only a reviewer stops a new one.
-
   import Phoenix.LiveViewTest
 
   alias StatifierBlocks.Compiler
@@ -93,9 +83,9 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert html =~ "Compile"
     end
 
-    # R1: undo and redo are the package's toolbar, not the host's header. Two
-    # pairs of controls over one history is the thing the ruling forbids, and
-    # the header is where the second pair would appear.
+    # Ruled by the operator: undo and redo are the package's toolbar, not the
+    # host's header. Two pairs of controls over one history is the thing the
+    # ruling forbids, and the header is where the second pair would appear.
     #
     # Sabotage: added an Undo button to the header markup; this went red, then
     # reverted.
@@ -235,7 +225,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   end
 
   describe "the strict compile" do
-    # D1 (campaign 018): the package's number is THE number. The compiler's
+    # Ruled by the operator: the package's number is THE number. The compiler's
     # count and the drawer's are not the same count - the compiler reports
     # what it found, and `ViewModel` derives findings of its own on top of
     # whatever the caller hands in - so the header used to render the first
@@ -513,7 +503,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # document declares an `object` and `myapp.intake` writes a
     # `cards.credit_txn`, and every gap is greyed and NAMES the intake.
     #
-    # [2026-09-07, `se-yag` under RQ-SF036-0a and the `statifier_blocks`
+    # [2026-09-07, `se-yag` under an operator ruling and the `statifier_blocks`
     # ADR-0011 Note of the same date] The root's own body is greyed too,
     # and this row now says so. Seeding a declared path type is
     # ROOT-FORWARD: it enters at the document root and reaches every gap
@@ -573,13 +563,13 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   end
 
   describe "the fit the page opens at" do
-    # D3 / sb-ehqn: the spike opened every document at Fit width and the
-    # authors who used it never pressed the button, so the host opts in
-    # through the package's `fit` attr instead of leaving a first-render zoom
-    # of 100% on a document wider than the scroller. The attr is the mode, and
-    # the canvas carries it as `data-fit`; the zoom itself needs a measurement
-    # only the browser has, so the mount-time evidence is the mode and not a
-    # number.
+    # sb-ehqn, ruled by the operator: the spike opened every document at Fit
+    # width and the authors who used it never pressed the button, so the host
+    # opts in through the package's `fit` attr instead of leaving a
+    # first-render zoom of 100% on a document wider than the scroller. The
+    # attr is the mode, and the canvas carries it as `data-fit`; the zoom
+    # itself needs a measurement only the browser has, so the mount-time
+    # evidence is the mode and not a number.
     #
     # Every fixture, because the attr is on the one component call all three
     # go through and a single-document row would pass on a page that had

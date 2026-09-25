@@ -26,7 +26,8 @@ defmodule StatifierExamples.Signup.Journey do
   screen with no way off it. The draft is never persisted and never sent;
   it is what the reader can see of their own typing.
 
-  That pair is the shape Riddler R10e's presentation contract takes, and
+  That pair is the shape Riddler's presentation contract (ruled by the
+  operator, 2026-09-12) takes, and
   the two properties worth naming are what a host implementing it has to
   provide rather than what this app happens to do:
 
@@ -63,9 +64,10 @@ defmodule StatifierExamples.Signup.Journey do
   That feeds every question's capture pair (destination `responses.<key>`,
   source `<key>`), and it is the whole of the contract this app leans on.
   Neither document states it and neither can check it;
-  `docs/spikes/SF040-signup-skeleton.md` carries it as the ask.
+  `docs/spikes/signup-skeleton-spike.md` carries it as the ask.
 
-  ## The button's own literal map, and why it is gone (2026-09-18, RQ-RF050-A3)
+  ## The button's own literal map, and why it is gone (ruled by the operator,
+  2026-09-18)
 
   There was a second half. The function now called `responses/1` merged the
   firing button's own declared literal map over the typed responses, which
@@ -73,9 +75,9 @@ defmodule StatifierExamples.Signup.Journey do
   declaring a literal plan value for a `writes` pair whose string source
   read it straight back out.
 
-  Since 2026-09-13 (RQ-RF046-4) those buttons declare the literal capture
-  form instead - `{"responses.plan": ["const", "business"]}` - which the
-  compiled chart writes out of the **document**, so a press records which
+  Since 2026-09-13 (ruled by the operator) those buttons declare the literal
+  capture form instead - `{"responses.plan": ["const", "business"]}` - which
+  the compiled chart writes out of the **document**, so a press records which
   button fired without the host having to send anything for it.
   `StatifierExamples.Signup.Screen`'s moduledoc has the shape rule and the
   history.
@@ -95,7 +97,7 @@ defmodule StatifierExamples.Signup.Journey do
   element document needs a way for a button to say it does not validate;
   this app had such a field for an afternoon and took it out again, because
   a field no shipped screen can exercise is a field no test can defend.
-  `docs/spikes/SF040-signup-skeleton.md` carries it as the ask.
+  `docs/spikes/signup-skeleton-spike.md` carries it as the ask.
 
   ## Responses are coerced once, on the way in
 
@@ -106,15 +108,6 @@ defmodule StatifierExamples.Signup.Journey do
   and the datamodel a resolve reads back is already typed. se-e68's page
   coerced in its render for want of a chart; this is the same two lines in
   the one place that now has somewhere to put them.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   alias StatifierExamples.Charts

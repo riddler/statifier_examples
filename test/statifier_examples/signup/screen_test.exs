@@ -8,21 +8,12 @@ defmodule StatifierExamples.Signup.ScreenTest do
   read here out of `StatifierBlocks.Composite.expand/2` rather than
   transcribed. The declaration cases are the answer to the first of the two
   limits the spike found by trying to build it
-  (`docs/spikes/SF040-signup-skeleton.md`): since `statifier_blocks` 0.32.0
+  (`docs/spikes/signup-skeleton-spike.md`): since `statifier_blocks` 0.32.0
   each block declares its own buttons' outcomes and `timed_out`, read from
   its own config. The data-declared twin still answers what the spike found,
   because the per-instance spelling is a module composite's only.
 
   A pure test: nothing here names LiveView.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   use ExUnit.Case, async: true
@@ -53,10 +44,10 @@ defmodule StatifierExamples.Signup.ScreenTest do
       assert Enum.map(Screen.config_schema(%{}), & &1.key) == ["screen", "timeout"]
     end
 
-    # `RQ-SF037-3`: a composite in this campaign exposes no slot of its own.
-    # 2026-09-18: it still declares no pass-through slot, and a config naming
-    # no screen opens nothing; a named screen's `on_<name>` slots are the
-    # declaration cases' below.
+    # Ruled by the operator, 2026-09-07: a leaf composite exposes no slot of
+    # its own. 2026-09-18: it still declares no pass-through slot, and a
+    # config naming no screen opens nothing; a named screen's `on_<name>`
+    # slots are the declaration cases' below.
     test "it exposes no slot of its own" do
       assert Screen.slots(%{}) == []
     end
@@ -139,11 +130,12 @@ defmodule StatifierExamples.Signup.ScreenTest do
              ]
     end
 
-    # R10d: the destination is `responses.<element_key>` and the source for a
-    # QUESTION is the bare key inside `_event.data` - the direction
-    # `core.on_event`'s "The optional `capture` map" states twice because it
-    # reads either way. The plan button's own pair is the other shape, a
-    # `["const", value]` literal (se-luu, 2026-09-13); both land in one map.
+    # The response-key rule: the destination is `responses.<element_key>` and
+    # the source for a QUESTION is the bare key inside `_event.data` - the
+    # direction `core.on_event`'s "The optional `capture` map" states twice
+    # because it reads either way. The plan button's own pair is the other
+    # shape, a `["const", value]` literal (se-luu, 2026-09-13); both land in
+    # one map.
     test "each handler captures every question on the screen, keyed by destination" do
       [personal, _business, back] = expansion(@plan).slots["interrupts"]
 
@@ -186,13 +178,14 @@ defmodule StatifierExamples.Signup.ScreenTest do
     # document. `core/on_event.ex`'s own moduledoc calls the literal form "what
     # lets two handlers on one screen record which of them fired".
     #
-    # se-luu (RQ-RF046-4, 2026-09-13) took the literal form up in THIS app, so
-    # what these cases pin is the other side of the same sentence: each plan
-    # button declares its OWN pair, the two no longer compile to the same
-    # assign, and the press is what reaches `responses.plan`. The host payload
-    # is no longer what carries it, and the plan buttons declare no `payload`
-    # map at all. `Screen`'s `writes/1` still passes the map through as it
-    # stands - the shape is the package's to read, not this app's to branch on.
+    # se-luu (ruled by the operator, 2026-09-13) took the literal form up in
+    # THIS app, so what these cases pin is the other side of the same
+    # sentence: each plan button declares its OWN pair, the two no longer
+    # compile to the same assign, and the press is what reaches
+    # `responses.plan`. The host payload is no longer what carries it, and the
+    # plan buttons declare no `payload` map at all. `Screen`'s `writes/1`
+    # still passes the map through as it stands - the shape is the package's
+    # to read, not this app's to branch on.
     #
     # Sabotage (2026-09-14): reverted both plan buttons' `writes` pairs in
     # `priv/fixtures/signup_screens.json` to the string form
