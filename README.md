@@ -826,6 +826,18 @@ mix quality                  # full gate: + dialyzer, deps audit, coverage floor
 Full `mix quality` must be green before any commit. `.quality.exs` records what
 the gate does and the one recorded deviation from the family's defaults.
 
+This reference host stays on SQLite, and the gate is where that is held to
+the storage contract: `test/statifier_examples/persistence_conformance_test.exs`
+runs `statifier_persistence`'s conformance suite against
+`StatifierExamples.Persistence`, this app's SQLite adapter. The suite tags
+four cases `:postgres` and generates each only when the adapter exports the
+callback it needs. The two metadata-listing cases are generated here, because
+the adapter exports `list_executions_by_metadata/2` and
+`list_execution_states_by_metadata/2`, and they pass on SQLite in the ordinary
+`mix test`. The two `lock_execution/3` cases are not generated, because the
+adapter does not export `lock_execution/3`. There is no second database
+profile: no Postgres configuration and no Postgres job in CI.
+
 One check runs beside the gate and is not part of it. `mix assets.bundle` runs
 esbuild over `assets/js/app.js`, which resolves `statifier_blocks` and
 `statifier_ui` out of `deps/` through esbuild's `NODE_PATH`, so a dependency
