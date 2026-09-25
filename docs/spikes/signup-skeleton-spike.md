@@ -1,7 +1,8 @@
-# SF040 - the signup walking skeleton
+# The signup walking skeleton (spike, 2026-09-12)
 
 A spike, in four beads. A Path is a `statifier_blocks` document plus one
-element document per screen (Riddler R10a); this app is where that claim gets
+element document per screen (Riddler's nouns ruling, the operator,
+2026-09-12); this app is where that claim gets
 built small enough to argue with.
 
 | Bead | What it added |
@@ -17,10 +18,9 @@ section; nothing rewrites an earlier one.
 ## Vocabulary
 
 Written into this file by k4, after the skeleton was built. The operator's
-R10d amendment of 2026-09-12 (recorded in the Riddler umbrella's
-`docs/decisions.md`; carried into campaign SF040 as consent amendment A2)
-settles the words this spike was groping for, and is the authority for the
-rename below:
+amendment of 2026-09-12 to Riddler's response-keys ruling (the vocabulary
+ruling) settles the words this spike was groping for, and is the authority
+for the rename below:
 
 - a **question** owns its `answer_options` - the things a select or a
   checkbox group chooses among; none of this skeleton's questions is one
@@ -80,8 +80,8 @@ this app only gets to discover them.
    a value no longer visible on any screen.
 
 3. **A text slot that resolves to nothing has no declared spelling.** The
-   document writes `{{ responses.first_name }}`. The subset is Riddler R9's to
-   define and **no Liquid library is added here** - `Screens.fill_slots/2` is
+   document writes `{{ responses.first_name }}`. The subset is Riddler's Liquid-subset
+   ruling's to define and **no Liquid library is added here** - `Screens.fill_slots/2` is
    one regex and one lookup, deliberately too small to be mistaken for an
    implementation. What that stand-in had to invent is the missing case: an
    unresolved path renders as the empty string, so a half-written sentence is
@@ -92,7 +92,7 @@ this app only gets to discover them.
    for the same reason, rather than raising inside a template.
 
 4. **One `key` field carries two meanings.** Answers are keyed by element key
-   (Riddler R10d), so a `text_question`'s key is also its datamodel path. For
+   (Riddler's response-keys ruling), so a `text_question`'s key is also its datamodel path. For
    `heading`, `text` and `button` the key identifies the node and addresses
    nothing. A document cannot currently say "this question writes somewhere
    other than its own key", and a renaming - which for a heading is cosmetic
@@ -134,7 +134,7 @@ this app only gets to discover them.
 
 ### Asks this k1 does not act on
 
-No ADR is amended in SF040 (consent clause 9), so these are recorded here:
+No ADR is amended by this spike, so these are recorded here:
 
 - **An element document format needs a written rule for an undecidable
   condition.** Finding 1 is a fork the skeleton took by itself, and two
@@ -311,9 +311,9 @@ stops being true.
    still being typed.
 
 8. **Response-key uniqueness is a Path-wide property no compiler can check.**
-   R10d keys answers by element key, so the key is not a per-screen
-   identifier. The check shipped here is deliberately narrower than R10d's
-   whole surface: `Screens.response_keys/1` reads `text_question` nodes only,
+   The response-keys ruling keys answers by element key, so the key is not
+   a per-screen identifier. The check shipped here is deliberately narrower
+   than that ruling's whole surface: `Screens.response_keys/1` reads `text_question` nodes only,
    so what `validate/1` holds unique is the keys that actually **carry an
    answer**, and the finding is tagged `:duplicate_response_key` to say so.
    Two screens sharing a `heading` or `button` key are not reported. That is
@@ -358,7 +358,7 @@ uses it to derive one handler and one event name per button instead.
 
 ### Asks this k2 does not act on
 
-No ADR is amended in SF040 (consent clause 9), so these are recorded here:
+No ADR is amended by this spike, so these are recorded here:
 
 - **A composite should be able to declare its outcomes.** Findings 1-3
   together: the root-only rule means the outcome surface of a composite is
@@ -390,7 +390,7 @@ No ADR is amended in SF040 (consent clause 9), so these are recorded here:
   so or can check it. Owner: the element document format, with
   `statifier_blocks` on the `capture` half.
 
-  **Closed for this app 2026-09-13 (`se-luu`, RQ-RF046-4).** `capture` grew
+  **Closed for this app 2026-09-13 (`se-luu`, ruled by the operator).** `capture` grew
   the literal arm on the `statifier_blocks` side - at 0.28.0 a source is told
   apart by SHAPE, a string being a path inside `_event.data` and a
   two-element `["const", value]` list a literal read out of the document (sb
@@ -412,7 +412,7 @@ No ADR is amended in SF040 (consent clause 9), so these are recorded here:
 | File | What it is |
 |---|---|
 | `lib/statifier_examples/signup/screen.ex` | `myapp.screen`: the composite, its params and its subtree |
-| `lib/statifier_examples/signup/path.ex` | the Path, and `validate/1` - the host-side uniqueness check narrower than R10d's own sentence (finding 8) |
+| `lib/statifier_examples/signup/path.ex` | the Path, and `validate/1` - the host-side uniqueness check narrower than the response-keys ruling's own sentence (finding 8) |
 | `priv/fixtures/signup_path.json` | three screens, a branch on `responses.plan`, a reminder timer |
 | `test/statifier_examples/signup/screen_test.exs` | the expansion, and the two limits above asserted as facts |
 | `test/statifier_examples/signup/path_test.exs` | the compile, the distinct events, the environment walk, the validator |
@@ -429,7 +429,7 @@ screen the run is parked on. Three submits take a run from the first screen to
 a created account; a screen nobody answers times out and the Path goes on
 without it. What follows is what that turned up.
 
-### The presentation contract, as it came out (Riddler R10e)
+### The presentation contract, as it came out (Riddler's presentation-contract ruling)
 
 The brief asked for the resolve/submit function pair recorded. It is two
 functions and a third that a linear-Path assumption would have missed:
@@ -466,7 +466,7 @@ with no way off it. The draft is never persisted and never sent.
    and the run reaches the confirm screen having chosen nothing. That is
    asserted, both ways, in `JourneyTest`.
 
-   **The button half is gone for this app 2026-09-18 (`se-bzx`, RQ-RF050-A3).**
+   **The button half is gone for this app 2026-09-18 (`se-bzx`, ruled by the operator).**
    `Journey.payload/2` no longer merges the firing button's own declared
    literal map over the typed responses: after `se-luu` no screen this app
    ships declared one, and a field no shipped screen can exercise is a field
@@ -499,7 +499,8 @@ with no way off it. The draft is never persisted and never sent.
    path gets a value rather than a missing one.
 
    (Dated: this is what the spike measured. `statifier_blocks` 0.28.0 leaves
-   such a destination unwritten instead - see the R10d section below.)
+   such a destination unwritten instead - see the responses-layout section
+   below.)
 
 3. **`timed_out` is unreachable from the Path, exactly as k2 said.** The
    deadline works: each screen's `core.await` arms a stored Oban job through
@@ -535,8 +536,8 @@ with no way off it. The draft is never persisted and never sent.
 
 6. **The element document needs a validation vocabulary, and had one field's
    worth of it invented here.** `required` is the document's; `format` is not.
-   `StatifierExamples.Signup.Validation` stands in for Riddler R10c's
-   elements package, and to have anything to check it added
+   `StatifierExamples.Signup.Validation` stands in for the elements
+   package of Riddler's validation ruling, and to have anything to check it added
    `"format": "email"` to the account screen's address question. The rule it
    implements is one regex, not RFC 5322, and a format name it does not
    implement raises rather than passing - a document asking for a check
@@ -596,7 +597,7 @@ function and calls itself one run.
 
 ### Asks this k3 does not act on
 
-No ADR is amended in SF040 (consent clause 9), so these are recorded here.
+No ADR is amended by this spike, so these are recorded here.
 They are additional to k2's four, which all stand.
 
 - **A capture should be able to leave a destination alone when the payload
@@ -611,11 +612,11 @@ They are additional to k2's four, which all stand.
 - **The element document format needs a validation vocabulary.** Findings 6,
   7 and 8: a named `format` check per question, the rule that checks run over
   resolved nodes rather than declared ones, and a way for a button to say it
-  does not validate. Owner: the element document format (Riddler R10c).
+  does not validate. Owner: the element document format (Riddler's validation ruling).
 - **A presentation contract needs a third answer.** Finding 5: "no screen,
   the run is working" is a state any asynchronous step produces, and a
   contract with only a screen and an ending has nowhere to put it. Owner:
-  Riddler R10e.
+  Riddler's presentation-contract ruling.
 
 ### Residue in this app, for the campaign to file
 
@@ -630,7 +631,7 @@ They are additional to k2's four, which all stand.
 | File | What it is |
 |---|---|
 | `lib/statifier_examples/signup/journey.ex` | the loop: `start`, `current`, `resolve`, `submit`, `payload` |
-| `lib/statifier_examples/signup/validation.ex` | the pure check standing in for R10c's elements package |
+| `lib/statifier_examples/signup/validation.ex` | the pure check standing in for the validation ruling's elements package |
 | `lib/statifier_examples_web/live/signup_journey_live.ex` | `/signup-journey`: the page, holding the last view it was answered with and the reader's unsent draft, neither of them authoritative |
 | `test/statifier_examples/signup/journey_test.exs` | three submits, the timeout, the park, the refusals |
 | `test/statifier_examples/signup/validation_test.exs` | the two rules, and what a third would cost |
@@ -651,7 +652,8 @@ the Path gained a block.
 
 ### What the k3 captures show
 
-Four, in `.claude/fleet/pending/SF040-spikes/`, taken against the dev server
+Four, kept in the maintainers' private working set (not in this
+repository), taken against the dev server
 on 8645 driving one real durable run end to end. The bead's acceptance line
 is "the page works in `mix phx.server`"; these are that, and each one is
 also the only evidence for something a test asserts differently.
@@ -674,9 +676,9 @@ Every cite below was read on branch `se-ocz-signup-findings` at `f81e92a`,
 the head of the k1 -> k2 -> k3 stack, and the file paths are as of that
 commit.
 
-### R10a, the nouns, as built
+### The nouns ruling, as built
 
-R10a says a Path is a `statifier_blocks` document plus the element documents
+The nouns ruling says a Path is a `statifier_blocks` document plus the element documents
 its screens reference; a Journey is a durable run plus its datamodel; a Guide
 is the durable stepper composed with an element resolver and a response
 validator **as effect executors**. Two of the three came out as ruled. The
@@ -702,7 +704,8 @@ position does not move. The same argument applies, more weakly, to the
 resolver: `Screens.resolve/2` has to run on the way *out* to a reader, which
 is not a step the chart takes either.
 
-This does not contradict R10c so much as complete it. R10c gives the chart
+This does not contradict the validation ruling so much as complete it. That
+ruling gives the chart
 "capture and consequence", and capture is genuinely the chart's - the
 `core.on_event` capture map is what writes a screen's responses. Consequence
 is not, or not all of it: the failure consequence (re-present with findings)
@@ -712,7 +715,7 @@ What the chart owns is what happens *after* it is spoken to.
 
 So the mapping worth carrying forward is: a Guide is the durable stepper plus
 a **host-side** pair of pure functions that stand between a reader and the
-run. That is a smaller claim than R10a's and it is the one the code can
+run. That is a smaller claim than the nouns ruling's and it is the one the code can
 defend.
 
 #### The file map
@@ -725,7 +728,7 @@ defend.
 | `lib/statifier_examples_web/components/signup_elements.ex` | one function component per element type, plus `screen/1` | k1 |
 | `lib/statifier_examples/signup/screen.ex` | `myapp.screen`: the Composite, its params, its subtree, `park_block_id/1` | k2, +k3 |
 | `lib/statifier_examples/signup/path.ex` | the Path, and `validate/1` - the host-side uniqueness check | k2 |
-| `lib/statifier_examples/signup/validation.ex` | the pure check standing in for R10c's elements package | k3 |
+| `lib/statifier_examples/signup/validation.ex` | the pure check standing in for the validation ruling's elements package | k3 |
 | `lib/statifier_examples/signup/journey.ex` | the loop: `start`, `current`, `resolve`, `submit`, `payload` | k3 |
 | `lib/statifier_examples_web/live/signup_screens_live.ex` | `/signup-screens` - the renderer with no chart behind it | k1 |
 | `lib/statifier_examples_web/live/signup_journey_live.ex` | `/signup-journey` - the page over a durable run | k3 |
@@ -742,9 +745,9 @@ holds no chart internals. A page cannot reach past `Journey` into the run,
 which is why the presentation contract below is a contract rather than a
 description.
 
-### R10b, what the screen Composite could not be asked to do
+### The screen-block ruling: what the screen Composite could not be asked to do
 
-R10b asks for a screen block whose slots are "one outcome per call to action
+The screen-block ruling asks for a screen block whose slots are "one outcome per call to action
 the document declares plus `timed_out`". The package cannot express that, and
 k2 proved it three ways rather than asserting it once.
 
@@ -763,7 +766,8 @@ k2 proved it three ways rather than asserting it once.
    declares it, so an await-rooted composite surfaces it - and then has
    nowhere to hang a button handler, because the only slots admitting an
    interrupt handler are the `interrupts` of `core.group` and
-   `core.resumable_group`. The two halves of R10b's request are individually
+   `core.resumable_group`. The two halves of the screen-block
+   ruling's request are individually
    expressible and jointly are not.
 
 k3 then ran it, and the runtime half is worse than the compile-time half. The
@@ -776,18 +780,19 @@ captures `:undefined`. Those are two different states that look the same one
 level up.
 
 **The Composite is still the right first shape.** Nothing here argues for
-promoting `myapp.screen` to a native BlockType, which R10b reserves for "the
+promoting `myapp.screen` to a native BlockType, which the screen-block ruling reserves
+for "the
 pilot hits something a Composite cannot express". This is that, twice over -
 but both limits are in `derived_outcomes/2` and in the `core.*` vocabulary,
 not in the Composite mechanism, so a native block type would inherit them
 rather than fix them. The asks below are the fix.
 
-### R10c, where validation ran and what it needed
+### The validation ruling: where validation ran and what it needed
 
 `StatifierExamples.Signup.Validation` is a pure function
 (`lib/statifier_examples/signup/validation.ex:76`), called by
 `Journey.submit/3` before anything reaches the chart. It stands in for
-R10c's `riddler_elements`. Three things it needed that no document said:
+the validation ruling's `riddler_elements`. Three things it needed that no document said:
 
 1. **A named format check, invented here.** `required` is the element
    document's own boolean and it was already there. `format` was not, so
@@ -813,14 +818,14 @@ R10c's `riddler_elements`. Three things it needed that no document said:
    no test can defend. That is the honest state - the need is real and the
    evidence for the shape is not.
 
-One more, which is R10c's seam rather than its vocabulary: **a hidden button
+One more, which is the validation ruling's seam rather than its vocabulary: **a hidden button
 is not a button anyone pressed.** `submit/3` looks for the named outcome
 among the *resolved* nodes, so pressing the business plan without a seat
 count is `{:unknown_outcome, _}`. Nothing in either document says whether a
 condition on a button hides it from the reader alone or from the chart as
 well; the skeleton chose both and nothing forced the choice.
 
-### R10d and Q17, the responses layout used, and what Back did
+### The responses layout used, and what Back did
 
 **Layout: flat.** One root, `responses.<element_key>`, declared once in the
 Path document's datamodel envelope alongside `created`, which the closing
@@ -829,7 +834,8 @@ because nothing in three screens needed it, and the flat form is what makes
 k2's uniqueness check meaningful at all: a key is a datamodel path, so two
 screens claiming one key are two screens claiming one cell.
 
-**Uniqueness is a host check, and a narrower one than R10d's sentence.**
+**Uniqueness is a host check, and a narrower one than the response-keys
+ruling's sentence.**
 `Path.validate/1` (`lib/statifier_examples/signup/path.ex:102`) runs two
 checks. The first reads `Screens.response_keys/1`, which reads
 `text_question` nodes only, so what is held unique is the keys that actually
@@ -845,16 +851,16 @@ document is not a block document, the compiler never reads it, and nothing
 upstream can see two screens claiming one key.
 
 **Back navigation was not built and cannot be built on this shape.** This is
-the part of R10d the spike was meant to exercise and could not. The plan
+the part of the response-keys ruling the spike was meant to exercise and could not. The plan
 screen declares a Back button (`priv/fixtures/signup_screens.json:102-104`,
 key `plan_back`, outcome `went_back`), and because a composite answers only
-`done` (R10b above), `went_back` reaches no outcome slot and the Path has no
+`done` (the screen-block section above), `went_back` reaches no outcome slot and the Path has no
 way to tell it from `personal_chosen` or `business_chosen`, the plan
 screen's own two buttons. **Pressing Back moves the Path forward.**
 Two consequences follow, and both are findings about the ruling rather than
 about this app:
 
-- R10d's "back navigation and re-asks overwrite" is **untested here**. The
+- The response-keys ruling's "back navigation and re-asks overwrite" is **untested here**. The
   skeleton has no back navigation to test it with. A linear Path never
   returns to a screen, which is also why k3's sabotage of the renderer's
   stored-response attribute reddened nothing: no input is ever redrawn over a
@@ -895,25 +901,28 @@ branch that takes neither arm and then to confirm. A loop back to the plan
 screen itself is a navigation no core block expresses, and it is not
 decided here.
 
-So Q17's open half - flat versus namespaced, and how back navigation and
+So the open half of Riddler's responses-layout question - flat versus
+namespaced, and how back navigation and
 re-asks overwrite - gets one input from this spike and it is not the one the
 question expects: **before the layout question can be answered, a Path needs a
-way to go backwards at all.** That is R10b's outcome limit again, met from the
+way to go backwards at all.** That is the screen-block
+ruling's outcome limit again, met from the
 other side.
 
-`context` - A2's host-supplied root - does not exist in the skeleton. The
+`context` - the vocabulary ruling's host-supplied root - does not exist in the skeleton. The
 Path declares `responses` and `created` and nothing else; no value enters a
 run from the host except through a button's event payload. A Path that
 needed to read who the visitor is, or what plan the marketing page offered
-them, has nowhere to put it today. Riddler R12.5 gives this a shape: the
+them, has nowhere to put it today. Riddler's `context` ruling (the operator,
+2026-09-12) gives this a shape: the
 host supplies `context` at Journey creation and on every submit, and
 `resolve` and `submit` merge it before the step. That contract is **not yet
 implemented** here - noted for `se-ah4` to leave in place, not built.
 
-### R10e and Q13, the resolve/submit pair, and the third state
+### The resolve/submit pair, and the third state
 
 The contract, as it came out (k3's table, repeated here because it is the
-deliverable R10e asked for):
+deliverable the presentation-contract ruling asked for):
 
 | Function | Takes | Answers |
 |---|---|---|
@@ -944,20 +953,22 @@ Four properties are the contract rather than the implementation:
    offering only "here is a screen" and "the journey is over" is wrong about
    every Path that calls anything.
 
-Point 4 is also the one input this spike has for Q13's streaming half. The
+Point 4 is also the one input this spike has for the streaming half of
+Riddler's open transport question. The
 page learned the job had answered because it subscribes to the execution's
 topic and redrew on an `:execution_advanced` broadcast (spelled
 `:run_advanced` when the spike was written), with nothing clicked between the
 two frames (`se-7wt-confirm-screen.png`). A transport whose only verb is a
 request cannot express that frame; whether the answer is a subscription, a
-poll, or a contract that simply blocks is Q13's, but the state exists whether
+poll, or a contract that simply blocks is that question's, but the state exists whether
 or not the transport admits it.
 
-The spike has **no** input on Q13's other two halves: auth and tenant scoping
-never entered the picture (see Q16 below), and field-level shape is a
+The spike has **no** input on that question's other two halves: auth and
+tenant scoping never entered the picture (see the Journey-identity section
+below), and field-level shape is a
 GraphQL question this app never posed.
 
-### Q16, how a Journey was keyed before an account existed
+### How a Journey was keyed before an account existed
 
 `Journey.start/0` mints the execution id with `Durable.new_execution_id/0` -
 `16 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)`
@@ -972,13 +983,15 @@ press depends on.
 execution rename landed in `se-20j` and the cites are re-located here
 by anchor - se-1mc, 2026-09-13. The finding itself is unchanged.)
 
-Three things that gives Q16 to work with:
+Three things that gives Riddler's open Journey-identity question to work
+with:
 
 - **An unguessable id is the whole of the authorization.** Anyone holding the
   id holds the Journey and can read every response in it. For a spike over
   fictional data that is fine and it is deliberate - the id is 128 bits of
   entropy, not a counter - but it is a decision, not an absence of one, and
-  it is the decision Q16 has to either adopt or replace. Note what it costs
+  it is the decision the Journey-identity question has to either adopt or
+  replace. Note what it costs
   if adopted: the id travels in a URL, so it lands in browser history, in a
   `Referer`, and in any log that records paths.
 - **The handoff is not built.** The account is created by the *last* block of
@@ -1001,8 +1014,8 @@ Three things that gives Q16 to work with:
 
 ### What the authoring half (q2) adds to this
 
-The element-editor spike (`se-aud`, notes under
-`.claude/fleet/pending/SF040-spikes/se-aud-authoring-notes.md`) re-authored
+The element-editor spike (`se-aud`, notes in `se-aud-authoring-notes.md` in the maintainers'
+private working set) re-authored
 k1's fixture in the blocks editor over an element palette. Its headline
 matters to the asks below: the editor was not the obstacle - the per-node
 authoring cost is flat - but the `element.*` vocabulary carried only 39 of
@@ -1016,8 +1029,8 @@ the strongest evidence either of them produced.
 ### Upstream asks, with the beads that carry them
 
 These were discovered by k2, k3 and the sd spike (t1) and **filed by the
-campaign conductor** under consent clause 8, unscheduled, at P4, labelled
-`campaign-SF040` and `sf041-candidate`. Listed here by id so a reader of this
+campaign conductor**, unscheduled, at P4, labelled for this spike and as
+candidates for the next planning pass. Listed here by id so a reader of this
 document can follow each one.
 
 | Bead | Repo | Ask | From |
@@ -1059,18 +1072,20 @@ and it is what folded `se-kbq`'s stragglers in and landed them.
 These belong to the product's own decision record, not to any fleet tracker,
 so they are written here rather than filed:
 
-- **The element document format needs a validation vocabulary** (R10c). Three
+- **The element document format needs a validation vocabulary** (the validation
+  ruling). Three
   parts, all met above: the set of named `format` checks and what an unknown
   name does; the rule that checks run over resolved nodes rather than
   declared ones; and a way for a button to say it does not validate.
 - **A node needs a way to declare what pressing it records, as a literal**
-  (R10b/R10d). `capture` is path-to-path by construction, so a button cannot
+  (the screen-block and response-keys rulings). `capture` is path-to-path by construction, so a button cannot
   record its own identity - the one thing a multi-button screen most
   obviously needs. Either the element document format grows the notion or
   `capture` grows a literal arm (`sb-m6ru`); the two owners should agree
   which. Until then a Path carries an unstated host contract that nothing can
   check.
-- **The presentation contract needs a third answer** (R10e). "No screen, the
+- **The presentation contract needs a third answer** (the
+  presentation-contract ruling). "No screen, the
   run is working", as above.
 - **An element document format needs a written rule for an undecidable
   condition, and for a malformed one** (k1 findings 1 and 8). The skeleton
@@ -1081,8 +1096,8 @@ so they are written here rather than filed:
   closer to an unknown element type (which raises) than to an unanswered one.
   Two screens taking this differently is a Path that behaves differently
   depending on which renderer drew it.
-- **R10a's Guide clause should say host-side pure functions, not effect
-  executors**, for the reason in the R10a section above. This is the only ask
+- **The nouns ruling's Guide clause should say host-side pure functions, not
+  effect executors**, for the reason in the nouns section above. This is the only ask
   here that proposes changing a ruling's words rather than filling a gap in
   one.
 - **`statifier_examples` should declare `predicator` directly** when the
@@ -1096,8 +1111,8 @@ A spike that only reports what it proved is more useful than one that implies
 it proved everything. These are the gaps, each one a place where a later bead
 should not read this document as evidence:
 
-- **Back navigation, and therefore R10d's overwrite rule.** No Path here goes
-  backwards; see the R10d section.
+- **Back navigation, and therefore the response-keys ruling's overwrite
+  rule.** No Path here goes backwards; see the responses-layout section.
 - **A response redrawn into an input.** The renderer takes a stored-response
   map for exactly that and it is unobservable on a linear Path - deleting the
   attribute's value reddened nothing in either suite.
@@ -1129,8 +1144,8 @@ cure, so the four qualifications are recorded here rather than fixed, and the
 document merges with them standing. Each was re-verified against the code
 before being written down; all four are true.
 
-1. **"the Path has no way to tell it from `Continue`"** (the R10d section,
-   on the plan screen's Back button) names the wrong comparator. The plan
+1. **"the Path has no way to tell it from `Continue`"** (the responses-layout
+   section, on the plan screen's Back button) names the wrong comparator. The plan
    screen declares no `Continue`; `Continue` is `account_continue` on the
    **account** screen, a different composite. What `went_back` is
    indistinguishable from is the plan screen's own two outcomes,
@@ -1138,7 +1153,7 @@ before being written down; all four are true.
    Back moves the Path forward, because a `core.group`-rooted composite takes
    the default single `done` - is verified and stands.
 
-2. **"Six test modules ... moved with them"** (the R10a file map) is off by
+2. **"Six test modules ... moved with them"** (the nouns section's file map) is off by
    one. The stack adds **seven**: `screens_test.exs`, `screen_test.exs`,
    `path_test.exs`, `journey_test.exs` and `validation_test.exs` under
    `test/statifier_examples/signup/`, plus `signup_screens_live_test.exs` and
@@ -1147,7 +1162,7 @@ before being written down; all four are true.
    files carrying pinned enumerations were modified.
 
 3. **The q2 notes path does not resolve inside this repository.**
-   `.claude/fleet/pending/SF040-spikes/se-aud-authoring-notes.md` lives in the
+   The notes file `se-aud-authoring-notes.md` lives in the
    private working set that coordinates the campaign, which is never
    published, so a reader of this repository alone follows that path to
    nothing. The cited content checks out exactly. This is a pattern k3's
@@ -1166,7 +1181,7 @@ before being written down; all four are true.
    above, which now names both checks).
 
 One finding the review raised as blocking is not listed above because it was
-corrected before the verdict landed, in this branch's second commit: the R10a
+corrected before the verdict landed, in this branch's second commit: the nouns
 section had said a refused `submit/3` answers "without touching storage at
 all", which is false - it reads the run and the datamodel twice before it can
 refuse. It now says what is true, which is that it writes nothing and never
@@ -1186,10 +1201,11 @@ over this file shows zero removed lines, so k1, k2 and k3 are untouched; and
 the file is plain ASCII throughout and carries no employer or product
 terminology.
 
-## Note (2026-09-19): the ruling and question numbers in this document
+## Note (2026-09-19, revised 2026-09-25): the ruling and question numbers in this document
 
-Where this document cites a ruling or a question by a short code of
-letters and numbers instead of by what it says, the code is a number on a
+This document once cited rulings and questions by short codes of letters
+and numbers instead of by what they say. Each code was a number on a
 private list of decisions or open questions kept outside this repository,
-and it names nothing a public reader can follow. The codes stay as
-written; a new one is not added.
+and it named nothing a public reader could follow. On 2026-09-25 every such
+code was replaced by what the ruling or question says; a new one is not
+added.
