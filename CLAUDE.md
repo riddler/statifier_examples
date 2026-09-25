@@ -87,9 +87,8 @@ operator has adopted verbatim that names automatic merges, with every
 condition that consent names met (full gate green, CI green, firewall scan
 clean with a positive control, any named review gate passed), the conductor's
 merge executes the operator's own authorization - the consent's text is what
-may be done and nothing more. (Recorded 2026-09-01 by the operator, campaign
-025 post-wrap queue walk; extended to this repo 2026-09-02 by ruling
-RQ-026-1.)
+may be done and nothing more. (Recorded 2026-09-01 by the operator;
+extended to this repo 2026-09-02, ruled by the operator.)
 
 Widening this section is a decision for the operator to make and record here.
 An agent may draft the change; it does not adopt it.

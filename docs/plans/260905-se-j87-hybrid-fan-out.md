@@ -149,8 +149,9 @@ an app.
   The cap is runtime-only; `core.map` validates nothing about N
   (`core/map.ex:24-31`).
 - The empty fan-out is **refused** by `StatifierOban.Invoke.FanOut`
-  (`fan_out.ex:190-198`), and sb-kha0 owns the record question. Campaign
-  amendment RQ-031-2 says the example must not depend on N = 0.
+  (`fan_out.ex:190-198`), and sb-kha0 owns the record question. An
+  amendment ruled by the operator, 2026-09-05, says the example must not
+  depend on N = 0.
 - `first_error` cancels in two halves: live children through
   `StatifierPersistence.Runs.cascade_cancel/3` and unstarted ones through
   the driver's `child_canceller:` (`driver.ex:292-296`, `:913-928`), which
@@ -162,7 +163,8 @@ an app.
   predicator parses list literals (`parser.ex:1746`), so
   `['su-c01','su-c02',...]` is a legal authored literal and is how the
   example seeds its ten descriptors.
-- Campaign ruling D31-9 / decisions.md D14 bind this bead: descriptors
+- The operator's rulings of 2026-09-05 and the maintainers' boundary rule
+  bind this bead: descriptors
   never row payloads, no slices, cap runtime-only, `first_error` cancels.
   A worker who thinks a ruling is wrong reports it rather than re-deciding.
 
@@ -171,14 +173,15 @@ an app.
 - **No version bump and no release.** `statifier_examples` is an app; its
   `CLAUDE.md` authority table forbids both outright.
 - **Not deciding the empty fan-out.** N = 0 is refused upstream and sb-kha0
-  owns the record question; nothing here depends on N = 0 (RQ-031-2).
+  owns the record question; nothing here depends on N = 0 (ruled by the operator, 2026-09-05).
 - **Not building capture's authoring surface** (sb-th97). The two parent
   documents author `collect` directly.
 - **Not implementing the four deferred `core.map` fields** - `item_as`,
   `index_as`, `max_concurrency`, `params` (sb ADR-0009 d4 Note). The
   descriptor reaches the child through the starter's `params`, which is the
   seeding path the package already ships.
-- **Not honouring `max_concurrency`.** Ruling R31-11: no slices at Tier A;
+- **Not honouring `max_concurrency`.** Ruled by the operator, 2026-09-05:
+  no slices at Tier A;
   the queue's limit is the bound.
 - **Not adding a `/runs` page.** Captures go through the existing
   `/editor?doc=...&run=...` drawer, which is the app's only run surface.
@@ -669,13 +672,13 @@ of blocking here.
 ## References
 
 - Bead: `se-j87` (depends on `se-eoj`, `se-i4v`, both landed)
-- Campaign rulings: `D31-9` (cap runtime-only, child set derived, no slices,
-  `first_error` cancels), `RQ-031-2` (empty fan-out refused), `RQ-031-4`
-  (the sob seam is `ChildStarter.start_child/5`), `RQ-031-6` (this app's
-  adapter answers `supports_metadata?/1` true because its metadata queries
-  are Elixir)
-- The boundary rule: the umbrella's `docs/decisions.md` D14 (private - read,
-  never quoted into this repo)
+- Rulings by the operator, 2026-09-05: the cap is runtime-only, the child
+  set is derived, there are no slices, and `first_error` cancels; the empty
+  fan-out is refused; the sob seam is `ChildStarter.start_child/5`; this
+  app's adapter answers `supports_metadata?/1` true because its metadata
+  queries are Elixir
+- The boundary rule: the maintainers' private decision record (read, never
+  quoted into this repo)
 - `deps/statifier_blocks/lib/statifier_blocks/core/map.ex` - the block type
 - `deps/statifier_oban/lib/statifier_oban/invoke/{fan_out,child_starter,child_start_worker}.ex`
 - `deps/statifier_persistence/lib/statifier_persistence/driver.ex:635-651`,

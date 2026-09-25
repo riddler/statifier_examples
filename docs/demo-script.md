@@ -438,8 +438,8 @@ resolved:
 `core.subchart` names its child by **document id**, and a document id is
 stable across every revision of that child - so the record would otherwise
 say nothing about which revision this execution actually ran. The hash is that
-missing fact, written once at create and never rewritten (campaign-023 ruling
-R-d). Edit the wizard, start a second onboarding execution, and the two
+missing fact, written once at create and never rewritten (ruled by the
+operator, 2026-08-31). Edit the wizard, start a second onboarding execution, and the two
 executions' pins
 differ while both still say `bdoc_signup_demo`. The digits are not quoted
 here for the same reason: they are a hash of the child's bytes, and this
@@ -627,7 +627,7 @@ render and move and change nothing - worth knowing about if a fork ever drops
 it.
 
 The beat above was first walked on a running server against the real
-`card_processing` document and captured for campaign 028 as
+`card_processing` document and captured on 2026-09-04 as
 `se-hzt-card-processing-picklists-before.jpg`,
 `se-hzt-card-processing-picklist-edit-applied.jpg` and
 `se-hzt-card-processing-same-field-as-source-text.jpg`. Those captures predate
