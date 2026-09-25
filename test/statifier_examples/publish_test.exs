@@ -6,7 +6,10 @@ defmodule StatifierExamples.PublishTest do
   payload, refused at the first stage; the same registration with the read
   corrected, which publishes; and a branch's overdue-loan sweep whose
   done-data read cannot be checked without a datamodel, which publishes
-  with a warning.
+  with a warning. Beside them, a parcel dispatch whose `<send>` goes to a
+  second send processor the host registers beside the router's: it
+  publishes, because only the send-types stage judges a send type, and it
+  is refused there when the host does not register the type.
 
   The host state each document is judged against is built here the way a
   host would build it: this app's palette, the fixture's own datamodel and
@@ -18,8 +21,8 @@ defmodule StatifierExamples.PublishTest do
 
   use ExUnit.Case, async: true
 
-  alias StatifierBlocks.{Compiled, Decode, Document, Edit}
-  alias StatifierExamples.{Charts, Publish}
+  alias StatifierBlocks.{Compiled, Compiler, Decode, Document, Edit}
+  alias StatifierExamples.{Charts, Publish, TypedSendStep}
   alias StatifierExamples.Charts.Subchart
 
   # A route adapter, so the router configuration registers one route name.
@@ -77,6 +80,36 @@ defmodule StatifierExamples.PublishTest do
            "config": {"items": "branch.overdue_loans", "chart": "bdoc_loan_reminder",
                       "collect": "branch.reminders", "collect_type": "LoanReminder",
                       "on": "all"}}
+        ]
+      }
+    }
+  }
+  """
+
+  # A second send processor the host registers beside the router's. It is
+  # only registered, never run: check/2 starts nothing.
+  defmodule CourierSends do
+    @moduledoc false
+  end
+
+  @courier_type "myapp:courier"
+
+  # A parcel leaving the depot tells the courier through the host's second
+  # send processor, not through the router.
+  @courier_dispatch """
+  {
+    "schema_version": 1,
+    "id": "bdoc_parcel_courier_dispatch",
+    "revision": 1,
+    "metadata": {"name": "Parcel courier dispatch", "domain": "parcel_delivery"},
+    "root": {
+      "type": "core.sequence",
+      "id": "blk_pcd_root",
+      "type_version": 1,
+      "slots": {
+        "body": [
+          {"type": "myapp.typed_send", "id": "blk_pcd_tell_courier", "type_version": 1,
+           "config": {"type": "myapp:courier", "target": "van_7", "event": "parcel.loaded"}}
         ]
       }
     }
@@ -190,6 +223,54 @@ defmodule StatifierExamples.PublishTest do
       assert %{check: :graph, anchor: {:config, "blk_bs_remind", "collect_type"}} = warning
       assert warning.message =~ ~s("LoanReminder")
     end
+  end
+
+  describe "a send of a type the host registers beside the router's own" do
+    # Sabotage: put report.unsupported_types back into contracts_stage/3 as
+    # errors; this went red, refused at the contracts stage. Reverted from a
+    # copy.
+    test "publishes: the router configuration's own snapshot does not judge it",
+         %{config: config} do
+      document = decode!(@courier_dispatch)
+      host = courier_host(config, %{@courier_type => CourierSends})
+
+      # The premise: the router configuration's snapshot holds its own send
+      # type alone, so the router's report lists this send as unsupported.
+      {:ok, %Compiled{scxml: scxml}} =
+        Compiler.compile(document, host.palette, datamodel: nil, declare: [])
+
+      {:ok, machine} = Statifier.compile(scxml)
+      report = StatifierRouter.Contracts.check(config, machine, host.accepts_lookup)
+
+      assert [%{type: @courier_type}] = report.unsupported_types
+
+      assert {:ok, %Compiled{}, [], []} = Publish.check(document, host)
+    end
+
+    # Sabotage: dropped send_types_stage/2 from check/2; this went red, the
+    # document published. Reverted from a copy.
+    test "is refused at the send_types stage when the host does not register it",
+         %{config: config} do
+      document = decode!(@courier_dispatch)
+
+      assert {:refused, %{stage: :send_types, findings: [finding]}} =
+               Publish.check(document, courier_host(config, %{}))
+
+      assert %{check: :unsupported_send_type, anchor: {:scxml, _location}} = finding
+      assert finding.message =~ ~s("#{@courier_type}")
+    end
+  end
+
+  # The library host with the typed send step in its palette and
+  # `extra_types` registered beside the router's own send type.
+  defp courier_host(config, extra_types) do
+    host = library_host(config)
+
+    %{
+      host
+      | palette: TypedSendStep.palette(),
+        send_types: Map.merge(host.send_types, extra_types)
+    }
   end
 
   # The host state for a shipped fixture: its own datamodel and roots, and

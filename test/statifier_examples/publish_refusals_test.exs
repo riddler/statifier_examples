@@ -193,8 +193,8 @@ defmodule StatifierExamples.PublishRefusalsTest do
 
   describe "a send whose type no processor is registered for" do
     # Sabotage: dropped send_types_stage/2 from Publish.check/2; this went
-    # red, the chart refused at the contracts stage instead. Reverted from a
-    # copy.
+    # red, the chart published: the contracts stage does not judge send
+    # types. Reverted from a copy.
     test "is refused at the send_types stage" do
       assert_refused("unregistered_send_type", :send_types)
     end
