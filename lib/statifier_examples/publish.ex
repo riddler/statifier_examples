@@ -33,7 +33,7 @@ defmodule StatifierExamples.Publish do
        registered.
     5. `:contracts` - `StatifierRouter.Contracts.check/3`: an event a
        `<send>` or a binding names that its receiving document does not
-       accept.
+       accept. Its send types are not judged again here; see below.
     6. `:accepts` - `Statifier.Chart.check_accepts/2`, over the compiled
        machine and the document's own `accepts` list.
     7. `:graph` - `StatifierBlocks.Graph.check/2`: every child document the
@@ -56,8 +56,16 @@ defmodule StatifierExamples.Publish do
       the editor's advisory, changes no verdict and is not carried;
     * every entry of `unsupported_sends/2`, of `unregistered/2`'s
       `:unregistered` list and of `Contracts.check/3`'s
-      `:unsupported_types`, `:unregistered_routes`, `:undeclared_events`
-      and `:undeclared_binding_events` lists is an error;
+      `:unregistered_routes`, `:undeclared_events` and
+      `:undeclared_binding_events` lists is an error;
+    * `Contracts.check/3`'s `:unsupported_types` list is not read. It
+      judges each `<send>` type against the send-type snapshot on the
+      router configuration's `:persistence_options`, which
+      `StatifierRouter.Config.new/1` builds from the router's own
+      `:send_type` alone, while the `:send_types` stage has already judged
+      every `<send>` type against the host's whole registry, `:send_types`.
+      Reading it would refuse a send to a second processor the host
+      registers;
     * every `:unchecked` entry of `unregistered/2` and of
       `Contracts.check/3` is a warning: a `<send>` whose type, target,
       event or receiving document is an expression cannot be judged before
@@ -206,8 +214,9 @@ defmodule StatifierExamples.Publish do
   defp contracts_stage(%Config{} = config, machine, lookup) do
     report = Contracts.check(config, machine, lookup)
 
-    Enum.map(report.unsupported_types, &{:error, unsupported_send(&1)})
-    |> Enum.concat(Enum.map(report.unregistered_routes, &{:error, unregistered_route(&1)}))
+    # `report.unsupported_types` is left unread: the send_types stage
+    # judged every send type against the host's registry; see the moduledoc.
+    Enum.map(report.unregistered_routes, &{:error, unregistered_route(&1)})
     |> Enum.concat(Enum.map(report.undeclared_events, &{:error, undeclared_event(&1)}))
     |> Enum.concat(Enum.map(report.undeclared_binding_events, &{:error, undeclared_binding(&1)}))
     |> Enum.concat(Enum.map(report.unchecked, &{:warning, unchecked(&1)}))
