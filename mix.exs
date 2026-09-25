@@ -1111,13 +1111,6 @@ defmodule StatifierExamples.MixProject do
   # writing `:undefined` into it (sb-ADR-0002's capture Note, N2), which
   # is what `StatifierExamples.Signup.JourneyTest` asserts by absence.
   #
-  # The ruling and question numbers in this file (2026-09-19). Where a
-  # comment here cites a ruling or a question by a short code of letters
-  # and numbers instead of by what it says, the code is a number on a
-  # private list of decisions or open questions kept outside this
-  # repository, and it names nothing a public reader can follow. The codes
-  # stay as written.
-  #
   # Ruled by the operator, 2026-09-14: the floor moves to `~> 0.30.0`, which is
   # PUBLISHED, so this arm stays a Hex requirement and takes no git pin and
   # no ledger entry. The `.0` form is the one the package's own README

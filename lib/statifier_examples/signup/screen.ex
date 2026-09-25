@@ -43,8 +43,7 @@ defmodule StatifierExamples.Signup.Screen do
   into the handler's - `responses.plan` on the two plan buttons, which is what
   the Path branches on.
 
-  ## `writes` records which button was pressed (ruled by the operator,
-  2026-09-13)
+  ## `writes` records which button was pressed (ruled by the operator, 2026-09-13)
 
   A `capture` value is told apart by its **shape**, and that is the package's
   rule rather than this app's: `StatifierBlocks.Core.OnEvent` (sb ADR-0002's
