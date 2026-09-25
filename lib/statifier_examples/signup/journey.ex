@@ -66,8 +66,7 @@ defmodule StatifierExamples.Signup.Journey do
   Neither document states it and neither can check it;
   `docs/spikes/signup-skeleton-spike.md` carries it as the ask.
 
-  ## The button's own literal map, and why it is gone (ruled by the operator,
-  2026-09-18)
+  ## The button's own literal map, and why it is gone (ruled by the operator, 2026-09-18)
 
   There was a second half. The function now called `responses/1` merged the
   firing button's own declared literal map over the typed responses, which
