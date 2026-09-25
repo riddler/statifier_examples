@@ -31,7 +31,7 @@ defmodule StatifierExamples.FirstWorkflowTest do
     assert {:ok, lines} = FirstWorkflow.run(execution_id: execution_id)
 
     assert [
-             "first workflow on statifier 2.8." <> _pins,
+             "first workflow on statifier 2.9." <> _pins,
              "expressible  bdoc_hold_pickup against the host palette",
              "published    every publish-time check passed, 0 warning(s)",
              "registered   chart sha256:" <> _hash,

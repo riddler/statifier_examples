@@ -118,7 +118,12 @@ defmodule StatifierExamples.MixProject do
       # `Statifier.Chart.diff/3` nor `Statifier.Position.compatible_at?/3`,
       # and no chart here spells the slash-less SCXML invoke type 2.8.1
       # starts a child for.
-      {:statifier, "~> 2.8"},
+      #
+      # 2026-09-25: the requirement moves to the 2.9 line with se-1pdf, and
+      # 2.9.0 is REQUIRED: `statifier_router` 0.6.0, below, states
+      # `{:statifier, "~> 2.9"}`. 2.9.0 adds `Statifier.Publish.findings/2`
+      # and `MachineState.last_selection`, and this app reads neither.
+      {:statifier, "~> 2.9"},
 
       # A note on every `statifier_persistence` name below, added with
       # se-20j. These comments record why each floor moved, release by
@@ -349,7 +354,16 @@ defmodule StatifierExamples.MixProject do
       # and exports neither optional pruning callback, so
       # `StatifierPersistence.Retention.prune/3` answers
       # `{:error, :execution_pruning_unsupported}` here.
-      {:statifier_persistence, "~> 0.17"},
+      #
+      # 2026-09-25: the requirement moves to the 0.19 line with se-1pdf, and
+      # 0.18.0 is REQUIRED: `statifier_router` 0.6.0, below, states
+      # `{:statifier_persistence, "~> 0.18"}`; 0.19.0 is the published
+      # release on that line. Neither adds a migration. 0.18.0's `migrate/4`
+      # refusal of a linked execution and 0.19.0's `prune_executions/4`
+      # reach nothing here: this app migrates no execution and its adapter
+      # exports no pruning callback, so `prune/3` still answers
+      # `{:error, :execution_pruning_unsupported}`.
+      {:statifier_persistence, "~> 0.19"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -505,7 +519,7 @@ defmodule StatifierExamples.MixProject do
       # `phoenix_live_view` is optional there and supplied by this app above.
       statifier_blocks_dep(),
 
-      # The router, for its two pure publish-time checks and nothing else.
+      # The router, first for its two pure publish-time checks.
       # `StatifierExamples.Publish.check/2` calls
       # `StatifierRouter.Routes.unregistered/2` and
       # `StatifierRouter.Contracts.check/3` over the host's own route
@@ -522,7 +536,19 @@ defmodule StatifierExamples.MixProject do
       # it. 0.4.1 reports a delayed `<send>` to the execution target as a
       # `Contracts.check/3` finding with reason `:delay`, which
       # `StatifierExamples.Publish` surfaces as one more contracts finding.
-      {:statifier_router, "~> 0.4.1"},
+      #
+      # 2026-09-25: the requirement moves to `~> 0.6.0` with se-1pdf, and
+      # this app now routes through the package as well:
+      # `StatifierExamples.RoutedWorkflow` configures one binding, a
+      # resolver, one route and the two reapers, and runs the four router
+      # tables with a `depot_id` column of its own
+      # (`priv/repo/migrations/20260925120001_add_statifier_router.exs`).
+      # 0.6.0 is REQUIRED: that recipe passes `:on_create` and `:on_step`,
+      # and the migration `:leading_columns`, none of which 0.5 has. 0.5.0's
+      # `:unmatched_event` drop and the `reason` on every
+      # `:unregistered_routes` entry reach `StatifierExamples.Publish`
+      # through a `%{route: _, location: _}` match that still holds.
+      {:statifier_router, "~> 0.6.0"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
