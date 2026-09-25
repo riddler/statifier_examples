@@ -7,13 +7,14 @@ defmodule StatifierExamples.Documents do
   ## Why it exists at all
 
   `se-1cl` puts a second view - `StatifierExamplesWeb.PlanLive` - over the
-  same documents `StatifierExamplesWeb.EditorLive` shows, which is D16's
-  reference pattern: a host-native view over the package's public APIs
-  rather than a second layout mode inside the package. The two views are
-  two LiveViews, so they are two processes, and until this module existed
-  each held its own `documents` map in its own assigns. An edit made in one
-  was invisible to the other, and "Open in editor" opened the document as
-  it was on disk rather than the one just edited.
+  same documents `StatifierExamplesWeb.EditorLive` shows, which is the
+  reference pattern the operator ruled on 2026-09-06: a host-native view over
+  the package's public APIs rather than a second layout mode inside the
+  package. The two views are two LiveViews, so they are two processes, and
+  until this module existed each held its own `documents` map in its own
+  assigns. An edit made in one was invisible to the other, and "Open in
+  editor" opened the document as it was on disk rather than the one just
+  edited.
 
   A document is not a property of a socket, so it does not belong in one.
   It is a property of the app, and this is the app's store.
@@ -38,17 +39,6 @@ defmodule StatifierExamples.Documents do
 
   `reset/0` is the test seam, and it is here rather than in the test tree
   because the state it clears is this module's.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new code of the shapes it matches, but the shape this module uses -
-  a bare letter and number with no ruling or question word beside it -
-  is not one of them, so here only a reviewer stops a new one.
   """
 
   use Agent

@@ -11,7 +11,7 @@ defmodule StatifierExamples.CardAuth.LegacyCheck do
 
   ## It used to be the type nobody registered
 
-  Through campaign 032 this type was deliberately absent from
+  At first this type was deliberately absent from
   `StatifierExamples.CardAuth.block_types/0` while `card_processing` named
   it at depth 7, so that the editor's unavailable-block chrome and the
   compiler's `unknown_block_type` finding were exercised on a document a

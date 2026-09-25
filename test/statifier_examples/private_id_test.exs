@@ -2,11 +2,10 @@ defmodule StatifierExamples.PrivateIdTest do
   @moduledoc """
   No file under `lib/` or `test/` gains a private ruling or question id.
 
-  A private ruling or question id is a number on a list of decisions or
-  open questions kept outside this repository, so a public reader cannot
-  follow it. The ids already in `lib/` and `test/` stay where they are
-  (each file that carries one says so in a dated note); a new one is
-  refused, and the substance is written instead.
+  A private ruling or question id is a number on a list of decisions or open
+  questions kept outside this repository, so a public reader cannot follow it.
+  Any id still in `lib/` or `test/` is counted in the baseline below; a new
+  one is refused, and the substance is written instead.
 
   ## Mechanism: a committed baseline, not a diff
 

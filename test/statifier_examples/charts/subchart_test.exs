@@ -19,15 +19,6 @@ defmodule StatifierExamples.Charts.SubchartTest do
   in `session_opts/0` below - see it for why the engine defaults it off.
   The pair of tests around `@child_first_state` and `@child_verify_group`
   is that difference, driven both ways round.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   # Not async: a session registers under the application's own
@@ -259,7 +250,7 @@ defmodule StatifierExamples.Charts.SubchartTest do
     assert outcome_reported(pid) == @child_outcome
   end
 
-  # `unknown_document`, the first of campaign-023 ruling R-b's three
+  # `unknown_document`, the first of the operator-ruled three
   # refusal reasons, read from the parent rather than from the handler: the
   # package raises `error.communication.invoke.<block id>` and the block's
   # own compiled transition routes it to the `on_error` slot. So what a
@@ -272,7 +263,7 @@ defmodule StatifierExamples.Charts.SubchartTest do
   # is the half a host actually routes on.
   #
   # `attempts` is deliberately absent from the payload: a refusal made no
-  # attempt (`StatifierBlocks.Runtime.Subchart`, campaign-023 ruling R-b).
+  # attempt (`StatifierBlocks.Runtime.Subchart`, ruled by the operator).
   # Asserting the whole data map is what pins that absence.
   #
   # Sabotage: made `resolve_chart/2` fall back to the first fixture for an

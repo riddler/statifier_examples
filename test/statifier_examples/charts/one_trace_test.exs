@@ -1,6 +1,6 @@
 defmodule StatifierExamples.Charts.OneTraceTest do
   @moduledoc """
-  The campaign-026 capstone proof (`se-opg`): the whole durable arc -
+  The capstone proof (`se-opg`): the whole durable arc -
   parent session, durable step, `start_child`, the child's own execution, a
   timer firing, and the child's completion re-entering the parent -
   observable as **one navigable trace graph**.
@@ -22,7 +22,7 @@ defmodule StatifierExamples.Charts.OneTraceTest do
     * a fired timer is linked to the trace that armed it, never parented,
       for the same reason across a longer gap (sob-ADR-0006 decision 7).
 
-  Ruling RQ-026-4 re-worded the criterion to what the design does
+  An operator ruling re-worded the criterion to what the design does
   produce: N roots joined by shared correlation ids and by link edges,
   with the child-start, timer-fire and completion re-entry edges each
   visible. That is what this module asserts.
@@ -37,15 +37,6 @@ defmodule StatifierExamples.Charts.OneTraceTest do
   exports synchronously to this process (`config/test.exs`) - driven
   through the same `StatifierExamples.Charts.Durable` entry points the
   page uses. Nothing here stubs a span or hand-builds a graph.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   # Not async, for `StatifierExamples.Charts.DurableTest`'s reasons - the

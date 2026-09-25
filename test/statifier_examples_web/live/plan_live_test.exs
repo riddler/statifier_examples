@@ -4,14 +4,6 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   # store in `setup` - two async cases clear it under each other mid-test.
   use StatifierExamplesWeb.ConnCase
 
-  # The ruling and question numbers in this file (2026-09-19). Where a
-  # comment here cites a ruling or a question by a short code of letters
-  # and numbers instead of by what it says, the code is a number on a
-  # private list of decisions or open questions kept outside this
-  # repository, and it names nothing a public reader can follow. The codes
-  # stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  # a new one, so a new citation writes the substance instead.
-
   import Phoenix.LiveViewTest
 
   alias StatifierBlocks.Block
@@ -352,11 +344,12 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   end
 
   describe "a composite as a row" do
-    # `RQ-SF037-3` at the page: a composite exposes no slot, so it is ONE
-    # row - the declaration's sentence with this block's params in it - and
-    # the arrangement `subtree/1` describes is drawn nowhere. The expanded
-    # ids are asked of `Composite.expand/2` rather than written down, so an
-    # expansion that reshaped is still refuted by the same case.
+    # The no-slot ruling (2026-09-07) at the page: a composite exposes no
+    # slot, so it is ONE row - the declaration's sentence with this block's
+    # params in it - and the arrangement `subtree/1` describes is drawn
+    # nowhere. The expanded ids are asked of `Composite.expand/2` rather than
+    # written down, so an expansion that reshaped is still refuted by the same
+    # case.
     #
     # This goes through the page rather than only through
     # `StatifierExamples.ViewModelPinTest` because the row is what an author
@@ -390,11 +383,12 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       end
     end
 
-    # `RQ-SF038-5` at the page, and the half the count above cannot see: a
-    # composite that declares a pass-through slot draws as ONE row with the
-    # author's blocks as rows BENEATH it - one `data-depth` deeper - rather
-    # than as siblings, and the block the author placed carries its own id and
-    # its own sentence exactly as it would have anywhere else in the document.
+    # The pass-through ruling (2026-09-07) at the page, and the half the count
+    # above cannot see: a composite that declares a pass-through slot draws as
+    # ONE row with the author's blocks as rows BENEATH it - one `data-depth`
+    # deeper - rather than as siblings, and the block the author placed
+    # carries its own id and its own sentence exactly as it would have
+    # anywhere else in the document.
     #
     # This goes through the page rather than only through
     # `StatifierExamples.ViewModelPinTest` for the reason the case above gives:

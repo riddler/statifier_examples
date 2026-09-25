@@ -3,9 +3,10 @@ defmodule StatifierExamples.Signup.Screens do
   The signup wizard's **element documents**: what a screen shows, as opposed
   to what the chart does.
 
-  A Path is a `statifier_blocks` document plus one element document per
-  screen (Riddler R10a). `priv/fixtures/signup_wizard.json` is this domain's
-  block document and says when a screen is reached; this module reads
+  A Path is a `statifier_blocks` document plus one element document per screen
+  (ruled by the operator for Riddler, 2026-09-12).
+  `priv/fixtures/signup_wizard.json` is this domain's block document and says
+  when a screen is reached; this module reads
   `priv/fixtures/signup_screens.json`, which says what is on it. The two are
   deliberately separate files: a screen gains a paragraph without the chart's
   content hash - and therefore its chart identity - moving.
@@ -22,12 +23,13 @@ defmodule StatifierExamples.Signup.Screens do
   | `text_question` | a labelled text input | `label`, `placeholder`, `required` |
   | `button` | a button that ends the screen | `label`, `outcome` |
 
-  Every node carries a `key`. For a `text_question` the key is also where
-  the response lives: responses are keyed by element key, `responses.<key>`
-  (Riddler R10d), so the document never has to say a second time where a
-  question writes to. For the other three types the key is an identifier and
-  nothing more, which is one field carrying two meanings - a finding this
-  skeleton records rather than fixes (`docs/spikes/SF040-signup-skeleton.md`).
+  Every node carries a `key`. For a `text_question` the key is also where the
+  response lives: responses are keyed by element key, `responses.<key>` (ruled
+  by the operator for Riddler, 2026-09-12), so the document never has to say a
+  second time where a question writes to. For the other three types the key is
+  an identifier and nothing more, which is one field carrying two meanings - a
+  finding this skeleton records rather than fixes
+  (`docs/spikes/signup-skeleton-spike.md`).
 
   ## Resolving a screen
 
@@ -43,24 +45,15 @@ defmodule StatifierExamples.Signup.Screens do
       datamodel is empty. A node with no condition is always kept.
 
     * **Text slots.** A `heading` or `text` node's text may hold
-      `{{ responses.first_name }}`. `fill_slots/2` is the two-line stand-in for
-      the templating subset: one regex, one lookup. It is **not** a Liquid
+      `{{ responses.first_name }}`. `fill_slots/2` is the two-line stand-in
+      for the templating subset: one regex, one lookup. It is **not** a Liquid
       implementation and this app does not depend on one - the subset is
-      Riddler R9's to define, and a library added here would quietly become
-      the definition.
+      Riddler's to define (ruled by the operator, 2026-09-07), and a library
+      added here would quietly become the definition.
 
   A slot whose path the datamodel does not hold renders as the empty string.
   A half-written sentence is a visible bug; a raised exception on a screen
   whose questions have not been answered yet is a broken app.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   alias StatifierExamples.Signup.Screens
@@ -174,7 +167,8 @@ defmodule StatifierExamples.Signup.Screens do
 
   @doc """
   The element keys `screen`'s questions write responses under, in document
-  order. `responses.<key>` is where each one lands (Riddler R10d).
+  order. `responses.<key>` is where each one lands (ruled by the operator for
+  Riddler, 2026-09-12).
   """
   @spec response_keys(screen()) :: [String.t()]
   def response_keys(%{nodes: nodes}) do

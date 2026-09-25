@@ -1,14 +1,14 @@
 defmodule StatifierExamples.Signup.Path do
   @moduledoc """
   A **Path**: one block document, plus the element document screens its
-  `myapp.screen` blocks name (Riddler R10a).
+  `myapp.screen` blocks name (ruled by the operator for Riddler, 2026-09-12).
 
   The two halves are separate files on purpose
   (`StatifierExamples.Signup.Screens` says why), and separate files can
   disagree. This module is the check that they do not, and it exists
   because one of the disagreements is silent.
 
-  ## Response keys are unique across a Path (R10d)
+  ## Response keys are unique across a Path
 
   A response lands at `responses.<element_key>`. The key is therefore not a
   per-screen identifier but a **Path-wide name**, and two screens on the
@@ -24,10 +24,11 @@ defmodule StatifierExamples.Signup.Path do
 
   **Response keys, not every element key.** The read is
   `StatifierExamples.Signup.Screens.response_keys/1`, which is `text_question`
-  nodes and nothing else, so what this holds unique is the keys that carry
-  a response - hence `:duplicate_response_key` rather than a tag claiming the
-  whole of R10d. Two screens sharing a `heading` or `button` key are not
-  reported. That is a gap and not a decision; the spike document records it.
+  nodes and nothing else, so what this holds unique is the keys that carry a
+  response - hence `:duplicate_response_key` rather than a tag claiming the
+  whole of the response-key rule. Two screens sharing a `heading` or `button`
+  key are not reported. That is a gap and not a decision; the spike document
+  records it.
 
   ## Outcome names are unique across a Path
 
@@ -76,15 +77,6 @@ defmodule StatifierExamples.Signup.Path do
   than folded into either uniqueness rule, and the back-edge drop never
   spends one: a block in an `on_` slot naming an undeclared screen is
   reported however many earlier blocks named the same key.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   alias StatifierBlocks.{Block, Document}

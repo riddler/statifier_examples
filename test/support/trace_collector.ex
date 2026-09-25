@@ -69,7 +69,7 @@ defmodule StatifierExamples.TraceCollector do
 
   @doc """
   The spans reachable from the spans `from` selects, by parent edges, link
-  edges, and shared correlation ids - the campaign-026 proof's
+  edges, and shared correlation ids - the capstone proof's
   navigability claim, made checkable.
 
   Reachability is deliberately over the undirected graph. A link points

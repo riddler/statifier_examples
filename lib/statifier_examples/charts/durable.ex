@@ -137,15 +137,6 @@ defmodule StatifierExamples.Charts.Durable do
   anything runs. `StatifierExamples.Charts.ExecutionLock`'s moduledoc has the
   reasoning; this module is the caller that would otherwise get the
   refusal.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   alias Statifier.{Event, Machine}
@@ -178,7 +169,7 @@ defmodule StatifierExamples.Charts.Durable do
 
   # The execution-record metadata key carrying the host-provenance pin: which
   # child chart each `core.subchart` in this execution's document resolved to
-  # when the execution was created (campaign-023 ruling R-d). See
+  # when the execution was created (ruled by the operator). See
   # `StatifierExamples.Charts.Subchart.identities/1`, which builds it.
   @subcharts_key "subcharts"
 
@@ -241,8 +232,8 @@ defmodule StatifierExamples.Charts.Durable do
 
   A `core.subchart` names its child by **document id**, which is stable
   across every revision of that child, so the execution record would otherwise
-  say nothing about which revision this execution actually ran. Campaign-023
-  ruling R-d puts it in the metadata at create: one content hash per
+  say nothing about which revision this execution actually ran. An operator
+  ruling puts it in the metadata at create: one content hash per
   document the chart names as a child, taken over the child exactly as the
   handler compiles it (`StatifierExamples.Charts.Subchart.identities/1`).
 
@@ -518,7 +509,7 @@ defmodule StatifierExamples.Charts.Durable do
 
   Nothing is coerced or filtered on the way through - the map the caller
   hands over is the map the chart reads - because deciding what belongs in
-  it is exactly the host contract `docs/spikes/SF040-signup-skeleton.md`
+  it is exactly the host contract `docs/spikes/signup-skeleton-spike.md`
   records as unstated in both documents.
 
   ## A refused send says so, rather than reading like a drive
@@ -1038,7 +1029,7 @@ defmodule StatifierExamples.Charts.Durable do
   # The two facts a created execution records about the chart it is an execution of:
   # which shipped fixture it came from, for a cold node rebuilding it, and
   # which child charts its subcharts resolved to, for a reader asking
-  # afterwards what actually ran (campaign-023 ruling R-d).
+  # afterwards what actually ran (ruled by the operator).
   @spec metadata(String.t() | nil, Document.t()) :: %{optional(String.t()) => term()}
   defp metadata(fixture_key, document) do
     %{}

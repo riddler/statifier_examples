@@ -34,15 +34,6 @@ defmodule StatifierExamples.CollapseWalkTest do
   carrying the author's own `"id_suffix"`, which is the twin proper.
 
   A pure test: nothing here names LiveView, so it compiles and runs headless.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   use ExUnit.Case, async: true
@@ -90,8 +81,9 @@ defmodule StatifierExamples.CollapseWalkTest do
       refute Map.has_key?(declaration, "sentence")
       refute Map.has_key?(declaration, "palette_entry")
 
-      # No slot, so no pass-through slot. `RQ-SF037-3`: this composite has
-      # none, and `20E` proposes one only for a slot left unfilled.
+      # No slot, so no pass-through slot. As ruled (2026-09-07), this
+      # composite has none, and `20E` proposes one only for a slot left
+      # unfilled.
       refute Map.has_key?(declaration, "slots")
     end
 

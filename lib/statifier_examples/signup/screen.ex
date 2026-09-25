@@ -5,8 +5,9 @@ defmodule StatifierExamples.Signup.Screen do
 
   A **composite** - `use StatifierBlocks.Composite`, params plus a pure
   `subtree/1` (sb ADR-0002 decision 5's amendment of 2026-09-07) - and the
-  block half of a Path (Riddler R10a). `StatifierExamples.Signup.Screens`
-  is the element half: it says what is *on* a screen. This says what
+  block half of a Path (ruled by the operator for Riddler, 2026-09-12).
+  `StatifierExamples.Signup.Screens` is the element half: it says what is *on*
+  a screen. This says what
   *happens* at one.
 
   ## The arrangement it stands for
@@ -31,17 +32,19 @@ defmodule StatifierExamples.Signup.Screen do
 
   ## Where a response lands
 
-  `responses.<element_key>` (Riddler R10d), written by the firing handler's
-  `capture` map - the key is the destination and the value is the path
-  inside `_event.data` (`StatifierBlocks.Core.OnEvent`'s "The optional
-  `capture` map"). So a screen's `text_question` keyed `first_name` writes
-  `responses.first_name`, and the document never says so twice.
+  `responses.<element_key>` (ruled by the operator for Riddler, 2026-09-12),
+  written by the firing handler's `capture` map - the key is the destination
+  and the value is the path inside `_event.data`
+  (`StatifierBlocks.Core.OnEvent`'s "The optional `capture` map"). So a
+  screen's `text_question` keyed `first_name` writes `responses.first_name`,
+  and the document never says so twice.
 
   A button may also declare `writes`, a `capture` map of its own, merged
   into the handler's - `responses.plan` on the two plan buttons, which is what
   the Path branches on.
 
-  ## `writes` records which button was pressed (2026-09-13, RQ-RF046-4)
+  ## `writes` records which button was pressed (ruled by the operator,
+  2026-09-13)
 
   A `capture` value is told apart by its **shape**, and that is the package's
   rule rather than this app's: `StatifierBlocks.Core.OnEvent` (sb ADR-0002's
@@ -72,7 +75,7 @@ defmodule StatifierExamples.Signup.Screen do
   to the declaration it was ever about. The literal form closes the contract
   for these two buttons: no event the host sends has to carry a `plan` field
   any more, and the plan buttons declare no `payload`.
-  `docs/spikes/SF040-signup-skeleton.md` carries the finding and this answer
+  `docs/spikes/signup-skeleton-spike.md` carries the finding and this answer
   to it.
 
   ## The park, and what it costs
@@ -139,17 +142,8 @@ defmodule StatifierExamples.Signup.Screen do
   whole type. They are confined here to that version. Two parts still hold:
   a declaration held as `StatifierBlocks.Composite.Data` has no
   per-instance spelling, and an execution still has no real give-up.
-  `docs/spikes/SF040-signup-skeleton.md` carries the finding and this answer
+  `docs/spikes/signup-skeleton-spike.md` carries the finding and this answer
   to it.
-
-  ## The ruling and question numbers in this module (2026-09-19)
-
-  Where this module cites a ruling or a question by a short code of
-  letters and numbers instead of by what it says, the code is a number
-  on a private list of decisions or open questions kept outside this
-  repository, and it names nothing a public reader can follow. The codes
-  stay as written. `test/statifier_examples/private_id_test.exs` refuses
-  a new one, so a new citation writes the substance instead.
   """
 
   use StatifierBlocks.Composite,

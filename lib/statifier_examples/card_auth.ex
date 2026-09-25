@@ -75,7 +75,7 @@ defmodule StatifierExamples.CardAuth do
 
   ## Every type the documents name is registered here
 
-  Through campaign 032 `myapp.legacy_check` was left out on purpose, so
+  At first `myapp.legacy_check` was left out on purpose, so
   that ADR-0005 decision 12's case - the block whose type does not
   resolve - was exercised at depth 7 of `card_processing`. It is
   registered as of 2026-09-06 (se-bv9): the compiler reports findings
