@@ -10,7 +10,7 @@
   "datamodel": [
     {
       "id": "responses",
-      "description": "What the screens collected, keyed by element key (Riddler R10d). Each myapp.screen writes responses.<element_key> from the firing button's capture map, and the plan buttons additionally record responses.plan."
+      "description": "What the screens collected, keyed by element key (a Riddler convention). Each myapp.screen writes responses.<element_key> from the firing button's capture map, and the plan buttons additionally record responses.plan."
     },
     {
       "id": "created",
