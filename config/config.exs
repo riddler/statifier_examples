@@ -37,11 +37,29 @@ config :statifier_examples, StatifierExamples.Repo,
 # and can pile up. Sharing one queue would let a backlog of slow calls
 # delay every reminder behind it, and it would make a paused or drained
 # queue mean two things at once during an incident (se-d74).
+#
+# The routed first-workflow recipe adds two queues of its own and the
+# cron entries that schedule `statifier_router`'s two reapers, which the
+# package leaves to the host: `parcel_notices` carries the hand-off its
+# one route makes, and `router_maintenance` the reapers. The recipe
+# checks that both reapers are on this crontab.
 config :statifier_examples, Oban,
   repo: StatifierExamples.Repo,
   engine: Oban.Engines.Lite,
   notifier: Oban.Notifiers.PG,
-  queues: [statifier_timers: 5, statifier_invocations: 5]
+  queues: [
+    statifier_timers: 5,
+    statifier_invocations: 5,
+    parcel_notices: 1,
+    router_maintenance: 1
+  ],
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"@hourly", StatifierExamples.RoutedWorkflow.DedupeReaper},
+       {"@hourly", StatifierExamples.RoutedWorkflow.AddressReaper}
+     ]}
+  ]
 
 # How long an unverified signup waits before the wizard nudges it.
 #

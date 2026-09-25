@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_parcel_route",
+  "revision": 1,
+  "metadata": {
+    "name": "Parcel route",
+    "description": "One parcel's way from a depot to a doorstep: the depot scans it out, then the courier scans it at the door. The routed first-workflow guide runs it end to end, every scan arriving through the router.",
+    "domain": "parcel_delivery"
+  },
+  "accepts": [
+    "parcel.scanned"
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_pr_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.await",
+          "id": "blk_pr_depot_scan",
+          "type_version": 1,
+          "config": {
+            "event": "parcel.scanned"
+          }
+        },
+        {
+          "type": "core.await",
+          "id": "blk_pr_doorstep_scan",
+          "type_version": 1,
+          "config": {
+            "event": "parcel.scanned"
+          }
+        }
+      ]
+    }
+  }
+}
