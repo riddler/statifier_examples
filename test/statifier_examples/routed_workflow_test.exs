@@ -28,7 +28,10 @@ defmodule StatifierExamples.RoutedWorkflowTest do
   # Sabotage: dropped `on_complete:` from `RoutedWorkflow.config/0`; the
   # doorstep scan finished the execution with no notice queued, and this
   # went red with the recipe naming the `completed` step. Reverted from a
-  # copy.
+  # copy. Routing one more late scan, or expecting the ledger in another
+  # order, went red at `finished`; deleting the address row before the
+  # reap, or expecting two dedupe rows, went red at `reaped`. Each
+  # reverted from a copy.
   test "runs the whole recipe, and every scan reaches the parcel's one execution" do
     assert {:ok, lines} = RoutedWorkflow.run(parcel_id: "parcel-test")
 

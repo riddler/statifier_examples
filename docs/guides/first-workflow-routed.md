@@ -326,7 +326,9 @@ Each of these is in `statifier_router`'s README and not needed here:
 - **Its own execution ids.** The router mints each new execution id; a host
   that names its executions gives an `:execution_id` callback.
 - **Route sends from the chart.** This chart sends nothing: its one route is
-  reached through `:on_complete`. A `<send>` of the router's type to a
+  reached through `:on_complete`, because a block document at
+  statifier_blocks 0.35.0 cannot author a routed `<send>` - `core.send`
+  declares no `type` or `target`. A `<send>` of the router's type to a
   registered route reaches the same adapter, and a delayed one needs a
   `:timer_queue`.
 
