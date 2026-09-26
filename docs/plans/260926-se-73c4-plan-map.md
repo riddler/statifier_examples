@@ -117,8 +117,17 @@ branch visible and the empty slots marked (at the graph and layout level).
   stays in the page after it, complete and in the tab order; the map region
   `aria-hidden="true"`.
 - Click-through: a box pushes `select-row` with its block id (the list's own
-  event), and the selected block's `ConfigForm` opens in a panel beside the
-  map, read-only when the page is.
+  event); the selected block's `ConfigForm` opens on its row in the list, and
+  a panel beside the map names the block. (Amended 2026-09-26 while
+  building: a second, read-only copy of the form in the panel put every
+  field on the page twice, which the page's field-surface tests refuse. The
+  form moves into the panel, as the one form surface, in PR 3, with the
+  editing controls.)
+- From the PR 1 review: leaves and containers sized from their widest line,
+  title included (containers through a minimum size elkjs 0.9.3 reads
+  transposed under `DOWN`); rail and tray blocks not joined by edges; a
+  sentence that repeats its title not drawn twice; the layout driver reads
+  the layout `drawMap` drew; an edge-offset check in the layout tests.
 - Theme tokens for the map in `assets/css/app.css` for the three themes.
 - LiveView tests: both library fixtures render the map region with a graph
   holding every block; the list is present and complete; selecting from the
@@ -141,6 +150,9 @@ complete; a11y (the map aria-hidden from the list's path).
   same gap target the list computes; the panel carries move up, move down
   and remove for the selected block (`move`, `remove`); the panel's form is
   `ConfigForm` posting `config-change` (`update_config`).
+- The one form surface: the selected block's `ConfigForm` moves from its
+  row into the panel, which then leaves the map's `aria-hidden` region
+  and is reached from the row by keyboard.
 - Tests: each command performed from the map and from the list on copies of
   the same document ends at the same document.
 

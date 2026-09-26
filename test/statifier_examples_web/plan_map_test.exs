@@ -10,6 +10,8 @@ defmodule StatifierExamplesWeb.PlanMapTest do
 
   use ExUnit.Case, async: true
 
+  alias StatifierBlocks.Block
+  alias StatifierBlocks.Document
   alias StatifierBlocks.ViewModel
   alias StatifierBlocks.ViewModel.Node
   alias StatifierExamples.Charts
@@ -82,6 +84,66 @@ defmodule StatifierExamplesWeb.PlanMapTest do
 
       assert %{"title" => title} = find(graph("library_loan"), "blk_ll_due/undecided/empty")
       assert title == PlanMap.empty_text()
+    end
+  end
+
+  describe "what is and is not an edge" do
+    # A group's interrupt rules each watch the whole body; joining them
+    # would draw them as steps that run one after another.
+    #
+    # Sabotage: made flow_edges/1 answer sequence_edges/1 for every slot;
+    # this went red on both library groups. Reverted from a copy.
+    test "a rail's blocks are not joined" do
+      for {key, rail} <- [
+            {"library_loan", "blk_ll_on_loan/interrupts"},
+            {"patron_registration", "blk_pr_verify/interrupts"}
+          ] do
+        assert %{"edges" => [], "children" => [_first, _second]} = find(graph(key), rail)
+      end
+    end
+
+    # Sabotage: made under/2 always wrap; "Sequence" came back under
+    # "Sequence" and this went red. Reverted from a copy.
+    test "a sentence that only repeats the title is not drawn twice" do
+      graph = graph("library_loan")
+
+      assert %{"title" => "Sequence", "lines" => []} = find(graph, "blk_ll_root")
+      assert %{"title" => "Wait", "lines" => ["Wait 21d"]} = find(graph, "blk_ll_loan_period")
+    end
+  end
+
+  describe "sizes" do
+    # A word longer than a line keeps its own line, whole, and widens its
+    # box to fit rather than running out of it.
+    #
+    # Sabotage: capped leaf_width/1 at 260 again; this went red. Reverted
+    # from a copy.
+    test "a leaf is as wide as its longest word needs" do
+      event = "patron.registration.second_reminder_after_the_first_week"
+
+      root =
+        Block.new("core.sequence",
+          id: "root",
+          slots: %{"body" => [Block.new("core.send", id: "long", config: %{"event" => event})]}
+        )
+
+      graph = root |> Document.new() |> ViewModel.build(Charts.palette(), []) |> PlanMap.graph()
+      leaf = find(graph, "long")
+
+      assert event in leaf["lines"]
+      assert leaf["width"] >= String.length(event) * 7 + 24
+    end
+
+    # The title is sized too, not only the sentence under it.
+    #
+    # Sabotage: made the leaf clause call leaf_width(lines) without the
+    # title; this went red. Reverted from a copy.
+    test "a leaf is at least as wide as its title" do
+      for fixture <- Charts.fixtures(),
+          node <- walk(PlanMap.graph(view_model(fixture))),
+          Map.has_key?(node, "width") do
+        assert node["width"] >= String.length(node["title"]) * 7 + 24, node["id"]
+      end
     end
   end
 

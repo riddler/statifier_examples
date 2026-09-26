@@ -42,6 +42,60 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
       end
     end
 
+    # Every connector starts on its source's bottom edge and ends on its
+    # target's top edge, inside each box's width: an edge drawn from the
+    # wrong offset would join the right ids and point at the wrong boxes.
+    #
+    # Sabotage: made edgesOf double the offsets it adds; this went red.
+    # Reverted from a copy.
+    test "every edge leaves its source's bottom and enters its target's top", %{tmp_dir: dir} do
+      for fixture <- Charts.fixtures() do
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+        %{"drawn" => "map", "boxes" => boxes, "edges" => edges} = run(dir, fixture.key, graph)
+
+        assert length(edges) == length(Enum.flat_map(containers(graph), & &1["edges"]))
+
+        for %{"source" => from, "target" => to, "start" => start, "end" => stop} <- edges do
+          source = boxes[from]
+          target = boxes[to]
+
+          assert_in_delta start["y"],
+                          source["y"] + source["height"],
+                          0.5,
+                          "#{fixture.key}: #{from}"
+
+          assert_in_delta stop["y"], target["y"], 0.5, "#{fixture.key}: #{to}"
+          assert start["x"] >= source["x"] and start["x"] <= source["x"] + source["width"]
+          assert stop["x"] >= target["x"] and stop["x"] <= target["x"] + target["width"]
+        end
+      end
+    end
+
+    # No box is narrower than the widest line it carries, title included,
+    # at the map's own per-character estimate - so no text runs out of its
+    # box. Containers are the case the estimate alone would not hold: their
+    # width is ELK's, and only the minimum size on them keeps it.
+    #
+    # Sabotage: dropped the nodeSize.minimum option from
+    # container_options/2; this went red on a container whose header is
+    # wider than its children. Reverted from a copy.
+    test "every box is at least as wide as its text", %{tmp_dir: dir} do
+      for fixture <- Charts.fixtures() do
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+        %{"drawn" => "map", "boxes" => boxes} = run(dir, fixture.key, graph)
+
+        for node <- walk(graph), node["id"] != "plan-map" do
+          texts =
+            if node["kind"] == "slot", do: node["lines"], else: [node["title"] | node["lines"]]
+
+          needed = text_width(texts)
+
+          assert boxes[node["id"]]["width"] >= needed,
+                 "#{fixture.key}: #{node["id"]} is #{boxes[node["id"]]["width"]} wide, its text needs #{needed}"
+        end
+      end
+    end
+
     # Sabotage: made drawNode draw nothing for an empty marker; this went
     # red. Reverted from a copy.
     test "both library fixtures draw every arm, the empty one marked", %{tmp_dir: dir} do
@@ -123,6 +177,11 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     assert status == 0, "the layout driver exited #{status}: #{out}"
     Jason.decode!(out)
   end
+
+  # The map's per-character estimate, padding included (7 and 24 in
+  # `StatifierExamplesWeb.PlanMap`).
+  defp text_width(texts),
+    do: (texts |> Enum.map(&String.length/1) |> Enum.max(fn -> 0 end)) * 7 + 24
 
   defp walk(%{} = node), do: [node | Enum.flat_map(Map.get(node, "children", []), &walk/1)]
 

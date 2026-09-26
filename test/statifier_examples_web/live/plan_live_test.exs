@@ -15,6 +15,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   alias StatifierExamples.Charts.Messaging.Notify
   alias StatifierExamples.Documents
   alias StatifierExamples.Signup.{GuardedSection, GuardedStep}
+  alias StatifierExamplesWeb.PlanMap
 
   @themes ["light", "dark", "brand"]
 
@@ -868,7 +869,128 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     end
   end
 
+  describe "the map" do
+    # The map is the page's first section, and the graph it carries is the
+    # whole document: every block, every arm, every empty slot's marker.
+    # What the browser draws from it is `PlanMapLayoutTest`'s; what this
+    # asserts is that the page hands over the right graph.
+    #
+    # Sabotage: rendered the map section after the list; this went red on
+    # the order. Reverted from a copy.
+    test "both library fixtures open on a map of the whole document, above the list",
+         %{conn: conn} do
+      for {key, empty} <- [
+            {"library_loan", "blk_ll_due/undecided/empty"},
+            {"patron_registration", "blk_pr_age/otherwise/empty"}
+          ] do
+        {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: key]}")
+        fixture = fixture(key)
+        graph = map_graph(html)
+
+        assert graph == Jason.decode!(Jason.encode!(PlanMap.graph(view_model_of(fixture))))
+
+        assert PlanMap.nodes(graph) ==
+                 for({node, _depth, _kind} <- outline_of(fixture), do: node.block_id)
+
+        assert empty in map_ids(graph)
+
+        [before_list | _rest] = String.split(html, ~s(data-plan-section="plan"))
+        assert before_list =~ ~s(data-plan-section="map")
+      end
+    end
+
+    # The list is untouched by the map: every row still there, and the map
+    # region hidden from assistive technology with nothing in it that takes
+    # focus - so a keyboard or a screen reader meets the document once, in
+    # the list.
+    #
+    # Sabotage: dropped aria-hidden from the map section; this went red.
+    # Reverted from a copy.
+    test "the list stays complete and the map stays out of its path", %{conn: conn} do
+      for key <- ["library_loan", "patron_registration"] do
+        {:ok, view, html} = live(conn, ~p"/plan?#{[doc: key]}")
+
+        assert rows_in(html) == length(outline_of(fixture(key)))
+
+        assert html =~
+                 ~s(<section class="myapp-plan__map" data-plan-section="map" aria-hidden="true">)
+
+        # With a block selected, so the panel's markup is inside the check.
+        [_root, {second, _depth, _kind} | _rest] = outline_of(fixture(key))
+        selected = render_hook(view, "select-row", %{"block-id" => second.block_id})
+        assert selected =~ ~s(data-plan-panel="#{second.block_id}")
+
+        map = section(selected, "map")
+        refute map =~ ~r/<(button|input|select|textarea|a)[\s>]/
+        refute map =~ "tabindex"
+      end
+    end
+
+    # A click on the map sends the list's own event: the row is selected,
+    # the hook is told which box to mark, and the panel shows the block.
+    #
+    # Sabotage: made panel/2 answer nil whatever was selected; this went red,
+    # with the two other cases that select. Reverted from a copy.
+    test "selecting a block from the map selects its row and names it in the panel",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
+
+      html = render_hook(view, "select-row", %{"block-id" => "blk_ll_loan_period"})
+
+      assert html =~ ~s(data-selected="blk_ll_loan_period")
+      assert html =~ ~s(data-plan-panel="blk_ll_loan_period")
+      assert section(html, "map") =~ "Wait 21d"
+      assert html =~ ~r/myapp-plan__row--selected"[^>]*data-block-id="blk_ll_loan_period"/
+      assert field_keys(html) == ["duration"]
+
+      deselected = render_hook(view, "select-row", %{"block-id" => "blk_ll_loan_period"})
+      refute deselected =~ "data-plan-panel"
+      refute deselected =~ ~s(data-selected=)
+    end
+
+    # The map redraws from the document the page holds, so a write made
+    # through the list shows on it without the map being asked.
+    #
+    # Sabotage: made rebuild/1 keep the first graph it assigned; this went
+    # red. Reverted from a copy.
+    test "a change made through the list reaches the map", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+      assert "blk_pr_welcome" in PlanMap.nodes(map_graph(html))
+
+      after_remove = render_hook(view, "remove", %{"block-id" => "blk_pr_welcome"})
+      refute "blk_pr_welcome" in PlanMap.nodes(map_graph(after_remove))
+    end
+
+    # Read-only draws the same map, and selecting still names the block.
+    #
+    # Sabotage: drew the map section only when the page is not read-only;
+    # this went red. Reverted from a copy.
+    test "a read-only page draws the map too", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/plan?#{[doc: "library_loan", readonly: "1"]}")
+      assert html =~ ~s(phx-hook="PlanMap")
+
+      selected = render_hook(view, "select-row", %{"block-id" => "blk_ll_loan_period"})
+      assert selected =~ ~s(data-plan-panel="blk_ll_loan_period")
+    end
+  end
+
   # ----------------------------------------------------------------- helpers
+
+  # The graph the page handed the map hook, decoded.
+  defp map_graph(html) do
+    [json] =
+      html
+      |> LazyHTML.from_document()
+      |> LazyHTML.query("#plan-map")
+      |> LazyHTML.attribute("data-graph")
+
+    Jason.decode!(json)
+  end
+
+  defp map_ids(%{} = node),
+    do: [node["id"] | Enum.flat_map(Map.get(node, "children", []), &map_ids/1)]
+
+  defp view_model_of(fixture), do: ViewModel.build(fixture.document, Charts.palette(), [])
 
   defp fixture(key) do
     {:ok, fixture} = Charts.fixture(key)

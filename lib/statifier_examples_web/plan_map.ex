@@ -32,9 +32,15 @@ defmodule StatifierExamplesWeb.PlanMap do
   drawn as a marker rather than left out - an outcome nobody has written a
   step for yet is exactly what a reader of the map has to be able to see.
 
-  Consecutive blocks in one slot are joined by a `sequence` edge, in
-  `ViewModel.flow_children/1` order; nothing else is an edge. Connectors
-  are drawn, never authored.
+  Consecutive blocks in one body slot are joined by a `sequence` edge, in
+  `ViewModel.flow_children/1` order; nothing else is an edge. A rail's
+  blocks are not joined - a group's interrupt rules are alternatives that
+  each watch the whole body, not steps that run one after another - and
+  neither is a tray's. Connectors are drawn, never authored.
+
+  A box's title is its type's name and the line under it is the block's
+  sentence; where the two are the same words ("Sequence", "Group") the
+  line is left off rather than said twice.
 
   ## Order is semantic, so it is forced
 
@@ -59,7 +65,10 @@ defmodule StatifierExamplesWeb.PlanMap do
   Text is measured by estimate, a fixed width per character, rather than
   by the browser: the graph is built on the server, and a node sized after
   the page measured it would be a layout that depends on which fonts
-  loaded. The estimate errs wide.
+  loaded. The estimate errs wide, and no box is narrower than the widest
+  line it carries, its title included: a single word longer than a line
+  widens its box rather than running out of it, and a container is held
+  at least that wide whatever its children need.
   """
 
   alias StatifierBlocks.ViewModel
@@ -139,21 +148,22 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   @spec block(Node.t()) :: graph_node()
   defp block(%Node{slots: []} = node) do
-    lines = wrap(ViewModel.sentence(node))
-    width = leaf_width(lines)
+    lines = node |> ViewModel.sentence() |> under(ViewModel.title(node))
+    title = ViewModel.title(node)
 
     %{
       "id" => node.block_id,
       "kind" => "block",
-      "title" => ViewModel.title(node),
+      "title" => title,
       "lines" => lines,
-      "width" => width,
+      "width" => leaf_width([title | lines]),
       "height" => @header_base + (length(lines) + 1) * @line_height
     }
   end
 
   defp block(%Node{} = node) do
-    lines = node |> header() |> wrap()
+    lines = node |> header() |> under(ViewModel.title(node))
+    title = ViewModel.title(node)
 
     {children, edges} =
       node
@@ -164,9 +174,9 @@ defmodule StatifierExamplesWeb.PlanMap do
     %{
       "id" => node.block_id,
       "kind" => "block",
-      "title" => ViewModel.title(node),
+      "title" => title,
       "lines" => lines,
-      "layoutOptions" => container_options(lines),
+      "layoutOptions" => container_options([title | lines], lines),
       "children" => List.flatten(children),
       "edges" => List.flatten(edges)
     }
@@ -221,7 +231,7 @@ defmodule StatifierExamplesWeb.PlanMap do
     {children, edges} =
       case slot.children do
         [] -> {[empty(id)], []}
-        _blocks -> {slot_children(slot), sequence_edges(slot)}
+        _blocks -> {slot_children(slot), flow_edges(slot)}
       end
 
     %{
@@ -242,8 +252,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   @spec slot_options(Slot.t(), [String.t()]) :: %{String.t() => String.t()}
   defp slot_options(%Slot{} = slot, lines) do
     if ViewModel.rail?(slot) or ViewModel.tray?(slot),
-      do: Map.put(container_options(lines), @layer_constraint, "LAST"),
-      else: container_options(lines)
+      do: Map.put(container_options(lines, lines), @layer_constraint, "LAST"),
+      else: container_options(lines, lines)
   end
 
   @spec slot_header(Slot.t()) :: String.t()
@@ -266,6 +276,12 @@ defmodule StatifierExamplesWeb.PlanMap do
   @spec slot_children(Slot.t()) :: [graph_node()]
   defp slot_children(%Slot{} = slot) do
     Enum.map(ViewModel.flow_children(slot) ++ ViewModel.shelf_children(slot), &block/1)
+  end
+
+  # A rail's or a tray's blocks are not a sequence; see the moduledoc.
+  @spec flow_edges(Slot.t()) :: [map()]
+  defp flow_edges(%Slot{} = slot) do
+    if ViewModel.rail?(slot) or ViewModel.tray?(slot), do: [], else: sequence_edges(slot)
   end
 
   @spec sequence_edges(Slot.t()) :: [map()]
@@ -293,22 +309,46 @@ defmodule StatifierExamplesWeb.PlanMap do
   # ------------------------------------------------------------------ sizing
 
   # Every container orders its own children; see the moduledoc on why this
-  # is set per container and `considerModelOrder` is not.
-  @spec container_options([String.t()]) :: %{String.t() => String.t()}
-  defp container_options(lines) do
+  # is set per container and `considerModelOrder` is not. `texts` is every
+  # line the container draws, title included, and holds its width; `lines`
+  # is what sits under the title, and sets the header's height.
+  #
+  # The minimum is written HEIGHT first. Under `direction: DOWN` with
+  # `hierarchyHandling: INCLUDE_CHILDREN`, elkjs 0.9.3 applies a nested
+  # container's `nodeSize.minimum` transposed - `(w,h)` comes back `w` tall
+  # and `h` wide - so the pair is handed over in the order it is read back
+  # in. Written the documented way round, a container whose header is
+  # wider than its children stays narrow and grows a tall empty band.
+  # `StatifierExamplesWeb.PlanMapLayoutTest` lays every fixture out and
+  # holds every box at least as wide as its text, so an elkjs that stops
+  # transposing turns that test red rather than quietly narrowing a box.
+  @spec container_options([String.t()], [String.t()]) :: %{String.t() => String.t()}
+  defp container_options(texts, lines) do
     top = @header_base + (length(lines) + 1) * @line_height
 
     %{
       @force_model_order => "true",
-      "org.eclipse.elk.padding" => "[top=#{top},left=12,bottom=12,right=12]"
+      "org.eclipse.elk.padding" => "[top=#{top},left=12,bottom=12,right=12]",
+      "org.eclipse.elk.nodeSize.constraints" => "MINIMUM_SIZE",
+      "org.eclipse.elk.nodeSize.minimum" => "(#{top + 12},#{text_width(texts)})"
     }
   end
 
   @spec leaf_width([String.t()]) :: pos_integer()
-  defp leaf_width(lines) do
-    widest = lines |> Enum.map(&String.length/1) |> Enum.max(fn -> 0 end)
-    (widest * @char_width + @leaf_padding) |> max(@leaf_min_width) |> min(@leaf_max_width)
+  defp leaf_width(texts), do: max(text_width(texts), @leaf_min_width)
+
+  # The width the widest of `texts` needs at the estimate, padding included.
+  @spec text_width([String.t()]) :: pos_integer()
+  defp text_width(texts) do
+    widest = texts |> Enum.map(&String.length/1) |> Enum.max(fn -> 0 end)
+    widest * @char_width + @leaf_padding
   end
+
+  # The lines under a box's title: `text` wrapped, or none when it only
+  # repeats the title.
+  @spec under(String.t(), String.t()) :: [String.t()]
+  defp under(title, title), do: []
+  defp under(text, _title), do: wrap(text)
 
   # Words onto lines no wider than a leaf holds. A single word longer than a
   # line keeps its own line rather than being cut: nothing on the map

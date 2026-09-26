@@ -70,7 +70,7 @@ export function boxes(laid) {
 // Every edge with its points made absolute. An edge's points are relative
 // to the node it is declared in, which is the container holding both of
 // its ends.
-function edgesOf(laid) {
+export function edgesOf(laid) {
   const out = []
   const shift = (p, dx, dy) => ({x: dx + p.x, y: dy + p.y})
   const walk = (node, dx, dy) => {
@@ -170,34 +170,68 @@ export function renderError(reason) {
 }
 
 // Lays `graph` out and draws the result, or the error pane, into `target`.
-// Resolves to "map" or "error" so a caller can tell which it drew.
+// Resolves to `{drawn: "map", laid}` with the laid-out graph it drew, or
+// `{drawn: "error", laid: null}`, so a caller can tell which it drew and
+// read the very positions it drew from.
 export async function drawMap(target, graph, elk = elkInstance()) {
   try {
     const laid = await layout(graph, elk)
     target.innerHTML = renderSvg(laid)
-    return "map"
+    return {drawn: "map", laid}
   } catch (reason) {
     target.innerHTML = renderError(reason)
-    return "error"
+    return {drawn: "error", laid: null}
+  }
+}
+
+// Marks the box of the block the page has selected, and unmarks the rest.
+export function markSelected(target, id) {
+  for (const node of target.querySelectorAll("[data-map-kind=block]")) {
+    node.classList.toggle("plan-map__block--selected", node.dataset.mapNode === id)
   }
 }
 
 // The LiveView hook. The graph arrives JSON-encoded in `data-graph` on the
-// hook's element; the drawing goes into the child marked `data-map-canvas`
-// (which the page keeps out of LiveView's patching) or, lacking one, into
-// the element itself. A layout still running when a newer graph arrives is
+// hook's element and the selected block's id in `data-selected`; the
+// drawing goes into the child marked `data-map-canvas` (which the page
+// keeps out of LiveView's patching) or, lacking one, into the element
+// itself.
+//
+// A patch that changes only the selection re-marks the drawing rather than
+// laying it out again. A layout still running when a newer graph arrives is
 // dropped when it lands, so a slow layout never draws over a newer one.
+//
+// A click on a block's box sends the page the same `select-row` event the
+// list's own row button sends, so the two views select through one handler.
+// The map is hidden from assistive technology; the list is the keyboard
+// path to the same selection.
 export const PlanMap = {
-  mounted() { this.draw() },
+  mounted() {
+    this.el.addEventListener("click", (event) => {
+      const box = event.target.closest("[data-map-kind=block]")
+      if (box) this.pushEvent("select-row", {"block-id": box.dataset.mapNode})
+    })
+    this.draw()
+  },
+
   updated() { this.draw() },
 
   draw() {
-    const token = (this.drawn = (this.drawn || 0) + 1)
     const target = this.el.querySelector("[data-map-canvas]") || this.el
+    const source = this.el.dataset.graph
+    const selected = this.el.dataset.selected || null
+
+    if (source === this.source) {
+      markSelected(target, selected)
+      return
+    }
+
+    this.source = source
+    const token = (this.drawn = (this.drawn || 0) + 1)
     let graph
 
     try {
-      graph = JSON.parse(this.el.dataset.graph)
+      graph = JSON.parse(source)
     } catch (reason) {
       target.innerHTML = renderError(reason)
       return
@@ -205,7 +239,9 @@ export const PlanMap = {
 
     const staging = {innerHTML: ""}
     drawMap(staging, graph).then(() => {
-      if (token === this.drawn) target.innerHTML = staging.innerHTML
+      if (token !== this.drawn) return
+      target.innerHTML = staging.innerHTML
+      markSelected(target, this.el.dataset.selected || null)
     })
   },
 }
