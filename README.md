@@ -951,6 +951,7 @@ tree, so `git checkout mix.lock && mix deps.get` afterwards to come back to Hex.
 | `StatifierExamples.Charts.ExecutionLock` | the per-execution serialization strategy durable steps run inside |
 | `StatifierExamples.Persistence` | the storage adapter and the `statifier_persistence` host declaration |
 | `StatifierExamples.FirstWorkflow` | the first-workflow guide's recipe, which `mix statifier_examples.first_workflow` runs |
+| `StatifierExamples.RoutedWorkflow` | the routed guide's recipe, which `mix statifier_examples.first_workflow_routed` runs |
 
 Both domains are filled. `StatifierExamples.Charts` also carries the shared
 messaging block type `myapp.notify`, which belongs to neither domain, and
