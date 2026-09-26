@@ -90,6 +90,11 @@ defmodule StatifierExamples.RoutedWorkflow do
   # The scope every scan is routed under: one depot. Opaque to the router.
   @scope "depot_eastside"
 
+  # The routing ledger's outcomes for one parcel, in the order the recipe
+  # routes its four scans: the depot scan, the same scan again, the
+  # doorstep scan and the late scan.
+  @ledger_outcomes ["created_and_delivered", "duplicate", "delivered", "dropped: finished"]
+
   # How long a message id is remembered, and how long a finished parcel's
   # address row outlives it. One second so the command finishes quickly;
   # a real host would keep days.
@@ -371,9 +376,9 @@ defmodule StatifierExamples.RoutedWorkflow do
     with {:ok, [{:dropped, @binding_id, :finished}]} <- route(config, parcel_id, "late"),
          %Address{execution_id: ^execution_id, terminal_seen_at: %DateTime{}} <-
            address(config, parcel_id),
-         [_, _, _, _] = rows <- ledger(config, parcel_id),
+         @ledger_outcomes = outcomes <- Enum.map(ledger(config, parcel_id), & &1.outcome),
          [] <- written_depot_ids(config, parcel_id) do
-      {:ok, Enum.map(rows, & &1.outcome)}
+      {:ok, outcomes}
     else
       other -> {:error, other}
     end
@@ -383,15 +388,15 @@ defmodule StatifierExamples.RoutedWorkflow do
   # Oban, the way its cron entries schedule them.
   @spec reaped(Config.t(), String.t()) :: {:ok, map()} | {:error, term()}
   defp reaped(config, parcel_id) do
-    dedupe_before = length(dedupe(config, parcel_id))
-
-    with :ok <- scheduled(),
+    with [_, _, _] = dedupe_before <- dedupe(config, parcel_id),
+         [%Address{}] = addresses_before <- List.wrap(address(config, parcel_id)),
+         :ok <- scheduled(),
          :ok <- Process.sleep(@horizon_ms + 100),
          {:ok, _} <- Oban.insert(DedupeReaper.new(%{})),
          {:ok, _} <- Oban.insert(AddressReaper.new(%{})),
          :ok <-
            await(fn -> dedupe(config, parcel_id) == [] and address(config, parcel_id) == nil end) do
-      {:ok, %{dedupe: dedupe_before, addresses: 1}}
+      {:ok, %{dedupe: length(dedupe_before), addresses: length(addresses_before)}}
     else
       other -> {:error, other}
     end
