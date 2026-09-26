@@ -293,8 +293,17 @@ defmodule StatifierExamplesWeb.PlanLive do
   # `slot`, the head of that slot - the map's empty-slot marker, a gap the
   # list has no row to put a "+" under. `gap_key/1` is the one reading of
   # the pair, and every insert handler below goes through it.
+  #
+  # Arming the head of an empty slot clears the selection: the panel shows
+  # the slot's picker or a block's form, never both at once.
   def handle_event("insert-open", %{"block-id" => _id} = params, socket) do
-    {:noreply, socket |> assign(:inserting, gap_key(params)) |> assign_insertable()}
+    case gap_key(params) do
+      {:slot, _id, _name} = key ->
+        {:noreply, socket |> assign(inserting: key, selected_id: nil) |> rebuild()}
+
+      key ->
+        {:noreply, socket |> assign(:inserting, key) |> assign_insertable()}
+    end
   end
 
   def handle_event("insert-close", _params, socket) do
@@ -324,7 +333,8 @@ defmodule StatifierExamplesWeb.PlanLive do
        |> assign(:inserting, nil)
        |> apply_session(Session.commit(socket.assigns.session, {:compound, commands}))}
     else
-      _no_gap_or_refused_recipe -> {:noreply, assign(socket, :inserting, nil)}
+      _no_gap_or_refused_recipe ->
+        {:noreply, socket |> assign(:inserting, nil) |> assign_insertable()}
     end
   end
 
@@ -338,7 +348,7 @@ defmodule StatifierExamplesWeb.PlanLive do
 
       {:noreply, socket}
     else
-      _no_gap_or_type -> {:noreply, assign(socket, :inserting, nil)}
+      _no_gap_or_type -> {:noreply, socket |> assign(:inserting, nil) |> assign_insertable()}
     end
   end
 
@@ -518,8 +528,10 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   # The panel beside the map: the page's one form surface. The selected
   # block's name, its held draft if there is one, its `ConfigForm` and the
-  # move and delete controls its row also carries; or, when an insert was
-  # armed at the head of an empty slot on the map, the picker for it.
+  # block's move and delete controls - its row hides its own while it is
+  # selected, so a screen reader meets one set; or, when an insert was armed
+  # at the head of an empty slot on the map, the picker for it, and then no
+  # block is selected.
   #
   # It sits outside the map's `aria-hidden` region and ahead of the list, and
   # it takes focus (`tabindex="-1"`), so the selected row's "Its fields" link
@@ -673,7 +685,10 @@ defmodule StatifierExamplesWeb.PlanLive do
           Its fields
         </a>
 
-        <span :if={not @readonly?} class="myapp-plan__controls">
+        <span
+          :if={not @readonly? and @node.block_id != @selected_id}
+          class="myapp-plan__controls"
+        >
           <button
             class="myapp-plan__control"
             type="button"

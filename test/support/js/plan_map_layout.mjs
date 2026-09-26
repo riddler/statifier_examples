@@ -9,7 +9,10 @@
 // "error"), the drawn markup, every box and edge of the SAME layout that
 // markup was drawn from in absolute coordinates, and `gestures` - for every
 // clickable element the markup carries, the event and payload the hook's
-// own mapGesture/2 turns a click on it into.
+// own mapGesture/2 turns a click on it into - and `childGestures`, the same
+// asked of a click on each of that element's children (the rect, text,
+// circle or path a real click lands on), which reach the element by walking
+// up exactly as a browser's `closest` does.
 import {readFileSync} from "node:fs"
 import {boxes, drawMap, edgesOf, mapGesture} from "../../../assets/js/plan_map.mjs"
 
@@ -37,34 +40,61 @@ if (laid) {
   }
 }
 
-// A stand-in for the element a click lands on: one drawn `<g>`, its data
-// attributes as `dataset`, and a `closest` that answers the three selectors
-// mapGesture asks. The markup is the hook's own, so what is read here is
-// what a browser would hand the click handler.
+// A small element tree over the drawn markup: every tag with its data
+// attributes as `dataset`, its parent, and a `closest` that walks from the
+// element up through its ancestors, as the DOM's does, matching the
+// attribute selectors mapGesture asks (`[name]` and `[name=value]`).
 const unescape = (v) => v.replace(/&quot;/g, "\"").replace(/&#39;/g, "'")
   .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
 const camel = (name) => name.replace(/-([a-z])/g, (_m, c) => c.toUpperCase())
 
-function element(tag) {
-  const dataset = {}
-  for (const [, name, value] of tag.matchAll(/data-([a-z-]+)="([^"]*)"/g)) {
-    dataset[camel(name)] = unescape(value)
-  }
-  const matches = (selector) =>
-    (selector === "[data-map-gap]" && dataset.mapGap !== undefined) ||
-    (selector === "[data-map-kind=empty]" && dataset.mapKind === "empty") ||
-    (selector === "[data-map-kind=block]" && dataset.mapKind === "block")
-  return {dataset, closest: (selector) => (matches(selector) ? element(tag) : null)}
+function matches(el, selector) {
+  const [, name, value] = selector.match(/^\[([a-z-]+)(?:=([^\]]+))?\]$/)
+  const key = camel(name.replace(/^data-/, ""))
+  if (!(key in el.dataset)) return false
+  return value === undefined || el.dataset[key] === value
 }
+
+function parse(markup) {
+  const root = {tag: "#root", dataset: {}, parent: null, children: []}
+  let current = root
+  for (const [token, closing, tag, attrs, selfClosing] of
+    markup.matchAll(/<(\/?)([a-zA-Z]+)([^>]*?)(\/?)>/g)) {
+    if (closing) {
+      current = current.parent || root
+      continue
+    }
+    const dataset = {}
+    for (const [, name, value] of attrs.matchAll(/data-([a-z-]+)="([^"]*)"/g)) {
+      dataset[camel(name)] = unescape(value)
+    }
+    const el = {tag, dataset, parent: current, children: [], token}
+    el.closest = (selector) => {
+      for (let at = el; at && at.tag !== "#root"; at = at.parent) {
+        if (matches(at, selector)) return at
+      }
+      return null
+    }
+    current.children.push(el)
+    if (!selfClosing) current = el
+  }
+  return root
+}
+
+const all = []
+const walk = (el) => { for (const child of el.children) { all.push(child); walk(child) } }
+walk(parse(target.innerHTML))
+
+const keyOf = (el) =>
+  el.dataset.mapGap !== undefined ? `gap:${el.dataset.mapGap}` : `${el.dataset.mapKind}:${el.dataset.mapNode}`
 
 const gestures = []
-for (const [tag] of target.innerHTML.matchAll(/<g [^>]*>/g)) {
-  const el = element(tag)
-  if (el.dataset.mapGap === undefined && el.dataset.mapKind === undefined) continue
-  gestures.push({
-    element: el.dataset.mapGap !== undefined ? `gap:${el.dataset.mapGap}` : `${el.dataset.mapKind}:${el.dataset.mapNode}`,
-    gesture: mapGesture(el, editable),
-  })
+const childGestures = []
+for (const el of all.filter((e) => e.tag === "g" && (e.dataset.mapGap !== undefined || e.dataset.mapKind !== undefined))) {
+  gestures.push({element: keyOf(el), gesture: mapGesture(el, editable)})
+  for (const child of el.children) {
+    childGestures.push({element: keyOf(el), child: child.tag, gesture: mapGesture(child, editable)})
+  }
 }
 
-process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, gestures}))
+process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, gestures, childGestures}))

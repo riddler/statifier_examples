@@ -193,6 +193,34 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
       end
     end
 
+    # A real click lands on the rect, text, circle or path inside a drawn
+    # group, and reaches the group by walking up. The driver's elements walk
+    # up the same way, and every child answers what its group answers.
+    #
+    # Sabotage: made mapGesture match only the clicked element itself, not
+    # its ancestors; every child click came back null and this went red.
+    # Reverted from a copy.
+    test "a click on a drawn child answers what its group answers", %{tmp_dir: dir} do
+      for fixture <- Charts.fixtures() do
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+
+        %{"gestures" => gestures, "childGestures" => children} =
+          run(dir, fixture.key, graph, "editable")
+
+        by_element = Map.new(gestures, &{&1["element"], &1["gesture"]})
+
+        refute children == []
+
+        for %{"element" => element, "child" => tag, "gesture" => gesture} <- children do
+          assert gesture == by_element[element], "#{fixture.key}: a click on #{element}'s #{tag}"
+        end
+
+        for element <- Map.keys(by_element) do
+          assert Enum.any?(children, &(&1["element"] == element)), "#{element} has no child"
+        end
+      end
+    end
+
     # Sabotage: made renderSvg draw the gaps whatever `editable` said; this
     # went red. Reverted from a copy.
     test "a read-only map only selects", %{tmp_dir: dir} do
