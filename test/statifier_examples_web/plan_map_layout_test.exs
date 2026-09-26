@@ -1,0 +1,147 @@
+defmodule StatifierExamplesWeb.PlanMapLayoutTest do
+  @moduledoc """
+  The map laid out through the real elkjs, and drawn by the hook's own
+  `drawMap`: the order a reader sees, and what a failed layout draws.
+
+  The layout runs in the browser, so the only honest test of it runs the
+  same JavaScript. `test/support/js/plan_map_layout.mjs` imports
+  `assets/js/plan_map.mjs` - the file the page bundles - lays a graph out
+  and prints what it drew. That needs Node on the path, the one tool this
+  suite asks for beyond Elixir; a machine without it fails here with that
+  sentence rather than skipping, because a skipped order test is an
+  unpinned order.
+  """
+
+  use ExUnit.Case, async: true
+
+  alias StatifierBlocks.ViewModel
+  alias StatifierExamples.Charts
+  alias StatifierExamplesWeb.PlanMap
+
+  @driver Path.expand("../support/js/plan_map_layout.mjs", __DIR__)
+
+  @moduletag :tmp_dir
+
+  describe "the order test" do
+    # Arms side by side, left to right in the order the branch evaluates
+    # them; steps top to bottom in the order they run. Read off the boxes
+    # elkjs placed, for every container in every fixture.
+    #
+    # Sabotage: dropped @force_model_order from both the root options and
+    # container_options/1; elkjs laid a branch's arms out of order and this
+    # went red. Reverted from a copy.
+    test "every fixture lays out in model order", %{tmp_dir: dir} do
+      for fixture <- Charts.fixtures() do
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+        %{"drawn" => "map", "boxes" => boxes} = run(dir, fixture.key, graph)
+
+        for container <- containers(graph) do
+          assert_arms_in_order(fixture.key, container, boxes)
+          assert_steps_in_order(fixture.key, container, boxes)
+        end
+      end
+    end
+
+    # Sabotage: made drawNode draw nothing for an empty marker; this went
+    # red. Reverted from a copy.
+    test "both library fixtures draw every arm, the empty one marked", %{tmp_dir: dir} do
+      for {key, empty} <- [
+            {"library_loan", "blk_ll_due/undecided/empty"},
+            {"patron_registration", "blk_pr_age/otherwise/empty"}
+          ] do
+        {:ok, fixture} = Charts.fixture(key)
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+        %{"drawn" => "map", "html" => html, "boxes" => boxes} = run(dir, key, graph)
+
+        for id <- PlanMap.nodes(graph), do: assert(Map.has_key?(boxes, id), "#{key}: #{id}")
+        assert html =~ ~s(data-map-node="#{empty}" data-map-kind="empty")
+        assert html =~ PlanMap.empty_text()
+      end
+    end
+  end
+
+  describe "the error-pane test" do
+    # An edge to a node the graph does not hold is a graph elkjs refuses
+    # outright, which is the failure the pane is for.
+    #
+    # Sabotage: made drawMap rethrow in its catch instead of drawing
+    # renderError; the driver exited non-zero and this went red, with the
+    # empty-layout case below. Reverted from a copy.
+    test "a layout that throws draws the error pane and no map", %{tmp_dir: dir} do
+      graph =
+        put_in(sample_graph(), ["children", Access.at(0), "edges"], [
+          %{"id" => "dangling", "sources" => ["blk_pr_deadline"], "targets" => ["no_such_block"]}
+        ])
+
+      assert %{"drawn" => "error", "html" => html} = run(dir, "throws", graph)
+      assert html =~ ~s(data-map-error="true")
+      assert html =~ "The map could not be drawn."
+      assert html =~ "The list has every step of this document."
+      refute html =~ "<svg"
+    end
+
+    # Sabotage: dropped the throw from layout()'s emptiness check; this
+    # went red. Reverted from a copy.
+    test "a layout that comes back empty draws the error pane, not a blank map",
+         %{tmp_dir: dir} do
+      graph = Map.put(sample_graph(), "children", [])
+
+      assert %{"drawn" => "error", "html" => html} = run(dir, "empty", graph)
+      assert html =~ "the layout came back empty"
+      refute html =~ "<svg"
+    end
+  end
+
+  # A document's words reach the SVG as text, never as markup.
+  #
+  # Sabotage: made escapeText return its argument unchanged; the title
+  # arrived as a live element and this went red. Reverted from a copy.
+  test "a title is escaped into the drawing", %{tmp_dir: dir} do
+    graph =
+      update_in(sample_graph(), ["children", Access.at(0), "title"], fn _title ->
+        ~s|<img src=x onerror="alert(1)">|
+      end)
+
+    assert %{"drawn" => "map", "html" => html} = run(dir, "escaped", graph)
+    refute html =~ "<img"
+    assert html =~ "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;"
+  end
+
+  # ------------------------------------------------------------------ helpers
+
+  defp sample_graph do
+    {:ok, fixture} = Charts.fixture("patron_registration")
+    PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+  end
+
+  defp run(dir, name, graph) do
+    node = System.find_executable("node") || flunk("the map's layout tests need Node on the PATH")
+    path = Path.join(dir, "#{name}.json")
+    File.write!(path, Jason.encode!(graph))
+
+    {out, status} = System.cmd(node, [@driver, path], stderr_to_stdout: true)
+    assert status == 0, "the layout driver exited #{status}: #{out}"
+    Jason.decode!(out)
+  end
+
+  defp walk(%{} = node), do: [node | Enum.flat_map(Map.get(node, "children", []), &walk/1)]
+
+  defp containers(graph), do: Enum.filter(walk(graph), &(Map.get(&1, "children", []) != []))
+
+  # A block's slot nodes that are arms sit side by side, in slot order.
+  defp assert_arms_in_order(key, container, boxes) do
+    arms = for %{"kind" => "slot", "style" => "arm", "id" => id} <- container["children"], do: id
+    xs = Enum.map(arms, &boxes[&1]["x"])
+
+    assert xs == Enum.sort(xs) and xs == Enum.uniq(xs),
+           "#{key}: #{container["id"]}'s arms #{inspect(arms)} are out of order at #{inspect(xs)}"
+  end
+
+  # Every sequence edge runs downwards: the later step sits lower.
+  defp assert_steps_in_order(key, container, boxes) do
+    for %{"sources" => [from], "targets" => [to]} <- container["edges"] do
+      assert boxes[to]["y"] > boxes[from]["y"],
+             "#{key}: #{to} is not below #{from} (#{boxes[from]["y"]} -> #{boxes[to]["y"]})"
+    end
+  end
+end

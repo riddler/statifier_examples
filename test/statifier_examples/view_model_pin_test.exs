@@ -127,7 +127,12 @@ defmodule StatifierExamples.ViewModelPinTest do
     # screen shown again from the plan block's `on_went_back` slot. It walks
     # as an ARM, not a step: a declared outcome slot is drawn the way a
     # branch's arm is, one level beneath the block that opens it.
-    "signup_path" => {10, %{step: 7, arm: 3}}
+    "signup_path" => {10, %{step: 7, arm: 3}},
+
+    # The library world. Each branch keeps every arm it declares, the empty
+    # one included - an empty slot has no row, because a slot is not a block.
+    "library_loan" => {10, %{step: 4, arm: 4, rail: 2}},
+    "patron_registration" => {11, %{step: 6, arm: 3, rail: 2}}
   }
 
   # The two fixtures whose prose is pinned as well as counted, as
@@ -260,7 +265,7 @@ defmodule StatifierExamples.ViewModelPinTest do
     # here and took the row-count case above with it, which is the pairing
     # that makes an unwalked fixture impossible rather than merely unlikely.
     # Reverted from a copy.
-    test "the twelve fixtures are the twelve fixtures" do
+    test "the fourteen fixtures are the fourteen fixtures" do
       assert Charts.fixtures() |> Enum.map(& &1.key) |> Enum.sort() ==
                @outlines |> Map.keys() |> Enum.sort()
     end

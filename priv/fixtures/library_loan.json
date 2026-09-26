@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_library_loan",
+  "revision": 1,
+  "metadata": {
+    "name": "Library loan",
+    "description": "A patron borrows a copy from a branch for three weeks. A return ends the loan early; at the due date the loan either closes, renews, or sends an overdue notice and waits two more weeks for the copy.",
+    "domain": "library"
+  },
+  "datamodel": [
+    {
+      "id": "loan",
+      "description": "The loan itself: whether the copy came back, and how many times it has been renewed."
+    },
+    {
+      "id": "copy",
+      "description": "The copy on loan: how many other patrons hold it."
+    }
+  ],
+  "accepts": ["copy.returned", "copy.reported_lost"],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_ll_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.group",
+          "id": "blk_ll_on_loan",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "core.wait",
+                "id": "blk_ll_loan_period",
+                "type_version": 1,
+                "config": {
+                  "duration": "21d"
+                }
+              }
+            ],
+            "interrupts": [
+              {
+                "type": "core.on_event",
+                "id": "blk_ll_returned_early",
+                "type_version": 1,
+                "config": {
+                  "event": "copy.returned",
+                  "outcome": "abandon"
+                }
+              },
+              {
+                "type": "core.on_event",
+                "id": "blk_ll_reported_lost",
+                "type_version": 1,
+                "config": {
+                  "event": "copy.reported_lost",
+                  "outcome": "abandon"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "core.branch",
+          "id": "blk_ll_due",
+          "type_version": 1,
+          "config": {
+            "arms": [
+              {
+                "slot": "arm_returned",
+                "cond": "loan.returned"
+              },
+              {
+                "slot": "arm_renew",
+                "cond": "copy.holds == 0 AND loan.renewals < 2"
+              }
+            ]
+          },
+          "slots": {
+            "arm_returned": [
+              {
+                "type": "core.send",
+                "id": "blk_ll_close",
+                "type_version": 1,
+                "config": {
+                  "event": "loan.closed"
+                }
+              }
+            ],
+            "arm_renew": [
+              {
+                "type": "core.send",
+                "id": "blk_ll_renewed",
+                "type_version": 1,
+                "config": {
+                  "event": "loan.renewed"
+                }
+              }
+            ],
+            "otherwise": [
+              {
+                "type": "core.send",
+                "id": "blk_ll_overdue_notice",
+                "type_version": 1,
+                "config": {
+                  "event": "loan.overdue"
+                }
+              },
+              {
+                "type": "core.await",
+                "id": "blk_ll_late_return",
+                "type_version": 1,
+                "config": {
+                  "event": "copy.returned",
+                  "timeout": "14d"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

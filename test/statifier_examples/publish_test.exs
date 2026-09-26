@@ -131,7 +131,7 @@ defmodule StatifierExamples.PublishTest do
   describe "the documents this app ships" do
     # Sabotage: dropped Signup.fixtures/0 from Charts.fixtures/0; this went
     # red. Reverted from a copy.
-    test "are the twelve the host lists" do
+    test "are the fourteen the host lists" do
       assert Enum.map(Charts.fixtures(), & &1.key) == [
                "card_processing",
                "card_processing_sketch",
@@ -144,7 +144,9 @@ defmodule StatifierExamples.PublishTest do
                "signup_invite_chunk",
                "signup_guarded_step",
                "signup_guarded_section",
-               "signup_path"
+               "signup_path",
+               "library_loan",
+               "patron_registration"
              ]
     end
 
