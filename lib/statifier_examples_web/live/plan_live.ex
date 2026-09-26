@@ -117,9 +117,15 @@ defmodule StatifierExamplesWeb.PlanLive do
   The list stays, complete and in the tab order, because it is the path a
   keyboard and a screen reader take through the document. The map region is
   `aria-hidden`: a reader of the list would otherwise meet every step twice.
+  Its scroll box carries `tabindex="-1"`, because a browser makes a
+  scrolling element with nothing focusable inside it a Tab stop of its own,
+  and a Tab stop inside a region hidden from assistive technology is one a
+  keyboard user lands on with nothing announced.
   Clicking a block on the map sends the list's own `select-row`, so both
-  views select through one handler. The panel beside the map names the
-  selected block; its fields open on its row in the list, which stays the
+  views select through one handler. A click on a slot's box or on an
+  empty slot's marker selects nothing. The panel beside the map names the
+  selected block, its sentence under its title only where the two differ
+  (the map's own rule); its fields open on its row in the list, which stays the
   page's one form surface - a second copy of the form beside the map
   would put every field on the page twice.
 
@@ -404,6 +410,7 @@ defmodule StatifierExamplesWeb.PlanLive do
               id="plan-map"
               class="myapp-plan__map-canvas"
               phx-hook="PlanMap"
+              tabindex="-1"
               data-graph={@map_graph}
               data-selected={@selected_id}
             >
@@ -412,7 +419,12 @@ defmodule StatifierExamplesWeb.PlanLive do
 
             <aside :if={@panel} class="myapp-plan__panel" data-plan-panel={@panel.block_id}>
               <p class="myapp-plan__panel-title">{ViewModel.title(@panel)}</p>
-              <p class="myapp-plan__panel-sentence">{ViewModel.sentence(@panel)}</p>
+              <p
+                :if={ViewModel.sentence(@panel) != ViewModel.title(@panel)}
+                class="myapp-plan__panel-sentence"
+              >
+                {ViewModel.sentence(@panel)}
+              </p>
               <p :if={@panel.form} class="myapp-plan__panel-hint">
                 Its fields are open on its row in the list.
               </p>
