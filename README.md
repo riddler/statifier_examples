@@ -46,6 +46,11 @@ To see one durable workflow from document to finished execution without the
 editor, run `mix ecto.migrate` and then `mix statifier_examples.first_workflow`.
 [`docs/guides/first-workflow.md`](docs/guides/first-workflow.md) walks what
 it does, step by step, and names the package versions it runs on.
+[`docs/guides/first-workflow-routed.md`](docs/guides/first-workflow-routed.md)
+is the routed version, and `mix statifier_examples.first_workflow_routed` runs
+it: where the first guide opens its execution by hand, this one lets
+`statifier_router` open it, routing each event from a source to the one
+execution its key names and handing the finished execution's answer to a sink.
 
 ## Opening a document in the editor
 
