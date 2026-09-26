@@ -28,7 +28,7 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     # elkjs placed, for every container in every fixture.
     #
     # Sabotage: dropped @force_model_order from both the root options and
-    # container_options/1; elkjs laid a branch's arms out of order and this
+    # container_options/2; elkjs laid a branch's arms out of order and this
     # went red. Reverted from a copy.
     test "every fixture lays out in model order", %{tmp_dir: dir} do
       for fixture <- Charts.fixtures() do

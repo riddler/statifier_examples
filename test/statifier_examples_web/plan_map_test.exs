@@ -148,7 +148,7 @@ defmodule StatifierExamplesWeb.PlanMapTest do
   end
 
   describe "the options that keep the model order" do
-    # Sabotage: dropped @force_model_order from container_options/1; every
+    # Sabotage: dropped @force_model_order from container_options/2; every
     # container lost it and this went red. Reverted from a copy.
     test "forceNodeModelOrder is on every container" do
       for fixture <- Charts.fixtures() do
@@ -162,7 +162,7 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     end
 
     # Sabotage: added `@consider_model_order => "NODES_AND_EDGES"` to
-    # container_options/1; this went red on the first nested container.
+    # container_options/2; this went red on the first nested container.
     # Reverted from a copy.
     test "considerModelOrder is on the root and on nothing else" do
       for fixture <- Charts.fixtures() do

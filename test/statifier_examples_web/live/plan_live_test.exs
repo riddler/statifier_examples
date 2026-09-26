@@ -905,7 +905,8 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     # the list.
     #
     # Sabotage: dropped aria-hidden from the map section; this went red.
-    # Reverted from a copy.
+    # Dropped tabindex="-1" from the canvas; this went red. Each reverted
+    # from a copy.
     test "the list stays complete and the map stays out of its path", %{conn: conn} do
       for key <- ["library_loan", "patron_registration"] do
         {:ok, view, html} = live(conn, ~p"/plan?#{[doc: key]}")
@@ -922,7 +923,11 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
         map = section(selected, "map")
         refute map =~ ~r/<(button|input|select|textarea|a)[\s>]/
-        refute map =~ "tabindex"
+        # The canvas scrolls, and a scroll box with nothing focusable in it
+        # is a Tab stop unless it says otherwise: it is taken out of the tab
+        # order, and it is the only thing in the region with a tabindex.
+        assert map =~ ~r/id="plan-map"[^>]*tabindex="-1"/
+        assert map |> String.split("tabindex") |> length() == 2
       end
     end
 
@@ -930,7 +935,8 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     # the hook is told which box to mark, and the panel shows the block.
     #
     # Sabotage: made panel/2 answer nil whatever was selected; this went red,
-    # with the two other cases that select. Reverted from a copy.
+    # with the two other cases that select. Dropped the panel sentence's
+    # :if; this went red on the root. Each reverted from a copy.
     test "selecting a block from the map selects its row and names it in the panel",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
@@ -940,10 +946,14 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert html =~ ~s(data-selected="blk_ll_loan_period")
       assert html =~ ~s(data-plan-panel="blk_ll_loan_period")
       assert section(html, "map") =~ "Wait 21d"
+
+      # A block whose sentence is its title is named once.
+      root = render_hook(view, "select-row", %{"block-id" => "blk_ll_root"})
+      refute root =~ "myapp-plan__panel-sentence"
       assert html =~ ~r/myapp-plan__row--selected"[^>]*data-block-id="blk_ll_loan_period"/
       assert field_keys(html) == ["duration"]
 
-      deselected = render_hook(view, "select-row", %{"block-id" => "blk_ll_loan_period"})
+      deselected = render_hook(view, "select-row", %{"block-id" => "blk_ll_root"})
       refute deselected =~ "data-plan-panel"
       refute deselected =~ ~s(data-selected=)
     end
