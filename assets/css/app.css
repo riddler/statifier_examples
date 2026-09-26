@@ -553,6 +553,109 @@
   margin: 0;
 }
 
+/* ----------------------------------------------------------------- map
+ *
+ * The map above the list (`StatifierExamplesWeb.PlanMap`, drawn by the
+ * `PlanMap` hook). Its colours are the page's own `--sb-*` tokens, mapped
+ * onto the five `--plan-map-*` names the hook's SVG reads, so each of the
+ * three themes below dresses the map without a block of its own. The SVG
+ * carries a fallback for every name, which is what it looks like on a page
+ * that sets none.
+ */
+.myapp-plan__map {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sb-space-2);
+}
+
+.myapp-plan__map-canvas {
+  --plan-map-block-fill: var(--sb-bg);
+  --plan-map-block-stroke: var(--sb-border-strong);
+  --plan-map-slot-fill: var(--sb-bg-muted);
+  --plan-map-slot-stroke: var(--sb-border);
+  --plan-map-empty-fill: transparent;
+  --plan-map-empty-stroke: var(--sb-fg-subtle);
+  --plan-map-edge: var(--sb-fg-subtle);
+
+  flex: 1;
+  min-width: 0;
+  max-height: 75vh;
+  overflow: auto;
+  padding: var(--sb-space);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius-sm, 3px);
+  background: var(--sb-bg-canvas);
+}
+
+.plan-map__svg {
+  display: block;
+}
+
+/* 12px is the size the server's width estimate (7px a character) is
+   written for; a larger size here would run text out of its boxes. */
+.plan-map__svg text {
+  font-family: inherit;
+  font-size: 12px;
+  fill: var(--sb-fg);
+}
+
+.plan-map__title {
+  font-weight: 600;
+}
+
+.plan-map__sentence,
+.plan-map__slot-label {
+  fill: var(--sb-fg-muted);
+}
+
+.plan-map__svg .plan-map__empty-text {
+  fill: var(--sb-fg-subtle);
+  font-style: italic;
+}
+
+.plan-map__block {
+  cursor: pointer;
+}
+
+/* The drawing sets each box's stroke inline, so the selection has to win
+   over a style attribute. */
+.plan-map__block--selected > rect {
+  stroke: var(--sb-accent, #6c8cff) !important;
+  stroke-width: 2;
+}
+
+.plan-map__error {
+  color: var(--sb-fg);
+  font-size: var(--sb-text-sm);
+}
+
+.plan-map__error-reason,
+.plan-map__error-hint {
+  color: var(--sb-fg-muted);
+}
+
+.myapp-plan__panel {
+  width: 20rem;
+  flex-shrink: 0;
+  padding: var(--sb-space);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius-sm, 3px);
+  background: var(--sb-bg);
+}
+
+.myapp-plan__panel-title {
+  margin: 0;
+  font-weight: var(--sb-weight-medium, 500);
+  color: var(--sb-fg);
+}
+
+.myapp-plan__panel-sentence,
+.myapp-plan__panel-hint {
+  margin: var(--sb-space-half) 0 0;
+  color: var(--sb-fg-muted);
+  font-size: var(--sb-text-sm);
+}
+
 /* --------------------------------------------------------------- themes
  *
  * Three host themes, each a block of `--sb-*` custom properties and nothing

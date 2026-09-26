@@ -105,6 +105,24 @@ defmodule StatifierExamplesWeb.PlanLive do
   form draws what the refusal said rather than a second derivation of it.
   Two host functions went with the residue.
 
+  ## The map
+
+  The page opens on a map of the same document above the list:
+  `StatifierExamplesWeb.PlanMap.graph/1` turns the view model this page
+  already builds into a graph, and the `PlanMap` hook in
+  `assets/js/plan_map.mjs` lays it out with elkjs and draws it. The map is a
+  projection and nothing more - no position it draws is stored anywhere, and
+  the next change lays the document out again.
+
+  The list stays, complete and in the tab order, because it is the path a
+  keyboard and a screen reader take through the document. The map region is
+  `aria-hidden`: a reader of the list would otherwise meet every step twice.
+  Clicking a block on the map sends the list's own `select-row`, so both
+  views select through one handler. The panel beside the map names the
+  selected block; its fields open on its row in the list, which stays the
+  page's one form surface - a second copy of the form beside the map
+  would put every field on the page twice.
+
   ## Read-only
 
   `?readonly=1` renders values and no controls. It is one parameter rather
@@ -143,6 +161,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamples.Documents
+  alias StatifierExamplesWeb.PlanMap
 
   @default_theme :light
 
@@ -380,6 +399,26 @@ defmodule StatifierExamplesWeb.PlanLive do
         </div>
 
         <div class="myapp-plan__body">
+          <section class="myapp-plan__map" data-plan-section="map" aria-hidden="true">
+            <div
+              id="plan-map"
+              class="myapp-plan__map-canvas"
+              phx-hook="PlanMap"
+              data-graph={@map_graph}
+              data-selected={@selected_id}
+            >
+              <div id="plan-map-canvas" data-map-canvas phx-update="ignore"></div>
+            </div>
+
+            <aside :if={@panel} class="myapp-plan__panel" data-plan-panel={@panel.block_id}>
+              <p class="myapp-plan__panel-title">{ViewModel.title(@panel)}</p>
+              <p class="myapp-plan__panel-sentence">{ViewModel.sentence(@panel)}</p>
+              <p :if={@panel.form} class="myapp-plan__panel-hint">
+                Its fields are open on its row in the list.
+              </p>
+            </aside>
+          </section>
+
           <ol class="myapp-plan__list" data-plan-section="plan">
             <.row
               :for={{node, depth, kind} <- @plan}
@@ -726,11 +765,23 @@ defmodule StatifierExamplesWeb.PlanLive do
 
     socket
     |> assign(:view_model, view_model)
+    |> assign(:map_graph, view_model |> PlanMap.graph() |> Jason.encode!())
+    |> assign(:panel, panel(outline, socket.assigns.selected_id))
     |> assign(:positions, ViewModel.positions(view_model))
     |> assign(:plan, Enum.filter(outline, fn {_node, _depth, kind} -> kind in [:step, :arm] end))
     |> assign(:rails, Enum.filter(outline, fn {_node, _depth, kind} -> kind == :rail end))
     |> assign(:trays, Enum.filter(outline, fn {_node, _depth, kind} -> kind == :tray end))
     |> assign_insertable()
+  end
+
+  # The block the map's panel shows: the selected one, off the outline the
+  # list draws, so a held draft shows there exactly as it does in its row.
+  @spec panel([{ViewModel.Node.t(), non_neg_integer(), atom()}], Block.id() | nil) ::
+          ViewModel.Node.t() | nil
+  defp panel(_outline, nil), do: nil
+
+  defp panel(outline, id) do
+    Enum.find_value(outline, fn {node, _depth, _kind} -> if node.block_id == id, do: node end)
   end
 
   # One outline entry with its draft over it, where a draft is held. Both

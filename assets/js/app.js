@@ -70,7 +70,7 @@ import { StatifierUIHooks } from "statifier_ui/assets/js/index.js"
 // The Plan view's map (`StatifierExamplesWeb.PlanMap` builds the graph; the
 // hook lays it out and draws it). It is this app's own hook, not a package's,
 // and it carries elkjs 0.9.3, vendored whole under `assets/vendor/` beside its
-// licence (EPL-2.0) - about 1.6 MB as shipped and about 460 KB gzipped, the
+// licence (EPL-2.0) - about 1.6 MB as shipped and about 467 KB gzipped, the
 // largest thing in this bundle.
 import PlanMapHooks from "./plan_map.mjs"
 
