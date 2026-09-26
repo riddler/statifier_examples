@@ -37,7 +37,7 @@ defmodule StatifierExamples.Charts do
 
   alias StatifierBlocks.Palette
   alias StatifierBlocks.Runtime
-  alias StatifierExamples.{CardAuth, Signup}
+  alias StatifierExamples.{CardAuth, Library, Signup}
   alias StatifierExamples.Charts.{FanOut, Fixture, Icons, Messaging, Subchart, SyncAdapter}
 
   @themes [:light, :dark, :brand]
@@ -138,7 +138,7 @@ defmodule StatifierExamples.Charts do
   they are decoded at compile time.
   """
   @spec fixtures() :: [Fixture.t()]
-  def fixtures, do: CardAuth.fixtures() ++ Signup.fixtures()
+  def fixtures, do: CardAuth.fixtures() ++ Signup.fixtures() ++ Library.fixtures()
 
   @doc """
   The fixture stored under `key`, or `:error`.

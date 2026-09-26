@@ -165,7 +165,7 @@ defmodule StatifierExamples.ChartsTest do
 
   # Sabotage: made fixtures/0 read only Signup.fixtures(); this went red, then
   # reverted.
-  test "the fixture list is both domains', card processing first" do
+  test "the fixture list is every domain's, card processing first" do
     assert [
              %{key: "card_processing", name: "Card processing"},
              %{key: "card_processing_sketch", name: "Card processing (sketch)"},
@@ -178,7 +178,9 @@ defmodule StatifierExamples.ChartsTest do
              %{key: "signup_invite_chunk"},
              %{key: "signup_guarded_step"},
              %{key: "signup_guarded_section"},
-             %{key: "signup_path"}
+             %{key: "signup_path"},
+             %{key: "library_loan", name: "Library loan"},
+             %{key: "patron_registration", name: "Patron registration"}
            ] = Charts.fixtures()
   end
 

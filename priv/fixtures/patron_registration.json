@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_patron_registration_map",
+  "revision": 1,
+  "metadata": {
+    "name": "Patron registration",
+    "description": "A new patron has a week to verify their email address. A patron under thirteen also needs a guardian's consent before the card is issued; one the branch cannot place is asked to visit.",
+    "domain": "library"
+  },
+  "datamodel": [
+    {
+      "id": "patron",
+      "description": "The patron being registered: their age and home branch, as the registration form gave them."
+    }
+  ],
+  "accepts": ["email.verified", "registration.abandoned", "guardian.consented"],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_pr_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.group",
+          "id": "blk_pr_verify",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "core.send",
+                "id": "blk_pr_deadline",
+                "type_version": 1,
+                "config": {
+                  "event": "registration.deadline",
+                  "delay": "7d"
+                }
+              },
+              {
+                "type": "core.await",
+                "id": "blk_pr_email",
+                "type_version": 1,
+                "config": {
+                  "event": "email.verified"
+                }
+              }
+            ],
+            "interrupts": [
+              {
+                "type": "core.on_event",
+                "id": "blk_pr_abandoned",
+                "type_version": 1,
+                "config": {
+                  "event": "registration.abandoned",
+                  "outcome": "abandon"
+                }
+              },
+              {
+                "type": "core.on_event",
+                "id": "blk_pr_expired",
+                "type_version": 1,
+                "config": {
+                  "event": "registration.deadline",
+                  "outcome": "abandon"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "core.branch",
+          "id": "blk_pr_age",
+          "type_version": 1,
+          "config": {
+            "arms": [
+              {
+                "slot": "arm_child",
+                "cond": "patron.age < 13"
+              },
+              {
+                "slot": "arm_adult",
+                "cond": "patron.age >= 13"
+              }
+            ]
+          },
+          "slots": {
+            "arm_child": [
+              {
+                "type": "core.await",
+                "id": "blk_pr_guardian",
+                "type_version": 1,
+                "config": {
+                  "event": "guardian.consented",
+                  "timeout": "14d"
+                }
+              }
+            ],
+            "arm_adult": [
+              {
+                "type": "core.send",
+                "id": "blk_pr_card_ready",
+                "type_version": 1,
+                "config": {
+                  "event": "card.ready"
+                }
+              }
+            ],
+            "undecided": [
+              {
+                "type": "core.send",
+                "id": "blk_pr_visit",
+                "type_version": 1,
+                "config": {
+                  "event": "patron.asked_to_visit"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "core.send",
+          "id": "blk_pr_welcome",
+          "type_version": 1,
+          "config": {
+            "event": "patron.welcomed"
+          }
+        }
+      ]
+    }
+  }
+}

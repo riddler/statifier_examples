@@ -1,0 +1,7 @@
+# Unmodified third-party files vendored into this repo, each pinned to the
+# SHA-256 of its upstream bytes. A listed file whose bytes match skips the
+# pre-push terminology and planning-id line scans; its name is still
+# scanned, and editing it ends the exemption.
+#
+# <path> sha256=<hex> upstream=<name@version> [licence=<path>]
+assets/vendor/elk.bundled.js sha256=b0745abd7f23cd91690a1587e377edbe19fd7233c783300290936720546216d4 upstream=elkjs@0.9.3 licence=assets/vendor/elkjs-LICENSE.md
