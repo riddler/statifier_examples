@@ -29,9 +29,10 @@ The recipe is written and checked against these releases, which are what
 | `statifier` | 2.9.0 | compiling the chart and running it |
 
 `statifier_router` 0.6.0 requires `statifier ~> 2.9` and
-`statifier_persistence ~> 0.18`, which is what moved those two with it. The
-jobs run on this app's own Oban. The first line the command prints names
-the versions it actually loaded.
+`statifier_persistence ~> 0.18`, which is what moved those two with it.
+`mix.exs` asks for `statifier_persistence ~> 0.19` all the same, the
+release this table names. The jobs run on this app's own Oban. The first
+line the command prints names the versions it actually loaded.
 
 ## The workflow
 
@@ -97,7 +98,10 @@ table's columns back and checks that `depot_id` is second.
 ## 2. The router configuration
 
 `StatifierExamples.RoutedWorkflow.config/0` builds the one
-`StatifierRouter.Config` every step uses:
+`StatifierRouter.Config` every step uses. It builds it on its first call
+and keeps it in `:persistent_term`, so the executor, which is handed every
+effect, and each reaper job read that same struct back rather than build
+it again:
 
 ```elixir
 StatifierRouter.Config.new(

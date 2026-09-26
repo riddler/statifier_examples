@@ -854,6 +854,11 @@ defmodule StatifierExamples.MixDepsTest do
   # callback. Sabotage: pointed the LOCK assertion back at `"0.17.` and
   # left `mix.lock` alone; it went red reporting the resolved 0.19.0 entry.
   # Reverted from a copy.
+  #
+  # 2026-09-26, se-rhk5: the requirement stays `~> 0.19` rather than the
+  # `~> 0.18` the router forces, because it follows the pin
+  # `docs/guides/first-workflow-routed.md` names; `mix.exs` says so beside
+  # the dep.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 

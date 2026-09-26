@@ -363,6 +363,13 @@ defmodule StatifierExamples.MixProject do
       # reach nothing here: this app migrates no execution and its adapter
       # exports no pruning callback, so `prune/3` still answers
       # `{:error, :execution_pruning_unsupported}`.
+      #
+      # 2026-09-26, se-rhk5: the floor stays at 0.19.0 although the router
+      # forces only 0.18.0, because it follows the pin
+      # `docs/guides/first-workflow-routed.md` names for
+      # `statifier_persistence` (0.19.0), the release the routed recipe is
+      # written and checked against. `~> 0.18` would resolve the same
+      # `mix.lock` entry; the floor says which release the guide promises.
       {:statifier_persistence, "~> 0.19"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
