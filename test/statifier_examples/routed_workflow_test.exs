@@ -120,6 +120,29 @@ defmodule StatifierExamples.RoutedWorkflowTest do
              Repo.all(from(j in Oban.Job, where: j.worker == ^worker))
   end
 
+  # Sabotage: dropped the `:persistent_term.put/2` from
+  # `RoutedWorkflow.config/0`; this went red at the first assertion. Made
+  # the lookup always miss, so every call built afresh; this went red at
+  # the planted `send_type`. Each reverted from a copy.
+  test "the router configuration is built once and read back on every later call" do
+    key = {RoutedWorkflow, :config}
+    :persistent_term.erase(key)
+
+    try do
+      config = RoutedWorkflow.config()
+      assert :persistent_term.get(key) == config
+
+      # A struct planted under the key is what the next call answers, so
+      # the executor and the reapers read what the first call stored
+      # rather than build it again.
+      planted = %{config | send_type: "myapp:planted"}
+      :persistent_term.put(key, planted)
+      assert RoutedWorkflow.config().send_type == "myapp:planted"
+    after
+      :persistent_term.erase(key)
+    end
+  end
+
   # Sabotage: made the task print none of the lines; this went red.
   # Reverted from a copy.
   test "the mix task prints every line the recipe answers" do

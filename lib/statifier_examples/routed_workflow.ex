@@ -112,6 +112,11 @@ defmodule StatifierExamples.RoutedWorkflow do
   @leading_column "depot_id"
   @tables [:addresses, :dedupe, :routing_ledger, :subscriptions]
 
+  # Where `config/0` keeps the configuration it built, so the executor,
+  # which runs once per effect, and each reaper job read it rather than
+  # build it again.
+  @config_key {__MODULE__, :config}
+
   @typedoc "The step `run/1` names when it stops; see the moduledoc."
   @type step ::
           :decoded
@@ -141,9 +146,9 @@ defmodule StatifierExamples.RoutedWorkflow do
     config = config()
 
     with {:ok, document} <- step(:decoded, decode()),
-         :ok <- step(:migrated, migrated()),
+         :ok <- step(:migrated, migrated(config)),
          {:ok, _compiled, accepts, warnings} <- step(:published, publish(document, config)),
-         :ok <- step(:guarded, guarded(document)),
+         :ok <- step(:guarded, guarded(document, config)),
          {:ok, content_hash} <- step(:registered, register(document)),
          {:ok, execution_id} <- step(:created, created(config, parcel_id)),
          :ok <- step(:duplicate, duplicate(config, parcel_id, execution_id)),
@@ -189,9 +194,27 @@ defmodule StatifierExamples.RoutedWorkflow do
   is `#{@route}`, served by `StatifierExamples.RoutedWorkflow.DoorstepRoute`
   and named by `:on_complete`, so a delivery that finishes an execution
   hands its donedata there.
+
+  The configuration is built on the first call and kept in
+  `:persistent_term`; every later call, the executor's on each effect and
+  each reaper job's included, reads that same struct back. Nothing in it
+  changes while the app runs, so it is written once.
   """
   @spec config() :: Config.t()
   def config do
+    case :persistent_term.get(@config_key, nil) do
+      %Config{} = config ->
+        config
+
+      nil ->
+        config = build_config()
+        :persistent_term.put(@config_key, config)
+        config
+    end
+  end
+
+  @spec build_config() :: Config.t()
+  defp build_config do
     case Config.new(
            repo: Repo,
            store: FirstWorkflow.store(),
@@ -258,10 +281,8 @@ defmodule StatifierExamples.RoutedWorkflow do
 
   # SQLite numbers a table's columns from 0 in `PRAGMA table_info`, so
   # ordinal position 2 is `cid` 1.
-  @spec migrated() :: :ok | {:error, term()}
-  defp migrated do
-    config = config()
-
+  @spec migrated(Config.t()) :: :ok | {:error, term()}
+  defp migrated(config) do
     misplaced =
       for table <- @tables,
           name = Config.table(config, table),
@@ -290,9 +311,9 @@ defmodule StatifierExamples.RoutedWorkflow do
 
   # A binding that names an event the document does not accept is a
   # contract the publish gate has to refuse, before any event is routed.
-  @spec guarded(Document.t()) :: :ok | {:error, term()}
-  defp guarded(document) do
-    config = %{config() | bindings: [built_binding("parcel.lost")]}
+  @spec guarded(Document.t(), Config.t()) :: :ok | {:error, term()}
+  defp guarded(document, config) do
+    config = %{config | bindings: [built_binding("parcel.lost")]}
 
     case publish(document, config) do
       {:refused, %{stage: :contracts, findings: [%{anchor: {:binding, @binding_id}} | _]}} ->
