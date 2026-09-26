@@ -95,6 +95,21 @@ function textLines(node, x, y, className) {
     .join("")
 }
 
+// The "+" at a block's lower right corner: the gap right after the block,
+// the same gap the list's "+" under its row arms. Drawn only on a page that
+// can edit, and never for the root, which sits in no slot.
+function drawGap(node) {
+  if (node.kind !== "block" || node.gap !== true) return ""
+  const cx = node.x + node.width - 10
+  const cy = node.y + node.height
+  return `<g class="plan-map__gap" data-map-gap="${escapeText(node.id)}">` +
+    `<circle cx="${cx}" cy="${cy}" r="7" ` +
+    `style="fill: var(--plan-map-block-fill, #ffffff); stroke: var(--plan-map-edge, #64748b)"/>` +
+    `<path d="M${cx - 3.5} ${cy} H${cx + 3.5} M${cx} ${cy - 3.5} V${cy + 3.5}" ` +
+    `style="stroke: var(--plan-map-edge, #64748b); stroke-width: 1.5"/>` +
+    `</g>`
+}
+
 function drawNode(node) {
   const x = node.x
   const y = node.y
@@ -104,7 +119,9 @@ function drawNode(node) {
   const id = escapeText(node.id)
 
   if (node.kind === "empty") {
-    return `<g class="plan-map__empty" data-map-node="${id}" data-map-kind="empty">` +
+    const target = node.parent === undefined ? "" :
+      ` data-map-parent="${escapeText(node.parent)}" data-map-slot="${escapeText(node.slot)}"`
+    return `<g class="plan-map__empty" data-map-node="${id}" data-map-kind="empty"${target}>` +
       `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" ` +
       `style="fill: var(--plan-map-empty-fill, transparent); stroke: var(--plan-map-empty-stroke, #94a3b8); stroke-dasharray: 4 3"/>` +
       `<text class="plan-map__empty-text" x="${x + 12}" y="${y + HEADER_BASE + LINE_HEIGHT - 4}">${escapeText(node.title)}</text>` +
@@ -142,8 +159,13 @@ function drawEdge(edge) {
 // The laid-out graph as one SVG string. The picture is decoration over the
 // list, which is the accessible path through the same document, so the SVG
 // is hidden from assistive technology and takes no focus.
-export function renderSvg(laid) {
-  const nodes = boxes(laid).map(drawNode).join("")
+//
+// `editable` adds the gaps an insert can target; a read-only page draws
+// none.
+export function renderSvg(laid, {editable = false} = {}) {
+  const all = boxes(laid)
+  const nodes = all.map(drawNode).join("")
+  const gaps = editable ? all.map(drawGap).join("") : ""
   const edges = edgesOf(laid).map(drawEdge).join("")
   const width = Math.ceil(laid.width)
   const height = Math.ceil(laid.height)
@@ -154,7 +176,7 @@ export function renderSvg(laid) {
     `<defs><marker id="plan-map-arrow" viewBox="0 0 10 10" refX="10" refY="5" ` +
     `markerWidth="7" markerHeight="7" orient="auto-start-reverse">` +
     `<path d="M0 0 L10 5 L0 10 z" style="fill: var(--plan-map-edge, #64748b)"/></marker></defs>` +
-    nodes + edges +
+    nodes + edges + gaps +
     `</svg>`
 }
 
@@ -172,16 +194,42 @@ export function renderError(reason) {
 // Lays `graph` out and draws the result, or the error pane, into `target`.
 // Resolves to `{drawn: "map", laid}` with the laid-out graph it drew, or
 // `{drawn: "error", laid: null}`, so a caller can tell which it drew and
-// read the very positions it drew from.
-export async function drawMap(target, graph, elk = elkInstance()) {
+// read the very positions it drew from. `editable` is `renderSvg`'s.
+export async function drawMap(target, graph, {elk = elkInstance(), editable = false} = {}) {
   try {
     const laid = await layout(graph, elk)
-    target.innerHTML = renderSvg(laid)
+    target.innerHTML = renderSvg(laid, {editable})
     return {drawn: "map", laid}
   } catch (reason) {
     target.innerHTML = renderError(reason)
     return {drawn: "error", laid: null}
   }
+}
+
+// What a click on the map asks the page to do, as `{event, payload}`, or
+// null. Every event is one the page's list already sends, with the payload
+// the list sends it: a block's box selects it (`select-row`); a gap arms
+// the insert right after its block (`insert-open`, as the row's "+");
+// an empty slot's marker arms the insert at the head of that slot
+// (`insert-open` with the slot named). A page that cannot edit gets only
+// the selection. `target` is any element with `closest` and `dataset`.
+export function mapGesture(target, editable) {
+  const gap = target.closest("[data-map-gap]")
+  if (gap) return editable ? {event: "insert-open", payload: {"block-id": gap.dataset.mapGap}} : null
+
+  const empty = target.closest("[data-map-kind=empty]")
+  if (empty) {
+    if (!editable || empty.dataset.mapParent === undefined) return null
+    return {
+      event: "insert-open",
+      payload: {"block-id": empty.dataset.mapParent, slot: empty.dataset.mapSlot},
+    }
+  }
+
+  const box = target.closest("[data-map-kind=block]")
+  if (box) return {event: "select-row", payload: {"block-id": box.dataset.mapNode}}
+
+  return null
 }
 
 // Marks the box of the block the page has selected, and unmarks the rest.
@@ -192,33 +240,46 @@ export function markSelected(target, id) {
 }
 
 // The LiveView hook. The graph arrives JSON-encoded in `data-graph` on the
-// hook's element and the selected block's id in `data-selected`; the
-// drawing goes into the child marked `data-map-canvas` (which the page
-// keeps out of LiveView's patching) or, lacking one, into the element
-// itself.
+// hook's element, the selected block's id in `data-selected`, and whether
+// the page can edit in `data-editable`; the drawing goes into the child
+// marked `data-map-canvas` (which the page keeps out of LiveView's
+// patching) or, lacking one, into the element itself.
 //
 // A patch that changes only the selection re-marks the drawing rather than
 // laying it out again. A layout still running when a newer graph arrives is
 // dropped when it lands, so a slow layout never draws over a newer one.
 //
-// A click on a block's box sends the page the same `select-row` event the
-// list's own row button sends, so the two views select through one handler.
-// The map is hidden from assistive technology; the list is the keyboard
-// path to the same selection.
+// A click becomes the event `mapGesture` names, sent through the page's
+// own handlers. After an insert armed from the map, the next patch scrolls
+// the open picker into view, since it may sit below the map. The map is
+// hidden from assistive technology; the list and the panel are the keyboard
+// path to every one of these gestures but the insert into an empty slot.
 export const PlanMap = {
   mounted() {
     this.el.addEventListener("click", (event) => {
-      const box = event.target.closest("[data-map-kind=block]")
-      if (box) this.pushEvent("select-row", {"block-id": box.dataset.mapNode})
+      const gesture = mapGesture(event.target, this.el.dataset.editable === "true")
+      if (!gesture) return
+      if (gesture.event === "insert-open") this.revealPicker = true
+      this.pushEvent(gesture.event, gesture.payload)
     })
     this.draw()
   },
 
-  updated() { this.draw() },
+  updated() {
+    this.draw()
+    if (this.revealPicker) {
+      const picker = document.querySelector("[data-plan-picker=open]")
+      if (picker) {
+        this.revealPicker = false
+        picker.scrollIntoView({block: "nearest"})
+      }
+    }
+  },
 
   draw() {
     const target = this.el.querySelector("[data-map-canvas]") || this.el
-    const source = this.el.dataset.graph
+    const editable = this.el.dataset.editable === "true"
+    const source = `${editable}|${this.el.dataset.graph}`
     const selected = this.el.dataset.selected || null
 
     if (source === this.source) {
@@ -231,14 +292,14 @@ export const PlanMap = {
     let graph
 
     try {
-      graph = JSON.parse(source)
+      graph = JSON.parse(this.el.dataset.graph)
     } catch (reason) {
       target.innerHTML = renderError(reason)
       return
     }
 
     const staging = {innerHTML: ""}
-    drawMap(staging, graph).then(() => {
+    drawMap(staging, graph, {editable}).then(() => {
       if (token !== this.drawn) return
       target.innerHTML = staging.innerHTML
       markSelected(target, this.el.dataset.selected || null)

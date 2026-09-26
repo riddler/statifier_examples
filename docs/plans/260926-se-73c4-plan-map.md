@@ -155,6 +155,15 @@ complete; a11y (the map aria-hidden from the list's path).
   and is reached from the row by keyboard.
 - Tests: each command performed from the map and from the list on copies of
   the same document ends at the same document.
+- As built (2026-09-26): an empty marker arms `insert-open` with the slot
+  named (`{:slot, block, slot}` in the page), the head of that slot - a gap
+  the list has no row for, held to the package's own insert at that
+  position rather than to a list gesture. The picker for the gap after a
+  block opens under that block's row whichever view armed it; the empty-slot
+  picker opens in the panel. The panel sits between the map and the list,
+  and the selected row's "Its fields" link moves focus into it. What the
+  map sends is read off the hook's own `mapGesture` through Node, and the
+  LiveView tests send exactly that.
 
 ### Acceptance items met
 

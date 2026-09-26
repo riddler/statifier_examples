@@ -22,7 +22,12 @@ defmodule StatifierExamplesWeb.PlanMap do
   |---|---|---|
   | a block | one `ViewModel.Node`, keyed by its block id | its slots, below |
   | a slot | one of a block's slots, keyed `<block id>/<slot name>` | the slot's blocks, in slot order |
-  | an empty marker | a slot with nothing in it, keyed `<slot id>/empty` | nothing |
+  | an empty marker | a slot with nothing in it, keyed `<slot id>/empty`, carrying `parent` and `slot` | nothing |
+
+  Every block but the root carries `gap: true`: it sits in a slot, so there
+  is a place right after it an insert can target, the same place the list's
+  "+" under its row targets. The root sits in no slot. An empty marker is
+  the other kind of gap: the head of the slot it stands for.
 
   A block whose only body slot stacks (`ViewModel.arrangement/1` is
   `:stack`) holds that slot's blocks directly, because a sequence drawn
@@ -119,7 +124,7 @@ defmodule StatifierExamplesWeb.PlanMap do
     %{
       "id" => "plan-map",
       "layoutOptions" => @root_options,
-      "children" => [block(root)],
+      "children" => [root |> block() |> Map.put("gap", false)],
       "edges" => []
     }
   end
@@ -154,6 +159,7 @@ defmodule StatifierExamplesWeb.PlanMap do
     %{
       "id" => node.block_id,
       "kind" => "block",
+      "gap" => true,
       "title" => title,
       "lines" => lines,
       "width" => leaf_width([title | lines]),
@@ -174,6 +180,7 @@ defmodule StatifierExamplesWeb.PlanMap do
     %{
       "id" => node.block_id,
       "kind" => "block",
+      "gap" => true,
       "title" => title,
       "lines" => lines,
       "layoutOptions" => container_options([title | lines], lines),
@@ -188,7 +195,7 @@ defmodule StatifierExamplesWeb.PlanMap do
   defp slot_part(%Node{} = node, %Slot{} = slot) do
     cond do
       not inline?(node, slot) -> {[slot(node, slot)], []}
-      slot.children == [] -> {[empty("#{node.block_id}/#{slot.name}")], []}
+      slot.children == [] -> {[empty(node.block_id, slot.name)], []}
       true -> {slot_children(slot), sequence_edges(slot)}
     end
   end
@@ -230,7 +237,7 @@ defmodule StatifierExamplesWeb.PlanMap do
 
     {children, edges} =
       case slot.children do
-        [] -> {[empty(id)], []}
+        [] -> {[empty(block_id, slot.name)], []}
         _blocks -> {slot_children(slot), flow_edges(slot)}
       end
 
@@ -294,11 +301,15 @@ defmodule StatifierExamplesWeb.PlanMap do
     end)
   end
 
-  @spec empty(String.t()) :: graph_node()
-  defp empty(slot_id) do
+  # An empty slot's marker carries the block and the slot it stands for,
+  # which is the gap an insert into it targets.
+  @spec empty(String.t(), String.t()) :: graph_node()
+  defp empty(block_id, slot_name) do
     %{
-      "id" => "#{slot_id}/empty",
+      "id" => "#{block_id}/#{slot_name}/empty",
       "kind" => "empty",
+      "parent" => block_id,
+      "slot" => slot_name,
       "title" => @empty_text,
       "lines" => [],
       "width" => leaf_width([@empty_text]),

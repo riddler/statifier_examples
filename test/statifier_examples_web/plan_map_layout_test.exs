@@ -146,6 +146,69 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     end
   end
 
+  describe "what a click on the map sends" do
+    # Every clickable element the hook draws, and what its own mapGesture
+    # turns a click there into, for every fixture: a block selects itself;
+    # every block but the root has a "+" arming the gap after it; every
+    # empty slot's marker arms the head of the slot it stands for. The
+    # payloads are the ones the list's own controls send.
+    #
+    # Sabotage: made drawGap draw for the root too; this went red on the
+    # gap count. Made the empty marker omit data-map-slot; this went red.
+    # Each reverted from a copy.
+    test "an editable map arms the list's own gestures", %{tmp_dir: dir} do
+      for fixture <- Charts.fixtures() do
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+        %{"drawn" => "map", "gestures" => gestures} = run(dir, fixture.key, graph, "editable")
+        by_element = Map.new(gestures, &{&1["element"], &1["gesture"]})
+        [root | blocks] = PlanMap.nodes(graph)
+
+        assert by_element["block:#{root}"] == %{
+                 "event" => "select-row",
+                 "payload" => %{"block-id" => root}
+               }
+
+        refute Map.has_key?(by_element, "gap:#{root}")
+
+        for id <- blocks do
+          assert by_element["block:#{id}"] == %{
+                   "event" => "select-row",
+                   "payload" => %{"block-id" => id}
+                 }
+
+          assert by_element["gap:#{id}"] == %{
+                   "event" => "insert-open",
+                   "payload" => %{"block-id" => id}
+                 }
+        end
+
+        for %{"kind" => "empty", "id" => id, "parent" => parent, "slot" => slot} <- walk(graph) do
+          assert by_element["empty:#{id}"] == %{
+                   "event" => "insert-open",
+                   "payload" => %{"block-id" => parent, "slot" => slot}
+                 }
+        end
+
+        assert Enum.count(gestures, &String.starts_with?(&1["element"], "gap:")) == length(blocks)
+      end
+    end
+
+    # Sabotage: made renderSvg draw the gaps whatever `editable` said; this
+    # went red. Reverted from a copy.
+    test "a read-only map only selects", %{tmp_dir: dir} do
+      for fixture <- Charts.fixtures() do
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+        %{"drawn" => "map", "html" => html, "gestures" => gestures} = run(dir, fixture.key, graph)
+
+        refute html =~ "data-map-gap"
+
+        for %{"gesture" => gesture} <- gestures, gesture != nil do
+          assert gesture["event"] == "select-row"
+        end
+      end
+    end
+  end
+
   # A document's words reach the SVG as text, never as markup.
   #
   # Sabotage: made escapeText return its argument unchanged; the title
@@ -168,12 +231,13 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
   end
 
-  defp run(dir, name, graph) do
+  defp run(dir, name, graph, mode \\ nil) do
     node = System.find_executable("node") || flunk("the map's layout tests need Node on the PATH")
     path = Path.join(dir, "#{name}.json")
     File.write!(path, Jason.encode!(graph))
 
-    {out, status} = System.cmd(node, [@driver, path], stderr_to_stdout: true)
+    args = if mode, do: [@driver, path, mode], else: [@driver, path]
+    {out, status} = System.cmd(node, args, stderr_to_stdout: true)
     assert status == 0, "the layout driver exited #{status}: #{out}"
     Jason.decode!(out)
   end

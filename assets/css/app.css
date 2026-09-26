@@ -562,10 +562,18 @@
  * carries a fallback for every name, which is what it looks like on a page
  * that sets none.
  */
-.myapp-plan__map {
+/* The map and the panel side by side. The panel follows the map in the
+   document, ahead of the list, which is also where a keyboard reaches it. */
+.myapp-plan__top {
   display: flex;
   align-items: flex-start;
   gap: var(--sb-space-2);
+}
+
+.myapp-plan__map {
+  flex: 1;
+  min-width: 0;
+  display: flex;
 }
 
 .myapp-plan__map-canvas {
@@ -613,7 +621,12 @@
   font-style: italic;
 }
 
-.plan-map__block {
+.plan-map__block,
+.plan-map__gap {
+  cursor: pointer;
+}
+
+.plan-map__svg .plan-map__empty {
   cursor: pointer;
 }
 
@@ -635,7 +648,9 @@
 }
 
 .myapp-plan__panel {
-  width: 20rem;
+  width: 24rem;
+  max-height: 75vh;
+  overflow: auto;
   flex-shrink: 0;
   padding: var(--sb-space);
   border: 1px solid var(--sb-border);
