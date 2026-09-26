@@ -55,7 +55,7 @@ execution its key names and handing the finished execution's answer to a sink.
 ## Opening a document in the editor
 
 1. Click a document on the home page, or go to `/editor?doc=<key>` directly.
-   The eight keys, in the order the switcher offers them - which is
+   The keys, in the order the switcher offers them - which is
    `StatifierExamples.Charts.fixtures/0`'s order, card processing first:
 
    | `doc=` | What the document shows |
@@ -69,6 +69,8 @@ execution its key names and handing the finished execution's answer to a sink.
    | `signup_bulk_invites` | the fan-out shape: a `core.assign` seeding ten chunk descriptors, then a `core.map` running `signup_invite_chunk` once per descriptor with `collect: "results"` and `on: "all"`, then a confirmation step. Ids are what fan out, never invitee rows - the list is serialized on every persisted step |
    | `signup_bulk_invites_strict` | the same document with two characters changed: one descriptor is a deliberate bad id, and the `core.map` runs `on: "first_error"`. It is the pair that makes the two failure policies readable side by side |
    | `signup_guarded_step` | one `myapp.guarded_step` block: a call, and a `myapp.notify` on its error path. The second composite, and the pairing an author forgets - which is the argument for having composites at all |
+   | `library_loan` | the library world, from `core.*` blocks alone: a three-week loan with a return or a lost-copy report ending it early, then a branch at the due date - close, renew, or an overdue notice and two more weeks - whose "cannot be decided" arm is left empty |
+   | `patron_registration` | a week to verify an email address, with abandonment and a deadline on the group's rail, then a branch on the patron's age - a guardian's consent, a card, or a visit to the branch - whose "otherwise" arm is left empty |
    | `signup_invite_chunk` | the child the two bulk documents fan out over: one `core.invoke` of `myapp:process_rows` for the chunk a descriptor stands for, answering a summary. It is offered in the switcher because a child chart is a document like any other |
 
 2. Switch documents with the header's DOCUMENT select. Edits live in
@@ -86,6 +88,74 @@ list of steps instead of a canvas (`StatifierExamplesWeb.PlanLive`). It takes
 the same `doc=` and `theme=` parameters plus `readonly=1`, and its
 `Open in editor` link and the editor's own page are two views of one
 document, which is what the store above is for.
+
+## The Plan view's map
+
+`/plan?doc=<key>` opens on a map of the document, drawn above the list of
+steps. Every block is a box; a container draws its steps inside it, top to
+bottom in the order they run; a branch draws its arms side by side, left to
+right in the order it evaluates them; a slot nobody has put a step in is a
+dashed "Nothing here yet" marker rather than a gap in the picture. It is the
+Plan view's default reading; the list below it is unchanged, complete, and
+the page's keyboard and screen-reader path.
+
+The map is a projection and stores nothing. `StatifierExamplesWeb.PlanMap`
+builds a graph from the same `StatifierBlocks.ViewModel` the list is drawn
+from, on every change; the `PlanMap` hook in `assets/js/plan_map.mjs` lays it
+out in the browser and draws plain SVG. No position, size or connector is
+written to the document or to any table, and nothing is placed by hand: the
+next change lays the whole document out again. Connectors are drawn, never
+authored. A layout that fails draws an error pane in the map's place, never a
+blank one.
+
+Two ELK options keep the order the document means rather than the order that
+saves a crossing: `crossingMinimization.forceNodeModelOrder` on every
+container, and `considerModelOrder` on the root only.
+`StatifierExamplesWeb.PlanMapLayoutTest` lays every fixture out through the
+real layout library and reads the order off the boxes it placed.
+
+### Editing from the map
+
+Every gesture on the map is one the list already makes, sent to the same
+`StatifierExamplesWeb.PlanLive` handler with the same payload:
+
+| On the map | What it does | The keyboard's way to it |
+|---|---|---|
+| a block's box | selects it, and its form opens in the panel beside the map | the row's sentence, then the row's "Its fields" link into the panel |
+| the "+" at a block's lower right corner | opens the picker for the place right after it | the row's "+" |
+| an empty slot's marker | opens the picker, in the panel, for the head of that slot | none yet - see below |
+| the panel's Move up, Move down, Delete | moves or deletes the selected block | the same buttons on every row that is not selected, and the panel's |
+| the panel's form | changes the selected block's config | the same form, reached through the row's link |
+
+The panel is the page's one form surface: a block's fields are never drawn
+twice. It sits after the map and before the list, outside the map's region,
+and takes focus. The map's region is hidden from assistive technology and
+out of the tab order, so a keyboard or a screen reader meets every step once,
+in the list and the panel.
+
+**Not yet keyboard-reachable:** inserting at the head of an empty slot. The
+list has no row for an empty slot, so the marker on the map is the only way
+to arm that gap today. The editor at `/editor` has a focusable gap button in
+every slot, empty ones included, which is the keyboard path to the same
+insert until the Plan view grows one (`se-jdez`).
+
+On a read-only page (`readonly=1`) the map draws no "+" and a click only
+selects; the panel shows the block's fields as values.
+
+### What it costs
+
+The layout library is [elkjs](https://github.com/kieler/elkjs) 0.9.3, under
+the Eclipse Public License 2.0, vendored whole as
+`assets/vendor/elk.bundled.js` beside its licence,
+`assets/vendor/elkjs-LICENSE.md`. It is 1,606,238 bytes as shipped and
+466,990 bytes gzipped, the largest thing in the page bundle. The file is
+byte-identical to `lib/elk.bundled.js` in the npm tarball, and
+`.claude/firewall-vendor.txt` pins its SHA-256.
+
+The map's layout tests run `assets/js/plan_map.mjs` through the real elkjs,
+so they need **Node** on the `PATH`. It is the one tool the suite asks for
+beyond Elixir; without it those tests fail with that sentence rather than
+skipping, because a skipped order test is an unpinned order.
 
 ## What the Plan view copied, measured
 
@@ -852,6 +922,10 @@ packages because their own gates never bundle - statifier-ui's ADR-0009
 decides that, and names an example host as where the bundle should actually be
 built. Run it locally the same way; it needs no server and no npm install.
 
+The suite itself needs Node for one thing: the Plan view's map is laid out
+in the browser, so its layout and gesture tests run `assets/js/plan_map.mjs`
+through Node (see "The Plan view's map" above).
+
 The job runs two legs. **`hex`** bundles the `statifier_ui` this app actually
 depends on, the last published release, and it is a required check.
 **`statifier-ui-main`** bundles the statifier-ui repository's `main` instead,
@@ -946,6 +1020,11 @@ compiler's unknown-type finding. It is registered now (se-bv9): an
 unresolvable type in the shipped document masked every stage after
 resolution, and the reference embedder is worth more compiling clean than it
 is demonstrating a package's chrome.
+
+`library_loan.json` and `patron_registration.json` are the library world's
+two documents, written from `core.*` blocks alone and listed by
+`StatifierExamples.Library`. Each has a branch with one arm left empty on
+purpose: it is what the Plan view's map marks rather than hides.
 
 `test/fixtures/publish_refusals/` is the refusal suite, and it is the set a
 host can vendor: six charts in the library and parcel worlds, one JSON file

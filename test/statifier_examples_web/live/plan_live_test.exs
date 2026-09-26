@@ -1162,6 +1162,69 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
                |> Map.get(:config)
     end
 
+    # One set of move and delete controls for the selected block: the
+    # panel's. Its row hides its own while it is selected, so a screen
+    # reader walking the page meets the set once.
+    #
+    # Sabotage: drew the row's controls whatever was selected; this went
+    # red. Reverted from a copy.
+    test "the selected block has one set of move and delete controls", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+      html = map_select(view, "blk_pr_age")
+
+      up = ~s(phx-value-block-id="blk_pr_age" phx-value-dir="up")
+      assert occurrences(html, up) == 1
+      assert section(html, "panel") =~ up
+      assert occurrences(html, ~s(phx-click="remove" phx-value-block-id="blk_pr_age")) == 1
+
+      # Every other row keeps its own.
+      assert row_markup(html, "blk_pr_welcome") =~
+               ~s(phx-value-block-id="blk_pr_welcome" phx-value-dir="up")
+    end
+
+    # Arming an empty slot while a block is selected: the panel shows the
+    # slot's picker and nothing of the block.
+    #
+    # Sabotage: made insert-open keep the selection for a slot key; the
+    # block's form stayed beside the picker and this went red. Reverted from
+    # a copy.
+    test "the panel shows one thing: arming an empty slot clears the selection",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+      map_select(view, "blk_pr_deadline")
+
+      %{event: event, payload: payload} =
+        map_gesture("patron_registration", "empty:blk_pr_age/otherwise/empty")
+
+      html = render_hook(view, event, payload)
+      panel = section(html, "panel")
+
+      assert panel =~ ~s(data-plan-slot-insert="blk_pr_age/otherwise")
+      refute panel =~ "sb-form"
+      refute html =~ "data-plan-panel="
+      refute html =~ "myapp-plan__row--selected"
+    end
+
+    # A refused pick at an armed empty slot closes the picker rather than
+    # leaving it open on a stale target.
+    #
+    # Sabotage: dropped assign_insertable/1 from the insert handler's
+    # refusal branch; the panel picker stayed open and this went red.
+    # Reverted from a copy.
+    test "a refused pick at an empty slot closes its picker", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+
+      %{event: event, payload: payload} =
+        map_gesture("patron_registration", "empty:blk_pr_age/otherwise/empty")
+
+      assert render_hook(view, event, payload) =~ "data-plan-slot-insert"
+
+      html = render_hook(view, "insert", Map.put(payload, "type", "no.such.type"))
+      refute html =~ "data-plan-slot-insert"
+      refute html =~ ~s(data-plan-picker="open")
+      assert document("patron_registration") == fixture("patron_registration").document
+    end
+
     # A read-only page's map draws no gaps and arms nothing, and a crafted
     # slot payload naming a slot the block does not have arms nothing.
     #

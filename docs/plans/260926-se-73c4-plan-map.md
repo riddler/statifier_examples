@@ -180,6 +180,17 @@ list.
   criterion the earlier PRs pinned piecemeal, and a firewall-style check
   that no product name appears in the map's strings.
 
+- As built (2026-09-26): the README section "The Plan view's map" (and the
+  two library fixtures in its document and fixture lists); the review
+  advisories of PR 3 (one set of move and delete controls for the selected
+  block, arming an empty slot clears the selection, a refused pick closes
+  the empty-slot picker, the Node driver's `closest` walks ancestors). The
+  acceptance sweep is written line by line in the pull request's body, each
+  criterion cited to the test that holds it, rather than as a second test
+  over the same assertions. The no-product-name criterion is held by the
+  pre-push terminology scan over the whole outbound content; a test that
+  listed the names it refuses would be a public file carrying them.
+
 ### Acceptance items met
 
 README section; no product name; the whole acceptance list re-read against
