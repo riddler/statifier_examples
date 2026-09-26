@@ -273,7 +273,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert config_of(@doc_key, @block_id)["invoke_type"] != ""
 
       assert plan
-             |> element(~s(li[data-block-id="#{@block_id}"] button), "Discard edits")
+             |> element("#plan-panel button", "Discard edits")
              |> render_click() =~ @block_label
 
       refute render(plan) =~ "Nothing is stored yet"
@@ -339,7 +339,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       # Discarding takes the finding away with the bytes.
       refute plan
-             |> element(~s(li[data-block-id="#{@block_id}"] button), "Discard edits")
+             |> element("#plan-panel button", "Discard edits")
              |> render_click() =~ escaped(message)
     end
   end
@@ -489,10 +489,10 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       for {key, block_id, _module, _sentence} <- @composites do
         {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: key]}")
 
-        editable = plan |> select(block_id) |> row_markup(block_id)
+        editable = plan |> select(block_id) |> section("panel")
 
         assert editable =~ ~s(id="sb-form-#{block_id}"),
-               "#{key}: the row's form is not the package's"
+               "#{key}: the panel's form is not the package's"
 
         assert editable =~ ~s(class="sb-form myapp-plan__fields")
         assert editable =~ ~s(phx-change="config-change")
@@ -501,10 +501,10 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
         {:ok, readonly, _html} = live(conn, ~p"/plan?#{[doc: key, readonly: "1"]}")
 
-        read = readonly |> select(block_id) |> row_markup(block_id)
+        read = readonly |> select(block_id) |> section("panel")
 
         assert read =~ ~s(class="sb-form sb-form--readonly"),
-               "#{key}: the read-only row is not the package's read-only form"
+               "#{key}: the read-only panel is not the package's read-only form"
 
         assert read =~ ~s(data-read-only="true")
         refute read =~ ~s(id="sb-form-#{block_id}")
@@ -945,7 +945,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       assert html =~ ~s(data-selected="blk_ll_loan_period")
       assert html =~ ~s(data-plan-panel="blk_ll_loan_period")
-      assert section(html, "map") =~ "Wait 21d"
+      assert section(html, "panel") =~ "Wait 21d"
 
       # A block whose sentence is its title is named once.
       root = render_hook(view, "select-row", %{"block-id" => "blk_ll_root"})
@@ -981,6 +981,214 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       selected = render_hook(view, "select-row", %{"block-id" => "blk_ll_loan_period"})
       assert selected =~ ~s(data-plan-panel="blk_ll_loan_period")
+    end
+  end
+
+  describe "editing from the map" do
+    # What the map sends is read off the hook itself: the Node driver draws
+    # the document with `plan_map.mjs`, and for every clickable element it
+    # draws, asks the hook's own `mapGesture` what a click there sends. The
+    # cases below send exactly that, so a hook that sent a different event or
+    # payload than the list's would fail here rather than in a browser.
+
+    # Sabotage: made mapGesture send "select" rather than "select-row" for a
+    # block; this went red, with the move, remove and update_config cases.
+    # Reverted from a copy.
+    test "a block selected from the map opens the one form, in the panel", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+
+      %{event: event, payload: payload} =
+        map_gesture("patron_registration", "block:blk_pr_deadline")
+
+      html = render_hook(view, event, payload)
+
+      # One form on the page, and it is in the panel.
+      assert occurrences(html, ~s(id="sb-form-blk_pr_deadline")) == 1
+      assert section(html, "panel") =~ ~s(id="sb-form-blk_pr_deadline")
+      refute section(html, "plan") =~ "sb-form"
+      assert field_keys(html) == shown_keys(node_in("patron_registration", "blk_pr_deadline"))
+    end
+
+    # The keyboard path: the selected row carries a link into the panel,
+    # the panel takes focus and sits outside the map's aria-hidden region,
+    # and every control in it is an ordinary button or field.
+    #
+    # Sabotage: put aria-hidden on the panel; this went red. Pointed the
+    # row's "Its fields" link elsewhere; this went red. Each reverted from a
+    # copy.
+    test "the panel is reached from the row by keyboard", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+      html = select(view, "blk_pr_deadline")
+
+      assert row_markup(html, "blk_pr_deadline") =~ ~r/<a[^>]*href="#plan-panel"/
+      assert html =~ ~r/<aside[^>]*id="plan-panel"[^>]*tabindex="-1"/
+      [_before, after_map] = String.split(html, ~s(data-plan-section="map"), parts: 2)
+      [map_region | _rest] = String.split(after_map, "</section>", parts: 2)
+      refute map_region =~ "plan-panel"
+      refute map_region =~ "sb-form"
+      refute section(html, "panel") =~ "aria-hidden"
+    end
+
+    # Insert at a gap after a block: the map's "+" arms the same gap the
+    # row's "+" arms, and the same pick lands the same step.
+    #
+    # Sabotage: made mapGesture send the gap's block id as "id" rather than
+    # "block-id"; nothing was armed and this went red. Reverted from a copy.
+    test "insert at a gap: map and list give the same document", %{conn: conn} do
+      from_map =
+        edit(conn, "patron_registration", fn view ->
+          %{event: event, payload: payload} =
+            map_gesture("patron_registration", "gap:blk_pr_deadline")
+
+          render_hook(view, event, payload)
+          pick(view, ~s(li[data-block-id="blk_pr_deadline"] [data-plan-picker="open"] button))
+        end)
+
+      from_list =
+        edit(conn, "patron_registration", fn view ->
+          view
+          |> element(~s(li[data-block-id="blk_pr_deadline"] button.myapp-plan__add))
+          |> render_click()
+
+          pick(view, ~s(li[data-block-id="blk_pr_deadline"] [data-plan-picker="open"] button))
+        end)
+
+      assert from_map == from_list
+
+      assert slot_of(from_map, "blk_pr_verify", "body") == [
+               "blk_pr_deadline",
+               "new",
+               "blk_pr_email"
+             ]
+    end
+
+    # Insert at the head of an empty slot: the gap only the map draws. The
+    # list has no row to put a "+" under, so what it is held to is the
+    # package's own insert at that position.
+    #
+    # Sabotage: made gap_target/2 answer index 1 for a slot key; the insert
+    # was refused and this went red. Reverted from a copy.
+    test "insert into an empty slot lands at its head, as the package's insert does",
+         %{conn: conn} do
+      from_map =
+        edit(conn, "patron_registration", fn view ->
+          %{event: event, payload: payload} =
+            map_gesture("patron_registration", "empty:blk_pr_age/otherwise/empty")
+
+          html = render_hook(view, event, payload)
+          assert section(html, "panel") =~ ~s(data-plan-slot-insert="blk_pr_age/otherwise")
+          pick(view, ~s(#plan-panel [data-plan-picker="open"] button))
+        end)
+
+      original = fixture("patron_registration").document
+      {:ok, wait} = StatifierBlocks.Palette.new_block(Charts.palette(), "core.wait")
+
+      {:ok, expected, _inverse} =
+        StatifierBlocks.Edit.apply(original, {:insert, {"blk_pr_age", "otherwise", 0}, wait})
+
+      assert from_map == normalize(expected, original)
+    end
+
+    # Sabotage: made the panel's "Move up" post dir "down"; this went red.
+    # Reverted from a copy.
+    test "move: map and list give the same document", %{conn: conn} do
+      from_map =
+        edit(conn, "patron_registration", fn view ->
+          map_select(view, "blk_pr_age")
+          view |> element("#plan-panel button", "Move up") |> render_click()
+        end)
+
+      from_list =
+        edit(conn, "patron_registration", fn view ->
+          view
+          |> element(~s(li[data-block-id="blk_pr_age"] button), "Move up")
+          |> render_click()
+        end)
+
+      assert from_map == from_list
+      assert body_of(from_map) == ["blk_pr_age", "blk_pr_verify", "blk_pr_welcome"]
+    end
+
+    # Sabotage: made the panel's "Delete" post insert-close; this went red.
+    # Reverted from a copy.
+    test "remove: map and list give the same document", %{conn: conn} do
+      from_map =
+        edit(conn, "patron_registration", fn view ->
+          map_select(view, "blk_pr_welcome")
+          view |> element("#plan-panel button", "Delete") |> render_click()
+        end)
+
+      from_list =
+        edit(conn, "patron_registration", fn view ->
+          view
+          |> element(~s(li[data-block-id="blk_pr_welcome"] button), "Delete")
+          |> render_click()
+        end)
+
+      assert from_map == from_list
+      assert body_of(from_map) == ["blk_pr_verify", "blk_pr_age"]
+    end
+
+    # update_config: the panel's form is the one form, reached from a map
+    # click or from the row, and the same change stores the same config.
+    #
+    # Sabotage: made config-change store nothing; this went red, with the
+    # three list-side editing cases. Reverted from a copy.
+    test "update_config: map and list give the same document", %{conn: conn} do
+      change = fn view ->
+        view
+        |> element("#sb-form-blk_pr_deadline")
+        |> render_change(%{"config" => %{"event" => "registration.deadline", "delay" => "10d"}})
+      end
+
+      from_map =
+        edit(conn, "patron_registration", fn view ->
+          map_select(view, "blk_pr_deadline")
+          change.(view)
+        end)
+
+      from_list =
+        edit(conn, "patron_registration", fn view ->
+          select(view, "blk_pr_deadline")
+          change.(view)
+        end)
+
+      assert from_map == from_list
+
+      assert %{"delay" => "10d"} =
+               from_map
+               |> Document.blocks()
+               |> Enum.find(&(&1.id == "blk_pr_deadline"))
+               |> Map.get(:config)
+    end
+
+    # A read-only page's map draws no gaps and arms nothing, and a crafted
+    # slot payload naming a slot the block does not have arms nothing.
+    #
+    # Sabotage: made mapGesture ignore `editable` for an empty marker; the
+    # read-only gesture came back as an insert and this went red. Reverted
+    # from a copy.
+    test "nothing inserts where it cannot", %{conn: conn} do
+      read_only = map_gestures("patron_registration", false)
+      refute Enum.any?(read_only, &String.starts_with?(&1["element"], "gap:"))
+
+      assert %{"gesture" => nil} =
+               Enum.find(read_only, &(&1["element"] == "empty:blk_pr_age/otherwise/empty"))
+
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+
+      html =
+        render_hook(view, "insert-open", %{"block-id" => "blk_pr_age", "slot" => "no_such_slot"})
+
+      refute html =~ "data-plan-slot-insert"
+
+      render_hook(view, "insert", %{
+        "block-id" => "blk_pr_age",
+        "slot" => "no_such_slot",
+        "type" => "core.wait"
+      })
+
+      assert document("patron_registration") == fixture("patron_registration").document
     end
   end
 
@@ -1070,13 +1278,89 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     hd(String.split(rest, ">", parts: 2))
   end
 
-  # The markup of one row's body: from its `data-block-id` to the start of
-  # the next row, so a case can ask what a single row draws rather than what
-  # the page draws. The row's own `<li>` carries that attribute first, which
-  # is why the split is on the first occurrence even though the form the row
-  # expands to carries it too.
+  # The hook's own answer, for every clickable element it draws on `key`'s
+  # map: `%{"element" => ..., "gesture" => %{"event" => ..., "payload" => ...} | nil}`.
+  defp map_gestures(key, editable) do
+    fixture = fixture(key)
+    graph = fixture.document |> ViewModel.build(Charts.palette(), []) |> PlanMap.graph()
+    dir = Path.join(System.tmp_dir!(), "plan-map-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    path = Path.join(dir, "graph.json")
+    File.write!(path, Jason.encode!(graph))
+
+    node =
+      System.find_executable("node") || flunk("the map's gesture tests need Node on the PATH")
+
+    driver = Path.expand("../../support/js/plan_map_layout.mjs", __DIR__)
+    args = if editable, do: [driver, path, "editable"], else: [driver, path]
+    {out, 0} = System.cmd(node, args, stderr_to_stdout: true)
+    File.rm_rf!(dir)
+    Jason.decode!(out)["gestures"]
+  end
+
+  defp map_gesture(key, element) do
+    %{"gesture" => %{"event" => event, "payload" => payload}} =
+      Enum.find(map_gestures(key, true), &(&1["element"] == element))
+
+    %{event: event, payload: payload}
+  end
+
+  defp map_select(view, block_id) do
+    %{event: event, payload: payload} = map_gesture(view_key(view), "block:#{block_id}")
+    render_hook(view, event, payload)
+  end
+
+  # Every editing case here runs on patron registration.
+  defp view_key(_view), do: "patron_registration"
+
+  # A fresh store, one mount, `gesture` run against it, and the stored
+  # document that results with any block the gesture created renamed "new".
+  defp edit(conn, key, gesture) do
+    :ok = Documents.reset()
+    {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: key]}")
+    gesture.(view)
+    normalize(document(key), fixture(key).document)
+  end
+
+  # Clicks the "Wait" entry of the picker under `selector`.
+  defp pick(view, selector), do: view |> element(selector, ~r/^\s*Wait\s*$/) |> render_click()
+
+  defp normalize(%Document{root: root} = document, %Document{} = original) do
+    known = original |> Document.blocks() |> MapSet.new(& &1.id)
+    %{document | root: rename_new(root, known)}
+  end
+
+  defp rename_new(%Block{id: id, slots: slots} = block, known) do
+    slots =
+      Map.new(slots, fn {name, children} -> {name, Enum.map(children, &rename_new(&1, known))} end)
+
+    %{block | id: if(MapSet.member?(known, id), do: id, else: "new"), slots: slots}
+  end
+
+  defp body_of(%Document{root: root}), do: Enum.map(root.slots["body"], & &1.id)
+
+  defp slot_of(%Document{} = document, block_id, slot) do
+    document
+    |> Document.blocks()
+    |> Enum.find(&(&1.id == block_id))
+    |> Map.fetch!(:slots)
+    |> Map.fetch!(slot)
+    |> Enum.map(& &1.id)
+  end
+
+  defp node_in(key, block_id) do
+    fixture(key).document
+    |> ViewModel.build(Charts.palette(), [])
+    |> ViewModel.find_node(block_id)
+  end
+
+  # The markup of one row's body: from its `<li>` to the start of the next
+  # row, so a case can ask what a single row draws rather than what the page
+  # draws. It anchors on the `<li>` carrying the id rather than on the id's
+  # first occurrence, because the panel ahead of the list carries the
+  # selected block's id on its form too.
   defp row_markup(html, block_id) do
-    [_before, rest] = String.split(html, ~s(data-block-id="#{block_id}"), parts: 2)
+    [_before, rest] = Regex.split(~r/<li[^>]*data-block-id="#{block_id}"/, html, parts: 2)
 
     hd(String.split(rest, "<li"))
   end

@@ -121,13 +121,29 @@ defmodule StatifierExamplesWeb.PlanLive do
   scrolling element with nothing focusable inside it a Tab stop of its own,
   and a Tab stop inside a region hidden from assistive technology is one a
   keyboard user lands on with nothing announced.
-  Clicking a block on the map sends the list's own `select-row`, so both
-  views select through one handler. A click on a slot's box or on an
-  empty slot's marker selects nothing. The panel beside the map names the
-  selected block, its sentence under its title only where the two differ
-  (the map's own rule); its fields open on its row in the list, which stays the
-  page's one form surface - a second copy of the form beside the map
-  would put every field on the page twice.
+
+  Every gesture on the map is one the list already makes, sent to the same
+  handler with the same payload (`mapGesture` in the hook says which):
+
+  | On the map | The event | The list's own way to it |
+  |---|---|---|
+  | a block's box | `select-row` | the row's sentence |
+  | the "+" at a block's corner | `insert-open`, the gap after it | the row's "+" |
+  | an empty slot's marker | `insert-open` with the slot named, its head | none - no row stands for an empty slot |
+  | the panel's Move up, Move down, Delete | `move`, `remove` | the row's buttons |
+  | the panel's form | `config-change` (`update_config`) | the same form, reached from the row |
+
+  A click on a slot's box selects nothing. A read-only page draws no "+"
+  and arms nothing from the map; its clicks only select.
+
+  The panel is the page's one form surface. It holds the selected block's
+  name - its sentence under its title only where the two differ, as on the
+  map - any held draft, its `ConfigForm` and its move and delete controls;
+  or, for an insert armed at an empty slot, the picker. It sits after the
+  map and before the list, outside the `aria-hidden` region, and takes
+  focus: the selected row's "Its fields" link moves a keyboard into it. A
+  picker for the gap after a block opens under that block's row, whichever
+  view armed it; the hook scrolls it into view when the map did.
 
   ## Read-only
 
@@ -170,6 +186,10 @@ defmodule StatifierExamplesWeb.PlanLive do
   alias StatifierExamplesWeb.PlanMap
 
   @default_theme :light
+
+  # An armed gap: a block id (the gap after it) or `{:slot, id, slot}` (the
+  # head of that slot).
+  @typep gap() :: Block.id() | {:slot, Block.id(), String.t()}
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -267,8 +287,14 @@ defmodule StatifierExamplesWeb.PlanLive do
   # The "+" between two rows: arming it is what asks the assignability
   # question, and it is asked here rather than on every render because the
   # answer costs one drop check per palette type and a plan has many gaps.
-  def handle_event("insert-open", %{"block-id" => id}, socket) do
-    {:noreply, socket |> assign(:inserting, id) |> assign_insertable()}
+  #
+  # The map arms the same event two ways: with a block id, the gap right
+  # after that block, exactly as the row's "+"; and with a block id and a
+  # `slot`, the head of that slot - the map's empty-slot marker, a gap the
+  # list has no row to put a "+" under. `gap_key/1` is the one reading of
+  # the pair, and every insert handler below goes through it.
+  def handle_event("insert-open", %{"block-id" => _id} = params, socket) do
+    {:noreply, socket |> assign(:inserting, gap_key(params)) |> assign_insertable()}
   end
 
   def handle_event("insert-close", _params, socket) do
@@ -284,10 +310,14 @@ defmodule StatifierExamplesWeb.PlanLive do
   # and the refusal at the write are the same function, so a crafted
   # payload naming a recipe that does not land here is refused here too,
   # by the package rather than by a second copy of its rule.
-  def handle_event("insert", %{"block-id" => id, "kind" => "recipe", "type" => name}, socket) do
+  def handle_event(
+        "insert",
+        %{"block-id" => _id, "kind" => "recipe", "type" => name} = params,
+        socket
+      ) do
     %Session{document: document, palette: palette} = socket.assigns.session
 
-    with {_parent_id, _slot, _index} = target <- gap_target(socket, id),
+    with {_parent_id, _slot, _index} = target <- gap_target(socket, gap_key(params)),
          {:ok, commands} <- Targets.recipe_inserts(document, palette, name, target) do
       {:noreply,
        socket
@@ -298,8 +328,8 @@ defmodule StatifierExamplesWeb.PlanLive do
     end
   end
 
-  def handle_event("insert", %{"block-id" => id, "type" => type}, socket) do
-    with {_parent_id, _slot, _index} = target <- gap_target(socket, id),
+  def handle_event("insert", %{"block-id" => _id, "type" => type} = params, socket) do
+    with {_parent_id, _slot, _index} = target <- gap_target(socket, gap_key(params)),
          {:ok, %Block{} = block} <- Palette.new_block(socket.assigns.session.palette, type) do
       socket =
         socket
@@ -405,31 +435,30 @@ defmodule StatifierExamplesWeb.PlanLive do
         </div>
 
         <div class="myapp-plan__body">
-          <section class="myapp-plan__map" data-plan-section="map" aria-hidden="true">
-            <div
-              id="plan-map"
-              class="myapp-plan__map-canvas"
-              phx-hook="PlanMap"
-              tabindex="-1"
-              data-graph={@map_graph}
-              data-selected={@selected_id}
-            >
-              <div id="plan-map-canvas" data-map-canvas phx-update="ignore"></div>
-            </div>
-
-            <aside :if={@panel} class="myapp-plan__panel" data-plan-panel={@panel.block_id}>
-              <p class="myapp-plan__panel-title">{ViewModel.title(@panel)}</p>
-              <p
-                :if={ViewModel.sentence(@panel) != ViewModel.title(@panel)}
-                class="myapp-plan__panel-sentence"
+          <div class="myapp-plan__top">
+            <section class="myapp-plan__map" data-plan-section="map" aria-hidden="true">
+              <div
+                id="plan-map"
+                class="myapp-plan__map-canvas"
+                phx-hook="PlanMap"
+                tabindex="-1"
+                data-graph={@map_graph}
+                data-selected={@selected_id}
+                data-editable={to_string(not @readonly?)}
               >
-                {ViewModel.sentence(@panel)}
-              </p>
-              <p :if={@panel.form} class="myapp-plan__panel-hint">
-                Its fields are open on its row in the list.
-              </p>
-            </aside>
-          </section>
+                <div id="plan-map-canvas" data-map-canvas phx-update="ignore"></div>
+              </div>
+            </section>
+
+            <.panel
+              :if={@panel || @slot_insert}
+              node={@panel}
+              slot_insert={@slot_insert}
+              insertable={@insertable}
+              readonly?={@readonly?}
+              drafted?={@panel != nil and Map.has_key?(@session.drafts, @panel.block_id)}
+            />
+          </div>
 
           <ol class="myapp-plan__list" data-plan-section="plan">
             <.row
@@ -441,7 +470,6 @@ defmodule StatifierExamplesWeb.PlanLive do
               inserting={@inserting}
               insertable={@insertable}
               readonly?={@readonly?}
-              drafted?={Map.has_key?(@session.drafts, node.block_id)}
             />
           </ol>
 
@@ -457,7 +485,6 @@ defmodule StatifierExamplesWeb.PlanLive do
                 inserting={@inserting}
                 insertable={@insertable}
                 readonly?={@readonly?}
-                drafted?={Map.has_key?(@session.drafts, node.block_id)}
               />
             </ol>
           </section>
@@ -474,7 +501,6 @@ defmodule StatifierExamplesWeb.PlanLive do
                 inserting={@inserting}
                 insertable={@insertable}
                 readonly?={@readonly?}
-                drafted?={Map.has_key?(@session.drafts, node.block_id)}
               />
             </ol>
           </footer>
@@ -484,43 +510,64 @@ defmodule StatifierExamplesWeb.PlanLive do
     """
   end
 
-  attr(:node, ViewModel.Node, required: true)
-  attr(:depth, :integer, required: true)
-  attr(:kind, :atom, required: true)
-  attr(:selected_id, :string, default: nil)
-  attr(:inserting, :string, default: nil)
+  attr(:node, ViewModel.Node, default: nil)
+  attr(:slot_insert, :map, default: nil)
   attr(:insertable, :list, default: [])
   attr(:readonly?, :boolean, default: false)
   attr(:drafted?, :boolean, default: false)
 
-  # One outline entry. The indentation is `depth` and nothing else -
-  # `outline/1`'s depth is block nesting depth, so a rail's blocks sit at
-  # the same indent as the body blocks of the container they hang off, and
-  # the section they are in is what says they are a rail.
-  defp row(assigns) do
+  # The panel beside the map: the page's one form surface. The selected
+  # block's name, its held draft if there is one, its `ConfigForm` and the
+  # move and delete controls its row also carries; or, when an insert was
+  # armed at the head of an empty slot on the map, the picker for it.
+  #
+  # It sits outside the map's `aria-hidden` region and ahead of the list, and
+  # it takes focus (`tabindex="-1"`), so the selected row's "Its fields" link
+  # moves a keyboard straight into it. Every control in it posts the event
+  # the list's own controls post.
+  defp panel(assigns) do
     ~H"""
-    <li
-      class={["myapp-plan__row", @selected_id == @node.block_id && "myapp-plan__row--selected"]}
-      style={"--plan-depth: #{@depth}"}
-      data-block-id={@node.block_id}
-      data-depth={@depth}
-      data-kind={@kind}
+    <aside
+      id="plan-panel"
+      class="myapp-plan__panel"
+      data-plan-section="panel"
+      data-plan-panel={@node && @node.block_id}
+      tabindex="-1"
+      aria-label="Selected step"
     >
-      <div class="myapp-plan__line">
-        <button
-          class="myapp-plan__sentence"
-          type="button"
-          phx-click="select-row"
-          phx-value-block-id={@node.block_id}
+      <div :if={@node}>
+        <p class="myapp-plan__panel-title">{ViewModel.title(@node)}</p>
+        <p
+          :if={ViewModel.sentence(@node) != ViewModel.title(@node)}
+          class="myapp-plan__panel-sentence"
         >
           {ViewModel.sentence(@node)}
-        </button>
+        </p>
 
-        <span :if={@node.findings_count > 0} class="myapp-plan__findings">
-          {@node.findings_count}
-        </span>
+        <div :if={@node.form} class="myapp-plan__form">
+          <p :if={@drafted?} class="myapp-plan__pending">
+            Nothing is stored yet{refused_fields(@node)}.
+            <button
+              :if={not @readonly?}
+              class="myapp-plan__control"
+              type="button"
+              phx-click="discard-draft"
+              phx-value-block-id={@node.block_id}
+            >
+              Discard edits
+            </button>
+          </p>
 
-        <span :if={not @readonly? and @node.block_id != @selected_id} class="myapp-plan__controls">
+          <ConfigForm.config_form
+            node={@node}
+            event="config-change"
+            target={nil}
+            read_only={@readonly?}
+            class="myapp-plan__fields"
+          />
+        </div>
+
+        <span :if={not @readonly?} class="myapp-plan__controls">
           <button
             class="myapp-plan__control"
             type="button"
@@ -550,27 +597,81 @@ defmodule StatifierExamplesWeb.PlanLive do
         </span>
       </div>
 
-      <div :if={@selected_id == @node.block_id and @node.form} class="myapp-plan__form">
-        <p :if={@drafted?} class="myapp-plan__pending">
-          Nothing is stored yet{refused_fields(@node)}.
-          <button
-            :if={not @readonly?}
-            class="myapp-plan__control"
-            type="button"
-            phx-click="discard-draft"
-            phx-value-block-id={@node.block_id}
-          >
-            Discard edits
-          </button>
+      <div
+        :if={@slot_insert}
+        class="myapp-plan__picker"
+        data-plan-picker="open"
+        data-plan-slot-insert={"#{@slot_insert.block_id}/#{@slot_insert.slot}"}
+      >
+        <p class="myapp-plan__panel-title">
+          Add a step to {@slot_insert.label} of {@slot_insert.block}
         </p>
+        <p :if={@insertable == []} class="myapp-plan__picker-empty">
+          Nothing this palette carries fits here.
+        </p>
+        <button
+          :for={entry <- @insertable}
+          class="myapp-plan__control"
+          type="button"
+          phx-click="insert"
+          phx-value-block-id={@slot_insert.block_id}
+          phx-value-slot={@slot_insert.slot}
+          phx-value-kind={entry.kind}
+          phx-value-type={entry.name}
+        >
+          {entry.entry.label}
+        </button>
+        <button class="myapp-plan__control" type="button" phx-click="insert-close">
+          Cancel
+        </button>
+      </div>
+    </aside>
+    """
+  end
 
-        <ConfigForm.config_form
-          node={@node}
-          event="config-change"
-          target={nil}
-          read_only={@readonly?}
-          class="myapp-plan__fields"
-        />
+  attr(:node, ViewModel.Node, required: true)
+  attr(:depth, :integer, required: true)
+  attr(:kind, :atom, required: true)
+  attr(:selected_id, :string, default: nil)
+  attr(:inserting, :any, default: nil)
+  attr(:insertable, :list, default: [])
+  attr(:readonly?, :boolean, default: false)
+
+  # One outline entry. The indentation is `depth` and nothing else -
+  # `outline/1`'s depth is block nesting depth, so a rail's blocks sit at
+  # the same indent as the body blocks of the container they hang off, and
+  # the section they are in is what says they are a rail.
+  defp row(assigns) do
+    ~H"""
+    <li
+      class={["myapp-plan__row", @selected_id == @node.block_id && "myapp-plan__row--selected"]}
+      style={"--plan-depth: #{@depth}"}
+      data-block-id={@node.block_id}
+      data-depth={@depth}
+      data-kind={@kind}
+    >
+      <div class="myapp-plan__line">
+        <button
+          class="myapp-plan__sentence"
+          type="button"
+          phx-click="select-row"
+          phx-value-block-id={@node.block_id}
+        >
+          {ViewModel.sentence(@node)}
+        </button>
+
+        <span :if={@node.findings_count > 0} class="myapp-plan__findings">
+          {@node.findings_count}
+        </span>
+
+        <a
+          :if={@selected_id == @node.block_id and @node.form}
+          class="myapp-plan__control"
+          href="#plan-panel"
+          data-plan-to-panel
+        >
+          Its fields
+        </a>
 
         <span :if={not @readonly?} class="myapp-plan__controls">
           <button
@@ -847,10 +948,12 @@ defmodule StatifierExamplesWeb.PlanLive do
   # for a host to offer less of the palette than the palette holds.
   @spec assign_insertable(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp assign_insertable(%{assigns: %{inserting: nil}} = socket),
-    do: assign(socket, :insertable, [])
+    do: assign(socket, insertable: [], slot_insert: nil)
 
   defp assign_insertable(socket) do
-    assign(socket, :insertable, insertable(socket, gap_target(socket, socket.assigns.inserting)))
+    socket
+    |> assign(:insertable, insertable(socket, gap_target(socket, socket.assigns.inserting)))
+    |> assign(:slot_insert, slot_insert(socket))
   end
 
   @spec insertable(Phoenix.LiveView.Socket.t(), Edit.target() | nil) :: [map()]
@@ -881,8 +984,20 @@ defmodule StatifierExamplesWeb.PlanLive do
   # so its own "+" means the other thing the reader could mean by it: the
   # first step inside the plan. A root with no body slot at all offers
   # nothing, which is the empty-list answer every other refusal here gives.
-  @spec gap_target(Phoenix.LiveView.Socket.t(), Block.id() | nil) :: Edit.target() | nil
+  @spec gap_target(Phoenix.LiveView.Socket.t(), gap() | nil) :: Edit.target() | nil
   defp gap_target(_socket, nil), do: nil
+
+  # The head of a named slot: the gap an empty slot's marker on the map
+  # stands for. A slot the block does not have offers nothing, the same
+  # answer a crafted payload gets everywhere else on this page.
+  defp gap_target(socket, {:slot, id, name}) do
+    with %ViewModel.Node{slots: slots} <- ViewModel.find_node(socket.assigns.view_model, id),
+         true <- Enum.any?(slots, &(&1.name == name)) do
+      {id, name, 0}
+    else
+      _no_node_or_slot -> nil
+    end
+  end
 
   defp gap_target(socket, id) do
     case position(socket, id) do
@@ -890,6 +1005,26 @@ defmodule StatifierExamplesWeb.PlanLive do
       nil -> first_body_target(socket.assigns.view_model.root, id)
     end
   end
+
+  # What an insert event names: a block id for the gap after it, or
+  # `{:slot, block id, slot}` for the head of that slot. See `insert-open`.
+  @spec gap_key(map()) :: gap()
+  defp gap_key(%{"block-id" => id, "slot" => slot}) when is_binary(slot), do: {:slot, id, slot}
+  defp gap_key(%{"block-id" => id}), do: id
+
+  # The slot an armed empty-slot insert targets, labelled for the panel, or
+  # nil when the armed gap is a row's.
+  @spec slot_insert(Phoenix.LiveView.Socket.t()) :: map() | nil
+  defp slot_insert(%{assigns: %{inserting: {:slot, id, name}, view_model: view_model}}) do
+    with %ViewModel.Node{slots: slots} = node <- ViewModel.find_node(view_model, id),
+         %ViewModel.Slot{label: label} <- Enum.find(slots, &(&1.name == name)) do
+      %{block_id: id, slot: name, label: label, block: ViewModel.title(node)}
+    else
+      _no_node_or_slot -> nil
+    end
+  end
+
+  defp slot_insert(_socket), do: nil
 
   # The gap a block that sits in no slot offers: the head of its own first
   # body slot. Only the root reaches this, and only because the root is the
