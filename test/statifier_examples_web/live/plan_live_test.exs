@@ -937,6 +937,11 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     # Sabotage: made panel/2 answer nil whatever was selected; this went red,
     # with the two other cases that select. Dropped the panel sentence's
     # :if; this went red on the root. Each reverted from a copy.
+    #
+    # 2026-09-27: statifier_blocks 0.36.0 gives `core.sequence` a sentence
+    # of its own, so the library root's panel now says it under the title,
+    # and the block named once is a card fixture's `Invoke`, whose type
+    # declares no sentence.
     test "selecting a block from the map selects its row and names it in the panel",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
@@ -947,15 +952,21 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert html =~ ~s(data-plan-panel="blk_ll_loan_period")
       assert section(html, "panel") =~ "Wait 21d"
 
-      # A block whose sentence is its title is named once.
+      # The root's sentence is not its title, so the panel says both.
       root = render_hook(view, "select-row", %{"block-id" => "blk_ll_root"})
-      refute root =~ "myapp-plan__panel-sentence"
+      assert section(root, "panel") =~ "Run its steps in order"
       assert html =~ ~r/myapp-plan__row--selected"[^>]*data-block-id="blk_ll_loan_period"/
       assert field_keys(html) == ["duration"]
 
       deselected = render_hook(view, "select-row", %{"block-id" => "blk_ll_root"})
       refute deselected =~ "data-plan-panel"
       refute deselected =~ ~s(data-selected=)
+
+      # A block whose sentence is its title is named once.
+      {:ok, card, _html} = live(conn, ~p"/plan?#{[doc: "card_processing"]}")
+      invoke = render_hook(card, "select-row", %{"block-id" => "blk_cp_authorize"})
+      assert invoke =~ ~s(data-plan-panel="blk_cp_authorize")
+      refute invoke =~ "myapp-plan__panel-sentence"
     end
 
     # The map redraws from the document the page holds, so a write made

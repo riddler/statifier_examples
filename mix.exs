@@ -666,7 +666,11 @@ defmodule StatifierExamples.MixProject do
       {:ex_quality, "~> 0.15", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:excoveralls, "~> 0.18", only: :test}
+      {:excoveralls, "~> 0.18", only: :test},
+
+      # A draft-07 validator for the block-document schema test only; it
+      # never reaches the running app.
+      {:ex_json_schema, "~> 0.11", only: :test, runtime: false}
     ]
   end
 
@@ -1190,13 +1194,22 @@ defmodule StatifierExamples.MixProject do
   # says NONE for 0.34.0, and 0.35.0 adds `StatifierBlocks.Plan.expressible/3`
   # and `expressible?/3`, which the first-workflow task calls against the
   # palette before it publishes; nothing else in the release reaches here.
+  #
+  # 2026-09-27: the floor moves to `~> 0.36.0`, published, so the arm stays
+  # a Hex requirement. 0.36.0 ships the block document's JSON Schema, which
+  # the suite validates every shipped block document against, and
+  # `StatifierBlocks.Describe`, which the suite uses to outline the library
+  # loan and patron registration. The release's one visible change is the
+  # card line of `core.sequence`, `core.group` and `core.await`, which now
+  # reads as a sentence rather than as the label; the view-model and Plan
+  # map pins here carry the new lines.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.35.0"}
+        {:statifier_blocks, "~> 0.36.0"}
     end
   end
 

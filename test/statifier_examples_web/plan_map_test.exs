@@ -104,11 +104,21 @@ defmodule StatifierExamplesWeb.PlanMapTest do
 
     # Sabotage: made under/2 always wrap; "Sequence" came back under
     # "Sequence" and this went red. Reverted from a copy.
+    #
+    # 2026-09-27: statifier_blocks 0.36.0 gives `core.sequence` and
+    # `core.group` sentences of their own, so the library root now draws
+    # its line and the words said once are a card fixture's `Invoke`, whose
+    # type declares no sentence and falls back to its label.
     test "a sentence that only repeats the title is not drawn twice" do
       graph = graph("library_loan")
 
-      assert %{"title" => "Sequence", "lines" => []} = find(graph, "blk_ll_root")
+      assert %{"title" => "Sequence", "lines" => ["Run its steps in order"]} =
+               find(graph, "blk_ll_root")
+
       assert %{"title" => "Wait", "lines" => ["Wait 21d"]} = find(graph, "blk_ll_loan_period")
+
+      assert %{"title" => "Invoke", "lines" => []} =
+               find(graph("card_processing"), "blk_cp_authorize")
     end
   end
 

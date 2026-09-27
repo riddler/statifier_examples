@@ -341,12 +341,19 @@ defmodule StatifierExamples.MixDepsTest do
   # Sabotage: pointed the LOCK assertion back at `"0.33.` and left
   # `mix.lock` alone; it went red reporting the resolved 0.35.0 entry.
   # Reverted from a copy.
+  #
+  # 2026-09-27: both halves move to 0.36. 0.36.0 ships the block
+  # document's JSON Schema and `StatifierBlocks.Describe`, which the suite
+  # uses to check every shipped block document and to outline the library
+  # loan and patron registration. Sabotage: pointed the LOCK assertion back
+  # at `"0.35.` and left `mix.lock` alone; it went red reporting the
+  # resolved 0.36.0 entry. Reverted from a copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.35.0"} in deps
+    assert {:statifier_blocks, "~> 0.36.0"} in deps
 
     lock_line =
       "mix.lock"
@@ -355,7 +362,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.35.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.36.)
     refute lock_line =~ ":git,"
   end
 
@@ -456,6 +463,14 @@ defmodule StatifierExamples.MixDepsTest do
   # release line (`"0.3.`) and left `mix.lock` alone; it went red
   # reporting the resolved 0.4.0 entry against the mutated expectation.
   # Reverted from a backup copy.
+  #
+  # 2026-09-27: the lock moves to 0.5.0 with statifier_blocks 0.36.0,
+  # whose requirement is still `~> 0.4`; the move is the resolver taking
+  # the newest release inside it, not a raised floor. 0.5.0 is additive:
+  # it ships the datamodel document's JSON Schema, which nothing here
+  # reads. Sabotage: pointed the LOCK assertion back at `"0.4.` and left
+  # `mix.lock` alone; it went red reporting the resolved 0.5.0 entry.
+  # Reverted from a copy.
   test "statifier_datamodel arrives transitively and is not named directly" do
     deps = Mix.Project.config()[:deps]
 
@@ -469,7 +484,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_datamodel": )))
 
     assert lock_line, "statifier_datamodel has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.4.)
+    assert lock_line =~ ~s({:hex, :statifier_datamodel, "0.5.)
     refute lock_line =~ ":git,"
   end
 
