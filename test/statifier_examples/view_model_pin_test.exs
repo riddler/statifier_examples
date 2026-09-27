@@ -145,8 +145,15 @@ defmodule StatifierExamples.ViewModelPinTest do
   # declares a `sentence/1` callback - branch, parallel, wait, send, assign,
   # subchart - plus this app's own types, which declare none and fall back
   # to the author's title and then to the palette label.
+  #
+  # 2026-09-27: statifier_blocks 0.36.0 adds `sentence/1` to
+  # `core.sequence`, `core.group` and `core.await`. The first two are in
+  # these fixtures and their rows now read "Run its steps in order" and
+  # "Run interruptible steps" where they read the labels; `core.await` is
+  # in neither, so the claim above now holds for every core type but that
+  # one.
   @card_processing_steps [
-    {"blk_cp_root", 0, "Sequence"},
+    {"blk_cp_root", 0, "Run its steps in order"},
     {"blk_cp_intake", 1, "Intake"},
     {"blk_cp_validation", 1, "Decide: When \"valid\", otherwise"},
     {"blk_cp_authz_deadline", 3, "Send card.authz_timed_out"},
@@ -167,21 +174,21 @@ defmodule StatifierExamples.ViewModelPinTest do
     {"blk_cp_manual_wait", 3, "Wait 2d"},
     {"blk_cp_resolve", 3, "Resolve review"},
     {"blk_cp_review_cleared", 3, "Set review.parked"},
-    {"blk_cp_tail", 1, "Sequence"},
+    {"blk_cp_tail", 1, "Run its steps in order"},
     {"blk_cp_receipt", 2, "Receipt"},
     {"blk_cp_final_notify", 2, "Notify"}
   ]
 
   @signup_wizard_steps [
-    {"blk_su_root", 0, "Sequence"},
+    {"blk_su_root", 0, "Run its steps in order"},
     {"blk_su_account", 1, "Signup step"},
-    {"blk_su_verify", 1, "Group"},
+    {"blk_su_verify", 1, "Run interruptible steps"},
     {"blk_su_send_verification", 2, "Signup step"},
-    {"blk_su_reminder_window", 2, "Group"},
+    {"blk_su_reminder_window", 2, "Run interruptible steps"},
     {"blk_su_reminder_timer", 3, "Send signup.reminder_due"},
     {"blk_su_verify_wait", 3, "Wait 24h"},
     {"blk_su_reminder_notice", 2, "Notify"},
-    {"blk_su_onboarding", 1, "Group"},
+    {"blk_su_onboarding", 1, "Run interruptible steps"},
     {"blk_su_onboarding_deadline", 2, "Send signup.abandoned"},
     {"blk_su_plan", 2, "Decide: When \"business\", otherwise"},
     {"blk_su_provision", 2, "Provision"}
@@ -198,12 +205,12 @@ defmodule StatifierExamples.ViewModelPinTest do
   # the count alone cannot tell a composite drawn as itself from a composite
   # silently drawn as the first block of its subtree.
   @card_processing_composite_steps [
-    {"blk_cpx_root", 0, "Sequence"},
+    {"blk_cpx_root", 0, "Run its steps in order"},
     {"blk_cpx_authz", 1, "Authorize within 1h, else abandon"}
   ]
 
   @signup_guarded_step_steps [
-    {"blk_gs_root", 0, "Sequence"},
+    {"blk_gs_root", 0, "Run its steps in order"},
     {"blk_gs_step", 1, "Run myapp:provision, notify on failure"}
   ]
 
@@ -212,7 +219,7 @@ defmodule StatifierExamples.ViewModelPinTest do
   # one deeper, and a walk that flattened the two into siblings would keep the
   # row count intact.
   @signup_guarded_section_steps [
-    {"blk_gx_root", 0, "Sequence"},
+    {"blk_gx_root", 0, "Run its steps in order"},
     {"blk_gx_section", 1, "Run myapp:provision, notify on failure, then continue"},
     {"blk_gx_confirm", 2, "Notify"}
   ]

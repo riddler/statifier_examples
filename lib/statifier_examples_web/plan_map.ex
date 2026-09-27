@@ -44,7 +44,7 @@ defmodule StatifierExamplesWeb.PlanMap do
   neither is a tray's. Connectors are drawn, never authored.
 
   A box's title is its type's name and the line under it is the block's
-  sentence; where the two are the same words ("Sequence", "Group") the
+  sentence; where the two are the same words ("Invoke", "Raise") the
   line is left off rather than said twice.
 
   ## Order is semantic, so it is forced
