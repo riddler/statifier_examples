@@ -170,7 +170,13 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert body.kind == :body
       assert body.title == "Steps"
       assert fact(body, "Group") == "Group (Run interruptible steps)"
-      assert fact(body, "Steps") == ["Send registration.deadline", "Wait for email.verified"]
+
+      assert fact(body, "Steps") == [
+               "Send registration.deadline",
+               "Wait for email.verified",
+               ~s(Decide: When "child", otherwise),
+               "Send patron.welcomed"
+             ]
     end
 
     # Sabotage: paired the branch edges with the wired slots in reverse

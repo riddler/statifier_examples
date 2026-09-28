@@ -76,6 +76,13 @@ defmodule StatifierExamples.DescribeOutlineTest do
     end
   end
 
+  # The deadline ends the registration: the age branch and the welcome sit
+  # inside the group's body, the group is the root's last step, and so the
+  # rule that abandons the group ends the document.
+  #
+  # Sabotage: moved blk_pr_age and blk_pr_welcome back out after the group
+  # in the fixture; this went red on the group ending the root. Restored
+  # from a copy.
   test "patron registration reads as its chart" do
     outline = outline("patron_registration")
     lines = Describe.render(outline, [])
@@ -86,8 +93,12 @@ defmodule StatifierExamples.DescribeOutlineTest do
 
     for line <- [
           "Run interruptible steps starts with Send registration.deadline",
-          "Wait for email.verified (received, timed_out) ends Run interruptible steps",
+          "Run interruptible steps (done) ends Run its steps in order",
+          "On registration.deadline, When registration.deadline, abandon abandons " <>
+            "Run interruptible steps",
+          ~s|After Wait for email.verified (received, timed_out), Decide: When "child", otherwise|,
           ~s|After Decide: When "child", otherwise (done), Send patron.welcomed|,
+          "Send patron.welcomed (done) ends Run interruptible steps",
           # The arm its author left empty goes straight to the branch's end.
           ~s|Decide: When "child", otherwise: otherwise, the end of | <>
             ~s|Decide: When "child", otherwise|,

@@ -42,6 +42,64 @@
                 "config": {
                   "event": "email.verified"
                 }
+              },
+              {
+                "type": "core.branch",
+                "id": "blk_pr_age",
+                "type_version": 1,
+                "config": {
+                  "arms": [
+                    {
+                      "slot": "arm_child",
+                      "cond": "patron.age < 13"
+                    },
+                    {
+                      "slot": "arm_adult",
+                      "cond": "patron.age >= 13"
+                    }
+                  ]
+                },
+                "slots": {
+                  "arm_child": [
+                    {
+                      "type": "core.await",
+                      "id": "blk_pr_guardian",
+                      "type_version": 1,
+                      "config": {
+                        "event": "guardian.consented",
+                        "timeout": "14d"
+                      }
+                    }
+                  ],
+                  "arm_adult": [
+                    {
+                      "type": "core.send",
+                      "id": "blk_pr_card_ready",
+                      "type_version": 1,
+                      "config": {
+                        "event": "card.ready"
+                      }
+                    }
+                  ],
+                  "undecided": [
+                    {
+                      "type": "core.send",
+                      "id": "blk_pr_visit",
+                      "type_version": 1,
+                      "config": {
+                        "event": "patron.asked_to_visit"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "core.send",
+                "id": "blk_pr_welcome",
+                "type_version": 1,
+                "config": {
+                  "event": "patron.welcomed"
+                }
               }
             ],
             "interrupts": [
@@ -64,64 +122,6 @@
                 }
               }
             ]
-          }
-        },
-        {
-          "type": "core.branch",
-          "id": "blk_pr_age",
-          "type_version": 1,
-          "config": {
-            "arms": [
-              {
-                "slot": "arm_child",
-                "cond": "patron.age < 13"
-              },
-              {
-                "slot": "arm_adult",
-                "cond": "patron.age >= 13"
-              }
-            ]
-          },
-          "slots": {
-            "arm_child": [
-              {
-                "type": "core.await",
-                "id": "blk_pr_guardian",
-                "type_version": 1,
-                "config": {
-                  "event": "guardian.consented",
-                  "timeout": "14d"
-                }
-              }
-            ],
-            "arm_adult": [
-              {
-                "type": "core.send",
-                "id": "blk_pr_card_ready",
-                "type_version": 1,
-                "config": {
-                  "event": "card.ready"
-                }
-              }
-            ],
-            "undecided": [
-              {
-                "type": "core.send",
-                "id": "blk_pr_visit",
-                "type_version": 1,
-                "config": {
-                  "event": "patron.asked_to_visit"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "core.send",
-          "id": "blk_pr_welcome",
-          "type_version": 1,
-          "config": {
-            "event": "patron.welcomed"
           }
         }
       ]
