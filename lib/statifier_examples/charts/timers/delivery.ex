@@ -34,6 +34,15 @@ defmodule StatifierExamples.Charts.Timers.Delivery do
   all of them are facts about the execution rather than about the node, which
   is the line `StatifierOban.Timer.Worker` draws between a cancel and a
   retry.
+
+  ## A parked execution is retried, not discarded
+
+  An execution a migration parked (`:needs_migration`) is not terminal: it
+  goes on once it is migrated or unparked. So a timer that fires into one
+  raises out of `StatifierExamples.Charts.Durable.deliver/2` rather than
+  discarding, and the worker retries the job while attempts remain. A
+  discard would cancel it, and the unparked execution would wait on a
+  timer that no longer exists.
   """
 
   @behaviour StatifierOban.Timer.Delivery

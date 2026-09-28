@@ -12,6 +12,15 @@ defmodule StatifierExamples.FirstWorkflow.Delivery do
   Every answer is `:delivered` or `{:discarded, reason}`. A discard is the
   ordinary answer for an execution that is no longer live, and it tells the
   job not to retry.
+
+  One refusal is neither, and only for the timer: a window that elapses
+  while a migration has the execution parked (`:needs_migration`). The
+  driver refuses the event whole and consumes nothing, and the execution
+  goes on once it is migrated or unparked
+  (`StatifierPersistence.Executions.unpark/3`), so a discard would lose the
+  one firing the hold is waiting for. The timer delivery raises instead,
+  and `StatifierOban.Timer.Worker` retries a raise out of its delivery
+  module while attempts remain.
   """
 
   @behaviour StatifierOban.Invoke.Delivery
@@ -40,11 +49,21 @@ defmodule StatifierExamples.FirstWorkflow.Delivery do
     drive(execution_id, &Driver.failed_invocation(&1, execution_id, invoke_id, failure))
   end
 
-  @doc "Feeds a fired timer's event back as an external event."
+  @doc """
+  Feeds a fired timer's event back as an external event, and raises for a
+  parked execution so the job is retried rather than discarded.
+  """
   @impl StatifierOban.Timer.Delivery
   @spec deliver(String.t(), SendDelayed.t()) :: :delivered | {:discarded, term()}
   def deliver(execution_id, %SendDelayed{event: event}) do
-    drive(execution_id, &Driver.send_event(&1, execution_id, Event.external(event)))
+    case drive(execution_id, &Driver.send_event(&1, execution_id, Event.external(event))) do
+      {:discarded, {:needs_migration, _execution}} ->
+        raise "execution #{execution_id} is parked (:needs_migration); " <>
+                "the timer is retried until it is migrated or unparked"
+
+      answer ->
+        answer
+    end
   end
 
   @spec drive(String.t(), (Driver.t() -> Driver.result())) :: :delivered | {:discarded, term()}

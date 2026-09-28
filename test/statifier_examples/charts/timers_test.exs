@@ -15,10 +15,10 @@ defmodule StatifierExamples.Charts.TimersTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, Timers}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, ExecutionLock, Timers}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup
-  alias StatifierPersistence.Storage
+  alias StatifierPersistence.{Executions, Storage}
 
   # The wait event the wizard's own `core.wait` answers to. Sending it is
   # how a test says "the verification window elapsed" without waiting a
@@ -280,6 +280,48 @@ defmodule StatifierExamples.Charts.TimersTest do
     {:ok, _driven} = Durable.start(compiled, document, execution_id)
 
     assert Durable.deliver(execution_id, "signup.reminder_due") == {:discarded, :chart_unknown}
+  end
+
+  # A migration's park is not an end: the execution goes on once it is
+  # unparked, so a reminder that fires into it is retried rather than
+  # discarded. The park is written through `Storage.update_execution_status/4`,
+  # the storage layer's public writer, as a migration's own park writes it;
+  # the unpark is the package's `Executions.unpark/3`.
+  #
+  # Sabotage: made `Durable.deliver/2`'s `{:needs_migration, _}` clause answer
+  # `{:discarded, :needs_migration}`; the first drain cancelled both jobs and
+  # this went red on `%{failure: 2}`. Reverted from a copy.
+  test "a reminder that fires into a parked execution is retried and delivered once unparked",
+       %{execution_id: execution_id} do
+    start!(execution_id)
+
+    {:ok, store} = Storage.new(StatifierExamples.Persistence, [])
+    :ok = Storage.update_execution_status(store, execution_id, :needs_migration)
+
+    # Both stored timers fire into the parked execution: the reminder and
+    # the verification wait. Neither is consumed and neither is cancelled.
+    assert %{failure: 2, cancelled: 0, success: 0} =
+             Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
+
+    assert [%{state: "retryable"}] = reminder_jobs(execution_id)
+    assert record!(execution_id).status == :needs_migration
+
+    assert {:ok, %{status: :active}} =
+             Executions.unpark(store, execution_id, serialization: {ExecutionLock, ExecutionLock})
+
+    # The retries, run now rather than at their backoff, are the same two
+    # firings, and the execution goes on exactly as it would have.
+    log =
+      at_info(fn ->
+        assert %{success: 2, failure: 0} =
+                 Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
+
+        assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
+      end)
+
+    assert log =~ "myapp:notify"
+    assert [%{state: "completed"}] = reminder_jobs(execution_id)
+    assert record!(execution_id).status == :completed
   end
 
   # The metadata a fired timer reads is written once, at create, and has to
