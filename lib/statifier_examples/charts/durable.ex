@@ -668,6 +668,16 @@ defmodule StatifierExamples.Charts.Durable do
   the layer below and is retried by Oban, which is the right answer to a
   fact about the node rather than about the execution.
 
+  A parked execution raises as well, though that is a fact about the
+  execution. `:needs_migration` is not terminal: a migration left the
+  execution there to be migrated or unparked, and either way it goes on.
+  The driver refuses the event whole and consumes nothing, and leaves
+  retrying it once the execution leaves the arm to the host
+  (`StatifierPersistence.Driver`'s `result` type). A discard would cancel
+  the job, and after `StatifierPersistence.Executions.unpark/3` the
+  execution would sit active with no timer left to fire, so this raises and
+  Oban retries the job instead.
+
   A delivered event is broadcast on `topic/1`, so a page that happens to
   be showing this execution redraws instead of waiting for someone to reload
   it. Nothing here depends on anyone listening.
@@ -676,7 +686,7 @@ defmodule StatifierExamples.Charts.Durable do
   def deliver(execution_id, event) when is_binary(execution_id) and is_binary(event) do
     with {:ok, store} <- store(),
          {:ok, record} <- Storage.fetch_execution(store, execution_id),
-         :active <- record.status,
+         :active <- live(record),
          {:ok, {compiled, document}} <- chart_for(record),
          {:ok, driven} <- resume(compiled, document, execution_id),
          {:ok, {durable, run}} <- continue(driven, event) do
@@ -699,9 +709,31 @@ defmodule StatifierExamples.Charts.Durable do
       # this clause with it.
       {:discarded, reason} -> {:discarded, reason}
       :error -> {:discarded, :chart_unknown}
+      # Parked, read by the pre-check or, when the park landed between the
+      # two reads, by the driver: `live/1` answers the driver's own shape so
+      # one clause takes both. It retries, for the doc's reason.
+      {:error, {:needs_migration, _execution}} -> parked!(execution_id)
       {:error, reason} -> {:discarded, reason}
       status when is_atom(status) -> {:discarded, status}
     end
+  end
+
+  # `deliver/2`'s pre-check. A parked execution is refused in the driver's
+  # own words, before `chart_for/1` and `resume/3` can read it: a park is
+  # what a migration leaves when the chart moved on, so rebuilding the
+  # current chart for it could answer an identity mismatch, and that is a
+  # discard.
+  @spec live(map()) :: :active | {:error, {:needs_migration, map()}} | atom()
+  defp live(%{status: :needs_migration} = record), do: {:error, {:needs_migration, record}}
+  defp live(%{status: status}), do: status
+
+  # The retry `deliver/2` asks for: `StatifierOban.Timer.Worker` retries a
+  # raise out of its delivery module while attempts remain, where a
+  # returned discard would cancel the job.
+  @spec parked!(String.t()) :: no_return()
+  defp parked!(execution_id) do
+    raise "execution #{execution_id} is parked (:needs_migration); " <>
+            "the timer is retried until it is migrated or unparked"
   end
 
   @doc """

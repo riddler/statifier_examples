@@ -13,9 +13,10 @@ defmodule StatifierExamples.FirstWorkflowTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Statifier.Effect.Invoke
+  alias StatifierExamples.Charts.ExecutionLock
   alias StatifierExamples.{FirstWorkflow, Repo}
   alias StatifierExamples.FirstWorkflow.{Delivery, SetAside}
-  alias StatifierPersistence.{Execution, Executions, Storage}
+  alias StatifierPersistence.{Driver, Execution, Executions, Storage}
 
   setup do
     :ok = Sandbox.checkout(Repo)
@@ -89,6 +90,49 @@ defmodule StatifierExamples.FirstWorkflowTest do
   # copy.
   test "a delivery to an execution that was never opened is discarded, not raised" do
     assert {:discarded, _reason} = Delivery.deliver("first_workflow_nobody", "inv_1", %{})
+  end
+
+  # The pickup window elapsing while a migration has the hold parked: the
+  # timer job is retried rather than cancelled, and once the execution is
+  # unparked the same firing ends the hold. The recipe runs once first so
+  # the chart is registered; the second execution is opened on it through
+  # the recipe's own driver. The park is written through
+  # `Storage.update_execution_status/4`, as a migration's own park writes
+  # it; the unpark is the package's `Executions.unpark/3`.
+  #
+  # Sabotage: made the timer `deliver/2`'s `{:needs_migration, _}` clause
+  # answer `{:discarded, :needs_migration}`; the first timer drain cancelled
+  # the job and this went red on `%{failure: 1}`. Reverted from a copy.
+  test "a pickup window that elapses into a parked execution is retried and ends it once unparked" do
+    assert {:ok, _lines} = FirstWorkflow.run(execution_id: "first_workflow_registers")
+
+    store = FirstWorkflow.store()
+    {:ok, machine} = FirstWorkflow.machine_for(store, "first_workflow_registers")
+    execution_id = "first_workflow_parked"
+    hold = %{"patron" => "p-1043", "copy" => "c-3107", "branch" => "Northside branch"}
+
+    assert {:ok, %Execution{status: :active}, _machine_state} =
+             store
+             |> FirstWorkflow.driver(machine)
+             |> Driver.create(execution_id, initialize: [datamodel: %{"hold" => hold}])
+
+    # The set-aside answer lands and the wait arms the pickup window.
+    assert %{success: 1} = Oban.drain_queue(queue: :statifier_invocations)
+
+    :ok = Storage.update_execution_status(store, execution_id, :needs_migration)
+
+    assert %{failure: 1, cancelled: 0, success: 0} =
+             Oban.drain_queue(queue: :statifier_timers, with_scheduled: true)
+
+    assert {:ok, %{status: :needs_migration}} = Storage.fetch_execution(store, execution_id)
+
+    assert {:ok, %Execution{status: :active}} =
+             Executions.unpark(store, execution_id, serialization: {ExecutionLock, ExecutionLock})
+
+    assert %{success: 1, failure: 0} =
+             Oban.drain_queue(queue: :statifier_timers, with_scheduled: true)
+
+    assert {:ok, %{status: :completed}} = Storage.fetch_execution(store, execution_id)
   end
 
   # Sabotage: made the task print none of the lines; this went red.
