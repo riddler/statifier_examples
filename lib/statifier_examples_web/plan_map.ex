@@ -132,6 +132,32 @@ defmodule StatifierExamplesWeb.PlanMap do
   the step has moved on). A send with no delay carries neither. A mark is
   drawn inside its block's box, so a click on it is a click on the box.
 
+  ## The happy path runs straight
+
+  A reader follows the steps that run when nothing goes wrong, so those
+  are drawn on one vertical line, and what can interrupt them sits to the
+  side. Inside a group's pane the body's steps already share a line: ELK
+  centres a chain of steps on one another, against the pane's left edge.
+  What would bend the line is the group itself, which is wider than its
+  body by the rules column: an edge attached to the middle of the group
+  lands between the body and the column, and the steps before and after
+  the group follow it there.
+
+  So a group attaches its edges where its body's line is. Its node
+  carries two `ports`, one on its top side for the edge in and one on its
+  bottom side for the edge out, at a fixed x (`portConstraints:
+  FIXED_POS`): the group's and the pane's left padding plus half the
+  widest step in the body. The steps before and after the group line up
+  under that point, and the rules column and its dashed abandon edges
+  stand to the right of it. The edges themselves still join block to
+  block: the hook moves an edge onto its node's port only for the layout,
+  and hands the edge back with its own ends.
+
+  The line is placed by estimate, from the widths this module gives its
+  leaves, so a group puts out its ports only when every step in its body
+  is a leaf or an empty marker. A body that holds a container, whose width
+  is ELK's to find, keeps its edges at the middle of the group, as before.
+
   ## Order is semantic, so it is forced
 
   A branch evaluates its arms in slot order and a sequence runs its steps
@@ -194,6 +220,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   @force_model_order "org.eclipse.elk.layered.crossingMinimization.forceNodeModelOrder"
   @consider_model_order "org.eclipse.elk.layered.considerModelOrder.strategy"
   @layer_constraint "org.eclipse.elk.layered.layering.layerConstraint"
+  @port_constraints "org.eclipse.elk.portConstraints"
+  @port_side "org.eclipse.elk.port.side"
 
   @root_options %{
     "org.eclipse.elk.algorithm" => "layered",
@@ -210,7 +238,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   One graph node, in elkjs's JSON shape plus the fields the hook draws
   from: `kind`, `title` and `lines`, on a slot `style`, on a timer block
   `mark`, on a group with interrupt rules `interrupts`, on a branch `band`,
-  `caption` and `caption_width`, and on a group's rules column `caption`.
+  `caption` and `caption_width`, on a group's rules column `caption`, and
+  on a group whose body is all leaves the `ports` its edges attach to.
   """
   @type graph_node :: %{required(String.t()) => term()}
 
@@ -315,6 +344,7 @@ defmodule StatifierExamplesWeb.PlanMap do
     }
     |> put_band(node)
     |> put_interrupts(node)
+    |> put_ports(node)
   end
 
   # ------------------------------------------------------------ the Branch
@@ -517,6 +547,44 @@ defmodule StatifierExamplesWeb.PlanMap do
   end
 
   defp put_interrupts(graph_node, %Node{}), do: graph_node
+
+  # ------------------------------------------------------- the happy path
+
+  # A group's two ports, where its body's steps stand: the group's and the
+  # pane's left padding, plus half the widest step. Only a body of leaves
+  # and empty markers has widths to read; see the moduledoc's "The happy
+  # path runs straight".
+  @spec put_ports(graph_node(), Node.t()) :: graph_node()
+  defp put_ports(
+         %{"id" => id, "children" => [%{"style" => "body", "children" => steps} | _]} =
+           graph_node,
+         %Node{} = node
+       ) do
+    widths = for %{"width" => width} <- steps, do: width
+
+    if group?(node) and widths != [] and length(widths) == length(steps) do
+      x = 2 * @pad + Enum.max(widths) / 2
+
+      graph_node
+      |> Map.update!("layoutOptions", &Map.put(&1, @port_constraints, "FIXED_POS"))
+      |> Map.put("ports", [port("#{id}#in", x, "NORTH"), port("#{id}#out", x, "SOUTH")])
+    else
+      graph_node
+    end
+  end
+
+  defp put_ports(graph_node, %Node{}), do: graph_node
+
+  @spec port(String.t(), number(), String.t()) :: graph_node()
+  defp port(id, x, side),
+    do: %{
+      "id" => id,
+      "x" => x,
+      "y" => 0,
+      "width" => 0,
+      "height" => 0,
+      "layoutOptions" => %{@port_side => side}
+    }
 
   @spec leads_to(term()) :: String.t() | nil
   defp leads_to("abandon"), do: "exit"

@@ -443,6 +443,84 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     end
   end
 
+  describe "the happy path, as drawn" do
+    # Each library group, the steps of its body, and the steps of the
+    # document's own flow after it.
+    @happy [
+      {"library_loan", "blk_ll_on_loan", ["blk_ll_loan_period"],
+       ["blk_ll_due", "blk_ll_root/end"]},
+      {"patron_registration", "blk_pr_verify", ["blk_pr_deadline", "blk_pr_email"],
+       ["blk_pr_age", "blk_pr_welcome"]}
+    ]
+
+    # How far off one line a step's centre may sit, in pixels.
+    @straight 1.0
+
+    # The body's steps and the steps after the group are centred on one
+    # vertical line, and the edge out of the group runs down it: it leaves
+    # the group's bottom and enters the next step's top on the line.
+    #
+    # Sabotage: made put_ports/2 answer its node unchanged; the edge left
+    # the middle of the group and the body's steps stood left of the line,
+    # and this went red. Made onPorts attach no edge; this went red. Made
+    # put_ports/2 count one padding, not two; the line moved 12px and this
+    # went red. Made offPorts give no edge back its ends; the edge out of
+    # the group came back from its port and this went red. Each reverted
+    # from a copy.
+    test "both library fixtures run their body's steps and what follows down one line",
+         %{tmp_dir: dir} do
+      for {key, group, steps, after_group} <- @happy do
+        %{"drawn" => "map", "boxes" => boxes, "edges" => edges} =
+          run(dir, key, library_graph(key))
+
+        [line | _rest] = centres = Enum.map(steps ++ after_group, &centre(boxes[&1]))
+
+        for {id, x} <- Enum.zip(steps ++ after_group, centres) do
+          assert_in_delta x, line, @straight, "#{key}: #{id} is off the line at #{x}, not #{line}"
+        end
+
+        [next | _rest] = after_group
+        id = "#{group}->#{next}"
+
+        edge =
+          Enum.find(edges, &(&1["id"] == id)) || flunk("#{key}: #{id} is not drawn")
+
+        assert %{"source" => ^group, "target" => ^next} = edge
+        assert_in_delta edge["start"]["x"], line, @straight, "#{key}: #{id} start"
+        assert_in_delta edge["end"]["x"], line, @straight, "#{key}: #{id} end"
+      end
+    end
+
+    # The rules column and every abandon edge drawn out of it stand to the
+    # right of the body's steps, so nothing that interrupts the happy path
+    # is drawn on it.
+    #
+    # Sabotage: made interruptsOf end an exit edge 30px in from the group's
+    # left edge; the edge crossed the body's steps and this went red.
+    # Reverted from a copy.
+    test "both library fixtures draw their rules and abandon ends beside the happy path",
+         %{tmp_dir: dir} do
+      for {key, group, steps, _after_group} <- @happy do
+        graph = library_graph(key)
+
+        %{"drawn" => "map", "boxes" => boxes, "interrupts" => drawn} =
+          run(dir, key, graph)
+
+        right = steps |> Enum.map(&(boxes[&1]["x"] + boxes[&1]["width"])) |> Enum.max()
+        column = boxes["#{group}/interrupts"]
+
+        assert column["x"] > right, "#{key}: the rules column is not beside the steps"
+
+        exits = for %{"to" => "exit"} = edge <- drawn, edge["target"] == group, do: edge
+        refute exits == [], key
+
+        for %{"id" => id, "d" => d} <- exits, point <- path_points(d) do
+          assert point.x > right, "#{key}: #{id} crosses the happy path at #{point.x}"
+        end
+      end
+    end
+  end
+
   describe "the error-pane test" do
     # An edge to a node the graph does not hold is a graph elkjs refuses
     # outright, which is the failure the pane is for.
@@ -622,6 +700,8 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     {value, ""} = Float.parse(text)
     value
   end
+
+  defp centre(box), do: box["x"] + box["width"] / 2
 
   # Whether `box` lies wholly inside `outer`.
   defp inside?(box, outer) do

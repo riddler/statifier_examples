@@ -371,6 +371,42 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     end
   end
 
+  describe "the happy path" do
+    # A group whose body is all leaves attaches its edges at a fixed point
+    # on its top and bottom sides: its and its pane's padding (12 each)
+    # plus half its widest step. A group whose body holds a container has
+    # no width to read and carries no ports.
+    #
+    # Sabotage: made put_ports/2 put out ports for any body with a leaf in
+    # it; the card group whose body holds containers carried ports and
+    # this went red. Made it count one padding, not two; this went red.
+    # Each reverted from a copy.
+    test "a group of leaves carries its two ports where its steps stand, and no other does" do
+      verify = find(graph("patron_registration"), "blk_pr_verify")
+      x = 12 + 12 + 206 / 2
+
+      assert verify["layoutOptions"]["org.eclipse.elk.portConstraints"] == "FIXED_POS"
+
+      assert [
+               %{"id" => "blk_pr_verify#in", "x" => ^x, "layoutOptions" => north},
+               %{"id" => "blk_pr_verify#out", "x" => ^x, "layoutOptions" => south}
+             ] = verify["ports"]
+
+      assert north == %{"org.eclipse.elk.port.side" => "NORTH"}
+      assert south == %{"org.eclipse.elk.port.side" => "SOUTH"}
+
+      authz = find(graph("card_processing"), "blk_cp_authz")
+      refute Map.has_key?(authz, "ports")
+      refute Map.has_key?(authz["layoutOptions"], "org.eclipse.elk.portConstraints")
+
+      for fixture <- Charts.fixtures(),
+          node <- walk(PlanMap.graph(view_model(fixture))),
+          Map.has_key?(node, "ports") do
+        assert [%{"style" => "body"} | _rest] = node["children"], fixture.key
+      end
+    end
+  end
+
   describe "the Branch" do
     # The header is the map's own; the branch type's sentence, which the
     # list draws, is what it was.
