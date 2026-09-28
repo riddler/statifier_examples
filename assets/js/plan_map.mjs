@@ -88,6 +88,45 @@ export function edgesOf(laid) {
   return out
 }
 
+// Every group's interrupt edges, each with the points it is drawn through,
+// absolute. They are not ELK's: the server hands them over on the group's
+// node as `interrupts`, beside its `edges`, so the layout never sees them
+// and they never move a box. Each is drawn from the boxes the layout
+// placed: an `abandon` rule (`to: "exit"`) straight down from the bottom
+// of its box to the group's bottom edge, which is where the group is left;
+// a `resume` rule (`to: "body"`) up from the top of its box to the head of
+// the group's body, and in from its side when the head sits to the left.
+export function interruptsOf(laid) {
+  const all = boxes(laid)
+  const byId = new Map(all.map((box) => [box.id, box]))
+  const out = []
+
+  for (const group of all) {
+    for (const edge of group.interrupts || []) {
+      const rule = byId.get(edge.sources[0])
+      if (!rule) continue
+      const x = rule.x + rule.width / 2
+      let points
+
+      if (edge.to === "exit") {
+        points = [{x, y: rule.y + rule.height}, {x, y: group.y + group.height}]
+      } else {
+        const head = byId.get(edge.head)
+        if (head && head.x + head.width < x) {
+          const y = head.y + head.height / 2
+          points = [{x, y: rule.y}, {x, y}, {x: head.x + head.width, y}]
+        } else {
+          points = [{x, y: rule.y}, {x, y: head ? head.y + head.height : group.y}]
+        }
+      }
+
+      out.push({id: edge.id, source: edge.sources[0], target: edge.targets[0], to: edge.to, points})
+    }
+  }
+
+  return out
+}
+
 function textLines(node, x, y, className) {
   return (node.lines || [])
     .map((line, i) =>
@@ -143,8 +182,28 @@ function drawNode(node) {
   return `<g class="plan-map__block${container ? " plan-map__block--container" : ""}" data-map-node="${id}" data-map-kind="block">` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" ` +
     `style="fill: var(--plan-map-block-fill, #ffffff); stroke: var(--plan-map-block-stroke, #64748b)"/>` +
-    caption + body +
+    caption + body + drawMark(node) +
     `</g>`
+}
+
+// A timer block's mark, a 14px glyph at the box's top right, level with the
+// title (the server left the title room for it): an hourglass for a wait
+// (`core.await`), a clock face for a delayed send. It is drawn inside the
+// block's group, so a click on it selects the block and nothing else.
+const MARK_STYLE = "fill: none; stroke: var(--plan-map-mark, #64748b); stroke-width: 1.5"
+
+function drawMark(node) {
+  if (node.mark !== "wait" && node.mark !== "clock") return ""
+  const x = node.x + node.width - 22
+  const y = node.y + HEADER_BASE - 4
+  const glyph = node.mark === "wait"
+    ? `<path d="M${x + 2} ${y} H${x + 12} M${x + 2} ${y + 14} H${x + 12} ` +
+      `M${x + 3} ${y} L${x + 11} ${y + 14} M${x + 11} ${y} L${x + 3} ${y + 14}" style="${MARK_STYLE}"/>`
+    : `<circle cx="${x + 7}" cy="${y + 7}" r="6.5" style="${MARK_STYLE}"/>` +
+      `<path d="M${x + 7} ${y + 3} V${y + 7} H${x + 10}" style="${MARK_STYLE}"/>`
+
+  return `<g class="plan-map__mark plan-map__mark--${node.mark}" data-map-mark="${node.mark}">` +
+    glyph + `</g>`
 }
 
 function drawEdge(edge) {
@@ -154,6 +213,17 @@ function drawEdge(edge) {
     return `<path class="plan-map__edge" data-map-edge="${escapeText(edge.id)}" d="${d}" ` +
       `marker-end="url(#plan-map-arrow)" style="fill: none; stroke: var(--plan-map-edge, #64748b)"/>`
   }).join("")
+}
+
+// An interrupt edge, dashed: it is not a step that follows the one before
+// it but a way out of (or back into) the group that fires whenever the
+// rule's event arrives.
+function drawInterrupt(edge) {
+  const d = edge.points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ")
+  return `<path class="plan-map__edge plan-map__edge--interrupt" data-map-edge="${escapeText(edge.id)}" ` +
+    `data-map-edge-kind="interrupt" data-map-edge-to="${escapeText(edge.to)}" d="${d}" ` +
+    `marker-end="url(#plan-map-arrow)" ` +
+    `style="fill: none; stroke: var(--plan-map-edge, #64748b); stroke-dasharray: 5 4"/>`
 }
 
 // The laid-out graph as one SVG string. The picture is decoration over the
@@ -166,7 +236,7 @@ export function renderSvg(laid, {editable = false} = {}) {
   const all = boxes(laid)
   const nodes = all.map(drawNode).join("")
   const gaps = editable ? all.map(drawGap).join("") : ""
-  const edges = edgesOf(laid).map(drawEdge).join("")
+  const edges = edgesOf(laid).map(drawEdge).join("") + interruptsOf(laid).map(drawInterrupt).join("")
   const width = Math.ceil(laid.width)
   const height = Math.ceil(laid.height)
 

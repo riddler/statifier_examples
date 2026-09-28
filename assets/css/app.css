@@ -557,7 +557,7 @@
  *
  * The map above the list (`StatifierExamplesWeb.PlanMap`, drawn by the
  * `PlanMap` hook). Its colours are the page's own `--sb-*` tokens, mapped
- * onto the five `--plan-map-*` names the hook's SVG reads, so each of the
+ * onto the `--plan-map-*` names the hook's SVG reads, so each of the
  * three themes below dresses the map without a block of its own. The SVG
  * carries a fallback for every name, which is what it looks like on a page
  * that sets none.
@@ -584,6 +584,7 @@
   --plan-map-empty-fill: transparent;
   --plan-map-empty-stroke: var(--sb-fg-subtle);
   --plan-map-edge: var(--sb-fg-subtle);
+  --plan-map-mark: var(--sb-fg-muted);
 
   flex: 1;
   min-width: 0;

@@ -11,6 +11,8 @@ defmodule StatifierExamplesWeb.PlanMapTest do
   use ExUnit.Case, async: true
 
   alias StatifierBlocks.Block
+  alias StatifierBlocks.Describe
+  alias StatifierBlocks.Describe.Edge
   alias StatifierBlocks.Document
   alias StatifierBlocks.ViewModel
   alias StatifierBlocks.ViewModel.Node
@@ -157,6 +159,131 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     end
   end
 
+  describe "interrupt edges and timer marks" do
+    # The map reads its interrupt edges off the view model; Describe reads
+    # them off the document. The two are held equal, rule for rule, so the
+    # map cannot draw an interrupt the description does not say.
+    #
+    # Sabotage: made leads_to/1 answer "body" for an abandon rule; this
+    # went red, with the library case below. Reverted from a copy.
+    test "every fixture's interrupt edges are Describe's" do
+      for fixture <- Charts.fixtures() do
+        described =
+          for %Edge{kind: :interrupt, from: {:block, rule}, to: {to, group}} <-
+                Describe.outline(fixture.document, Charts.palette(), []).edges do
+            %{"from" => rule, "group" => group, "to" => Atom.to_string(to)}
+          end
+
+        assert PlanMap.interrupts(PlanMap.graph(view_model(fixture))) == described, fixture.key
+      end
+    end
+
+    # Sabotage: made put_interrupts/2 take the group's last drawn child as
+    # the head; this went red, with the resume case below. Reverted from a
+    # copy.
+    test "each library group's two rules leave it by its exit" do
+      assert PlanMap.interrupts(graph("library_loan")) == [
+               %{"from" => "blk_ll_returned_early", "group" => "blk_ll_on_loan", "to" => "exit"},
+               %{"from" => "blk_ll_reported_lost", "group" => "blk_ll_on_loan", "to" => "exit"}
+             ]
+
+      assert PlanMap.interrupts(graph("patron_registration")) == [
+               %{"from" => "blk_pr_abandoned", "group" => "blk_pr_verify", "to" => "exit"},
+               %{"from" => "blk_pr_expired", "group" => "blk_pr_verify", "to" => "exit"}
+             ]
+
+      assert [%{"kind" => "interrupt", "head" => "blk_pr_deadline"} | _rest] =
+               find(graph("patron_registration"), "blk_pr_verify")["interrupts"]
+    end
+
+    # A resume rule goes back to the head of the group's body. Neither
+    # library fixture has one, so a signup group carries the case.
+    #
+    # Sabotage: the same head taken from the last drawn child; this went
+    # red. Reverted from a copy.
+    test "a resume rule leads to the head of its group's body" do
+      resumes =
+        for fixture <- Charts.fixtures(),
+            edge <- PlanMap.interrupts(PlanMap.graph(view_model(fixture))),
+            edge["to"] == "body",
+            do: {fixture.key, edge}
+
+      refute resumes == []
+
+      for {key, %{"group" => group}} <- resumes do
+        node = find(graph(key), group)
+        [%{"id" => head} | _rest] = node["children"]
+
+        for edge <- node["interrupts"], edge["to"] == "body" do
+          assert edge["head"] == head, "#{key}: #{edge["id"]}"
+        end
+      end
+    end
+
+    # Sabotage: made mark/1 answer nil for core.await; this went red, with
+    # the derived and drawn cases. Made delayed?/1 answer true for any
+    # string delay, blank included; this went red. Each reverted from a copy.
+    test "the library fixtures mark every await and the one delayed send, and no other" do
+      assert marks(graph("library_loan")) == %{"blk_ll_late_return" => "wait"}
+
+      assert marks(graph("patron_registration")) == %{
+               "blk_pr_deadline" => "clock",
+               "blk_pr_email" => "wait",
+               "blk_pr_guardian" => "wait"
+             }
+    end
+
+    # Derived rather than listed: every await in every fixture carries the
+    # wait mark, every send carries the clock mark exactly when its delay
+    # is set, and no other block carries a mark.
+    #
+    # Sabotage: the two mutations above; each turned this red. Reverted
+    # from a copy.
+    test "every fixture marks its awaits and its delayed sends, and nothing else" do
+      for fixture <- Charts.fixtures() do
+        view_model = view_model(fixture)
+
+        expected =
+          for {%Node{} = node, _depth, _kind} <- ViewModel.outline(view_model),
+              mark = expected_mark(node),
+              into: %{},
+              do: {node.block_id, mark}
+
+        assert marks(PlanMap.graph(view_model)) == expected, fixture.key
+      end
+    end
+
+    # The mark sits level with the title, so the title leaves it room. No
+    # core type's own label is long enough to need it, so the case is a
+    # view model whose await carries a long title of its own.
+    #
+    # Sabotage: dropped the title-plus-mark term from put_mark/4's width;
+    # this went red. Reverted from a copy.
+    test "a marked leaf is wide enough for its title and its mark" do
+      title = "Wait for the patron to collect the copy from the hold shelf"
+
+      root =
+        Block.new("core.sequence",
+          id: "root",
+          slots: %{
+            "body" => [
+              Block.new("core.await", id: "held", config: %{"event" => "hold.collected"})
+            ]
+          }
+        )
+
+      view_model = root |> Document.new() |> ViewModel.build(Charts.palette(), [])
+      [%{children: [await]} = body] = view_model.root.slots
+      titled = %{body | children: [%{await | title: title}]}
+      view_model = %{view_model | root: %{view_model.root | slots: [titled]}}
+
+      assert %{"mark" => "wait", "title" => ^title, "width" => width} =
+               find(PlanMap.graph(view_model), "held")
+
+      assert width >= String.length(title) * 7 + 24 + 22
+    end
+  end
+
   describe "the options that keep the model order" do
     # Sabotage: dropped @force_model_order from container_options/2; every
     # container lost it and this went red. Reverted from a copy.
@@ -229,6 +356,22 @@ defmodule StatifierExamplesWeb.PlanMapTest do
   defp containers(graph), do: Enum.filter(walk(graph), &Map.has_key?(&1, "children"))
 
   defp markers(graph), do: for(%{"kind" => "empty", "id" => id} <- walk(graph), do: id)
+
+  defp marks(graph),
+    do: for(%{"mark" => mark, "id" => id} <- walk(graph), into: %{}, do: {id, mark})
+
+  # The mark a block should carry, read off the fixture's own form values
+  # rather than the map's code.
+  defp expected_mark(%Node{type: "core.await"}), do: "wait"
+
+  defp expected_mark(%Node{type: "core.send", form: %{fields: fields}}) do
+    case Enum.find(fields, &(&1.key == "delay")) do
+      %{value: delay} when is_binary(delay) and delay != "" -> "clock"
+      _undelayed -> nil
+    end
+  end
+
+  defp expected_mark(%Node{}), do: nil
 
   defp slot_ids(graph, block_id) do
     for %{"kind" => "slot", "id" => id} <- find(graph, block_id)["children"], do: id

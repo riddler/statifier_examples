@@ -38,7 +38,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   step for yet is exactly what a reader of the map has to be able to see.
 
   Consecutive blocks in one body slot are joined by a `sequence` edge, in
-  `ViewModel.flow_children/1` order; nothing else is an edge. A rail's
+  `ViewModel.flow_children/1` order; nothing else is an edge the layout
+  sees (a group's interrupt edges are drawn after it, below). A rail's
   blocks are not joined - a group's interrupt rules are alternatives that
   each watch the whole body, not steps that run one after another - and
   neither is a tray's. Connectors are drawn, never authored.
@@ -46,6 +47,30 @@ defmodule StatifierExamplesWeb.PlanMap do
   A box's title is its type's name and the line under it is the block's
   sentence; where the two are the same words ("Invoke", "Raise") the
   line is left off rather than said twice.
+
+  ## Interrupt edges
+
+  A group's interrupt rules are not joined to each other, but each one does
+  lead somewhere: an `abandon` rule leaves the group by its exit and a
+  `resume` rule goes back to the head of its body. The group's node carries
+  those as `interrupts`, one per rule, in rail order, and the hook draws
+  each one dashed from the rule's box to where it leads. They are handed to
+  the hook beside the graph's `edges`, not among them, and drawn after the
+  layout from the boxes it placed, so an interrupt edge never moves a box.
+  They are the edges `StatifierBlocks.Describe.outline/3` answers with
+  `kind: :interrupt`, read here off the same view model - a rule's
+  `outcome`, on the `interrupts` rail of a `core.group` or a
+  `core.resumable_group` - because the map is built from the view model
+  alone; the test beside this module holds the two equal for every fixture.
+
+  ## Timer marks
+
+  Two blocks wait on a clock in different ways, and a box says which with a
+  small mark at its top right: a `core.await` carries the wait mark (it
+  waits, in its own step, for an event or its timeout), and a `core.send`
+  with a delay carries the clock mark (the event it arms fires later, after
+  the step has moved on). A send with no delay carries neither. A mark is
+  drawn inside its block's box, so a click on it is a click on the box.
 
   ## Order is semantic, so it is forced
 
@@ -87,6 +112,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   @leaf_padding 24
   @header_base 12
   @empty_text "Nothing here yet"
+  @mark_room 22
+  @group_types ["core.group", "core.resumable_group"]
 
   @force_model_order "org.eclipse.elk.layered.crossingMinimization.forceNodeModelOrder"
   @consider_model_order "org.eclipse.elk.layered.considerModelOrder.strategy"
@@ -105,7 +132,8 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   @typedoc """
   One graph node, in elkjs's JSON shape plus the fields the hook draws
-  from: `kind`, `title` and `lines`, and on a slot `style`.
+  from: `kind`, `title` and `lines`, on a slot `style`, on a timer block
+  `mark`, and on a group with interrupt rules `interrupts`.
   """
   @type graph_node :: %{required(String.t()) => term()}
 
@@ -145,6 +173,21 @@ defmodule StatifierExamplesWeb.PlanMap do
   def nodes(%{"kind" => "block", "id" => id}), do: [id]
   def nodes(%{}), do: []
 
+  @doc """
+  Every interrupt edge in `graph`, groups in the order a pre-order walk
+  meets them and each group's rules in rail order, as
+  `%{"from" => rule, "group" => group, "to" => "exit" | "body"}`.
+  """
+  @spec interrupts(t() | graph_node()) :: [%{String.t() => String.t()}]
+  def interrupts(%{} = node) do
+    own =
+      for %{"sources" => [from], "targets" => [group], "to" => to} <-
+            Map.get(node, "interrupts", []),
+          do: %{"from" => from, "group" => group, "to" => to}
+
+    own ++ Enum.flat_map(Map.get(node, "children", []), &interrupts/1)
+  end
+
   @doc "The text an empty slot's marker carries."
   @spec empty_text() :: String.t()
   def empty_text, do: @empty_text
@@ -165,6 +208,7 @@ defmodule StatifierExamplesWeb.PlanMap do
       "width" => leaf_width([title | lines]),
       "height" => @header_base + (length(lines) + 1) * @line_height
     }
+    |> put_mark(mark(node), title, lines)
   end
 
   defp block(%Node{} = node) do
@@ -187,7 +231,75 @@ defmodule StatifierExamplesWeb.PlanMap do
       "children" => List.flatten(children),
       "edges" => List.flatten(edges)
     }
+    |> put_interrupts(node)
   end
+
+  # ------------------------------------------------------------ timer marks
+
+  # The mark a leaf carries, and the room for it beside the title: the mark
+  # sits at the box's top right, level with the title, so the title line is
+  # the one that has to leave it space.
+  @spec put_mark(graph_node(), String.t() | nil, String.t(), [String.t()]) :: graph_node()
+  defp put_mark(graph_node, nil, _title, _lines), do: graph_node
+
+  defp put_mark(graph_node, mark, title, lines) do
+    width = Enum.max([graph_node["width"], text_width([title]) + @mark_room, leaf_width(lines)])
+    Map.merge(graph_node, %{"mark" => mark, "width" => width})
+  end
+
+  # See the moduledoc's "Timer marks".
+  @spec mark(Node.t()) :: String.t() | nil
+  defp mark(%Node{type: "core.await"}), do: "wait"
+  defp mark(%Node{type: "core.send"} = node), do: if(delayed?(node), do: "clock")
+  defp mark(%Node{}), do: nil
+
+  # Whether a send's `delay` holds anything but blank, as its form reads it.
+  @spec delayed?(Node.t()) :: boolean()
+  defp delayed?(%Node{form: %{fields: fields}}) do
+    case Enum.find(fields, &(&1.key == "delay")) do
+      %{value: value} when is_binary(value) -> String.trim(value) != ""
+      %{value: value} -> not is_nil(value)
+      nil -> false
+    end
+  end
+
+  defp delayed?(%Node{}), do: false
+
+  # -------------------------------------------------------- interrupt edges
+
+  # One edge per interrupt rule on a group's rail: `abandon` to the group's
+  # exit, `resume` to the head of its body, which is the first node drawn
+  # inside the group, because the body is drawn first. A rule with neither
+  # outcome leads nowhere and has no edge, as in `StatifierBlocks.Describe`.
+  @spec put_interrupts(graph_node(), Node.t()) :: graph_node()
+  defp put_interrupts(graph_node, %Node{type: type, block_id: group, slots: slots})
+       when type in @group_types do
+    head = graph_node["children"] |> List.first(%{}) |> Map.get("id")
+
+    edges =
+      for %Slot{name: "interrupts"} = slot <- slots,
+          %Node{outcome: outcome, block_id: rule} <- ViewModel.flow_children(slot),
+          to = leads_to(outcome),
+          to != nil do
+        %{
+          "id" => "#{rule}->#{group}/#{to}",
+          "sources" => [rule],
+          "targets" => [group],
+          "kind" => "interrupt",
+          "to" => to,
+          "head" => head
+        }
+      end
+
+    if edges == [], do: graph_node, else: Map.put(graph_node, "interrupts", edges)
+  end
+
+  defp put_interrupts(graph_node, %Node{}), do: graph_node
+
+  @spec leads_to(term()) :: String.t() | nil
+  defp leads_to("abandon"), do: "exit"
+  defp leads_to("resume"), do: "body"
+  defp leads_to(_other), do: nil
 
   # What one slot adds to its block: the slot's blocks drawn straight into
   # the block when the slot is inlined, or one slot node otherwise.

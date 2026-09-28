@@ -7,14 +7,17 @@
 // Lays the graph out through the real elkjs and draws it with the hook's
 // own drawMap/3, then prints one JSON object: what was drawn ("map" or
 // "error"), the drawn markup, every box and edge of the SAME layout that
-// markup was drawn from in absolute coordinates, and `gestures` - for every
-// clickable element the markup carries, the event and payload the hook's
-// own mapGesture/2 turns a click on it into - and `childGestures`, the same
+// markup was drawn from in absolute coordinates, `interrupts` - every
+// interrupt path in the markup, with its dash and its path data as drawn -
+// `marks`, each block's timer marks as the markup carries them, and
+// `gestures` - for every clickable element the markup carries, the event
+// and payload the hook's own mapGesture/2 turns a click on it into - and
+// `childGestures`, the same
 // asked of a click on each of that element's children (the rect, text,
 // circle or path a real click lands on), which reach the element by walking
 // up exactly as a browser's `closest` does.
 import {readFileSync} from "node:fs"
-import {boxes, drawMap, edgesOf, mapGesture} from "../../../assets/js/plan_map.mjs"
+import {boxes, drawMap, edgesOf, interruptsOf, mapGesture} from "../../../assets/js/plan_map.mjs"
 
 const graph = JSON.parse(readFileSync(process.argv[2], "utf8"))
 const editable = process.argv[3] === "editable"
@@ -23,6 +26,7 @@ const {drawn, laid} = await drawMap(target, graph, {editable})
 
 const laidOut = {}
 const edges = []
+const drawnPoints = {}
 if (laid) {
   for (const box of boxes(laid)) {
     laidOut[box.id] = {x: box.x, y: box.y, width: box.width, height: box.height}
@@ -38,6 +42,7 @@ if (laid) {
       end: sections.length ? sections[sections.length - 1].endPoint : null,
     })
   }
+  for (const edge of interruptsOf(laid)) drawnPoints[edge.id] = edge
 }
 
 // A small element tree over the drawn markup: every tag with its data
@@ -97,4 +102,29 @@ for (const el of all.filter((e) => e.tag === "g" && (e.dataset.mapGap !== undefi
   }
 }
 
-process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, gestures, childGestures}))
+// An interrupt edge is read off the markup: a path marked
+// data-map-edge-kind="interrupt", with its dash and its points as drawn.
+const interrupts = []
+for (const [path] of target.innerHTML.matchAll(/<path [^>]*data-map-edge-kind="interrupt"[^>]*>/g)) {
+  const attr = (name) => (path.match(new RegExp(`\\s${name}="([^"]*)"`)) || [])[1]
+  const id = unescape(attr("data-map-edge"))
+  const edge = drawnPoints[id]
+  interrupts.push({
+    id,
+    to: attr("data-map-edge-to"),
+    dashed: /stroke-dasharray:\s*[1-9]/.test(attr("style") || ""),
+    d: attr("d"),
+    source: edge ? edge.source : null,
+    target: edge ? edge.target : null,
+  })
+}
+
+// Every block's timer marks: the data-map-mark of every element inside
+// the block's own group, keyed by the block's id.
+const marks = {}
+for (const el of all.filter((e) => e.dataset.mapMark !== undefined)) {
+  const box = el.closest("[data-map-kind=block]")
+  if (box) (marks[box.dataset.mapNode] ||= []).push(el.dataset.mapMark)
+}
+
+process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, gestures, childGestures}))
