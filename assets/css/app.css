@@ -672,6 +672,46 @@
   font-size: var(--sb-text-sm);
 }
 
+/* The description region at the top of the panel: words, never controls. */
+.myapp-plan__description {
+  margin-bottom: var(--sb-space);
+  padding-bottom: var(--sb-space);
+  border-bottom: 1px solid var(--sb-border);
+  font-size: var(--sb-text-sm);
+  color: var(--sb-fg);
+}
+
+.myapp-plan__description-title {
+  margin: 0;
+  font-weight: var(--sb-weight-medium, 500);
+}
+
+.myapp-plan__description-sentence,
+.myapp-plan__description-text,
+.myapp-plan__description-heading {
+  margin: var(--sb-space-half) 0 0;
+  color: var(--sb-fg-muted);
+}
+
+.myapp-plan__description-facts {
+  margin: var(--sb-space-half) 0 0;
+}
+
+.myapp-plan__description-facts dt {
+  font-weight: var(--sb-weight-medium, 500);
+}
+
+.myapp-plan__description-facts dd {
+  margin: 0 0 var(--sb-space-half);
+  color: var(--sb-fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.myapp-plan__description-facts ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
 /* --------------------------------------------------------------- themes
  *
  * Three host themes, each a block of `--sb-*` custom properties and nothing

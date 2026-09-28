@@ -156,6 +156,27 @@ insert until the Plan view grows one (`se-jdez`).
 On a read-only page (`readonly=1`) the map draws no "+" and a click only
 selects; the panel shows the block's fields as values.
 
+### The description region
+
+The top of the panel is always a description, in words, of what is
+selected: a block's title and sentence, what its type is for, its settings
+as a labelled list of values, where it sits, each outcome and where it goes,
+the interrupt rules that can leave it, and any findings. With nothing
+selected it describes the document: its name and description, what starts
+it and the events it listens for, how to read the map, and how many steps
+and open slots it has.
+
+`StatifierExamplesWeb.PlanDescription` builds one such description for
+every element the map draws - blocks, interrupt rules, arms (the undecided
+arm included), a group's rules, empty-slot markers and connectors - from
+the view model and `StatifierBlocks.Describe.outline/3`, keyed by the map's
+own ids. The region is `aria-live="polite"` and every row of the list names
+it with `aria-describedby`, so a screen reader hears what a sighted reader
+sees on the map. It shows values, never controls, and adds no event: the
+row's own selection is what fills it. What a core type is for is this app's
+fixed text (`StatifierExamplesWeb.TypeExplanation`) until `statifier_blocks`
+answers it; any other type falls back to its palette description.
+
 ### What it costs
 
 The layout library is [elkjs](https://github.com/kieler/elkjs) 0.9.3, under

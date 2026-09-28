@@ -145,6 +145,27 @@ defmodule StatifierExamplesWeb.PlanLive do
   picker for the gap after a block opens under that block's row, whichever
   view armed it; the hook scrolls it into view when the map did.
 
+  ## The description region
+
+  The panel is always drawn, and at its top is the description region:
+  the selected block described in words - its title and sentence, what
+  its type is for, its settings as values, where it sits, its outcomes
+  and where each goes, the interrupt rules that can leave it and any
+  findings - or, when no block is selected, the document: its name and
+  description, what starts it, how to read the map, and how many steps
+  and open slots it has. `StatifierExamplesWeb.PlanDescription` builds
+  every one of those descriptions, one per element the map draws, from
+  the view model and `StatifierBlocks.Describe.outline/3`; the page draws
+  the region from them and holds the rest in a hidden store keyed by the
+  map's own ids.
+
+  The region is `aria-live="polite"`, so selecting a row announces what
+  the region now says, and every row of the list names it with
+  `aria-describedby`. It is where the map's picture becomes words for a
+  reader who cannot see the map, which is why it is outside the map's
+  `aria-hidden` region. It shows values and never controls, and it adds no
+  event of its own: what fills it is the selection the list already makes.
+
   ## Read-only
 
   `?readonly=1` renders values and no controls. It is one parameter rather
@@ -173,6 +194,7 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   alias StatifierBlocks.Assignability
   alias StatifierBlocks.Block
+  alias StatifierBlocks.Describe
   alias StatifierBlocks.Document
   alias StatifierBlocks.Edit
   alias StatifierBlocks.Edit.History
@@ -183,6 +205,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamples.Documents
+  alias StatifierExamplesWeb.PlanDescription
   alias StatifierExamplesWeb.PlanMap
 
   @default_theme :light
@@ -461,7 +484,7 @@ defmodule StatifierExamplesWeb.PlanLive do
             </section>
 
             <.panel
-              :if={@panel || @slot_insert}
+              description={@description}
               node={@panel}
               slot_insert={@slot_insert}
               insertable={@insertable}
@@ -514,19 +537,31 @@ defmodule StatifierExamplesWeb.PlanLive do
               />
             </ol>
           </footer>
+
+          <div id="plan-descriptions" hidden>
+            <div
+              :for={description <- @descriptions}
+              data-describes={description.id}
+              data-describes-kind={description.kind}
+            >
+              <.description description={description} />
+            </div>
+          </div>
         </div>
       </div>
     </div>
     """
   end
 
+  attr(:description, PlanDescription, required: true)
   attr(:node, ViewModel.Node, default: nil)
   attr(:slot_insert, :map, default: nil)
   attr(:insertable, :list, default: [])
   attr(:readonly?, :boolean, default: false)
   attr(:drafted?, :boolean, default: false)
 
-  # The panel beside the map: the page's one form surface. The selected
+  # The panel beside the map, always drawn: the description region at its
+  # top, then the page's one form surface. The selected
   # block's name, its held draft if there is one, its `ConfigForm` and the
   # block's move and delete controls - its row hides its own while it is
   # selected, so a screen reader meets one set; or, when an insert was armed
@@ -547,6 +582,16 @@ defmodule StatifierExamplesWeb.PlanLive do
       tabindex="-1"
       aria-label="Selected step"
     >
+      <section
+        id="plan-description"
+        class="myapp-plan__description"
+        aria-live="polite"
+        aria-label="Description"
+        data-plan-description={@description.kind}
+      >
+        <.description description={@description} />
+      </section>
+
       <div :if={@node}>
         <p class="myapp-plan__panel-title">{ViewModel.title(@node)}</p>
         <p
@@ -641,6 +686,42 @@ defmodule StatifierExamplesWeb.PlanLive do
     """
   end
 
+  attr(:description, PlanDescription, required: true)
+
+  # One `PlanDescription`, in words: the region draws the current one and
+  # the hidden store draws every one. Values, never controls.
+  defp description(assigns) do
+    ~H"""
+    <p class="myapp-plan__description-title">{@description.title}</p>
+    <p :if={@description.sentence} class="myapp-plan__description-sentence">
+      {@description.sentence}
+    </p>
+    <p class="myapp-plan__description-text">{@description.explanation}</p>
+    <.facts :if={@description.settings != []} heading="Settings" facts={@description.settings} />
+    <.facts :if={@description.facts != []} facts={@description.facts} />
+    """
+  end
+
+  attr(:heading, :string, default: nil)
+  attr(:facts, :list, required: true)
+
+  defp facts(assigns) do
+    ~H"""
+    <p :if={@heading} class="myapp-plan__description-heading">{@heading}</p>
+    <dl class="myapp-plan__description-facts">
+      <%= for {label, value} <- @facts do %>
+        <dt>{label}</dt>
+        <dd :if={is_binary(value)}>{value}</dd>
+        <dd :if={is_list(value)}>
+          <ul>
+            <li :for={item <- value}>{item}</li>
+          </ul>
+        </dd>
+      <% end %>
+    </dl>
+    """
+  end
+
   attr(:node, ViewModel.Node, required: true)
   attr(:depth, :integer, required: true)
   attr(:kind, :atom, required: true)
@@ -661,11 +742,13 @@ defmodule StatifierExamplesWeb.PlanLive do
       data-block-id={@node.block_id}
       data-depth={@depth}
       data-kind={@kind}
+      aria-describedby="plan-description"
     >
       <div class="myapp-plan__line">
         <button
           class="myapp-plan__sentence"
           type="button"
+          aria-describedby="plan-description"
           phx-click="select-row"
           phx-value-block-id={@node.block_id}
         >
@@ -885,6 +968,9 @@ defmodule StatifierExamplesWeb.PlanLive do
       socket.assigns.session
 
     view_model = ViewModel.build(document, palette, [])
+    graph = PlanMap.graph(view_model)
+    described = Describe.outline(document, palette, [])
+    descriptions = PlanDescription.elements(graph, view_model, described)
 
     outline =
       view_model
@@ -893,7 +979,16 @@ defmodule StatifierExamplesWeb.PlanLive do
 
     socket
     |> assign(:view_model, view_model)
-    |> assign(:map_graph, view_model |> PlanMap.graph() |> Jason.encode!())
+    |> assign(:map_graph, Jason.encode!(graph))
+    |> assign(:descriptions, descriptions)
+    |> assign(
+      :description,
+      description(
+        descriptions,
+        socket.assigns.selected_id,
+        PlanDescription.idle(document, graph, view_model, described)
+      )
+    )
     |> assign(:panel, panel(outline, socket.assigns.selected_id))
     |> assign(:positions, ViewModel.positions(view_model))
     |> assign(:plan, Enum.filter(outline, fn {_node, _depth, kind} -> kind in [:step, :arm] end))
@@ -901,6 +996,15 @@ defmodule StatifierExamplesWeb.PlanLive do
     |> assign(:trays, Enum.filter(outline, fn {_node, _depth, kind} -> kind == :tray end))
     |> assign_insertable()
   end
+
+  # What the description region says: the selected block's description,
+  # or the document's when nothing is selected.
+  @spec description([PlanDescription.t()], Block.id() | nil, PlanDescription.t()) ::
+          PlanDescription.t()
+  defp description(_descriptions, nil, idle), do: idle
+
+  defp description(descriptions, id, idle),
+    do: Enum.find(descriptions, idle, &(&1.id == id))
 
   # The block the map's panel shows: the selected one, off the outline the
   # list draws, so a held draft shows there exactly as it does in its row.
