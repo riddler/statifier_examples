@@ -37,10 +37,13 @@ defmodule StatifierExamplesWeb.PlanDescription do
   boxes for blocks - a rule is a block in a group's interrupt rules;
   `:arm`, `:undecided_arm`, `:rules` and `:tray` are a block's slots drawn
   as boxes of their own; `:marker` is an empty slot's "Nothing here yet";
-  `:edge` is a connector; `:interrupt` is the dashed edge an interrupt
-  rule draws to where it takes its group; and `:idle` is the document,
-  described when nothing is selected. Each description is keyed by the id
-  the map draws it under, so the page's `PlanInfo` hook
+  `:end` is the end mark a branch that ends the document rejoins into;
+  `:edge` is a connector, a branch's rejoin among them; `:interrupt` is
+  the dashed edge an interrupt rule draws to where it takes its group;
+  and `:idle` is the document, described when nothing is selected. A
+  branch's description names its arms in order, which is what the band
+  over them on the map says. Each description is keyed by the id the map
+  draws it under, so the page's `PlanInfo` hook
   (`assets/js/plan_info.mjs`) looks one up by the element under the
   pointer without asking the server.
   """
@@ -62,6 +65,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
           | :rules
           | :tray
           | :marker
+          | :end
           | :edge
           | :interrupt
           | :idle
@@ -203,6 +207,17 @@ defmodule StatifierExamplesWeb.PlanDescription do
     slot(style, id, node, slot, context)
   end
 
+  defp describe(%{"kind" => "end", "id" => id, "title" => title}, _context) do
+    %__MODULE__{
+      id: id,
+      kind: :end,
+      title: title,
+      explanation:
+        "Where the document finishes. The branch above it is the document's last step, " <>
+          "so whichever of its arms runs, the document finishes when that arm does."
+    }
+  end
+
   # ----------------------------------------------------------------- blocks
 
   @spec block(String.t(), context()) :: t()
@@ -226,9 +241,26 @@ defmodule StatifierExamplesWeb.PlanDescription do
       sentence: second(ViewModel.sentence(node), ViewModel.title(node)),
       explanation: TypeExplanation.explain(node),
       settings: settings(node),
-      facts: facts ++ findings(node)
+      facts: arms(node) ++ facts ++ findings(node)
     }
   end
+
+  # A branch's arms, in the order it tries them, each with its condition:
+  # what the map's band over the arms, and the branch's header, say.
+  @spec arms(Node.t()) :: [fact()]
+  defp arms(%Node{type: "core.branch"} = node) do
+    arms =
+      for {slot, n} <- Enum.with_index(ViewModel.body_slots(node), 1) do
+        case slot.condition do
+          condition when is_binary(condition) -> "#{n}. #{slot.label}: #{condition}"
+          _none -> "#{n}. #{slot.label}"
+        end
+      end
+
+    [{"Arms, in order", arms}]
+  end
+
+  defp arms(%Node{}), do: []
 
   # The block's configured values, labelled as its type labels them: the
   # fields `config_schema/1` declares and the type does not hide.
@@ -550,22 +582,24 @@ defmodule StatifierExamplesWeb.PlanDescription do
   # ------------------------------------------------------------------ edges
 
   @spec edge(map(), context()) :: t()
+  defp edge(%{"id" => id, "kind" => "rejoin", "sources" => [from], "targets" => [to]}, context) do
+    onto = target(to, context)
+
+    %__MODULE__{
+      id: id,
+      kind: :edge,
+      title: "Rejoin",
+      sentence: "After whichever arm of #{sentence_of(from, context)} runs, #{onto}",
+      explanation:
+        "Where the arms of a branch come back together: whichever arm runs, when it " <>
+          "finishes, what this points at comes next.",
+      facts:
+        [{"From", sentence_of(from, context)}, {"To", onto}] ++
+          carries(from, to, context) ++ [{"Inside", finishes_inside(from, context)}]
+    }
+  end
+
   defp edge(%{"id" => id, "sources" => [from], "targets" => [to]}, context) do
-    described =
-      Enum.find(
-        context.edges,
-        &(&1.kind == :sequence and &1.from == {:block, from} and &1.to == {:block, to})
-      )
-
-    carries =
-      case described do
-        %Describe.Edge{outcomes: [_first | _rest] = names} ->
-          [{"Carries", Enum.join(names, ", ")}]
-
-        _none ->
-          []
-      end
-
     %__MODULE__{
       id: id,
       kind: :edge,
@@ -576,7 +610,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
           "follow the order of the steps; nobody draws them by hand.",
       facts:
         [{"From", sentence_of(from, context)}, {"To", sentence_of(to, context)}] ++
-          carries ++ [{"Inside", finishes_inside(from, context)}]
+          carries(from, to, context) ++ [{"Inside", finishes_inside(from, context)}]
     }
   end
 
@@ -615,6 +649,31 @@ defmodule StatifierExamplesWeb.PlanDescription do
   @spec lands(String.t(), String.t(), context()) :: String.t()
   defp lands("exit", group, context), do: "the end of #{named(group, context)}"
   defp lands(_body, group, context), do: "the head of the body of #{named(group, context)}"
+
+  # The outcomes the outline's `:sequence` edge between the same two blocks
+  # carries; none for an edge into the end mark, which is not a block.
+  @spec carries(String.t(), String.t(), context()) :: [fact()]
+  defp carries(from, to, context) do
+    described =
+      Enum.find(
+        context.edges,
+        &(&1.kind == :sequence and &1.from == {:block, from} and &1.to == {:block, to})
+      )
+
+    case described do
+      %Describe.Edge{outcomes: [_first | _rest] = names} -> [{"Carries", Enum.join(names, ", ")}]
+      _none -> []
+    end
+  end
+
+  # A rejoin's target: the next step, or the end mark, which is no block.
+  @spec target(String.t(), context()) :: String.t()
+  defp target(id, context) do
+    case ViewModel.find_node(context.view_model, id) do
+      nil -> "the document finishes"
+      node -> ViewModel.sentence(node)
+    end
+  end
 
   @spec finishes_inside(String.t(), context()) :: String.t()
   defp finishes_inside(id, context) do

@@ -38,7 +38,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   step for yet is exactly what a reader of the map has to be able to see.
 
   Consecutive blocks in one body slot are joined by a `sequence` edge, in
-  `ViewModel.flow_children/1` order; nothing else is an edge the layout
+  `ViewModel.flow_children/1` order (a `rejoin` edge where the first is a
+  branch; see "The Branch" below); nothing else is an edge the layout
   sees (a group's interrupt edges are drawn after it, below). A rail's
   blocks are not joined - a group's interrupt rules are alternatives that
   each watch the whole body, not steps that run one after another - and
@@ -47,6 +48,32 @@ defmodule StatifierExamplesWeb.PlanMap do
   A box's title is its type's name and the line under it is the block's
   sentence; where the two are the same words ("Invoke", "Raise") the
   line is left off rather than said twice.
+
+  ## The Branch
+
+  A branch is one decision, and its box says so in three ways.
+
+  - **The header names every arm, in order.** Where every other container
+    carries its sentence, a `core.branch` carries the package's own "one
+    of" and then one numbered entry per arm, in slot order, each the arm's
+    label and its condition as authored (`When "renew": copy.holds == 0
+    AND loan.renewals < 2`), the arms with no condition ("Otherwise",
+    "Cannot be decided") by their label alone.
+    This header is the map's own: the branch type's sentence, which the
+    list draws, is not changed by it.
+  - **The arms sit under one band.** The branch's node carries `band: true`
+    and room above its arms; the hook draws one band spanning every arm,
+    with a small fork mark at its left, from the boxes the layout placed.
+    The band and the mark are drawn inside the branch's own box, so a click
+    on either is a click on the branch.
+  - **The arms rejoin at its bottom edge.** The edge from a branch to the
+    step after it carries `kind: "rejoin"`, and the hook draws it with a
+    join dot where it leaves the branch. A branch that is the last step of
+    the document's own flow rejoins into an end mark (`kind: "end"`, keyed
+    `<root id>/end`), because nothing else comes next; a branch that ends a
+    nested flow needs none, since the flow it ends is itself joined to what
+    follows it. An end mark is not a block: it is in no outline, selects
+    nothing and arms no insert.
 
   ## Interrupt edges
 
@@ -114,6 +141,10 @@ defmodule StatifierExamplesWeb.PlanMap do
   @empty_text "Nothing here yet"
   @mark_room 22
   @group_types ["core.group", "core.resumable_group"]
+  @branch_type "core.branch"
+  @band_room 24
+  @end_text "End"
+  @end_height 28
 
   @force_model_order "org.eclipse.elk.layered.crossingMinimization.forceNodeModelOrder"
   @consider_model_order "org.eclipse.elk.layered.considerModelOrder.strategy"
@@ -133,7 +164,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   @typedoc """
   One graph node, in elkjs's JSON shape plus the fields the hook draws
   from: `kind`, `title` and `lines`, on a slot `style`, on a timer block
-  `mark`, and on a group with interrupt rules `interrupts`.
+  `mark`, on a group with interrupt rules `interrupts`, and on a branch
+  `band`.
   """
   @type graph_node :: %{required(String.t()) => term()}
 
@@ -152,7 +184,7 @@ defmodule StatifierExamplesWeb.PlanMap do
     %{
       "id" => "plan-map",
       "layoutOptions" => @root_options,
-      "children" => [root |> block() |> Map.put("gap", false)],
+      "children" => [root |> block() |> Map.put("gap", false) |> put_end(root)],
       "edges" => []
     }
   end
@@ -212,8 +244,12 @@ defmodule StatifierExamplesWeb.PlanMap do
   end
 
   defp block(%Node{} = node) do
-    lines = node |> header() |> under(ViewModel.title(node))
     title = ViewModel.title(node)
+
+    {lines, extra} =
+      if branch?(node),
+        do: {arm_lines(node), @band_room},
+        else: {node |> header() |> under(title), 0}
 
     {children, edges} =
       node
@@ -227,12 +263,77 @@ defmodule StatifierExamplesWeb.PlanMap do
       "gap" => true,
       "title" => title,
       "lines" => lines,
-      "layoutOptions" => container_options([title | lines], lines),
+      "layoutOptions" => container_options([title | lines], lines, extra),
       "children" => List.flatten(children),
       "edges" => List.flatten(edges)
     }
+    |> put_band(node)
     |> put_interrupts(node)
   end
+
+  # ------------------------------------------------------------ the Branch
+
+  @spec branch?(Node.t()) :: boolean()
+  defp branch?(%Node{type: type}), do: type == @branch_type
+
+  # A branch's header: the package's "one of", then one numbered entry per
+  # arm, in slot order, each the arm's label and its condition as authored;
+  # see the moduledoc's "The Branch". An entry wider than a line wraps onto
+  # the next.
+  @spec arm_lines(Node.t()) :: [String.t()]
+  defp arm_lines(%Node{} = node) do
+    arms =
+      node
+      |> ViewModel.body_slots()
+      |> Enum.with_index(1)
+      |> Enum.flat_map(fn {slot, n} -> wrap("#{n}. #{slot_header(slot)}") end)
+
+    case ViewModel.fan_label(node) do
+      nil -> arms
+      label -> ["#{String.capitalize(label)}, in order:" | arms]
+    end
+  end
+
+  @spec put_band(graph_node(), Node.t()) :: graph_node()
+  defp put_band(graph_node, %Node{} = node),
+    do: if(branch?(node), do: Map.put(graph_node, "band", true), else: graph_node)
+
+  # The end mark after a branch that is the last step of the root's own
+  # flow, joined to it by a rejoin edge; every other root is left as it is.
+  @spec put_end(graph_node(), Node.t()) :: graph_node()
+  defp put_end(%{"children" => children} = graph_node, %Node{} = root) do
+    with [%Slot{} = body] <- ViewModel.body_slots(root),
+         true <- inline?(root, body),
+         %Node{block_id: last} = branch <- List.last(ViewModel.flow_children(body)),
+         true <- branch?(branch) do
+      id = "#{root.block_id}/end"
+      {before, [drawn | rest]} = Enum.split_while(children, &(&1["id"] != last))
+
+      mark = %{
+        "id" => id,
+        "kind" => "end",
+        "title" => @end_text,
+        "lines" => [],
+        "width" => text_width([@end_text]),
+        "height" => @end_height
+      }
+
+      edge = %{
+        "id" => "#{last}->#{id}",
+        "sources" => [last],
+        "targets" => [id],
+        "kind" => "rejoin"
+      }
+
+      graph_node
+      |> Map.put("children", before ++ [drawn, mark | rest])
+      |> Map.update!("edges", &(&1 ++ [edge]))
+    else
+      _no_end -> graph_node
+    end
+  end
+
+  defp put_end(graph_node, %Node{}), do: graph_node
 
   # ------------------------------------------------------------ timer marks
 
@@ -408,10 +509,14 @@ defmodule StatifierExamplesWeb.PlanMap do
     slot
     |> ViewModel.flow_children()
     |> Enum.chunk_every(2, 1, :discard)
-    |> Enum.map(fn [%Node{block_id: from}, %Node{block_id: to}] ->
-      %{"id" => "#{from}->#{to}", "sources" => [from], "targets" => [to], "kind" => "sequence"}
+    |> Enum.map(fn [%Node{block_id: from} = source, %Node{block_id: to}] ->
+      %{"id" => "#{from}->#{to}", "sources" => [from], "targets" => [to], "kind" => kind(source)}
     end)
   end
+
+  # The edge out of a branch is where its arms rejoin; see the moduledoc.
+  @spec kind(Node.t()) :: String.t()
+  defp kind(%Node{} = node), do: if(branch?(node), do: "rejoin", else: "sequence")
 
   # An empty slot's marker carries the block and the slot it stands for,
   # which is the gap an insert into it targets.
@@ -445,9 +550,13 @@ defmodule StatifierExamplesWeb.PlanMap do
   # `StatifierExamplesWeb.PlanMapLayoutTest` lays every fixture out and
   # holds every box at least as wide as its text, so an elkjs that stops
   # transposing turns that test red rather than quietly narrowing a box.
-  @spec container_options([String.t()], [String.t()]) :: %{String.t() => String.t()}
-  defp container_options(texts, lines) do
-    top = @header_base + (length(lines) + 1) * @line_height
+  #
+  # `extra` is room under the header and above the children: a branch's
+  # band.
+  @spec container_options([String.t()], [String.t()], non_neg_integer()) ::
+          %{String.t() => String.t()}
+  defp container_options(texts, lines, extra \\ 0) do
+    top = @header_base + (length(lines) + 1) * @line_height + extra
 
     %{
       @force_model_order => "true",

@@ -127,6 +127,52 @@ export function interruptsOf(laid) {
   return out
 }
 
+// A branch's band: one strip spanning every arm, in the room the server
+// left between the branch's header and its arms, with the fork mark at its
+// left. Read from the boxes the layout placed, never stored. Answers
+// `{x, y, width, height, fork: {x, y}}` in the coordinates `node` is in
+// (absolute, for a box out of `boxes`), or null for a node with no band
+// or no arm.
+const BAND_HEIGHT = 16
+const BAND_GAP = 4
+
+export function bandOf(node) {
+  if (node.band !== true) return null
+  const arms = (node.children || []).filter((c) => c.kind === "slot" && c.style === "arm")
+  if (arms.length === 0) return null
+
+  const left = Math.min(...arms.map((a) => a.x))
+  const right = Math.max(...arms.map((a) => a.x + a.width))
+  const top = Math.min(...arms.map((a) => a.y))
+  const y = node.y + top - BAND_GAP - BAND_HEIGHT
+
+  return {
+    x: node.x + left,
+    y,
+    width: right - left,
+    height: BAND_HEIGHT,
+    fork: {x: node.x + left + 6, y: y + 1},
+  }
+}
+
+// The fork mark, a 14px glyph: one stem splitting into three.
+function drawFork({x, y}) {
+  return `<path class="plan-map__fork" data-map-fork="true" ` +
+    `d="M${x + 7} ${y} V${y + 5} M${x + 7} ${y + 5} L${x + 1} ${y + 13} ` +
+    `M${x + 7} ${y + 5} V${y + 13} M${x + 7} ${y + 5} L${x + 13} ${y + 13}" style="${MARK_STYLE}"/>`
+}
+
+function drawBand(node) {
+  const band = bandOf(node)
+  if (band === null) return ""
+  // Its own group, so the selected box's `> rect` outline stays on the box.
+  return `<g class="plan-map__band-group">` +
+    `<rect class="plan-map__band" data-map-band="${escapeText(node.id)}" ` +
+    `x="${band.x}" y="${band.y}" width="${band.width}" height="${band.height}" rx="4" ` +
+    `style="fill: var(--plan-map-band-fill, #e2e8f0); stroke: var(--plan-map-slot-stroke, #cbd5e1)"/>` +
+    drawFork(band.fork) + `</g>`
+}
+
 function textLines(node, x, y, className) {
   return (node.lines || [])
     .map((line, i) =>
@@ -167,6 +213,17 @@ function drawNode(node) {
       `</g>`
   }
 
+  // The end of the document's flow, where a last branch rejoins. It is not
+  // a block: it carries its id (so the description region can name it) but
+  // no data-map-kind, so a click on it does nothing.
+  if (node.kind === "end") {
+    return `<g class="plan-map__end" data-map-end="${id}" data-map-node="${id}">` +
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" ` +
+      `style="fill: var(--plan-map-block-fill, #ffffff); stroke: var(--plan-map-edge, #64748b); stroke-width: 1.5"/>` +
+      `<text class="plan-map__end-text" x="${x + w / 2}" y="${y + h / 2 + 4}" text-anchor="middle">${escapeText(node.title)}</text>` +
+      `</g>`
+  }
+
   if (node.kind === "slot") {
     const style = escapeText(node.style || "arm")
     return `<g class="plan-map__slot plan-map__slot--${style}" data-map-node="${id}" data-map-kind="slot">` +
@@ -182,7 +239,7 @@ function drawNode(node) {
   return `<g class="plan-map__block${container ? " plan-map__block--container" : ""}" data-map-node="${id}" data-map-kind="block">` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" ` +
     `style="fill: var(--plan-map-block-fill, #ffffff); stroke: var(--plan-map-block-stroke, #64748b)"/>` +
-    caption + body + drawMark(node) +
+    caption + body + drawMark(node) + drawBand(node) +
     `</g>`
 }
 
@@ -206,12 +263,27 @@ function drawMark(node) {
     glyph + `</g>`
 }
 
+// A layout edge. A branch's rejoin is drawn heavier, with a join dot where
+// it leaves the branch's bottom edge: the point the arms come back
+// together.
 function drawEdge(edge) {
+  const rejoin = edge.kind === "rejoin"
   return (edge.sections || []).map((section) => {
     const points = [section.startPoint, ...(section.bendPoints || []), section.endPoint]
     const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ")
-    return `<path class="plan-map__edge" data-map-edge="${escapeText(edge.id)}" d="${d}" ` +
-      `marker-end="url(#plan-map-arrow)" style="fill: none; stroke: var(--plan-map-edge, #64748b)"/>`
+    const path = rejoin
+      ? `<path class="plan-map__edge plan-map__edge--rejoin" data-map-edge="${escapeText(edge.id)}" ` +
+        `data-map-edge-kind="rejoin" d="${d}" marker-end="url(#plan-map-arrow)" ` +
+        `style="fill: none; stroke: var(--plan-map-edge, #64748b); stroke-width: 1.5"/>`
+      : `<path class="plan-map__edge" data-map-edge="${escapeText(edge.id)}" d="${d}" ` +
+        `marker-end="url(#plan-map-arrow)" style="fill: none; stroke: var(--plan-map-edge, #64748b)"/>`
+    const dot = rejoin
+      ? `<circle class="plan-map__join" data-map-join="${escapeText(edge.id)}" ` +
+        `data-map-edge="${escapeText(edge.id)}" ` +
+        `cx="${section.startPoint.x}" cy="${section.startPoint.y}" r="3.5" ` +
+        `style="fill: var(--plan-map-edge, #64748b)"/>`
+      : ""
+    return path + dot
   }).join("")
 }
 

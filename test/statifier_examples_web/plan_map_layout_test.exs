@@ -187,6 +187,157 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     end
   end
 
+  describe "the Branch, as drawn" do
+    # The two library branches and the step each rejoins into: the loan's
+    # branch is the last step of its document, so it rejoins into the end
+    # mark; the registration's rejoins into the welcome.
+    @branches [
+      {"library_loan", "blk_ll_due", "blk_ll_root/end",
+       [
+         "One of, in order:",
+         "1. When \"returned\": loan.returned",
+         "2. When \"renew\": copy.holds == 0",
+         "AND loan.renewals < 2",
+         "3. Otherwise",
+         "4. Cannot be decided"
+       ]},
+      {"patron_registration", "blk_pr_age", "blk_pr_welcome",
+       [
+         "One of, in order:",
+         "1. When \"child\": patron.age < 13",
+         "2. When \"adult\": patron.age >= 13",
+         "3. Otherwise",
+         "4. Cannot be decided"
+       ]}
+    ]
+
+    # The header under the branch's title names every arm with its
+    # condition, in slot order, as the markup draws it.
+    #
+    # Sabotage: made arm_lines/1 reverse the arms; this went red. Made
+    # arm_lines/1 drop the arms with no condition; this went red. Each
+    # reverted from a copy.
+    test "both library branches draw a header naming every arm in slot order",
+         %{tmp_dir: dir} do
+      for {key, branch, _next, header} <- @branches do
+        %{"drawn" => "map", "headers" => headers} = run(dir, key, library_graph(key))
+
+        assert headers[branch] == header, key
+      end
+    end
+
+    # One band per branch, drawn in the branch's own box, spanning every arm
+    # from the leftmost's left edge to the rightmost's right edge, above
+    # all of them and below the header; the fork mark inside it.
+    #
+    # Sabotage: made bandOf span the first arm only; this went red. Made
+    # drawBand leave the fork mark out; this went red. Made the server leave
+    # no band room (@band_room 0); the band overlapped the header and this
+    # went red. Each reverted from a copy.
+    test "both library branches draw their arms under one band with a fork mark",
+         %{tmp_dir: dir} do
+      for {key, branch, _next, header} <- @branches do
+        graph = library_graph(key)
+        %{"drawn" => "map", "boxes" => boxes, "bands" => bands} = run(dir, key, graph)
+
+        assert Map.keys(bands) == [branch], key
+        assert [%{"in" => ^branch, "fork" => %{} = fork} = band] = bands[branch]
+
+        arms =
+          for %{"kind" => "slot", "style" => "arm", "id" => id} <-
+                find(graph, branch)["children"],
+              do: boxes[id]
+
+        assert length(arms) == 4
+        left = arms |> Enum.map(& &1["x"]) |> Enum.min()
+        right = arms |> Enum.map(&(&1["x"] + &1["width"])) |> Enum.max()
+        top = arms |> Enum.map(& &1["y"]) |> Enum.min()
+        box = boxes[branch]
+        header_bottom = box["y"] + 12 + (length(header) + 1) * 16
+
+        assert_in_delta band["x"], left, 0.5, key
+        assert_in_delta band["x"] + band["width"], right, 0.5, key
+        assert band["y"] + band["height"] <= top, key
+        assert band["y"] >= header_bottom - 4, key
+
+        assert fork["x"] >= band["x"] and fork["x"] <= band["x"] + band["width"], key
+        assert fork["y"] >= band["y"] and fork["y"] <= band["y"] + band["height"], key
+      end
+    end
+
+    # The branch's rejoin is the edge out of it: drawn from the branch's
+    # bottom edge, with its join dot there, into the top of the next node.
+    #
+    # Sabotage: made the server mark the edge out of a branch "sequence";
+    # this went red. Made put_end/2 add no end mark; the loan's rejoin went
+    # missing and this went red. Made drawEdge draw no join dot; this went
+    # red. Dropped the dot's data-map-edge; this went red. Each reverted
+    # from a copy.
+    test "both library branches rejoin from their bottom edge into the next node",
+         %{tmp_dir: dir} do
+      for {key, branch, next, _header} <- @branches do
+        %{
+          "drawn" => "map",
+          "html" => html,
+          "boxes" => boxes,
+          "rejoins" => rejoins,
+          "edges" => edges
+        } =
+          run(dir, key, library_graph(key))
+
+        id = "#{branch}->#{next}"
+        assert [%{"id" => ^id, "d" => d, "dot" => dot}] = rejoins
+
+        assert [%{"kind" => "rejoin", "source" => ^branch, "target" => ^next}] =
+                 Enum.filter(edges, &(&1["kind"] == "rejoin"))
+
+        [start | _rest] = points = path_points(d)
+        stop = List.last(points)
+        from = boxes[branch]
+        to = boxes[next]
+
+        assert_in_delta start.y, from["y"] + from["height"], 0.5, "#{key}: start"
+        assert start.x > from["x"] and start.x < from["x"] + from["width"]
+        assert_in_delta stop.y, to["y"], 0.5, "#{key}: end"
+        assert stop.x >= to["x"] and stop.x <= to["x"] + to["width"]
+        assert %{"x" => dot_x, "y" => dot_y} = dot
+        assert_in_delta dot_x, start.x, 0.5
+        assert_in_delta dot_y, start.y, 0.5
+
+        # The dot carries its rejoin's id, so pointing at it names the rejoin.
+        escaped = String.replace(id, ">", "&gt;")
+        assert html =~ ~s(data-map-join="#{escaped}" data-map-edge="#{escaped}")
+      end
+    end
+
+    # The band, the fork mark, the join dot and the end mark select nothing
+    # new: a click on the band or its fork answers what a click on the
+    # branch answers, and the end mark is not clickable at all.
+    #
+    # Sabotage: gave the end mark data-map-kind="block"; it became a
+    # clickable box and this went red. Dropped its data-map-node; this went
+    # red. Each reverted from a copy.
+    test "the band, the rejoin and the end mark arm no new gesture", %{tmp_dir: dir} do
+      for {key, branch, _next, _header} <- @branches do
+        %{"html" => html, "gestures" => gestures, "childGestures" => children} =
+          run(dir, key, library_graph(key), "editable")
+
+        refute Enum.any?(gestures, &String.contains?(&1["element"], "/end"))
+
+        for %{"element" => element, "gesture" => gesture} <- children,
+            element == "block:#{branch}" do
+          assert gesture == %{"event" => "select-row", "payload" => %{"block-id" => branch}}
+        end
+
+        [end_tag] = Regex.run(~r/<g [^>]*data-map-end=[^>]*>/, html) || [""]
+        refute end_tag =~ "data-map-kind"
+
+        # It still carries its id, so the description region can name it.
+        if key == "library_loan", do: assert(end_tag =~ ~s(data-map-node="blk_ll_root/end"))
+      end
+    end
+  end
+
   describe "the error-pane test" do
     # An edge to a node the graph does not hold is a graph elkjs refuses
     # outright, which is the failure the pane is for.
@@ -331,6 +482,13 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     {:ok, fixture} = Charts.fixture("patron_registration")
     PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
   end
+
+  defp library_graph(key) do
+    {:ok, fixture} = Charts.fixture(key)
+    PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+  end
+
+  defp find(graph, id), do: Enum.find(walk(graph), &(&1["id"] == id))
 
   defp run(dir, name, graph, mode \\ nil) do
     node = System.find_executable("node") || flunk("the map's layout tests need Node on the PATH")

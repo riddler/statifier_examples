@@ -46,7 +46,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
         |> Enum.flat_map(fn key -> key |> described() |> elem(1) |> Enum.map(& &1.kind) end)
         |> MapSet.new()
 
-      for kind <- [:block, :rule, :arm, :undecided_arm, :rules, :marker, :edge, :interrupt] do
+      for kind <- [:block, :rule, :arm, :undecided_arm, :rules, :marker, :end, :edge, :interrupt] do
         assert kind in kinds, "no #{kind} described"
       end
     end
@@ -235,6 +235,37 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert fact(edge, "To") == "Wait for copy.returned, giving up after 14d"
       assert fact(edge, "Carries") == "done"
       assert fact(edge, "Inside") =~ ~r/^Branch \(/
+    end
+
+    # The map's Branch marks have their words here: a branch names its arms
+    # in the order it tries them, a rejoin says where the arms come back
+    # together, and the end mark says the document finishes there.
+    #
+    # Sabotage: made arms/1 answer [] for a branch; this went red. Made the
+    # rejoin clause of edge/2 title itself "Connector"; this went red. Made
+    # the end mark :marker; this went red. Each reverted from a copy.
+    test "a branch's arms, its rejoin and the end mark are described" do
+      loan = by_id("library_loan")
+
+      assert fact(loan["blk_ll_due"], "Arms, in order") == [
+               ~s(1. When "returned": loan.returned),
+               ~s(2. When "renew": copy.holds == 0 AND loan.renewals < 2),
+               "3. Otherwise",
+               "4. Cannot be decided"
+             ]
+
+      assert fact(loan["blk_ll_close"], "Arms, in order") == nil
+
+      rejoin = loan["blk_ll_due->blk_ll_root/end"]
+      assert %PlanDescription{kind: :edge, title: "Rejoin"} = rejoin
+      assert fact(rejoin, "To") == "the document finishes"
+      assert fact(rejoin, "Inside") =~ ~r/^Sequence/
+
+      assert %PlanDescription{kind: :end, title: "End"} = loan["blk_ll_root/end"]
+
+      patron = by_id("patron_registration")["blk_pr_age->blk_pr_welcome"]
+      assert %PlanDescription{kind: :edge, title: "Rejoin"} = patron
+      assert fact(patron, "To") == "Send patron.welcomed"
     end
   end
 
