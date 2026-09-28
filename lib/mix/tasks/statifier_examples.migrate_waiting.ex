@@ -25,7 +25,10 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
   available here - a reverse plan cannot target a retired chart.
 
   A step that does not answer as the guide says stops the task with a
-  non-zero exit and names the step. Run `mix ecto.migrate` first.
+  non-zero exit and names the step: an error or a refusal from a call, and
+  also a batch or a count that answered but not with what the guide shows
+  (`expect/3` holds each one to its expected counts). Run
+  `mix ecto.migrate` first.
   """
 
   use Mix.Task
@@ -68,6 +71,7 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
   def walk(opts \\ []) do
     loans = Keyword.get_lazy(opts, :loans, fn -> Enum.map(1..2, &"loan_#{suffix()}_#{&1}") end)
     store = FirstWorkflow.store()
+    n = length(loans)
 
     with {:ok, old} <- step(:registered, register(document(1))),
          :ok <- step(:waiting, open(store, old, loans)),
@@ -78,11 +82,17 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
          {:ok, blocks_only} <- step(:planned, plan(old, new, mapping["states"], [], [])),
          {:ok, forward} <- step(:planned, plan),
          {:ok, preview_blocks} <- step(:dry_run, batch(store, blocks_only, old, new, true)),
+         :ok <- expect(:dry_run, preview_blocks, %{would_migrate: 0, would_refuse: n}),
          {:ok, preview} <- step(:dry_run, batch(store, forward, old, new, true)),
+         :ok <- expect(:dry_run, preview, %{would_migrate: n, would_refuse: 0}),
          {:ok, applied} <- step(:applied, batch(store, forward, old, new, false)),
+         :ok <- expect(:applied, applied, %{migrated: n, refused: 0, parked: 0}),
          {:ok, drained} <- step(:drained, Executions.executions_on(store, old.hash)),
+         :ok <- expect(:drained, drained, %{active: 0, needs_migration: 0}),
          {:ok, landed} <- step(:drained, Executions.executions_on(store, new.hash)),
+         :ok <- expect(:drained, landed, %{active: n, needs_migration: 0}),
          timers = scheduled_timers(loans),
+         :ok <- expect(:timers, %{scheduled: timers}, %{scheduled: n}),
          {:error, retire} <- retire(store, old.hash),
          {:ok, reverse_map} <- step(:rollback, Migration.plan(new.compiled, old.compiled)),
          {:ok, reverse} <-
@@ -91,7 +101,9 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
              completed_plan(new, old, reverse_map, [{:remove, "damaged"}, {:remove, "repair"}])
            ),
          {:ok, reverse_preview} <- step(:rollback, batch(store, reverse, new, old, true)),
+         :ok <- expect(:rollback, reverse_preview, %{would_migrate: n, would_refuse: 0}),
          {:ok, rolled_back} <- step(:rollback, batch(store, reverse, new, old, false)),
+         :ok <- expect(:rollback, rolled_back, %{migrated: n, refused: 0, parked: 0}),
          :ok <- step(:tidied, tidy(store, loans)) do
       {:ok,
        [
@@ -116,6 +128,29 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
       {:ok, retired} -> {:error, :retire, {:unexpectedly_retired, retired}}
       other -> {:error, :unexpected, other}
     end
+  end
+
+  @doc """
+  Holds one step's answer to the counts the guide shows for it: `:ok` when
+  every key of `expected` has its value in `answer`, and
+  `{:error, step, {:unexpected, counts}}` otherwise, naming the step and
+  every count it did answer.
+
+  `answer` is a `StatifierPersistence.Executions.migrate_batch/3` report,
+  whose `counts` are read, or a plain map of counts such as
+  `StatifierPersistence.Executions.executions_on/2` answers. A batch
+  answers `{:ok, report}` whatever each execution's outcome was, so an
+  apply that refuses every loan is still `{:ok, report}`; this is what
+  stops the task on it.
+  """
+  @spec expect(atom(), map(), %{atom() => non_neg_integer()}) ::
+          :ok | {:error, atom(), {:unexpected, map()}}
+  def expect(step, %{counts: counts}, expected), do: expect(step, counts, expected)
+
+  def expect(step, counts, expected) when is_map(counts) do
+    if Map.take(counts, Map.keys(expected)) == expected,
+      do: :ok,
+      else: {:error, step, {:unexpected, counts}}
   end
 
   # ------------------------------------------------------------ the loan
