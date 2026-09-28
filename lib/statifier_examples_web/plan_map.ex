@@ -33,7 +33,9 @@ defmodule StatifierExamplesWeb.PlanMap do
   `:stack`) holds that slot's blocks directly, because a sequence drawn
   inside a box inside a box says nothing the one box does not. Every other
   slot is a node of its own: a branch's arms side by side, a parallel's
-  lanes, a group's interrupt rules and a drafts shelf. An empty slot is
+  lanes, a group's interrupt rules and a drafts shelf. A group is the one
+  exception the other way: its body stacks, but it is drawn as a slot node
+  of its own all the same (see "The Group" below). An empty slot is
   drawn as a marker rather than left out - an outcome nobody has written a
   step for yet is exactly what a reader of the map has to be able to see.
 
@@ -74,6 +76,36 @@ defmodule StatifierExamplesWeb.PlanMap do
     nested flow needs none, since the flow it ends is itself joined to what
     follows it. An end mark is not a block: it is in no outline, selects
     nothing and arms no insert.
+  - **The band carries a caption.** The branch's node carries `caption`,
+    `StatifierExamplesWeb.TypeExplanation.caption/1` of its type, and
+    `caption_width`, the room the caption and the fork mark need; the hook
+    writes the caption inside the band, after the fork mark, and never
+    draws the band narrower than that room.
+
+  ## The Group
+
+  A group's body is what it is for, and its interrupt rules watch that
+  body from beside it, so the map draws the body first and larger.
+
+  - **The body is a pane.** A `core.group` or `core.resumable_group`
+    draws its body slot as a slot node with `style: "body"`, first among
+    its children, rather than holding the body's blocks directly. The pane
+    is held wider than the rules column and at least as tall, at the same
+    per-character estimate as every other size here, so the body is the
+    larger of the two whatever the rules say.
+  - **The rules are a side column.** The interrupt rules' slot node is
+    laid out on its own, in one column, rules top to bottom in rail order,
+    and ELK places it beside the pane. It is laid out apart from the rest
+    of the graph (`hierarchyHandling: SEPARATE_CHILDREN`) because nothing
+    joins a rule to anything ELK sees: the interrupt edges are the hook's
+    (below), so no edge crosses into the column. It is laid out left to
+    right, where rules nothing joins share one layer, and a layer runs top
+    to bottom. Its minimum size is written width first, the documented
+    way round: a layout of its own is not transposed (see "Sizes").
+  - **The column carries a caption.** The rules' slot node carries
+    `caption`, `TypeExplanation.caption/1` of the group's type, which the
+    hook draws under the column's label. The caption is the host's fixed
+    text and lives in that one module, so it changes in one place.
 
   ## Interrupt edges
 
@@ -81,7 +113,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   lead somewhere: an `abandon` rule leaves the group by its exit and a
   `resume` rule goes back to the head of its body. The group's node carries
   those as `interrupts`, one per rule, in rail order, and the hook draws
-  each one dashed from the rule's box to where it leads. They are handed to
+  each one dashed from the rule's box to where it leads; the head of the
+  body is the first node drawn in the body's pane. They are handed to
   the hook beside the graph's `edges`, not among them, and drawn after the
   layout from the boxes it placed, so an interrupt edge never moves a box.
   They are the edges `StatifierBlocks.Describe.outline/3` answers with
@@ -117,6 +150,13 @@ defmodule StatifierExamplesWeb.PlanMap do
   The test beside this module pins both, and a test that lays the fixtures
   out through the real elkjs pins the order that results.
 
+  A group's rules column is laid out on its own, and there
+  `forceNodeModelOrder` alone does not hold the order: rules that nothing
+  joins are each a connected component, and ELK packs separate components
+  by size, not in model order. The column keeps its components together
+  (`separateConnectedComponents: false`), so its rules share one layer and
+  that layer keeps model order.
+
   ## Sizes
 
   Text is measured by estimate, a fixed width per character, rather than
@@ -131,6 +171,7 @@ defmodule StatifierExamplesWeb.PlanMap do
   alias StatifierBlocks.ViewModel
   alias StatifierBlocks.ViewModel.Node
   alias StatifierBlocks.ViewModel.Slot
+  alias StatifierExamplesWeb.TypeExplanation
 
   @char_width 7
   @line_height 16
@@ -145,6 +186,10 @@ defmodule StatifierExamplesWeb.PlanMap do
   @band_room 24
   @end_text "End"
   @end_height 28
+  @rule_spacing 24
+  @body_lead 48
+  @fork_room 26
+  @pad 12
 
   @force_model_order "org.eclipse.elk.layered.crossingMinimization.forceNodeModelOrder"
   @consider_model_order "org.eclipse.elk.layered.considerModelOrder.strategy"
@@ -164,8 +209,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   @typedoc """
   One graph node, in elkjs's JSON shape plus the fields the hook draws
   from: `kind`, `title` and `lines`, on a slot `style`, on a timer block
-  `mark`, on a group with interrupt rules `interrupts`, and on a branch
-  `band`.
+  `mark`, on a group with interrupt rules `interrupts`, on a branch `band`,
+  `caption` and `caption_width`, and on a group's rules column `caption`.
   """
   @type graph_node :: %{required(String.t()) => term()}
 
@@ -246,10 +291,10 @@ defmodule StatifierExamplesWeb.PlanMap do
   defp block(%Node{} = node) do
     title = ViewModel.title(node)
 
-    {lines, extra} =
+    {lines, extra, least} =
       if branch?(node),
-        do: {arm_lines(node), @band_room},
-        else: {node |> header() |> under(title), 0}
+        do: {arm_lines(node), @band_room, band_width(node)},
+        else: {node |> header() |> under(title), 0, 0}
 
     {children, edges} =
       node
@@ -263,7 +308,8 @@ defmodule StatifierExamplesWeb.PlanMap do
       "gap" => true,
       "title" => title,
       "lines" => lines,
-      "layoutOptions" => container_options([title | lines], lines, extra),
+      "layoutOptions" =>
+        container_options([title | lines], lines, extra, least: least + 2 * @pad),
       "children" => List.flatten(children),
       "edges" => List.flatten(edges)
     }
@@ -295,8 +341,78 @@ defmodule StatifierExamplesWeb.PlanMap do
   end
 
   @spec put_band(graph_node(), Node.t()) :: graph_node()
-  defp put_band(graph_node, %Node{} = node),
-    do: if(branch?(node), do: Map.put(graph_node, "band", true), else: graph_node)
+  defp put_band(graph_node, %Node{} = node) do
+    if branch?(node),
+      do:
+        Map.merge(graph_node, %{
+          "band" => true,
+          "caption" => TypeExplanation.caption(node.type),
+          "caption_width" => band_width(node)
+        }),
+      else: graph_node
+  end
+
+  # The least width a branch's band is drawn at: its fork mark and its
+  # caption, at the map's estimate.
+  @spec band_width(Node.t()) :: non_neg_integer()
+  defp band_width(%Node{} = node) do
+    case TypeExplanation.caption(node.type) do
+      nil -> 0
+      caption -> @fork_room + text_width([caption])
+    end
+  end
+
+  # ------------------------------------------------------------- the Group
+
+  @spec group?(Node.t()) :: boolean()
+  defp group?(%Node{type: type}), do: type in @group_types
+
+  # The rules column of a group, as `{width, height}` at the map's estimate:
+  # the slot node `slot/2` builds for it, its rules stacked one above the
+  # next. The body's pane is held larger than this; see the moduledoc's
+  # "The Group".
+  @spec column_size(Node.t()) :: {pos_integer(), pos_integer()}
+  defp column_size(%Node{block_id: block_id, slots: slots} = node) do
+    case Enum.find(slots, &ViewModel.rail?/1) do
+      nil ->
+        {0, 0}
+
+      %Slot{} = rail ->
+        lines = column_lines(node, rail)
+
+        parts =
+          case rail.children do
+            [] -> [empty(block_id, rail.name)]
+            _blocks -> slot_children(rail)
+          end
+
+        top = header_height(lines)
+        heights = Enum.map(parts, &part_height/1)
+        widths = Enum.map(parts, &part_width/1)
+        height = top + Enum.sum(heights) + @rule_spacing * (length(parts) - 1) + @pad
+        width = Enum.max([Enum.max(widths) + 2 * @pad, text_width(lines)])
+        {width, height}
+    end
+  end
+
+  # What a rules column says under its title: its label, then the caption.
+  @spec column_lines(Node.t(), Slot.t()) :: [String.t()]
+  defp column_lines(%Node{} = node, %Slot{} = slot) do
+    case TypeExplanation.caption(node.type) do
+      nil -> wrap(slot_header(slot))
+      caption -> wrap(slot_header(slot)) ++ [caption]
+    end
+  end
+
+  # A rule's size at the estimate. A rule is an interrupt handler, a leaf
+  # in the core vocabulary, so it carries its own; a host handler drawn as a
+  # container counts at a leaf's least, and the layout tests hold the pane
+  # larger for every fixture.
+  @spec part_width(graph_node()) :: pos_integer()
+  defp part_width(part), do: Map.get(part, "width", @leaf_min_width)
+
+  @spec part_height(graph_node()) :: pos_integer()
+  defp part_height(part), do: Map.get(part, "height", @header_base + 2 * @line_height)
 
   # The end mark after a branch that is the last step of the root's own
   # flow, joined to it by a rejoin edge; every other root is left as it is.
@@ -370,12 +486,17 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   # One edge per interrupt rule on a group's rail: `abandon` to the group's
   # exit, `resume` to the head of its body, which is the first node drawn
-  # inside the group, because the body is drawn first. A rule with neither
+  # in the body's pane, the group's first child. A rule with neither
   # outcome leads nowhere and has no edge, as in `StatifierBlocks.Describe`.
   @spec put_interrupts(graph_node(), Node.t()) :: graph_node()
   defp put_interrupts(graph_node, %Node{type: type, block_id: group, slots: slots})
        when type in @group_types do
-    head = graph_node["children"] |> List.first(%{}) |> Map.get("id")
+    head =
+      graph_node["children"]
+      |> List.first(%{})
+      |> Map.get("children", [])
+      |> List.first(%{})
+      |> Map.get("id")
 
     edges =
       for %Slot{name: "interrupts"} = slot <- slots,
@@ -432,20 +553,23 @@ defmodule StatifierExamplesWeb.PlanMap do
       Enum.filter(slots, &ViewModel.rail?/1) ++ Enum.filter(slots, &ViewModel.tray?/1)
   end
 
-  # A stacking block's one body slot is drawn inside the block itself.
+  # A stacking block's one body slot is drawn inside the block itself, but
+  # for a group's, which is a pane of its own; see the moduledoc.
   @spec inline?(Node.t(), Slot.t()) :: boolean()
   defp inline?(%Node{} = node, %Slot{name: name}) do
-    match?(
-      {:stack, [%Slot{name: ^name}]},
-      {ViewModel.arrangement(node), ViewModel.body_slots(node)}
-    )
+    not group?(node) and
+      match?(
+        {:stack, [%Slot{name: ^name}]},
+        {ViewModel.arrangement(node), ViewModel.body_slots(node)}
+      )
   end
 
   # ------------------------------------------------------------------- slots
 
   @spec slot(Node.t(), Slot.t()) :: graph_node()
-  defp slot(%Node{block_id: block_id}, %Slot{} = slot) do
+  defp slot(%Node{block_id: block_id} = node, %Slot{} = slot) do
     id = "#{block_id}/#{slot.name}"
+    style = style(node, slot)
     lines = slot |> slot_header() |> wrap()
 
     {children, edges} =
@@ -457,24 +581,63 @@ defmodule StatifierExamplesWeb.PlanMap do
     %{
       "id" => id,
       "kind" => "slot",
-      "style" => style(slot),
+      "style" => style,
       "title" => slot.label,
       "lines" => lines,
-      "layoutOptions" => slot_options(slot, lines),
+      "layoutOptions" => slot_options(style, node, slot, lines),
       "children" => children,
       "edges" => edges
     }
+    |> put_caption(style, node)
   end
+
+  # A group's rules column carries its caption; see the moduledoc.
+  @spec put_caption(graph_node(), String.t(), Node.t()) :: graph_node()
+  defp put_caption(graph_node, "rail", %Node{type: type}) when type in @group_types do
+    case TypeExplanation.caption(type) do
+      nil -> graph_node
+      caption -> Map.put(graph_node, "caption", caption)
+    end
+  end
+
+  defp put_caption(graph_node, _style, %Node{}), do: graph_node
 
   # A rail or a tray is not a step in the flow: it watches the whole of it,
   # or holds what is kept to one side. ELK's last layer puts it beside the
-  # flow's last step, rather than beside its first as if it came next.
-  @spec slot_options(Slot.t(), [String.t()]) :: %{String.t() => String.t()}
-  defp slot_options(%Slot{} = slot, lines) do
-    if ViewModel.rail?(slot) or ViewModel.tray?(slot),
-      do: Map.put(container_options(lines, lines), @layer_constraint, "LAST"),
-      else: container_options(lines, lines)
+  # flow's last step, rather than beside its first as if it came next. A
+  # group's rules column is laid out on its own and its body's pane is held
+  # larger than it; see the moduledoc's "The Group".
+  @spec slot_options(String.t(), Node.t(), Slot.t(), [String.t()]) ::
+          %{String.t() => String.t()}
+  defp slot_options("rail", %Node{type: type} = node, %Slot{} = slot, _lines)
+       when type in @group_types do
+    lines = column_lines(node, slot)
+
+    %{
+      @force_model_order => "true",
+      @layer_constraint => "LAST",
+      "org.eclipse.elk.hierarchyHandling" => "SEPARATE_CHILDREN",
+      "org.eclipse.elk.algorithm" => "layered",
+      "org.eclipse.elk.direction" => "RIGHT",
+      "org.eclipse.elk.separateConnectedComponents" => "false",
+      "org.eclipse.elk.spacing.nodeNode" => "#{@rule_spacing}",
+      "org.eclipse.elk.padding" =>
+        "[top=#{header_height(lines)},left=#{@pad},bottom=#{@pad},right=#{@pad}]",
+      "org.eclipse.elk.nodeSize.constraints" => "MINIMUM_SIZE",
+      "org.eclipse.elk.nodeSize.minimum" =>
+        "(#{text_width(lines)},#{header_height(lines) + @pad})"
+    }
   end
+
+  defp slot_options("body", %Node{} = node, %Slot{}, lines) do
+    {width, height} = column_size(node)
+    container_options(lines, lines, 0, least: width + @body_lead, tall: height)
+  end
+
+  defp slot_options(style, %Node{}, %Slot{}, lines) when style in ["rail", "tray"],
+    do: Map.put(container_options(lines, lines), @layer_constraint, "LAST")
+
+  defp slot_options(_arm, %Node{}, %Slot{}, lines), do: container_options(lines, lines)
 
   @spec slot_header(Slot.t()) :: String.t()
   defp slot_header(%Slot{label: label, condition: condition}) when is_binary(condition),
@@ -482,9 +645,12 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   defp slot_header(%Slot{label: label}), do: label
 
-  @spec style(Slot.t()) :: String.t()
-  defp style(%Slot{} = slot) do
+  # A group's body is its pane; every other slot is an arm, a rail (a
+  # group's rules column among them) or a tray.
+  @spec style(Node.t(), Slot.t()) :: String.t()
+  defp style(%Node{} = node, %Slot{} = slot) do
     cond do
+      group?(node) and not ViewModel.rail?(slot) and not ViewModel.tray?(slot) -> "body"
       ViewModel.rail?(slot) -> "rail"
       ViewModel.tray?(slot) -> "tray"
       true -> "arm"
@@ -552,19 +718,26 @@ defmodule StatifierExamplesWeb.PlanMap do
   # transposing turns that test red rather than quietly narrowing a box.
   #
   # `extra` is room under the header and above the children: a branch's
-  # band.
-  @spec container_options([String.t()], [String.t()], non_neg_integer()) ::
+  # band. `least` and `tall` raise the minimum width and height past what
+  # the text needs: a branch's band caption, a group body's pane.
+  @spec container_options([String.t()], [String.t()], non_neg_integer(), keyword()) ::
           %{String.t() => String.t()}
-  defp container_options(texts, lines, extra \\ 0) do
-    top = @header_base + (length(lines) + 1) * @line_height + extra
+  defp container_options(texts, lines, extra \\ 0, opts \\ []) do
+    top = header_height(lines) + extra
+    width = max(text_width(texts), Keyword.get(opts, :least, 0))
+    height = max(top + @pad, Keyword.get(opts, :tall, 0))
 
     %{
       @force_model_order => "true",
-      "org.eclipse.elk.padding" => "[top=#{top},left=12,bottom=12,right=12]",
+      "org.eclipse.elk.padding" => "[top=#{top},left=#{@pad},bottom=#{@pad},right=#{@pad}]",
       "org.eclipse.elk.nodeSize.constraints" => "MINIMUM_SIZE",
-      "org.eclipse.elk.nodeSize.minimum" => "(#{top + 12},#{text_width(texts)})"
+      "org.eclipse.elk.nodeSize.minimum" => "(#{height},#{width})"
     }
   end
+
+  # The height of a container's header: its title and `lines` under it.
+  @spec header_height([String.t()]) :: pos_integer()
+  defp header_height(lines), do: @header_base + (length(lines) + 1) * @line_height
 
   @spec leaf_width([String.t()]) :: pos_integer()
   defp leaf_width(texts), do: max(text_width(texts), @leaf_min_width)

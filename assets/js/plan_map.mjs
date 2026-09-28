@@ -129,12 +129,17 @@ export function interruptsOf(laid) {
 
 // A branch's band: one strip spanning every arm, in the room the server
 // left between the branch's header and its arms, with the fork mark at its
-// left. Read from the boxes the layout placed, never stored. Answers
-// `{x, y, width, height, fork: {x, y}}` in the coordinates `node` is in
-// (absolute, for a box out of `boxes`), or null for a node with no band
-// or no arm.
+// left and the branch's caption after it. Read from the boxes the layout
+// placed, never stored; never narrower than the server's `caption_width`,
+// the room the fork mark and the caption need. Answers
+// `{x, y, width, height, fork: {x, y}, caption: {x, y} | null}` in the
+// coordinates `node` is in (absolute, for a box out of `boxes`), or null
+// for a node with no band or no arm.
 const BAND_HEIGHT = 16
 const BAND_GAP = 4
+// The fork mark's room at the band's left, before the caption: the same
+// 26px the server's `caption_width` counts.
+const FORK_ROOM = 26
 
 export function bandOf(node) {
   if (node.band !== true) return null
@@ -149,9 +154,10 @@ export function bandOf(node) {
   return {
     x: node.x + left,
     y,
-    width: right - left,
+    width: Math.max(right - left, node.caption_width || 0),
     height: BAND_HEIGHT,
     fork: {x: node.x + left + 6, y: y + 1},
+    caption: node.caption ? {x: node.x + left + FORK_ROOM, y: y + BAND_HEIGHT - 4} : null,
   }
 }
 
@@ -170,7 +176,16 @@ function drawBand(node) {
     `<rect class="plan-map__band" data-map-band="${escapeText(node.id)}" ` +
     `x="${band.x}" y="${band.y}" width="${band.width}" height="${band.height}" rx="4" ` +
     `style="fill: var(--plan-map-band-fill, #e2e8f0); stroke: var(--plan-map-slot-stroke, #cbd5e1)"/>` +
-    drawFork(band.fork) + `</g>`
+    drawFork(band.fork) + drawCaption(band.caption, node.caption) + `</g>`
+}
+
+// A container's one-line caption: on a branch's band, or under a group's
+// rules column's label. The text is the server's, from the host's one
+// module of fixed type text.
+function drawCaption(at, text) {
+  if (!at || !text) return ""
+  return `<text class="plan-map__caption" data-map-caption="true" x="${at.x}" y="${at.y}">` +
+    `${escapeText(text)}</text>`
 }
 
 function textLines(node, x, y, className) {
@@ -224,12 +239,16 @@ function drawNode(node) {
       `</g>`
   }
 
+  // A slot's box: an arm, a rail, a tray, or a group's body pane. A group's
+  // rules column carries its caption on the line under its label.
   if (node.kind === "slot") {
     const style = escapeText(node.style || "arm")
+    const top = y + HEADER_BASE + LINE_HEIGHT - 4
+    const caption = {x: x + 12, y: top + (node.lines || []).length * LINE_HEIGHT}
     return `<g class="plan-map__slot plan-map__slot--${style}" data-map-node="${id}" data-map-kind="slot">` +
       `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" ` +
       `style="fill: var(--plan-map-slot-fill, #f8fafc); stroke: var(--plan-map-slot-stroke, #cbd5e1)"/>` +
-      textLines(node, x + 12, y + HEADER_BASE + LINE_HEIGHT - 4, "plan-map__slot-label") +
+      textLines(node, x + 12, top, "plan-map__slot-label") + drawCaption(caption, node.caption) +
       `</g>`
   }
 

@@ -12,7 +12,8 @@
 // `marks`, each block's timer marks as the markup carries them,
 // `bands` - each branch's band and fork mark as drawn - `rejoins`, every
 // rejoin path with its join dot, and `headers`, the lines under each
-// block's title in the order they are drawn - and
+// block's title in the order they are drawn - `captions`, every caption
+// with its text and place, keyed by the node it is drawn in - and
 // `gestures` - for every clickable element the markup carries, the event
 // and payload the hook's own mapGesture/2 turns a click on it into - and
 // `childGestures`, the same
@@ -158,6 +159,18 @@ for (const el of all.filter((e) => e.dataset.mapEdgeKind === "rejoin")) {
   })
 }
 
+// Every caption, read off the markup: its text, where it is drawn, and the
+// node whose group it is drawn in (a branch, for the caption on its band;
+// a group's rules column, for the one under its label).
+const captions = {}
+for (const el of all.filter((e) => e.dataset.mapCaption !== undefined)) {
+  const owner = el.closest("[data-map-node]")
+  const text = (target.innerHTML.slice(target.innerHTML.indexOf(el.token) + el.token.length).match(/^([^<]*)<\/text>/) || [])[1]
+  ;(captions[owner ? owner.dataset.mapNode : ""] ||= []).push({
+    text: unescape(text || ""), x: num(el, "x"), y: num(el, "y"),
+  })
+}
+
 // The lines under each block's title, read off the markup from the block's
 // own group to the next node's.
 const headers = {}
@@ -167,4 +180,4 @@ for (const [, id, rest] of html.matchAll(/data-map-node="([^"]*)" data-map-kind=
     .map((m) => unescape(m[1]))
 }
 
-process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, bands, rejoins, headers, gestures, childGestures}))
+process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, bands, rejoins, headers, captions, gestures, childGestures}))

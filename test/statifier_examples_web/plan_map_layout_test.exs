@@ -17,6 +17,7 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamplesWeb.PlanMap
+  alias StatifierExamplesWeb.TypeExplanation
 
   @driver Path.expand("../support/js/plan_map_layout.mjs", __DIR__)
 
@@ -86,7 +87,9 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
 
         for node <- walk(graph), node["id"] != "plan-map" do
           texts =
-            if node["kind"] == "slot", do: node["lines"], else: [node["title"] | node["lines"]]
+            if node["kind"] == "slot",
+              do: node["lines"] ++ List.wrap(node["caption"]),
+              else: [node["title"] | node["lines"]]
 
           needed = text_width(texts)
 
@@ -338,6 +341,108 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     end
   end
 
+  describe "the Group, as drawn" do
+    # The two library groups, their body's pane and their rules column, the
+    # rules in rail order.
+    @groups [
+      {"library_loan", "blk_ll_on_loan", ["blk_ll_returned_early", "blk_ll_reported_lost"]},
+      {"patron_registration", "blk_pr_verify", ["blk_pr_abandoned", "blk_pr_expired"]}
+    ]
+
+    # The body is the group's first child and is drawn first; it sits to the
+    # left of the rules column, wider than it and at least as tall; every
+    # step of the body is inside it.
+    #
+    # Sabotage: made inline?/2 inline a group's body again; the pane went
+    # missing and this went red. Dropped the column's size from the pane's
+    # minimum (slot_options/4 "body"); the pane came out narrower than the
+    # column and this went red. Each reverted from a copy.
+    test "both library groups draw their body first and larger than their rules column",
+         %{tmp_dir: dir} do
+      for {key, group, _rules} <- @groups do
+        graph = library_graph(key)
+        %{"drawn" => "map", "html" => html, "boxes" => boxes} = run(dir, key, graph)
+        body_id = "#{group}/body"
+        rules_id = "#{group}/interrupts"
+
+        assert [%{"id" => ^body_id, "style" => "body"} = pane, %{"id" => ^rules_id}] =
+                 find(graph, group)["children"]
+
+        body = boxes[body_id]
+        rules = boxes[rules_id]
+
+        assert body["x"] + body["width"] <= rules["x"],
+               "#{key}: the body is not left of the rules"
+
+        assert body["width"] > rules["width"], "#{key}: #{body["width"]} <= #{rules["width"]}"
+        assert body["height"] >= rules["height"], "#{key}: #{body["height"]} < #{rules["height"]}"
+
+        {body_at, _len} = :binary.match(html, ~s(data-map-node="#{body_id}"))
+        {rules_at, _len} = :binary.match(html, ~s(data-map-node="#{rules_id}"))
+        assert body_at < rules_at, "#{key}: the rules are drawn before the body"
+
+        for %{"kind" => "block", "id" => step} <- pane["children"] do
+          assert inside?(boxes[step], body), "#{key}: #{step} is outside the body"
+        end
+      end
+    end
+
+    # The rules stand in one column, top to bottom in rail order, each
+    # inside the column's box.
+    #
+    # Sabotage: dropped separateConnectedComponents from the column's
+    # options; ELK packed the rules by size and the registration's came out
+    # of order, and this went red. Reverted from a copy.
+    test "both library groups stack their rules in one column, in rail order",
+         %{tmp_dir: dir} do
+      for {key, group, rules} <- @groups do
+        %{"drawn" => "map", "boxes" => boxes} = run(dir, key, library_graph(key))
+        column = boxes["#{group}/interrupts"]
+
+        for rule <- rules, do: assert(inside?(boxes[rule], column), "#{key}: #{rule}")
+
+        for [upper, lower] <- Enum.chunk_every(rules, 2, 1, :discard) do
+          assert boxes[lower]["y"] >= boxes[upper]["y"] + boxes[upper]["height"],
+                 "#{key}: #{lower} is not below #{upper}"
+        end
+      end
+    end
+
+    # The rules column carries the group's caption on the line under its
+    # label, above its first rule; the branch's band carries the branch's,
+    # inside the band and after the fork mark. Both are the host's one
+    # module's text.
+    #
+    # Sabotage: made drawNode leave a slot's caption out; this went red.
+    # Made drawBand leave the band's caption out; this went red. Each
+    # reverted from a copy.
+    test "the rules column and the branch band carry their captions", %{tmp_dir: dir} do
+      branches = %{"library_loan" => "blk_ll_due", "patron_registration" => "blk_pr_age"}
+
+      for {key, group, [first | _rules]} <- @groups do
+        %{"drawn" => "map", "boxes" => boxes, "bands" => bands, "captions" => captions} =
+          run(dir, key, library_graph(key))
+
+        rules_id = "#{group}/interrupts"
+        column = boxes[rules_id]
+        group_caption = TypeExplanation.caption("core.group")
+
+        assert [%{"text" => ^group_caption, "x" => x, "y" => y}] = captions[rules_id]
+        assert x > column["x"] and x < column["x"] + column["width"], key
+        assert y > column["y"] + 16 and y < boxes[first]["y"], key
+
+        branch = branches[key]
+        branch_caption = TypeExplanation.caption("core.branch")
+        [band] = bands[branch]
+
+        assert [%{"text" => ^branch_caption, "x" => bx, "y" => by}] = captions[branch]
+        assert bx > band["fork"]["x"] and bx < band["x"] + band["width"], key
+        assert by > band["y"] and by <= band["y"] + band["height"], key
+        assert band["x"] + band["width"] - bx >= text_width([branch_caption]) - 24, key
+      end
+    end
+  end
+
   describe "the error-pane test" do
     # An edge to a node the graph does not hold is a graph elkjs refuses
     # outright, which is the failure the pane is for.
@@ -516,6 +621,13 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
   defp number(text) do
     {value, ""} = Float.parse(text)
     value
+  end
+
+  # Whether `box` lies wholly inside `outer`.
+  defp inside?(box, outer) do
+    box["x"] >= outer["x"] and box["y"] >= outer["y"] and
+      box["x"] + box["width"] <= outer["x"] + outer["width"] and
+      box["y"] + box["height"] <= outer["y"] + outer["height"]
   end
 
   defp walk(%{} = node), do: [node | Enum.flat_map(Map.get(node, "children", []), &walk/1)]

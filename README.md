@@ -137,12 +137,24 @@ A branch is drawn as one decision. Its header names every arm with its
 condition as authored, numbered in the order the branch tries them, under
 the package's "one of"; the branch type's own sentence, which the list
 draws, is unchanged. The arms sit under one band spanning all of them, with
-a small fork mark at its left. The edge out of the branch is its rejoin,
+a small fork mark at its left and a one-line caption after it. The edge out
+of the branch is its rejoin,
 drawn with a join dot where it leaves the branch's bottom edge, into the
 next step - or, where the branch is the document's last step, into an
 "End" mark. The band, the fork mark, the join dot and the end mark are
 drawn from the laid-out boxes and add no gesture: a click on the band
 selects the branch, and the end mark is not clickable.
+
+### The Group
+
+A group's body is what it is for, so it is drawn first and larger: its
+steps sit in a pane of their own, the group's first box, held wider than
+the interrupt rules and at least as tall. The rules stand beside the pane
+in one column, top to bottom in the order the group lists them, under a
+one-line caption below the column's label. The pane and the caption add no
+gesture. Both captions, the column's and the branch band's, are this app's
+fixed text in `StatifierExamplesWeb.TypeExplanation`, the one place they
+change.
 
 ### Editing from the map
 
@@ -183,7 +195,7 @@ and open slots it has.
 
 `StatifierExamplesWeb.PlanDescription` builds one such description for
 every element the map draws - blocks, interrupt rules, arms (the undecided
-arm included), a group's rules, empty-slot markers, the end mark,
+arm included), a group's body and its rules, empty-slot markers, the end mark,
 connectors (a branch's rejoin among them) and the dashed interrupt
 edges - from
 the view model and `StatifierBlocks.Describe.outline/3`, keyed by the map's

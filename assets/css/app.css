@@ -618,6 +618,14 @@
   fill: var(--sb-fg-muted);
 }
 
+/* A container's one-line caption: under a group's rules column's label,
+   and on a branch's band. Same 12px as every other line, so the width
+   estimate holds; set apart by its slant. */
+.plan-map__svg .plan-map__caption {
+  fill: var(--sb-fg-muted);
+  font-style: italic;
+}
+
 .plan-map__svg .plan-map__end-text {
   fill: var(--sb-fg-muted);
   font-weight: 600;

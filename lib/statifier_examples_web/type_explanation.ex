@@ -16,6 +16,16 @@ defmodule StatifierExamplesWeb.TypeExplanation do
   added to the package after this was written - falls back to its palette
   entry's `description`, and a block whose type the palette cannot resolve
   at all says so rather than guessing.
+
+  ## Captions
+
+  The map draws a one-line caption on the two structural containers whose
+  shape needs saying: under a group's interrupt rules, and on the band
+  over a branch's arms. `caption/1` is that text, and it lives here beside
+  the longer explanations for the same reason they do: when the package
+  publishes a per-type explanation, the host's fixed text is replaced in
+  this one module. Every other type has no caption, and a leaf never
+  carries one.
   """
 
   alias StatifierBlocks.ViewModel
@@ -55,6 +65,12 @@ defmodule StatifierExamplesWeb.TypeExplanation do
       "A shelf for steps the author has built but not placed: nothing on it is part of the flow, and nothing on it runs."
   }
 
+  @captions %{
+    "core.group" => "leave the group when they happen",
+    "core.resumable_group" => "leave the group when they happen",
+    "core.branch" => "only the first arm whose condition holds runs"
+  }
+
   @unresolved "A block of a type this palette does not know, so nothing can be said about what it does."
   @undescribed "Its type gives no description of what it does."
 
@@ -72,6 +88,14 @@ defmodule StatifierExamplesWeb.TypeExplanation do
       :error -> described(Map.get(entry, :description))
     end
   end
+
+  @doc """
+  The one-line caption the map draws for a block of `type`: under a
+  group's interrupt rules, or on a branch's band; `nil` for every other
+  type. See the moduledoc's "Captions".
+  """
+  @spec caption(String.t()) :: String.t() | nil
+  def caption(type) when is_binary(type), do: Map.get(@captions, type)
 
   @doc "The core type names this module carries its own text for."
   @spec core_types() :: [String.t()]

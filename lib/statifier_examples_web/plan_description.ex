@@ -35,8 +35,9 @@ defmodule StatifierExamplesWeb.PlanDescription do
 
   An element's `kind` says what it is on the map. `:block` and `:rule` are
   boxes for blocks - a rule is a block in a group's interrupt rules;
-  `:arm`, `:undecided_arm`, `:rules` and `:tray` are a block's slots drawn
-  as boxes of their own; `:marker` is an empty slot's "Nothing here yet";
+  `:arm`, `:undecided_arm`, `:rules`, `:body` and `:tray` are a block's
+  slots drawn as boxes of their own, `:body` being a group's body, drawn as
+  a pane beside its rules; `:marker` is an empty slot's "Nothing here yet";
   `:end` is the end mark a branch that ends the document rejoins into;
   `:edge` is a connector, a branch's rejoin among them; `:interrupt` is
   the dashed edge an interrupt rule draws to where it takes its group;
@@ -63,6 +64,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
           | :arm
           | :undecided_arm
           | :rules
+          | :body
           | :tray
           | :marker
           | :end
@@ -424,6 +426,18 @@ defmodule StatifierExamplesWeb.PlanDescription do
         "The interrupt rules of #{named(node)}: each one waits for its event whichever " <>
           "step of the group is running.",
       facts: [{"Group", named(node)}, {"Rules", sentences(slot, context)}]
+    }
+  end
+
+  defp slot("body", id, node, slot, context) do
+    %__MODULE__{
+      id: id,
+      kind: :body,
+      title: slot.label,
+      explanation:
+        "The body of #{named(node)}: its steps, run in order, which the group's " <>
+          "interrupt rules watch from beside it.",
+      facts: [{"Group", named(node)}, {"Steps", sentences(slot, context)}]
     }
   end
 

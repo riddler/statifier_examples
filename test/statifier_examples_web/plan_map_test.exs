@@ -18,6 +18,7 @@ defmodule StatifierExamplesWeb.PlanMapTest do
   alias StatifierBlocks.ViewModel.Node
   alias StatifierExamples.Charts
   alias StatifierExamplesWeb.PlanMap
+  alias StatifierExamplesWeb.TypeExplanation
 
   @force "org.eclipse.elk.layered.crossingMinimization.forceNodeModelOrder"
   @consider "org.eclipse.elk.layered.considerModelOrder.strategy"
@@ -124,6 +125,40 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     end
   end
 
+  describe "captions" do
+    # A group's rules column and a branch carry the host's one module's
+    # caption for their type, and nothing else on the map carries one.
+    #
+    # Sabotage: made put_caption/3 caption every rail, not only a group's;
+    # the card fixture's failure path came back captioned and this went
+    # red. Made put_band/2 leave the caption off; this went red. Each
+    # reverted from a copy.
+    test "only a group's rules column and a branch carry a caption, the host's own text" do
+      for fixture <- Charts.fixtures() do
+        graph = PlanMap.graph(view_model(fixture))
+
+        expected =
+          for node <- walk(graph),
+              node["kind"] == "block",
+              type = ViewModel.find_node(view_model(fixture), node["id"]).type,
+              TypeExplanation.caption(type) != nil,
+              into: %{} do
+            if node["band"],
+              do: {node["id"], TypeExplanation.caption(type)},
+              else: {"#{node["id"]}/interrupts", TypeExplanation.caption(type)}
+          end
+
+        captioned =
+          for node <- walk(graph), node["caption"], into: %{}, do: {node["id"], node["caption"]}
+
+        assert captioned == expected, fixture.key
+      end
+
+      assert find(graph("library_loan"), "blk_ll_on_loan/interrupts")["caption"] ==
+               "leave the group when they happen"
+    end
+  end
+
   describe "sizes" do
     # A word longer than a line keeps its own line, whole, and widens its
     # box to fit rather than running out of it.
@@ -200,7 +235,9 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     # library fixture has one, so a signup group carries the case.
     #
     # Sabotage: the same head taken from the last drawn child; this went
-    # red. Reverted from a copy.
+    # red. Reverted from a copy. Took the head from the group's first
+    # child, the body's pane itself, rather than the pane's first; this
+    # went red. Reverted from a copy.
     test "a resume rule leads to the head of its group's body" do
       resumes =
         for fixture <- Charts.fixtures(),
@@ -212,7 +249,9 @@ defmodule StatifierExamplesWeb.PlanMapTest do
 
       for {key, %{"group" => group}} <- resumes do
         node = find(graph(key), group)
-        [%{"id" => head} | _rest] = node["children"]
+        # The body is the group's first child, a pane; its head is the pane's first.
+        assert [%{"style" => "body", "children" => [%{"id" => head} | _steps]} | _rest] =
+                 node["children"]
 
         for edge <- node["interrupts"], edge["to"] == "body" do
           assert edge["head"] == head, "#{key}: #{edge["id"]}"
