@@ -82,6 +82,23 @@ defmodule StatifierExamplesWeb.PlanMap do
     writes the caption inside the band, after the fork mark, and never
     draws the band narrower than that room.
 
+  ## The start
+
+  A document starts when its host starts an execution of it, and the map
+  says where that execution begins the way a state chart does: one filled
+  dot, the initial mark, with no text, and one edge from it into the first
+  step of the document's own flow. The dot is a node of `kind: "start"`,
+  keyed `<root id>/start`, drawn first inside the root's box; its edge
+  carries `kind: "start"` and one ELK label, `start_text/0`, so the layout
+  leaves the caption its room. The caption reads the same on every
+  document: what the document listens for while it runs is the description
+  region's to say, not the edge's.
+
+  A root whose flow is not drawn inside it has no first step there, so its
+  dot stands above the root's box and the edge goes into the box itself.
+  Like the end mark, the dot is not a block: it is in no outline, selects
+  nothing and arms no insert.
+
   ## The Group
 
   A group's body is what it is for, and its interrupt rules watch that
@@ -212,6 +229,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   @band_room 24
   @end_text "End"
   @end_height 28
+  @start_text "Starts when told to"
+  @start_size 14
   @rule_spacing 24
   @body_lead 48
   @fork_room 26
@@ -236,7 +255,7 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   @typedoc """
   One graph node, in elkjs's JSON shape plus the fields the hook draws
-  from: `kind`, `title` and `lines`, on a slot `style`, on a timer block
+  from: `kind` (all the start dot carries), `title` and `lines`, on a slot `style`, on a timer block
   `mark`, on a group with interrupt rules `interrupts`, on a branch `band`,
   `caption` and `caption_width`, on a group's rules column `caption`, and
   on a group whose body is all leaves the `ports` its edges attach to.
@@ -261,6 +280,7 @@ defmodule StatifierExamplesWeb.PlanMap do
       "children" => [root |> block() |> Map.put("gap", false) |> put_end(root)],
       "edges" => []
     }
+    |> put_start(root)
   end
 
   @doc """
@@ -297,6 +317,13 @@ defmodule StatifierExamplesWeb.PlanMap do
   @doc "The text an empty slot's marker carries."
   @spec empty_text() :: String.t()
   def empty_text, do: @empty_text
+
+  @doc """
+  What starts a document, in the words the map's start edge carries and the
+  description region says: the one place the sentence is written.
+  """
+  @spec start_text() :: String.t()
+  def start_text, do: @start_text
 
   # ------------------------------------------------------------------ blocks
 
@@ -480,6 +507,62 @@ defmodule StatifierExamplesWeb.PlanMap do
   end
 
   defp put_end(graph_node, %Node{}), do: graph_node
+
+  # ------------------------------------------------------------- the start
+
+  # The start dot and its edge; see the moduledoc's "The start". The dot
+  # goes first among the root's children, into the first step of the root's
+  # own flow; for a root whose flow is not drawn inside it, first in the
+  # graph, into the root's box.
+  @spec put_start(t(), Node.t()) :: t()
+  defp put_start(%{"children" => [drawn]} = graph, %Node{block_id: root_id} = root) do
+    id = "#{root_id}/start"
+
+    with [%Slot{} = body] <- ViewModel.body_slots(root),
+         true <- inline?(root, body),
+         [first | _rest] <- drawn["children"] do
+      to =
+        case ViewModel.flow_children(body) do
+          [%Node{block_id: step} | _rest] -> step
+          [] -> first["id"]
+        end
+
+      started =
+        drawn
+        |> Map.update!("children", &[start_mark(id) | &1])
+        |> Map.update!("edges", &[start_edge(id, to) | &1])
+
+      Map.put(graph, "children", [started])
+    else
+      _not_inline ->
+        Map.merge(graph, %{
+          "children" => [start_mark(id), drawn],
+          "edges" => [start_edge(id, root_id)]
+        })
+    end
+  end
+
+  @spec start_mark(String.t()) :: graph_node()
+  defp start_mark(id),
+    do: %{"id" => id, "kind" => "start", "width" => @start_size, "height" => @start_size}
+
+  @spec start_edge(String.t(), String.t()) :: map()
+  defp start_edge(from, to) do
+    %{
+      "id" => "#{from}->#{to}",
+      "sources" => [from],
+      "targets" => [to],
+      "kind" => "start",
+      "labels" => [
+        %{
+          "id" => "#{from}/caption",
+          "text" => @start_text,
+          "width" => text_width([@start_text]),
+          "height" => @line_height
+        }
+      ]
+    }
+  end
 
   # ------------------------------------------------------------ timer marks
 

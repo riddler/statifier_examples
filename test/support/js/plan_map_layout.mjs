@@ -16,6 +16,7 @@
 // with its text and place, keyed by the node it is drawn in - and
 // `gestures` - for every clickable element the markup carries, the event
 // and payload the hook's own mapGesture/2 turns a click on it into - and
+// `starts`, every start dot as drawn with what a click on it asks, and
 // `childGestures`, the same
 // asked of a click on each of that element's children (the rect, text,
 // circle or path a real click lands on), which reach the element by walking
@@ -45,6 +46,7 @@ if (laid) {
       sections: sections.length,
       start: sections.length ? sections[0].startPoint : null,
       end: sections.length ? sections[sections.length - 1].endPoint : null,
+      labels: (edge.labels || []).map((l) => ({text: l.text, x: l.x, y: l.y, width: l.width, height: l.height})),
     })
   }
   for (const edge of interruptsOf(laid)) drawnPoints[edge.id] = edge
@@ -107,6 +109,18 @@ for (const el of all.filter((e) => e.tag === "g" && (e.dataset.mapGap !== undefi
   }
 }
 
+// The start dot, and what a click on it or on any of its children asks
+// for: the dot selects nothing, so every answer is expected to be null.
+const starts = []
+for (const el of all.filter((e) => e.dataset.mapStart !== undefined)) {
+  starts.push({
+    id: el.dataset.mapStart,
+    kind: el.dataset.mapKind === undefined ? null : el.dataset.mapKind,
+    children: el.children.map((c) => c.tag),
+    gestures: [el, ...el.children].map((c) => mapGesture(c, editable)),
+  })
+}
+
 // An interrupt edge is read off the markup: a path marked
 // data-map-edge-kind="interrupt", with its dash and its points as drawn.
 const interrupts = []
@@ -164,9 +178,10 @@ for (const el of all.filter((e) => e.dataset.mapEdgeKind === "rejoin")) {
 // a group's rules column, for the one under its label).
 const captions = {}
 for (const el of all.filter((e) => e.dataset.mapCaption !== undefined)) {
-  const owner = el.closest("[data-map-node]")
+  const node = el.closest("[data-map-node]")
+  const edge = node ? null : el.closest("[data-map-edge]")
   const text = (target.innerHTML.slice(target.innerHTML.indexOf(el.token) + el.token.length).match(/^([^<]*)<\/text>/) || [])[1]
-  ;(captions[owner ? owner.dataset.mapNode : ""] ||= []).push({
+  ;(captions[node ? node.dataset.mapNode : edge ? edge.dataset.mapEdge : ""] ||= []).push({
     text: unescape(text || ""), x: num(el, "x"), y: num(el, "y"),
   })
 }
@@ -180,4 +195,4 @@ for (const [, id, rest] of html.matchAll(/data-map-node="([^"]*)" data-map-kind=
     .map((m) => unescape(m[1]))
 }
 
-process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, bands, rejoins, headers, captions, gestures, childGestures}))
+process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, bands, rejoins, headers, captions, gestures, childGestures, starts}))

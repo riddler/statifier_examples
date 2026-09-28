@@ -117,6 +117,15 @@ container, and `considerModelOrder` on the root only.
 `StatifierExamplesWeb.PlanMapLayoutTest` lays every fixture out through the
 real layout library and reads the order off the boxes it placed.
 
+### The start
+
+Where the document starts is drawn the way a state chart draws it: one
+filled dot, with no text, and one edge from it into the first step. The
+edge is captioned "Starts when told to" on every document, because an
+execution starts when its host starts one; the events a document accepts
+are what it listens for while it runs, and the description region names
+them. The dot is not a block: a click on it selects nothing.
+
 ### Interrupt edges and timer marks
 
 A group's interrupt rules sit on its rail, and each one is drawn with a
@@ -196,6 +205,7 @@ and open slots it has.
 `StatifierExamplesWeb.PlanDescription` builds one such description for
 every element the map draws - blocks, interrupt rules, arms (the undecided
 arm included), a group's body and its rules, empty-slot markers, the end mark,
+the start dot and its edge,
 connectors (a branch's rejoin among them) and the dashed interrupt
 edges - from
 the view model and `StatifierBlocks.Describe.outline/3`, keyed by the map's

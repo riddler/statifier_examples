@@ -188,7 +188,9 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     test "a leaf is at least as wide as its title" do
       for fixture <- Charts.fixtures(),
           node <- walk(PlanMap.graph(view_model(fixture))),
-          Map.has_key?(node, "width") do
+          Map.has_key?(node, "width"),
+          # The start dot carries no text to be wide enough for.
+          node["kind"] != "start" do
         assert node["width"] >= String.length(node["title"]) * 7 + 24, node["id"]
       end
     end
@@ -469,7 +471,14 @@ defmodule StatifierExamplesWeb.PlanMapTest do
                fixture.key
 
         for %{"edges" => edges} <- walk(graph), %{"kind" => kind, "sources" => [from]} <- edges do
-          assert kind == if(from in branches, do: "rejoin", else: "sequence"),
+          expected =
+            cond do
+              String.ends_with?(from, "/start") -> "start"
+              from in branches -> "rejoin"
+              true -> "sequence"
+            end
+
+          assert kind == expected,
                  "#{fixture.key}: #{from}"
         end
       end
@@ -484,7 +493,7 @@ defmodule StatifierExamplesWeb.PlanMapTest do
       root = find(graph("library_loan"), "blk_ll_root")
 
       assert Enum.map(root["children"], & &1["id"]) ==
-               ["blk_ll_on_loan", "blk_ll_due", "blk_ll_root/end"]
+               ["blk_ll_root/start", "blk_ll_on_loan", "blk_ll_due", "blk_ll_root/end"]
 
       assert %{"kind" => "end", "title" => "End"} = List.last(root["children"])
 
@@ -496,6 +505,101 @@ defmodule StatifierExamplesWeb.PlanMapTest do
              }
 
       refute Enum.any?(walk(graph("patron_registration")), &(&1["kind"] == "end"))
+    end
+  end
+
+  describe "the start" do
+    # One start dot per document, first among the root's children, and one
+    # start edge from it into the first step of the root's own flow,
+    # captioned with the one sentence - whether the document declares the
+    # events it accepts (the library fixtures) or declares none (the card
+    # and signup fixtures). The dot is no block: it is in no outline.
+    #
+    # Sabotage: made put_start/2 answer the graph unchanged; this went red.
+    # Made put_start/2 aim the edge at the root instead of the first step;
+    # this went red. Made start_edge/2's label name an accepted event
+    # instead of the one sentence; this went red. Each reverted from a copy.
+    test "every fixture starts once, with one captioned edge into its first step" do
+      assert PlanMap.start_text() == "Starts when told to"
+
+      accepts = for fixture <- Charts.fixtures(), do: fixture.document.accepts != []
+      assert true in accepts and false in accepts
+
+      for fixture <- Charts.fixtures() do
+        view_model = view_model(fixture)
+        graph = PlanMap.graph(view_model)
+        root_id = view_model.root.block_id
+        start = "#{root_id}/start"
+
+        [%{block_id: first} | _rest] =
+          view_model.root |> ViewModel.body_slots() |> hd() |> ViewModel.flow_children()
+
+        assert [%{"id" => ^start, "kind" => "start"} = dot] =
+                 Enum.filter(walk(graph), &(&1["kind"] == "start"))
+
+        refute Map.has_key?(dot, "title")
+        assert [^dot | _rest] = find(graph, root_id)["children"]
+
+        edges = for node <- walk(graph), edge <- Map.get(node, "edges", []), do: edge
+
+        assert [
+                 %{
+                   "sources" => [^start],
+                   "targets" => [^first],
+                   "labels" => [%{"text" => "Starts when told to"}]
+                 }
+               ] = Enum.filter(edges, &(&1["kind"] == "start"))
+
+        refute start in PlanMap.nodes(graph)
+      end
+    end
+
+    # A document with no step yet starts into its root's empty marker.
+    #
+    # Sabotage: made put_start/2 fall back to the root, not the first drawn
+    # child, when the flow is empty; this went red. Reverted from a copy.
+    test "a document with no step starts into its empty slot" do
+      graph =
+        Block.new("core.sequence", id: "root", slots: %{"body" => []})
+        |> Document.new()
+        |> ViewModel.build(Charts.palette(), [])
+        |> PlanMap.graph()
+
+      root = find(graph, "root")
+
+      assert [%{"id" => "root/start"}, %{"id" => "root/body/empty"}] = root["children"]
+
+      assert [%{"sources" => ["root/start"], "targets" => ["root/body/empty"]}] =
+               root["edges"]
+    end
+
+    # A root whose flow is not drawn inside it - a group, whose body is a
+    # pane of its own - has its dot above its box and its edge into the box.
+    #
+    # Sabotage: dropped the inline? check from put_start/2; the group
+    # root's dot went inside its box and this went red. Reverted from a
+    # copy.
+    test "a root whose flow is not drawn inside it starts above its box" do
+      graph =
+        Block.new("core.group",
+          id: "held",
+          slots: %{
+            "body" => [
+              Block.new("core.await", id: "wait", config: %{"event" => "hold.collected"})
+            ],
+            "interrupts" => []
+          }
+        )
+        |> Document.new()
+        |> ViewModel.build(Charts.palette(), [])
+        |> PlanMap.graph()
+
+      assert [%{"id" => "held/start", "kind" => "start"}, %{"id" => "held"}] = graph["children"]
+
+      assert [%{"sources" => ["held/start"], "targets" => ["held"], "kind" => "start"}] =
+               graph["edges"]
+
+      refute Enum.any?(find(graph, "held")["children"], &(&1["kind"] == "start"))
     end
   end
 
