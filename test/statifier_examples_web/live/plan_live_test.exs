@@ -1069,7 +1069,9 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert slot_of(from_map, "blk_pr_verify", "body") == [
                "blk_pr_deadline",
                "new",
-               "blk_pr_email"
+               "blk_pr_email",
+               "blk_pr_age",
+               "blk_pr_welcome"
              ]
     end
 
@@ -1117,7 +1119,13 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
         end)
 
       assert from_map == from_list
-      assert body_of(from_map) == ["blk_pr_age", "blk_pr_verify", "blk_pr_welcome"]
+
+      assert slot_of(from_map, "blk_pr_verify", "body") == [
+               "blk_pr_deadline",
+               "blk_pr_age",
+               "blk_pr_email",
+               "blk_pr_welcome"
+             ]
     end
 
     # Sabotage: made the panel's "Delete" post insert-close; this went red.
@@ -1137,7 +1145,12 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
         end)
 
       assert from_map == from_list
-      assert body_of(from_map) == ["blk_pr_verify", "blk_pr_age"]
+
+      assert slot_of(from_map, "blk_pr_verify", "body") == [
+               "blk_pr_deadline",
+               "blk_pr_email",
+               "blk_pr_age"
+             ]
     end
 
     # update_config: the panel's form is the one form, reached from a map
@@ -1410,8 +1423,6 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
     %{block | id: if(MapSet.member?(known, id), do: id, else: "new"), slots: slots}
   end
-
-  defp body_of(%Document{root: root}), do: Enum.map(root.slots["body"], & &1.id)
 
   defp slot_of(%Document{} = document, block_id, slot) do
     document

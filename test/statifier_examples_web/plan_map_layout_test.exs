@@ -446,11 +446,13 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
   describe "the happy path, as drawn" do
     # Each library group, the steps of its body, and the steps of the
     # document's own flow after it.
+    # The registration's group is the root's last step - its age branch and
+    # welcome sit inside the body, so the deadline rule ends the document -
+    # and nothing follows it, so it has no edge out to draw.
     @happy [
       {"library_loan", "blk_ll_on_loan", ["blk_ll_loan_period"],
        ["blk_ll_due", "blk_ll_root/end"]},
-      {"patron_registration", "blk_pr_verify", ["blk_pr_deadline", "blk_pr_email"],
-       ["blk_pr_age", "blk_pr_welcome"]}
+      {"patron_registration", "blk_pr_verify", ["blk_pr_deadline", "blk_pr_email"], []}
     ]
 
     # How far off one line a step's centre may sit, in pixels.
@@ -479,15 +481,16 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
           assert_in_delta x, line, @straight, "#{key}: #{id} is off the line at #{x}, not #{line}"
         end
 
-        [next | _rest] = after_group
-        id = "#{group}->#{next}"
+        for next <- Enum.take(after_group, 1) do
+          id = "#{group}->#{next}"
 
-        edge =
-          Enum.find(edges, &(&1["id"] == id)) || flunk("#{key}: #{id} is not drawn")
+          edge =
+            Enum.find(edges, &(&1["id"] == id)) || flunk("#{key}: #{id} is not drawn")
 
-        assert %{"source" => ^group, "target" => ^next} = edge
-        assert_in_delta edge["start"]["x"], line, @straight, "#{key}: #{id} start"
-        assert_in_delta edge["end"]["x"], line, @straight, "#{key}: #{id} end"
+          assert %{"source" => ^group, "target" => ^next} = edge
+          assert_in_delta edge["start"]["x"], line, @straight, "#{key}: #{id} start"
+          assert_in_delta edge["end"]["x"], line, @straight, "#{key}: #{id} end"
+        end
       end
     end
 

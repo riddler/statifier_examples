@@ -73,7 +73,7 @@ and `mix statifier_examples.migrate_waiting` runs it.
    | `signup_bulk_invites_strict` | the same document with two characters changed: one descriptor is a deliberate bad id, and the `core.map` runs `on: "first_error"`. It is the pair that makes the two failure policies readable side by side |
    | `signup_guarded_step` | one `myapp.guarded_step` block: a call, and a `myapp.notify` on its error path. The second composite, and the pairing an author forgets - which is the argument for having composites at all |
    | `library_loan` | the library world, from `core.*` blocks alone: a three-week loan with a return or a lost-copy report ending it early, then a branch at the due date - close, renew, or an overdue notice and two more weeks - whose "cannot be decided" arm is left empty |
-   | `patron_registration` | a week to verify an email address, with abandonment and a deadline on the group's rail, then a branch on the patron's age - a guardian's consent, a card, or a visit to the branch - whose "otherwise" arm is left empty |
+   | `patron_registration` | a week to verify an email address, with abandonment and a deadline on the group's rail; inside the same group, after the email step, a branch on the patron's age - a guardian's consent, a card, or a visit to the branch - whose "otherwise" arm is left empty, and the welcome. The group is the document's last step, so the deadline ends the registration |
    | `signup_invite_chunk` | the child the two bulk documents fan out over: one `core.invoke` of `myapp:process_rows` for the chunk a descriptor stands for, answering a summary. It is offered in the switcher because a child chart is a document like any other |
 
 2. Switch documents with the header's DOCUMENT select. Edits live in
@@ -1097,6 +1097,22 @@ is demonstrating a package's chrome.
 two documents, written from `core.*` blocks alone and listed by
 `StatifierExamples.Library`. Each has a branch with one arm left empty on
 purpose: it is what the Plan view's map marks rather than hides.
+
+The registration ends at its deadline. A rule that abandons a group leaves
+the group and goes on to whatever follows it, so the age branch and the
+welcome sit inside the verification group's body, after the email step,
+and the group is the root's last step: when the week runs out, the rule
+abandons the group and the document ends there.
+`test/statifier_examples/charts/patron_registration_test.exs` runs it both
+ways. The deadline stays armed until the group is left, so it covers the
+age branch too.
+
+The loan stops short of a circulation policy on purpose. A reader who
+knows libraries will look for reminder emails before the due date, a fine
+on an overdue copy and a lost-copy path that charges for a replacement;
+the loan has none of them. A lost-copy report is an interrupt rule on the
+loan period and nothing more, because what the document teaches is the
+group's rail and the due-date branch.
 
 `test/fixtures/publish_refusals/` is the refusal suite, and it is the set a
 host can vendor: six charts in the library and parcel worlds, one JSON file

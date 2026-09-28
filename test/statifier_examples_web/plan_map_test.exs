@@ -356,16 +356,18 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     # Sabotage: reversed ViewModel.flow_children/1 in slot_children/1; this
     # went red, with the outline case above. Reverted from a copy.
     test "a container lists its children in model order, and sequence edges follow it" do
-      root = find(graph("patron_registration"), "blk_pr_root")
+      body = find(graph("patron_registration"), "blk_pr_verify/body")
 
-      assert Enum.map(root["children"], & &1["id"]) == [
-               "blk_pr_verify",
+      assert Enum.map(body["children"], & &1["id"]) == [
+               "blk_pr_deadline",
+               "blk_pr_email",
                "blk_pr_age",
                "blk_pr_welcome"
              ]
 
-      assert Enum.map(root["edges"], &{&1["sources"], &1["targets"]}) == [
-               {["blk_pr_verify"], ["blk_pr_age"]},
+      assert Enum.map(body["edges"], &{&1["sources"], &1["targets"]}) == [
+               {["blk_pr_deadline"], ["blk_pr_email"]},
+               {["blk_pr_email"], ["blk_pr_age"]},
                {["blk_pr_age"], ["blk_pr_welcome"]}
              ]
     end
@@ -381,23 +383,32 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     # it; the card group whose body holds containers carried ports and
     # this went red. Made it count one padding, not two; this went red.
     # Each reverted from a copy.
+    #
+    # The loan's group is the group of leaves: the registration's group
+    # holds its age branch in its body, so the deadline ends the document,
+    # and a body holding a container carries no ports.
     test "a group of leaves carries its two ports where its steps stand, and no other does" do
-      verify = find(graph("patron_registration"), "blk_pr_verify")
-      x = 12 + 12 + 206 / 2
+      on_loan = find(graph("library_loan"), "blk_ll_on_loan")
+      x = 12 + 12 + 150 / 2
 
-      assert verify["layoutOptions"]["org.eclipse.elk.portConstraints"] == "FIXED_POS"
+      assert on_loan["layoutOptions"]["org.eclipse.elk.portConstraints"] == "FIXED_POS"
 
       assert [
-               %{"id" => "blk_pr_verify#in", "x" => ^x, "layoutOptions" => north},
-               %{"id" => "blk_pr_verify#out", "x" => ^x, "layoutOptions" => south}
-             ] = verify["ports"]
+               %{"id" => "blk_ll_on_loan#in", "x" => ^x, "layoutOptions" => north},
+               %{"id" => "blk_ll_on_loan#out", "x" => ^x, "layoutOptions" => south}
+             ] = on_loan["ports"]
 
       assert north == %{"org.eclipse.elk.port.side" => "NORTH"}
       assert south == %{"org.eclipse.elk.port.side" => "SOUTH"}
 
-      authz = find(graph("card_processing"), "blk_cp_authz")
-      refute Map.has_key?(authz, "ports")
-      refute Map.has_key?(authz["layoutOptions"], "org.eclipse.elk.portConstraints")
+      for {key, id} <- [
+            {"card_processing", "blk_cp_authz"},
+            {"patron_registration", "blk_pr_verify"}
+          ] do
+        group = find(graph(key), id)
+        refute Map.has_key?(group, "ports"), id
+        refute Map.has_key?(group["layoutOptions"], "org.eclipse.elk.portConstraints"), id
+      end
 
       for fixture <- Charts.fixtures(),
           node <- walk(PlanMap.graph(view_model(fixture))),
