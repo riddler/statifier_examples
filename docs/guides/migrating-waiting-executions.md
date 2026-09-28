@@ -23,7 +23,8 @@ answers an error, and also every count and class quoted below that comes
 out otherwise: the publish warnings, the mapped and unmapped states, both
 diffs, each batch and each count. `migrate_batch/3` answers
 `{:ok, report}` even when it refused every loan, so the task checks each
-of those values itself.
+of those values itself. The two content hashes are shown shortened and
+are not checked: they change whenever the compiled SCXML does.
 
 At the end it cancels the two loans it opened, because the batch below
 takes every waiting execution on a chart, not only the ones one run

@@ -93,10 +93,14 @@ defmodule StatifierExamples.MigrateWaitingTest do
 
   # Sabotage: made `expect/3` answer `:ok` whatever the counts; this went
   # red on its first row. Reverted from a copy.
+  # Sabotage: made `expect/3` ignore the `:skipped` key; the `skipped: 1`
+  # row went red. Reverted from a copy.
   test "each step is held to the counts the guide shows for it" do
     report = fn counts -> %{from: "a", to: "b", dry_run: false, results: [], counts: counts} end
 
     for {step, answer, expected} <- [
+          {:applied, report.(%{migrated: 2, refused: 0, parked: 0, skipped: 1}),
+           %{migrated: 2, refused: 0, parked: 0, skipped: 0}},
           {:published, %{warnings: 1}, %{warnings: 0}},
           {:mapped, %{kept: 21, unmapped: 0}, %{kept: 16, unmapped: 5}},
           {:diff, %{class: :mapped, unresolved: 0}, %{class: :breaking, unresolved: 0}},

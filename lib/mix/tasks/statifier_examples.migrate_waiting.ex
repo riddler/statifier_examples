@@ -96,11 +96,12 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
          diff_plan = diff(old, new, forward.states),
          :ok <- expect(:diff, diff_plan, %{class: :breaking, unresolved: 0}),
          {:ok, preview_blocks} <- step(:dry_run, batch(store, blocks_only, old, new, true)),
-         :ok <- expect(:dry_run, preview_blocks, %{would_migrate: 0, would_refuse: n}),
+         :ok <-
+           expect(:dry_run, preview_blocks, %{would_migrate: 0, would_refuse: n, skipped: 0}),
          {:ok, preview} <- step(:dry_run, batch(store, forward, old, new, true)),
-         :ok <- expect(:dry_run, preview, %{would_migrate: n, would_refuse: 0}),
+         :ok <- expect(:dry_run, preview, %{would_migrate: n, would_refuse: 0, skipped: 0}),
          {:ok, applied} <- step(:applied, batch(store, forward, old, new, false)),
-         :ok <- expect(:applied, applied, %{migrated: n, refused: 0, parked: 0}),
+         :ok <- expect(:applied, applied, %{migrated: n, refused: 0, parked: 0, skipped: 0}),
          {:ok, drained} <- step(:drained, Executions.executions_on(store, old.hash)),
          :ok <- expect(:drained, drained, %{active: 0, needs_migration: 0}),
          {:ok, landed} <- step(:drained, Executions.executions_on(store, new.hash)),
@@ -115,9 +116,10 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
              completed_plan(new, old, reverse_map, [{:remove, "damaged"}, {:remove, "repair"}])
            ),
          {:ok, reverse_preview} <- step(:rollback, batch(store, reverse, new, old, true)),
-         :ok <- expect(:rollback, reverse_preview, %{would_migrate: n, would_refuse: 0}),
+         :ok <-
+           expect(:rollback, reverse_preview, %{would_migrate: n, would_refuse: 0, skipped: 0}),
          {:ok, rolled_back} <- step(:rollback, batch(store, reverse, new, old, false)),
-         :ok <- expect(:rollback, rolled_back, %{migrated: n, refused: 0, parked: 0}),
+         :ok <- expect(:rollback, rolled_back, %{migrated: n, refused: 0, parked: 0, skipped: 0}),
          :ok <- step(:tidied, tidy(store, loans)) do
       {:ok,
        [
