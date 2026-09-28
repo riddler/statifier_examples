@@ -18,7 +18,10 @@ step against this app's own database:
     mix statifier_examples.migrate_waiting
 
 It prints one line per step. If a step does not answer as this guide says,
-it stops with a non-zero exit and names the step. At the end it cancels
+it stops with a non-zero exit and names the step. That covers a call that
+answers an error, and also a batch that answers with other counts than the
+ones quoted below: `migrate_batch/3` answers `{:ok, report}` even when it
+refused every loan, so the task checks each report's counts itself. At the end it cancels
 the two loans it opened, because the batch below takes every waiting
 execution on a chart, not only the ones one run opened. The next run
 starts from an empty chart.

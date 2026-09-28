@@ -12,7 +12,7 @@ defmodule StatifierExamples.MigrateWaitingTest do
   alias Ecto.Adapters.SQL.Sandbox
   alias Mix.Tasks.StatifierExamples.MigrateWaiting
   alias StatifierExamples.{FirstWorkflow, Repo}
-  alias StatifierPersistence.Storage
+  alias StatifierPersistence.{Driver, Storage}
 
   setup do
     :ok = Sandbox.checkout(Repo)
@@ -65,6 +65,61 @@ defmodule StatifierExamples.MigrateWaitingTest do
 
     assert Storage.content_hash_query_supported?(store)
     refute Storage.chart_retirement_supported?(store)
+  end
+
+  # Sabotage: removed the `expect/3` check after the blocks-only dry run;
+  # the walk went on past a preview of three loans and this went red.
+  # Reverted from a copy.
+  test "a batch that answers with other counts than the guide's stops the walk at its step" do
+    assert {:ok, lines} = MigrateWaiting.walk(loans: ["loan_first_1", "loan_first_2"])
+    ["waiting      2 loan(s) on revision 1, " <> rest] = Enum.filter(lines, &(&1 =~ ~r/^waiting/))
+    [old_hash | _] = String.split(rest, ",")
+
+    # A third loan waiting on revision 1 that this walk did not open: every
+    # batch now answers `{:ok, report}` with three executions in it.
+    store = FirstWorkflow.store()
+    {:ok, chart} = Storage.fetch_chart(store, old_hash)
+    {:ok, machine} = Statifier.compile(chart.chart_blob)
+
+    assert {:ok, %{status: :active}, _state} =
+             store |> FirstWorkflow.driver(machine) |> Driver.create("loan_not_this_run")
+
+    assert {:error, :dry_run, {:unexpected, %{would_refuse: 3, would_migrate: 0}}} =
+             MigrateWaiting.walk(loans: ["loan_second_1", "loan_second_2"])
+  end
+
+  # Sabotage: made `expect/3` answer `:ok` whatever the counts; this went
+  # red on its first row. Reverted from a copy.
+  test "each step is held to the counts the guide shows for it" do
+    report = fn counts -> %{from: "a", to: "b", dry_run: false, results: [], counts: counts} end
+
+    for {step, answer, expected} <- [
+          {:dry_run, report.(%{would_migrate: 1, would_refuse: 1, skipped: 0}),
+           %{would_migrate: 0, would_refuse: 2}},
+          {:dry_run, report.(%{would_migrate: 1, would_refuse: 1, skipped: 0}),
+           %{would_migrate: 2, would_refuse: 0}},
+          {:applied, report.(%{migrated: 0, refused: 2, parked: 0, skipped: 0}),
+           %{migrated: 2, refused: 0, parked: 0}},
+          {:drained, %{active: 1, needs_migration: 0, completed: 0},
+           %{active: 0, needs_migration: 0}},
+          {:drained, %{active: 2, needs_migration: 1, completed: 0},
+           %{active: 2, needs_migration: 0}},
+          {:timers, %{scheduled: 1}, %{scheduled: 2}},
+          {:rollback, report.(%{migrated: 0, refused: 0, parked: 2, skipped: 0}),
+           %{migrated: 2, refused: 0, parked: 0}}
+        ] do
+      counts = Map.get(answer, :counts, answer)
+
+      assert {:error, ^step, {:unexpected, ^counts}} =
+               MigrateWaiting.expect(step, answer, expected)
+    end
+
+    assert :ok =
+             MigrateWaiting.expect(
+               :applied,
+               report.(%{migrated: 2, refused: 0, parked: 0, skipped: 0}),
+               %{migrated: 2, refused: 0, parked: 0}
+             )
   end
 
   # Sabotage: made the task print none of the lines; this went red.
