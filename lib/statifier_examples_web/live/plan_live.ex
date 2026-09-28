@@ -1012,7 +1012,7 @@ defmodule StatifierExamplesWeb.PlanLive do
     view_model = ViewModel.build(document, palette, [])
     graph = PlanMap.graph(view_model)
     described = Describe.outline(document, palette, [])
-    descriptions = PlanDescription.elements(graph, view_model, described)
+    descriptions = PlanDescription.elements(graph, view_model, described, palette)
 
     outline =
       view_model

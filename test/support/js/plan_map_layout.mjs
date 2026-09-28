@@ -9,6 +9,7 @@
 // "error"), the drawn markup, every box and edge of the SAME layout that
 // markup was drawn from in absolute coordinates, `interrupts` - every
 // interrupt path in the markup, with its dash and its path data as drawn -
+// `timers`, every timer path the same way, with its dash pattern -
 // `marks`, each block's timer marks as the markup carries them,
 // `bands` - each branch's band and fork mark as drawn - `rejoins`, every
 // rejoin path with its join dot, and `headers`, the lines under each
@@ -25,7 +26,7 @@
 // circle or path a real click lands on), which reach the element by walking
 // up exactly as a browser's `closest` does.
 import {readFileSync} from "node:fs"
-import {boxes, drawMap, edgesOf, interruptsOf, mapGesture} from "../../../assets/js/plan_map.mjs"
+import {boxes, drawMap, edgesOf, interruptsOf, mapGesture, timersOf} from "../../../assets/js/plan_map.mjs"
 
 const graph = JSON.parse(readFileSync(process.argv[2], "utf8"))
 const editable = process.argv[3] === "editable"
@@ -53,6 +54,7 @@ if (laid) {
     })
   }
   for (const edge of interruptsOf(laid)) drawnPoints[edge.id] = edge
+  for (const edge of timersOf(laid)) drawnPoints[edge.id] = edge
 }
 
 // A small element tree over the drawn markup: every tag with its data
@@ -171,6 +173,23 @@ for (const [path] of target.innerHTML.matchAll(/<path [^>]*data-map-edge-kind="i
   })
 }
 
+// A timer edge is read off the markup the same way: a path marked
+// data-map-edge-kind="timer", with its dash pattern and its points as
+// drawn.
+const timers = []
+for (const [path] of target.innerHTML.matchAll(/<path [^>]*data-map-edge-kind="timer"[^>]*>/g)) {
+  const attr = (name) => (path.match(new RegExp(`\\s${name}="([^"]*)"`)) || [])[1]
+  const id = unescape(attr("data-map-edge"))
+  const edge = drawnPoints[id]
+  timers.push({
+    id,
+    dash: ((attr("style") || "").match(/stroke-dasharray:\s*([\d. ]+)/) || [])[1] || null,
+    d: attr("d"),
+    source: edge ? edge.source : null,
+    target: edge ? edge.target : null,
+  })
+}
+
 // Every block's timer marks: the data-map-mark of every element inside
 // the block's own group, keyed by the block's id.
 const marks = {}
@@ -227,4 +246,4 @@ for (const [, id, rest] of html.matchAll(/data-map-node="([^"]*)" data-map-kind=
     .map((m) => unescape(m[1]))
 }
 
-process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, bands, rejoins, headers, captions, gestures, childGestures, starts, ends, endEdges}))
+process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, timers, marks, bands, rejoins, headers, captions, gestures, childGestures, starts, ends, endEdges}))

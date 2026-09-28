@@ -78,10 +78,10 @@ defmodule StatifierExamplesWeb.PlanMap do
     end"); a branch that ends a nested flow needs none, since the flow it
     ends is itself joined to what follows it.
   - **The band carries a caption.** The branch's node carries `caption`,
-    `StatifierExamplesWeb.TypeExplanation.caption/1` of its type, and
-    `caption_width`, the room the caption and the fork mark need; the hook
-    writes the caption inside the band, after the fork mark, and never
-    draws the band narrower than that room.
+    `caption/1` of its type (see "Captions"), and `caption_width`, the
+    room the caption and the fork mark need; the hook writes the caption
+    inside the band, after the fork mark, and never draws the band
+    narrower than that room.
 
   ## The start
 
@@ -152,9 +152,21 @@ defmodule StatifierExamplesWeb.PlanMap do
     to bottom. Its minimum size is written width first, the documented
     way round: a layout of its own is not transposed (see "Sizes").
   - **The column carries a caption.** The rules' slot node carries
-    `caption`, `TypeExplanation.caption/1` of the group's type, which the
-    hook draws under the column's label. The caption is the host's fixed
-    text and lives in that one module, so it changes in one place.
+    `caption`, `caption/1` of the group's type (see "Captions"), which the
+    hook draws under the column's label.
+
+  ## Captions
+
+  A structural container the map draws apart says what its type does in
+  one line: a branch on its band, a group on its rules column, under the
+  column's label. Nothing else carries a caption, and a leaf never does.
+  The words are the type's own: `caption/1` is the first sentence of
+  `StatifierBlocks.BlockType.explain/1`, the paragraph the package's
+  optional `explain/0` callback answers, and the description region shows
+  the whole paragraph. A caption is one line, so a first sentence wider
+  than a leaf's widest line is cut at a word and ends in "...": the
+  caption is the one text on the map that is cut, because the region
+  carries all of it.
 
   ## Interrupt edges
 
@@ -172,14 +184,35 @@ defmodule StatifierExamplesWeb.PlanMap do
   `core.resumable_group` - because the map is built from the view model
   alone; the test beside this module holds the two equal for every fixture.
 
+  ## Timer edges
+
+  A send with a delay arms an event that arrives later, and the interrupt
+  rule or the wait that names that event is what it arms. The graph's root
+  carries those as `timers`, one per delayed send and rule or await naming
+  its event, sends in reading order and each send's targets in reading
+  order, each with its `event` and its `delay` as the send's config holds
+  it; the hook draws each one dotted from the send's box to the rule's or
+  the await's, labelled with the delay. Like the interrupt edges they are
+  handed to the hook beside the graph's `edges`, not among them, and drawn
+  after the layout, so a timer edge never moves a box. They are the edges
+  `StatifierBlocks.Describe.outline/3` answers with `kind: :timer`, read
+  here off the same view model - only blocks the palette resolved, and
+  nothing on a drafts shelf - and the test beside this module holds the two
+  equal for every fixture. A timer edge is not a transition: it says which
+  block hears the event a send arms, so it is dotted where an interrupt
+  edge is dashed.
+
   ## Timer marks
 
   Two blocks wait on a clock in different ways, and a box says which with a
   small mark at its top right: a `core.await` carries the wait mark (it
   waits, in its own step, for an event or its timeout), and a `core.send`
   with a delay carries the clock mark (the event it arms fires later, after
-  the step has moved on). A send with no delay carries neither. A mark is
-  drawn inside its block's box, so a click on it is a click on the box.
+  the step has moved on). A delay counts when
+  `StatifierBlocks.Core.Duration.duration?/1` accepts it, the test the
+  send's own sentence and the timer edges use; a send with no delay
+  carries neither mark. A mark is drawn inside its block's box, so a click
+  on it is a click on the box.
 
   ## The happy path runs straight
 
@@ -243,11 +276,14 @@ defmodule StatifierExamplesWeb.PlanMap do
   at least that wide whatever its children need.
   """
 
+  alias StatifierBlocks.BlockType
+  alias StatifierBlocks.Core.Duration
+  alias StatifierBlocks.Palette
+  alias StatifierBlocks.Shelf
   alias StatifierBlocks.ViewModel
   alias StatifierBlocks.ViewModel.Node
   alias StatifierBlocks.ViewModel.Slot
   alias StatifierExamplesWeb.EventPhrasing
-  alias StatifierExamplesWeb.TypeExplanation
 
   @char_width 7
   @line_height 16
@@ -259,6 +295,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   @mark_room 22
   @group_types ["core.group", "core.resumable_group"]
   @branch_type "core.branch"
+  @captioned_types [@branch_type | @group_types]
+  @timer_targets ["core.on_event", "core.await"]
   @band_room 24
   @done "done"
   @abandon "abandon"
@@ -297,7 +335,10 @@ defmodule StatifierExamplesWeb.PlanMap do
   """
   @type graph_node :: %{required(String.t()) => term()}
 
-  @typedoc "The whole graph: the ELK root, with the document's root block as its one child."
+  @typedoc """
+  The whole graph: the ELK root, with the document's root block as its one
+  child, and `timers`, the timer edges the hook draws after the layout.
+  """
   @type t :: %{required(String.t()) => term()}
 
   @doc """
@@ -308,7 +349,7 @@ defmodule StatifierExamplesWeb.PlanMap do
   of them.
   """
   @spec graph(ViewModel.t()) :: t()
-  def graph(%ViewModel{root: %Node{} = root}) do
+  def graph(%ViewModel{root: %Node{} = root} = view_model) do
     %{
       "id" => "plan-map",
       "layoutOptions" => @root_options,
@@ -316,6 +357,7 @@ defmodule StatifierExamplesWeb.PlanMap do
       "edges" => []
     }
     |> put_start(root)
+    |> put_timers(view_model)
   end
 
   @doc """
@@ -348,6 +390,34 @@ defmodule StatifierExamplesWeb.PlanMap do
 
     own ++ Enum.flat_map(Map.get(node, "children", []), &interrupts/1)
   end
+
+  @doc """
+  Every timer edge in `graph`, in the order it is drawn, as
+  `%{"from" => send, "to" => rule_or_await, "event" => event, "delay" => delay}`.
+  """
+  @spec timers(t()) :: [%{String.t() => String.t()}]
+  def timers(%{} = graph) do
+    for %{"sources" => [from], "targets" => [to], "event" => event, "delay" => delay} <-
+          Map.get(graph, "timers", []),
+        do: %{"from" => from, "to" => to, "event" => event, "delay" => delay}
+  end
+
+  @doc """
+  The one-line caption the map draws for a block of `type`, or `nil`: the
+  first sentence of the type's explanation for a branch and the two group
+  types, cut at a word to one line; see the moduledoc's "Captions".
+  """
+  @spec caption(String.t()) :: String.t() | nil
+  def caption(type) when type in @captioned_types do
+    with {:ok, ref} <- Palette.fetch(Palette.core(), type),
+         text when is_binary(text) <- BlockType.explain(ref) do
+      text |> first_sentence() |> one_line()
+    else
+      _unexplained -> nil
+    end
+  end
+
+  def caption(type) when is_binary(type), do: nil
 
   @doc "The text an empty slot's marker carries."
   @spec empty_text() :: String.t()
@@ -438,7 +508,7 @@ defmodule StatifierExamplesWeb.PlanMap do
       do:
         Map.merge(graph_node, %{
           "band" => true,
-          "caption" => TypeExplanation.caption(node.type),
+          "caption" => caption(node.type),
           "caption_width" => band_width(node)
         }),
       else: graph_node
@@ -448,7 +518,7 @@ defmodule StatifierExamplesWeb.PlanMap do
   # caption, at the map's estimate.
   @spec band_width(Node.t()) :: non_neg_integer()
   defp band_width(%Node{} = node) do
-    case TypeExplanation.caption(node.type) do
+    case caption(node.type) do
       nil -> 0
       caption -> @fork_room + text_width([caption])
     end
@@ -490,7 +560,7 @@ defmodule StatifierExamplesWeb.PlanMap do
   # What a rules column says under its title: its label, then the caption.
   @spec column_lines(Node.t(), Slot.t()) :: [String.t()]
   defp column_lines(%Node{} = node, %Slot{} = slot) do
-    case TypeExplanation.caption(node.type) do
+    case caption(node.type) do
       nil -> wrap(slot_header(slot))
       caption -> wrap(slot_header(slot)) ++ [caption]
     end
@@ -655,17 +725,87 @@ defmodule StatifierExamplesWeb.PlanMap do
   defp mark(%Node{type: "core.send"} = node), do: if(delayed?(node), do: "clock")
   defp mark(%Node{}), do: nil
 
-  # Whether a send's `delay` holds anything but blank, as its form reads it.
+  # Whether a send's `delay` is a duration, as its form reads it: the test
+  # the send's sentence and `StatifierBlocks.Describe`'s timer edges use.
   @spec delayed?(Node.t()) :: boolean()
-  defp delayed?(%Node{form: %{fields: fields}}) do
-    case Enum.find(fields, &(&1.key == "delay")) do
-      %{value: value} when is_binary(value) -> String.trim(value) != ""
-      %{value: value} -> not is_nil(value)
-      nil -> false
+  defp delayed?(%Node{} = node), do: node |> field("delay") |> Duration.duration?()
+
+  # A field's value off a block's form, or `nil`.
+  @spec field(Node.t(), String.t()) :: term()
+  defp field(%Node{form: %{fields: fields}}, key) do
+    case Enum.find(fields, &(&1.key == key)) do
+      %{value: value} -> value
+      nil -> nil
     end
   end
 
-  defp delayed?(%Node{}), do: false
+  defp field(%Node{}, _key), do: nil
+
+  # ------------------------------------------------------------ timer edges
+
+  # One timer edge per delayed send and interrupt rule or await naming its
+  # event, sends in reading order and then targets; see the moduledoc's
+  # "Timer edges". A block the palette cannot resolve, or one on a drafts
+  # shelf, takes part in none.
+  @spec put_timers(t(), ViewModel.t()) :: t()
+  defp put_timers(graph, %ViewModel{} = view_model) do
+    blocks = timer_parties(view_model)
+
+    targets =
+      for %Node{type: type} = node when type in @timer_targets <- blocks,
+          event = event(node),
+          do: {node.block_id, event}
+
+    timers =
+      for %Node{type: "core.send"} = send <- blocks,
+          delayed?(send),
+          event = event(send),
+          {target, ^event} <- targets,
+          do: timer(send, target, event)
+
+    if timers == [], do: graph, else: Map.put(graph, "timers", timers)
+  end
+
+  # The blocks that can take part in a timer edge, in reading order:
+  # resolved, and neither a drafts shelf nor inside one. The outline is a
+  # pre-order walk, so a block is on a shelf exactly when a shelf opened at
+  # a lesser depth has not yet been left.
+  @spec timer_parties(ViewModel.t()) :: [Node.t()]
+  defp timer_parties(%ViewModel{} = view_model) do
+    view_model
+    |> ViewModel.outline()
+    |> Enum.map_reduce(nil, fn {%Node{type: type} = node, depth, _kind}, shelf ->
+      shelf = if shelf != nil and depth > shelf, do: shelf, else: nil
+      shelf = if shelf == nil and Shelf.shelf_type?(type), do: depth, else: shelf
+      {if(shelf == nil and node.status == :ok, do: node), shelf}
+    end)
+    |> elem(0)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  # A block's `event`, when it is a non-blank string.
+  @spec event(Node.t()) :: String.t() | nil
+  defp event(%Node{} = node) do
+    case field(node, "event") do
+      event when is_binary(event) -> if String.trim(event) == "", do: nil, else: event
+      _none -> nil
+    end
+  end
+
+  @spec timer(Node.t(), String.t(), String.t()) :: map()
+  defp timer(%Node{block_id: from} = send, to, event) do
+    delay = field(send, "delay")
+    id = "#{from}->#{to}/timer"
+
+    %{
+      "id" => id,
+      "sources" => [from],
+      "targets" => [to],
+      "kind" => "timer",
+      "event" => event,
+      "delay" => delay
+    }
+  end
 
   # -------------------------------------------------------- interrupt edges
 
@@ -817,7 +957,7 @@ defmodule StatifierExamplesWeb.PlanMap do
   # A group's rules column carries its caption; see the moduledoc.
   @spec put_caption(graph_node(), String.t(), Node.t()) :: graph_node()
   defp put_caption(graph_node, "rail", %Node{type: type}) when type in @group_types do
-    case TypeExplanation.caption(type) do
+    case caption(type) do
       nil -> graph_node
       caption -> Map.put(graph_node, "caption", caption)
     end
@@ -972,6 +1112,37 @@ defmodule StatifierExamplesWeb.PlanMap do
     widest * @char_width + @leaf_padding
   end
 
+  # The first sentence of a paragraph: up to the first full stop that ends
+  # a word and is followed by a space, or the whole paragraph.
+  @spec first_sentence(String.t()) :: String.t()
+  defp first_sentence(text) do
+    case Regex.run(~r/^.*?\w[.!?](?=\s)/u, text) do
+      [sentence] -> sentence
+      nil -> text
+    end
+  end
+
+  # `text` on one line no wider than a leaf holds: whole, or cut at a word
+  # with "..." after it; see the moduledoc's "Captions".
+  @spec one_line(String.t()) :: String.t()
+  defp one_line(text) do
+    per_line = div(@leaf_max_width - @leaf_padding, @char_width)
+
+    if String.length(text) <= per_line,
+      do: text,
+      else: fit(String.split(text, ~r/\s+/, trim: true), "", per_line - 3) <> "..."
+  end
+
+  # The longest run of `words` from the front, after `line`, that is no
+  # longer than `room`.
+  @spec fit([String.t()], String.t(), non_neg_integer()) :: String.t()
+  defp fit([], line, _room), do: line
+
+  defp fit([word | rest], line, room) do
+    next = if line == "", do: word, else: "#{line} #{word}"
+    if String.length(next) <= room, do: fit(rest, next, room), else: line
+  end
+
   # The lines under a box's title: `text` wrapped, or none when it only
   # repeats the title.
   @spec under(String.t(), String.t()) :: [String.t()]
@@ -980,7 +1151,7 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   # Words onto lines no wider than a leaf holds. A single word longer than a
   # line keeps its own line rather than being cut: nothing on the map
-  # truncates.
+  # truncates but a caption (see the moduledoc's "Captions").
   @spec wrap(String.t()) :: [String.t()]
   defp wrap(text) do
     per_line = div(@leaf_max_width - @leaf_padding, @char_width)

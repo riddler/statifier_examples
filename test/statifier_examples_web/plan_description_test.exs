@@ -2,7 +2,9 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
   use ExUnit.Case, async: true
 
   alias StatifierBlocks.Block
+  alias StatifierBlocks.BlockType
   alias StatifierBlocks.Core.Await
+  alias StatifierBlocks.Core.Group
   alias StatifierBlocks.Core.Wait
   alias StatifierBlocks.Describe
   alias StatifierBlocks.Document
@@ -11,13 +13,12 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
   alias StatifierExamples.Charts
   alias StatifierExamplesWeb.PlanDescription
   alias StatifierExamplesWeb.PlanMap
-  alias StatifierExamplesWeb.TypeExplanation
 
   # The library fixtures are the two teaching documents the region is read
   # against; between them every kind the map draws is drawn at least once.
   @library ["library_loan", "patron_registration"]
 
-  describe "elements/3" do
+  describe "elements/4" do
     # Every element the map draws has exactly one description, keyed by the
     # id the map draws it under - asked of every fixture, because a document
     # whose shape no other fixture has (a parallel, a composite, a drafts
@@ -175,7 +176,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert fact(body, "Group") == "Group (Run interruptible steps)"
 
       assert fact(body, "Steps") == [
-               "Send word that the registration week is up",
+               "In 7 days, send word that the registration week is up",
                "Wait until the email address is verified",
                ~s(Decide: When "child", otherwise),
                "Send word that the patron is welcomed"
@@ -404,7 +405,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
 
   describe "idle/4" do
     # Sabotage: counted the root among the steps; this went red. Reverted
-    # from a copy. Sabotage: cut the dashed arrow from the how-to-read
+    # from a copy. Sabotage: cut the dotted timer arrow from the how-to-read
+    # line; this went red. Reverted from a copy. Sabotage: cut the dashed arrow from the how-to-read
     # line; this went red. Reverted from a copy. Sabotage: cut the ring
     # from the how-to-read line; this went red. Reverted from a copy.
     test "the document: its name, description, what starts it, and its counts" do
@@ -419,6 +421,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert loan.explanation =~ "a dot inside a ring where it finishes"
       assert loan.explanation =~ "An hourglass marks a step that waits"
       assert loan.explanation =~ "a clock a message sent after a delay"
+      assert loan.explanation =~ "a dotted arrow, labelled with the delay"
       assert loan.explanation =~ "or point at the map"
       assert fact(loan, "What starts it") == "Starts when told to"
       assert fact(loan, "Listens for") == ["copy.returned", "copy.reported_lost"]
@@ -447,32 +450,108 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
     end
   end
 
-  describe "TypeExplanation" do
-    # The host's fixed text covers every core type the package ships.
+  describe "a block's explanation" do
+    # What a block's type does is the type's own paragraph, asked of
+    # `BlockType.explain/1` through the page's palette, for every block of
+    # every fixture: a core type's `explain/0`, a host type's palette
+    # description. No text of the host's own stands in for either.
     #
-    # Sabotage: deleted the "core.await" entry; this went red. Reverted from
-    # a copy.
-    test "has its own text for every core type" do
-      assert TypeExplanation.core_types() == Palette.core().types |> Map.keys() |> Enum.sort()
+    # Sabotage: made explain/2 answer the undescribed line for every
+    # resolved block; this went red. Reverted from a copy.
+    test "is the type's own explanation, through the palette, for every block" do
+      for fixture <- Charts.fixtures() do
+        view_model = ViewModel.build(fixture.document, Charts.palette(), [])
+        {_graph, descriptions, _idle} = described(fixture.key)
+
+        for %PlanDescription{kind: kind, id: id, explanation: explanation} <- descriptions,
+            kind in [:block, :rule] do
+          node = ViewModel.find_node(view_model, id)
+          {:ok, ref} = Palette.fetch(Charts.palette(), node.type)
+
+          assert explanation == BlockType.explain(ref), "#{fixture.key}: #{id}"
+        end
+      end
     end
 
-    # Sabotage: made described/1 hand back a blank description as it is;
+    # The registration's group reads the paragraph `core.group` declares,
+    # and a host type that declares none reads its palette description.
+    #
+    # Sabotage: made explain/2 look the type up in `Palette.core()` rather
+    # than the palette it is handed; the host type's line went missing and
     # this went red. Reverted from a copy.
-    test "falls back to the palette's description, then says so" do
-      host = %ViewModel.Node{
-        block_id: "x",
-        type: "myapp.example",
-        type_version: 1,
-        status: :ok,
-        entry: %{description: "Does a host thing."}
-      }
+    test "a core type reads its callback, a host type its palette description" do
+      assert by_id("patron_registration")["blk_pr_verify"].explanation == Group.explain()
 
-      assert TypeExplanation.explain(host) == "Does a host thing."
-      assert TypeExplanation.explain(%{host | entry: %{}}) =~ "no description"
-      assert TypeExplanation.explain(%{host | entry: %{description: " "}}) =~ "no description"
+      {:ok, fixture} = Charts.fixture("card_processing")
+      view_model = ViewModel.build(fixture.document, Charts.palette(), [])
+      node = ViewModel.find_node(view_model, "blk_cp_intake")
+      {:ok, ref} = Palette.fetch(Charts.palette(), node.type)
 
-      assert TypeExplanation.explain(%{host | status: {:unresolvable, :unknown_type}}) =~
-               "does not know"
+      refute Palette.declares?(ref, :explain, 0)
+      assert is_binary(node.entry.description) and node.entry.description != ""
+      assert by_id("card_processing")["blk_cp_intake"].explanation == node.entry.description
+    end
+
+    # A block the palette cannot resolve says so: the package has nothing
+    # to explain it with.
+    #
+    # Sabotage: dropped the unresolvable clause of explain/2; this went
+    # red. Reverted from a copy.
+    test "a block of a type the palette does not know says so" do
+      root =
+        Block.new("core.sequence",
+          id: "root",
+          slots: %{"body" => [Block.new("nowhere.unknown", id: "lost")]}
+        )
+
+      assert describe_root(root)["lost"].explanation =~ "does not know"
+    end
+  end
+
+  describe "timer edges" do
+    # The registration's deadline send arms the rule that abandons the
+    # registration: its dotted edge is described in the package's own line
+    # for it, with the event read as words, and names both ends, the event
+    # and the delay.
+    #
+    # Sabotage: made elements/4 leave the graph's timers out; this went
+    # red here and in the every-element test. Reverted from a copy.
+    test "the registration's deadline edge says which rule hears it, and when" do
+      id = "blk_pr_deadline->blk_pr_expired/timer"
+      assert %PlanDescription{kind: :timer} = timer = by_id("patron_registration")[id]
+      assert timer.title == "Timer"
+
+      assert timer.sentence ==
+               "In 7 days, the registration week is up reaches " <>
+                 "When the registration week is up, abandon"
+
+      assert timer.explanation =~ "dotted arrow"
+      assert fact(timer, "Sent by") == "In 7 days, send word that the registration week is up"
+      assert fact(timer, "Heard by") == "When the registration week is up, abandon"
+      assert fact(timer, "Event") == "registration.deadline"
+      assert fact(timer, "Delay") == "7d"
+    end
+
+    # The dotted edge's twin in words, for a reader who selects a row
+    # rather than points at the map: the send says what hears it, the rule
+    # which send arms it, and a block at neither end of a timer edge says
+    # neither.
+    #
+    # Sabotage: made timed/2 answer nothing; this went red. Reverted from
+    # a copy.
+    test "the send names what hears it, and the rule what arms it" do
+      described = by_id("patron_registration")
+
+      assert fact(described["blk_pr_deadline"], "Heard by") == [
+               "When the registration week is up, abandon"
+             ]
+
+      assert fact(described["blk_pr_expired"], "Armed by") == [
+               "In 7 days, send word that the registration week is up"
+             ]
+
+      assert fact(described["blk_pr_email"], "Heard by") == nil
+      assert fact(described["blk_pr_email"], "Armed by") == nil
     end
   end
 
@@ -485,7 +564,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
     graph = PlanMap.graph(view_model)
     outline = Describe.outline(document, Charts.palette(), [])
 
-    {graph, PlanDescription.elements(graph, view_model, outline),
+    {graph, PlanDescription.elements(graph, view_model, outline, Charts.palette()),
      PlanDescription.idle(document, graph, view_model, outline)}
   end
 
@@ -495,7 +574,9 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
     graph = PlanMap.graph(view_model)
     outline = Describe.outline(document, Charts.palette(), [])
 
-    graph |> PlanDescription.elements(view_model, outline) |> Map.new(&{&1.id, &1})
+    graph
+    |> PlanDescription.elements(view_model, outline, Charts.palette())
+    |> Map.new(&{&1.id, &1})
   end
 
   defp by_id(key) do
@@ -511,11 +592,12 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
     %{} |> module.config_schema() |> Enum.find(&(&1.key == key)) |> Map.fetch!(:label)
   end
 
-  # Every id the graph draws below its root: nodes, connectors and
-  # interrupt edges alike, and an edge the root itself carries.
+  # Every id the graph draws below its root: nodes, connectors, interrupt
+  # edges and timer edges alike, and an edge the root itself carries.
   defp graph_ids(%{"children" => children} = graph) do
     edges = graph |> Map.get("edges", []) |> Enum.map(& &1["id"])
-    (Enum.flat_map(children, &ids/1) ++ edges) |> Enum.sort()
+    timers = graph |> Map.get("timers", []) |> Enum.map(& &1["id"])
+    (Enum.flat_map(children, &ids/1) ++ edges ++ timers) |> Enum.sort()
   end
 
   defp ids(node) do

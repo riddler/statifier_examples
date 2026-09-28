@@ -1217,13 +1217,23 @@ defmodule StatifierExamples.MixProject do
   # card line of `core.sequence`, `core.group` and `core.await`, which now
   # reads as a sentence rather than as the label; the view-model and Plan
   # map pins here carry the new lines.
+  #
+  # 2026-09-28: the floor moves to `~> 0.37.0`, published, so the arm stays
+  # a Hex requirement; `mix.lock` moves only its `statifier_blocks` line.
+  # 0.37.0 is REQUIRED rather than tidy: the Plan map's captions and the
+  # description region read each type's explanation from
+  # `StatifierBlocks.BlockType.explain/1`, which 0.37.0 adds, and the map
+  # draws the `:timer` edges `StatifierBlocks.Describe` answers from it.
+  # The release's one visible change is the card line of a `core.send`
+  # with a delay, which now names the delay ("In 7 days, send ..."); the
+  # pins here carry the new lines.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.36.0"}
+        {:statifier_blocks, "~> 0.37.0"}
     end
   end
 

@@ -19,7 +19,6 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamplesWeb.PlanMap
-  alias StatifierExamplesWeb.TypeExplanation
 
   @driver Path.expand("../support/js/plan_map_layout.mjs", __DIR__)
 
@@ -165,6 +164,59 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
           refute path =~ "stroke-dasharray", "#{key}: #{path}"
         end
       end
+    end
+
+    # The registration's deadline send is drawn joined to the rule that
+    # abandons the registration on its event: one dotted path from the
+    # side of the send's box to the side of the rule's, labelled with the
+    # delay beside it, dotted in a pattern of its own so it reads apart
+    # from the dashed interrupt edges; and the loan, which sends nothing
+    # after a delay, draws none. Read off the markup's own path data.
+    #
+    # Sabotage: left timersOf out of renderSvg; this went red. Made
+    # drawTimer draw the interrupt's dash; this went red. Made timersOf end
+    # the edge on the rule's far side; this went red. Made drawTimer drop
+    # its label; this went red. Each reverted from a copy.
+    test "the registration draws its deadline timer edge dotted, with the delay",
+         %{tmp_dir: dir} do
+      id = "blk_pr_deadline->blk_pr_expired/timer"
+
+      %{
+        "drawn" => "map",
+        "boxes" => boxes,
+        "timers" => timers,
+        "interrupts" => interrupts,
+        "captions" => captions
+      } = run(dir, "patron_registration", library_graph("patron_registration"))
+
+      assert [%{"id" => ^id, "source" => "blk_pr_deadline", "target" => "blk_pr_expired"} = timer] =
+               timers
+
+      assert timer["dash"] == "2 3"
+      for interrupt <- interrupts, do: refute(interrupt["dash"] == timer["dash"])
+
+      [start | _rest] = points = path_points(timer["d"])
+      stop = List.last(points)
+      send = boxes["blk_pr_deadline"]
+      rule = boxes["blk_pr_expired"]
+
+      # The rule stands to the right of the send, in the rules column: the
+      # edge leaves the send's right side and enters the rule's left side.
+      assert rule["x"] >= send["x"] + send["width"]
+      assert_in_delta start.x, send["x"] + send["width"], 0.5
+      assert_in_delta start.y, send["y"] + send["height"] / 2, 0.5
+      assert_in_delta stop.x, rule["x"], 0.5
+      assert_in_delta stop.y, rule["y"] + rule["height"] / 2, 0.5
+
+      assert [%{"text" => "7d", "x" => x, "y" => y}] = captions[id]
+      [_start, bend | _rest] = points
+      assert x > bend.x and x < rule["x"]
+      assert y > min(start.y, stop.y) and y < max(start.y, stop.y) + 16
+
+      %{"drawn" => "map", "timers" => none} =
+        run(dir, "library_loan", library_graph("library_loan"))
+
+      assert none == []
     end
 
     # Every await box of both library fixtures carries the wait mark, the
@@ -686,8 +738,8 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
 
     # The rules column carries the group's caption on the line under its
     # label, above its first rule; the branch's band carries the branch's,
-    # inside the band and after the fork mark. Both are the host's one
-    # module's text.
+    # inside the band and after the fork mark. Both are the type's own
+    # explanation, cut to one line (`PlanMap.caption/1`).
     #
     # Sabotage: made drawNode leave a slot's caption out; this went red.
     # Made drawBand leave the band's caption out; this went red. Each
@@ -701,14 +753,14 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
 
         rules_id = "#{group}/interrupts"
         column = boxes[rules_id]
-        group_caption = TypeExplanation.caption("core.group")
+        group_caption = PlanMap.caption("core.group")
 
         assert [%{"text" => ^group_caption, "x" => x, "y" => y}] = captions[rules_id]
         assert x > column["x"] and x < column["x"] + column["width"], key
         assert y > column["y"] + 16 and y < boxes[first]["y"], key
 
         branch = branches[key]
-        branch_caption = TypeExplanation.caption("core.branch")
+        branch_caption = PlanMap.caption("core.branch")
         [band] = bands[branch]
 
         assert [%{"text" => ^branch_caption, "x" => bx, "y" => by}] = captions[branch]

@@ -11,6 +11,10 @@ defmodule StatifierExamplesWeb.PlanMapTest do
   use ExUnit.Case, async: true
 
   alias StatifierBlocks.Block
+  alias StatifierBlocks.Core.Branch
+  alias StatifierBlocks.Core.Duration
+  alias StatifierBlocks.Core.Group
+  alias StatifierBlocks.Core.ResumableGroup
   alias StatifierBlocks.Describe
   alias StatifierBlocks.Describe.Edge
   alias StatifierBlocks.Document
@@ -18,7 +22,6 @@ defmodule StatifierExamplesWeb.PlanMapTest do
   alias StatifierBlocks.ViewModel.Node
   alias StatifierExamples.Charts
   alias StatifierExamplesWeb.PlanMap
-  alias StatifierExamplesWeb.TypeExplanation
 
   @force "org.eclipse.elk.layered.crossingMinimization.forceNodeModelOrder"
   @consider "org.eclipse.elk.layered.considerModelOrder.strategy"
@@ -126,14 +129,14 @@ defmodule StatifierExamplesWeb.PlanMapTest do
   end
 
   describe "captions" do
-    # A group's rules column and a branch carry the host's one module's
-    # caption for their type, and nothing else on the map carries one.
+    # A group's rules column and a branch carry the caption for their type,
+    # and nothing else on the map carries one.
     #
     # Sabotage: made put_caption/3 caption every rail, not only a group's;
     # the card fixture's failure path came back captioned and this went
     # red. Made put_band/2 leave the caption off; this went red. Each
     # reverted from a copy.
-    test "only a group's rules column and a branch carry a caption, the host's own text" do
+    test "only a group's rules column and a branch carry a caption" do
       for fixture <- Charts.fixtures() do
         graph = PlanMap.graph(view_model(fixture))
 
@@ -141,11 +144,11 @@ defmodule StatifierExamplesWeb.PlanMapTest do
           for node <- walk(graph),
               node["kind"] == "block",
               type = ViewModel.find_node(view_model(fixture), node["id"]).type,
-              TypeExplanation.caption(type) != nil,
+              PlanMap.caption(type) != nil,
               into: %{} do
             if node["band"],
-              do: {node["id"], TypeExplanation.caption(type)},
-              else: {"#{node["id"]}/interrupts", TypeExplanation.caption(type)}
+              do: {node["id"], PlanMap.caption(type)},
+              else: {"#{node["id"]}/interrupts", PlanMap.caption(type)}
           end
 
         captioned =
@@ -153,9 +156,37 @@ defmodule StatifierExamplesWeb.PlanMapTest do
 
         assert captioned == expected, fixture.key
       end
+    end
 
-      assert find(graph("library_loan"), "blk_ll_on_loan/interrupts")["caption"] ==
-               "leave the group when they happen"
+    # A caption is the type's own explanation - the first sentence of
+    # `BlockType.explain/1` - on one line: whole where it fits, cut at a
+    # word and ended with "..." where it does not. Only a branch and the
+    # two groups have one; a leaf never does.
+    #
+    # Sabotage: made caption/1 answer the whole paragraph; this went red.
+    # Made fit/3 cut the last word short rather than leave it out; this
+    # went red on the group. Each reverted from a copy.
+    test "a caption is the first sentence of the type's explanation, on one line" do
+      per_line = div(260 - 24, 7)
+
+      assert PlanMap.caption("core.branch") == "A branch picks one path."
+      assert String.starts_with?(Branch.explain(), "A branch picks one path. ")
+
+      for {type, module} <- [
+            {"core.group", Group},
+            {"core.resumable_group", ResumableGroup}
+          ] do
+        caption = PlanMap.caption(type)
+        [sentence | _rest] = String.split(module.explain(), ". ", parts: 2)
+        cut = String.trim_trailing(caption, "...")
+
+        assert String.length(caption) <= per_line, type
+        assert String.ends_with?(caption, "..."), type
+        assert String.starts_with?(sentence <> " ", cut <> " "), type
+      end
+
+      for type <- ["core.send", "core.await", "core.on_event", "core.sequence", "myapp.intake"],
+          do: assert(PlanMap.caption(type) == nil, type)
     end
   end
 
@@ -252,6 +283,108 @@ defmodule StatifierExamplesWeb.PlanMapTest do
 
         assert PlanMap.interrupts(PlanMap.graph(view_model(fixture))) == described, fixture.key
       end
+    end
+
+    # The map's timer edges are the outline's `:timer` edges, for every
+    # fixture: each delayed send to each rule or await naming its event,
+    # in the outline's order, with the event and the delay.
+    #
+    # No fixture sends an undelayed event a rule or a wait names, so the
+    # delay filter is pinned by the inline document below.
+    test "every fixture's timer edges are Describe's" do
+      for fixture <- Charts.fixtures() do
+        described =
+          for %Edge{kind: :timer, from: {:block, from}, to: {:block, to}} = edge <-
+                Describe.outline(fixture.document, Charts.palette(), []).edges do
+            %{"from" => from, "to" => to, "event" => edge.event, "delay" => edge.delay}
+          end
+
+        assert PlanMap.timers(PlanMap.graph(view_model(fixture))) == described, fixture.key
+      end
+    end
+
+    # The registration's deadline send reaches the one rule that abandons
+    # the registration on its event, seven days on.
+    test "the registration's deadline send reaches its deadline rule" do
+      assert PlanMap.timers(graph("patron_registration")) == [
+               %{
+                 "from" => "blk_pr_deadline",
+                 "to" => "blk_pr_expired",
+                 "event" => "registration.deadline",
+                 "delay" => "7d"
+               }
+             ]
+
+      assert PlanMap.timers(graph("library_loan")) == []
+    end
+
+    # A send with no delay arms nothing for later, so it draws no timer
+    # edge to the wait that names its event, while a delayed one does; the
+    # outline agrees.
+    #
+    # Sabotage: made put_timers/2 pair every send, delayed or not; this
+    # went red. Reverted from a copy.
+    test "only a delayed send draws a timer edge" do
+      heard = Block.new("core.await", id: "heard", config: %{"event" => "x.due"})
+
+      root =
+        Block.new("core.sequence",
+          id: "root",
+          slots: %{
+            "body" => [
+              Block.new("core.send", id: "now", config: %{"event" => "x.due"}),
+              Block.new("core.send", id: "later", config: %{"event" => "x.due", "delay" => "1h"}),
+              heard
+            ]
+          }
+        )
+
+      document = Document.new(root)
+      graph = document |> ViewModel.build(Charts.palette(), []) |> PlanMap.graph()
+
+      described =
+        for %Edge{kind: :timer, from: {:block, from}, to: {:block, to}} <-
+              Describe.outline(document, Charts.palette(), []).edges,
+            do: {from, to}
+
+      assert described == [{"later", "heard"}]
+      assert Enum.map(PlanMap.timers(graph), &{&1["from"], &1["to"]}) == described
+    end
+
+    # A send on the drafts shelf arms nothing, and neither is a rule there
+    # heard: a shelved block takes part in no timer edge, as in Describe.
+    #
+    # Sabotage: made timer_parties/1 ignore the shelf; this went red.
+    # Reverted from a copy.
+    test "a delayed send or a rule on the drafts shelf draws no timer edge" do
+      send = fn id ->
+        Block.new("core.send", id: id, config: %{"event" => "x.due", "delay" => "1h"})
+      end
+
+      heard = Block.new("core.await", id: "heard", config: %{"event" => "x.due"})
+
+      root =
+        Block.new("core.sequence",
+          id: "root",
+          slots: %{
+            "body" => [
+              send.("live"),
+              heard,
+              Block.new("core.drafts", id: "shelf", slots: %{"body" => [send.("parked")]})
+            ]
+          }
+        )
+
+      document = Document.new(root)
+      graph = document |> ViewModel.build(Charts.palette(), []) |> PlanMap.graph()
+
+      described =
+        for %Edge{kind: :timer, from: {:block, from}, to: {:block, to}} <-
+              Describe.outline(document, Charts.palette(), []).edges,
+            do: {from, to}
+
+      assert described == [{"live", "heard"}]
+      assert Enum.map(PlanMap.timers(graph), &{&1["from"], &1["to"]}) == described
     end
 
     # Sabotage: made put_interrupts/2 take the group's last drawn child as
@@ -844,8 +977,8 @@ defmodule StatifierExamplesWeb.PlanMapTest do
 
   defp expected_mark(%Node{type: "core.send", form: %{fields: fields}}) do
     case Enum.find(fields, &(&1.key == "delay")) do
-      %{value: delay} when is_binary(delay) and delay != "" -> "clock"
-      _undelayed -> nil
+      %{value: delay} -> if Duration.duration?(delay), do: "clock"
+      nil -> nil
     end
   end
 

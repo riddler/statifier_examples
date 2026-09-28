@@ -26,7 +26,14 @@ defmodule StatifierExamplesWeb.PlanDescription do
   | the interrupt rules that can leave it | the outline's `:interrupt` edges |
   | what an arm goes to | the outline's `:branch` edges |
   | what a connector carries | the outline's `:sequence` edge between the same two blocks |
-  | what a type is for | `StatifierExamplesWeb.TypeExplanation` |
+  | what a timer edge says, and what a send arms or a rule hears | the outline's `:timer` edges, and a timer edge's line in `Describe.render/2` |
+  | what a type is for | `StatifierBlocks.BlockType.explain/1` of the block's type, through the page's palette |
+
+  A type's explanation is the package's: the paragraph its optional
+  `explain/0` callback answers, else its palette entry's `description`.
+  Two cases it has no answer for are said here: a block whose type the
+  palette cannot resolve, and a type that neither explains itself nor
+  carries a description.
 
   The settings are values, never controls: this is a description, and the
   one place a value is changed stays the panel's form.
@@ -45,7 +52,9 @@ defmodule StatifierExamplesWeb.PlanDescription do
   first step is a `:start` too;
   `:edge` is a connector, a branch's rejoin among them; `:interrupt` is
   the dashed edge an interrupt rule draws to where it takes its group;
-  and `:idle` is the document, described when nothing is selected. A
+  `:timer` is the dotted edge from a send with a delay to the rule or the
+  wait that hears the event it sends; and `:idle` is the document,
+  described when nothing is selected. A
   branch's description names its arms in order, which is what the band
   over them on the map says. Each description is keyed by the id the map
   draws it under, so the page's `PlanInfo` hook
@@ -53,14 +62,15 @@ defmodule StatifierExamplesWeb.PlanDescription do
   pointer without asking the server.
   """
 
+  alias StatifierBlocks.BlockType
   alias StatifierBlocks.Describe
   alias StatifierBlocks.Document
+  alias StatifierBlocks.Palette
   alias StatifierBlocks.ViewModel
   alias StatifierBlocks.ViewModel.Node
   alias StatifierBlocks.ViewModel.Slot
   alias StatifierExamplesWeb.EventPhrasing
   alias StatifierExamplesWeb.PlanMap
-  alias StatifierExamplesWeb.TypeExplanation
 
   @typedoc "What an element is on the map; see the moduledoc."
   @type kind ::
@@ -76,6 +86,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
           | :start
           | :edge
           | :interrupt
+          | :timer
           | :idle
 
   @typedoc "One labelled fact: a single value, or a list of them."
@@ -108,9 +119,14 @@ defmodule StatifierExamplesWeb.PlanDescription do
                  "An arrow runs from a step to the one after it; a dashed arrow runs " <>
                  "from an interrupt rule to where it takes its group, out of it or " <>
                  "back to the head of its body. An hourglass marks a step that waits, " <>
-                 "and a clock a message sent after a delay. A box saying " <>
+                 "and a clock a message sent after a delay; a dotted arrow, labelled " <>
+                 "with the delay, runs from that message to the rule or the wait that " <>
+                 "hears it. A box saying " <>
                  "\"#{PlanMap.empty_text()}\" is a slot no step fills yet. " <>
                  "Select a step in the list, or point at the map, to read about it here."
+
+  @unresolved "A block of a type this palette does not know, so nothing can be said about what it does."
+  @undescribed "Its type gives no description of what it does."
 
   @undecided "The arm taken when an arm's condition cannot be decided either way - " <>
                "it reads a value the execution does not have, say. Left empty, such a " <>
@@ -120,18 +136,22 @@ defmodule StatifierExamplesWeb.PlanDescription do
   Every element `graph` draws, described, in the order a walk of the graph
   meets them: a box, then what is inside it, then its connectors.
 
-  `graph` is `PlanMap.graph/1` of `view_model`, and `outline` is
-  `Describe.outline/3` of the same document.
+  `graph` is `PlanMap.graph/1` of `view_model`, `outline` is
+  `Describe.outline/3` of the same document, and `palette` is the one both
+  were built with, which a block's explanation is asked through. The
+  graph's timer edges come last.
   """
-  @spec elements(PlanMap.t(), ViewModel.t(), Describe.t()) :: [t()]
+  @spec elements(PlanMap.t(), ViewModel.t(), Describe.t(), Palette.t()) :: [t()]
   def elements(
         %{"children" => children} = graph,
         %ViewModel{} = view_model,
-        %Describe{} = outline
+        %Describe{} = outline,
+        %Palette{} = palette
       ) do
-    context = context(view_model, outline)
+    context = context(view_model, outline, palette)
     edges = graph |> Map.get("edges", []) |> Enum.map(&edge(&1, context))
-    Enum.flat_map(children, &walk(&1, context)) ++ edges
+    timers = graph |> Map.get("timers", []) |> Enum.map(&timer(&1, context))
+    Enum.flat_map(children, &walk(&1, context)) ++ edges ++ timers
   end
 
   @doc """
@@ -179,13 +199,17 @@ defmodule StatifierExamplesWeb.PlanDescription do
            nodes: %{optional(String.t()) => Describe.Node.t()},
            edges: [Describe.Edge.t()],
            positions: %{optional(String.t()) => {String.t(), String.t(), non_neg_integer()}},
-           slots: %{optional(String.t()) => {Node.t(), Slot.t()}}
+           slots: %{optional(String.t()) => {Node.t(), Slot.t()}},
+           palette: Palette.t(),
+           outline: Describe.t()
          }
 
-  @spec context(ViewModel.t(), Describe.t()) :: context()
-  defp context(view_model, outline) do
+  @spec context(ViewModel.t(), Describe.t(), Palette.t()) :: context()
+  defp context(view_model, outline, palette) do
     %{
       view_model: view_model,
+      palette: palette,
+      outline: outline,
       nodes: Map.new(outline.nodes, &{&1.id, &1}),
       edges: outline.edges,
       positions: ViewModel.positions(view_model),
@@ -281,10 +305,40 @@ defmodule StatifierExamplesWeb.PlanDescription do
       kind: if(rule?, do: :rule, else: :block),
       title: ViewModel.title(node),
       sentence: second(EventPhrasing.sentence(node), ViewModel.title(node)),
-      explanation: TypeExplanation.explain(node),
+      explanation: explain(node, context.palette),
       settings: settings(node),
-      facts: arms(node) ++ facts ++ findings(node)
+      facts: arms(node) ++ facts ++ timed(id, context) ++ findings(node)
     }
+  end
+
+  # The timer edges a block is an end of, off the outline's `:timer`
+  # edges: what hears the event a delayed send arms, and which delayed
+  # sends arm the event a rule or a wait hears. The words the dotted edge
+  # on the map stands for, so a reader who selects the row hears them.
+  @spec timed(String.t(), context()) :: [fact()]
+  defp timed(id, context) do
+    heard =
+      for %Describe.Edge{kind: :timer, from: {:block, ^id}, to: {:block, to}} <- context.edges,
+          do: sentence_of(to, context)
+
+    armed =
+      for %Describe.Edge{kind: :timer, from: {:block, from}, to: {:block, ^id}} <- context.edges,
+          do: sentence_of(from, context)
+
+    Enum.reject([{"Heard by", heard}, {"Armed by", armed}], &match?({_label, []}, &1))
+  end
+
+  # What the block's type does, in the type's own words; see the moduledoc.
+  @spec explain(Node.t(), Palette.t()) :: String.t()
+  defp explain(%Node{status: {:unresolvable, _reason}}, _palette), do: @unresolved
+
+  defp explain(%Node{type: type}, palette) do
+    with {:ok, ref} <- Palette.fetch(palette, type),
+         text when is_binary(text) <- BlockType.explain(ref) do
+      text
+    else
+      _unexplained -> @undescribed
+    end
   end
 
   # A branch's arms, in the order it tries them, each with its condition:
@@ -758,6 +812,45 @@ defmodule StatifierExamplesWeb.PlanDescription do
           ],
           &is_nil/1
         )
+    }
+  end
+
+  # A dotted timer edge, off the outline's `:timer` edge between the same
+  # two blocks: its line in the package's words, with the library world's
+  # event names read as words, the send, what hears it, the event and the
+  # delay.
+  @spec timer(map(), context()) :: t()
+  defp timer(%{"id" => id, "sources" => [from], "targets" => [to]} = drawn, context) do
+    index =
+      Enum.find_index(
+        context.edges,
+        &(&1.kind == :timer and &1.from == {:block, from} and &1.to == {:block, to})
+      )
+
+    sentence =
+      if index,
+        do:
+          context.outline
+          |> Describe.render([])
+          |> Enum.at(length(context.outline.nodes) + index)
+          |> EventPhrasing.line()
+
+    %__MODULE__{
+      id: id,
+      kind: :timer,
+      title: "Timer",
+      sentence: sentence,
+      explanation:
+        "A dotted arrow: not a step that follows the one before it, but the event a " <>
+          "message sent after a delay arms. The step that sends it finishes at once; " <>
+          "when the delay is up the event arrives, and the rule or the wait it points " <>
+          "at hears it.",
+      facts: [
+        {"Sent by", sentence_of(from, context)},
+        {"Heard by", sentence_of(to, context)},
+        {"Event", drawn["event"]},
+        {"Delay", drawn["delay"]}
+      ]
     }
   end
 
