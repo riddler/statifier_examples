@@ -166,6 +166,14 @@ defmodule StatifierExamplesWeb.PlanLive do
   `aria-hidden` region. It shows values and never controls, and it adds no
   event of its own: what fills it is the selection the list already makes.
 
+  Pointing at anything the map draws - a block, a rule, an arm, a marker,
+  a connector, an interrupt edge - shows that element's description in the
+  region, and pointing away puts back the selected block's or the
+  document's. That is the page's `PlanInfo` hook (`assets/js/plan_info.mjs`),
+  on an element of its own beside the store: it copies the store's entry
+  into the region in the browser and pushes nothing to the server. A
+  keyboard and a screen reader reach the same words through the list.
+
   ## Read-only
 
   `?readonly=1` renders values and no controls. It is one parameter rather
@@ -546,6 +554,15 @@ defmodule StatifierExamplesWeb.PlanLive do
             >
               <.description description={description} />
             </div>
+          </div>
+
+          <div
+            id="plan-info"
+            phx-hook="PlanInfo"
+            data-region="plan-description"
+            data-store="plan-descriptions"
+            hidden
+          >
           </div>
         </div>
       </div>

@@ -37,10 +37,12 @@ defmodule StatifierExamplesWeb.PlanDescription do
   boxes for blocks - a rule is a block in a group's interrupt rules;
   `:arm`, `:undecided_arm`, `:rules` and `:tray` are a block's slots drawn
   as boxes of their own; `:marker` is an empty slot's "Nothing here yet";
-  `:edge` is a connector; and `:idle` is the document, described when
-  nothing is selected. Each description is keyed by the id the map draws
-  it under, so a later reader of the map can look one up by the element
-  under the pointer without asking the server.
+  `:edge` is a connector; `:interrupt` is the dashed edge an interrupt
+  rule draws to where it takes its group; and `:idle` is the document,
+  described when nothing is selected. Each description is keyed by the id
+  the map draws it under, so the page's `PlanInfo` hook
+  (`assets/js/plan_info.mjs`) looks one up by the element under the
+  pointer without asking the server.
   """
 
   alias StatifierBlocks.Describe
@@ -53,7 +55,16 @@ defmodule StatifierExamplesWeb.PlanDescription do
 
   @typedoc "What an element is on the map; see the moduledoc."
   @type kind ::
-          :block | :rule | :arm | :undecided_arm | :rules | :tray | :marker | :edge | :idle
+          :block
+          | :rule
+          | :arm
+          | :undecided_arm
+          | :rules
+          | :tray
+          | :marker
+          | :edge
+          | :interrupt
+          | :idle
 
   @typedoc "One labelled fact: a single value, or a list of them."
   @type fact :: {String.t(), String.t() | [String.t()]}
@@ -78,9 +89,12 @@ defmodule StatifierExamplesWeb.PlanDescription do
   defstruct [:id, :kind, :title, :explanation, sentence: nil, settings: [], facts: []]
 
   @how_to_read "Every box on the map is a step, drawn inside the step that holds it. " <>
-                 "An arrow runs from a step to the one after it, and a box saying " <>
+                 "An arrow runs from a step to the one after it; a dashed arrow runs " <>
+                 "from an interrupt rule to where it takes its group, out of it or " <>
+                 "back to the head of its body. An hourglass marks a step that waits, " <>
+                 "and a clock a message sent after a delay. A box saying " <>
                  "\"#{PlanMap.empty_text()}\" is a slot no step fills yet. " <>
-                 "Select a step in the list to read about it here."
+                 "Select a step in the list, or point at the map, to read about it here."
 
   @undecided "The arm taken when an arm's condition cannot be decided either way - " <>
                "it reads a value the execution does not have, say. Left empty, such a " <>
@@ -172,7 +186,8 @@ defmodule StatifierExamplesWeb.PlanDescription do
     own = describe(graph_node, context)
     inside = graph_node |> Map.get("children", []) |> Enum.flat_map(&walk(&1, context))
     edges = graph_node |> Map.get("edges", []) |> Enum.map(&edge(&1, context))
-    [own | inside] ++ edges
+    interrupts = graph_node |> Map.get("interrupts", []) |> Enum.map(&interrupt(&1, context))
+    [own | inside] ++ edges ++ interrupts
   end
 
   @spec describe(map(), context()) :: t()
@@ -564,6 +579,42 @@ defmodule StatifierExamplesWeb.PlanDescription do
           carries ++ [{"Inside", finishes_inside(from, context)}]
     }
   end
+
+  # A dashed interrupt edge, off the outline's `:interrupt` edge from the
+  # same rule: the event it waits for, what it does to its group, and where
+  # the edge lands.
+  @spec interrupt(map(), context()) :: t()
+  defp interrupt(%{"id" => id, "sources" => [rule], "targets" => [group], "to" => to}, context) do
+    described =
+      Enum.find(
+        context.edges,
+        &(&1.kind == :interrupt and &1.from == {:block, rule} and &1.container == group)
+      )
+
+    %__MODULE__{
+      id: id,
+      kind: :interrupt,
+      title: "Interrupt",
+      sentence: described && interrupt_line(described, context),
+      explanation:
+        "A dashed arrow: not a step that follows the one before it, but a way out of " <>
+          "the group, or back to the head of its body, taken whenever the rule's event " <>
+          "arrives, whichever step of the group is running.",
+      facts:
+        Enum.reject(
+          [
+            {"Rule", sentence_of(rule, context)},
+            described && {"Listens for", described.event || "An event not named yet"},
+            {"Goes to", lands(to, group, context)}
+          ],
+          &is_nil/1
+        )
+    }
+  end
+
+  @spec lands(String.t(), String.t(), context()) :: String.t()
+  defp lands("exit", group, context), do: "the end of #{named(group, context)}"
+  defp lands(_body, group, context), do: "the head of the body of #{named(group, context)}"
 
   @spec finishes_inside(String.t(), context()) :: String.t()
   defp finishes_inside(id, context) do

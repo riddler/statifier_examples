@@ -168,7 +168,8 @@ and open slots it has.
 
 `StatifierExamplesWeb.PlanDescription` builds one such description for
 every element the map draws - blocks, interrupt rules, arms (the undecided
-arm included), a group's rules, empty-slot markers and connectors - from
+arm included), a group's rules, empty-slot markers, connectors and the
+dashed interrupt edges - from
 the view model and `StatifierBlocks.Describe.outline/3`, keyed by the map's
 own ids. The region is `aria-live="polite"` and every row of the list names
 it with `aria-describedby`, so a screen reader hears what a sighted reader
@@ -176,6 +177,13 @@ sees on the map. It shows values, never controls, and adds no event: the
 row's own selection is what fills it. What a core type is for is this app's
 fixed text (`StatifierExamplesWeb.TypeExplanation`) until `statifier_blocks`
 answers it; any other type falls back to its palette description.
+
+Pointing at anything the map draws shows that element's description in the
+region, and pointing away puts back the selected block's or the document's.
+The page's own `PlanInfo` hook (`assets/js/plan_info.mjs`) does it in the
+browser from the descriptions the server already rendered into a hidden
+store, so a hover pushes nothing to the server. The list stays the keyboard
+and screen-reader path to the same words.
 
 ### What it costs
 

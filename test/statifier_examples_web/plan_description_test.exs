@@ -46,7 +46,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
         |> Enum.flat_map(fn key -> key |> described() |> elem(1) |> Enum.map(& &1.kind) end)
         |> MapSet.new()
 
-      for kind <- [:block, :rule, :arm, :undecided_arm, :rules, :marker, :edge] do
+      for kind <- [:block, :rule, :arm, :undecided_arm, :rules, :marker, :edge, :interrupt] do
         assert kind in kinds, "no #{kind} described"
       end
     end
@@ -197,6 +197,33 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert fact(marker, "Goes to") =~ ~r/^the end of Branch/
     end
 
+    # Each dashed interrupt edge the map draws is described under its own
+    # map id, off the outline's interrupt edge from the same rule.
+    #
+    # Sabotage: made lands/3 answer the exit for a resume edge too; this
+    # went red. Reverted from a copy.
+    test "an interrupt edge says its rule, its event and where it lands" do
+      loan = by_id("library_loan")
+      edge = loan["blk_ll_returned_early->blk_ll_on_loan/exit"]
+
+      assert edge.kind == :interrupt
+      assert edge.sentence == "On copy.returned, abandons Group (Run interruptible steps)"
+      assert fact(edge, "Rule") =~ "copy.returned"
+      assert fact(edge, "Listens for") == "copy.returned"
+      assert fact(edge, "Goes to") == "the end of Group (Run interruptible steps)"
+
+      resumes =
+        for fixture <- Charts.fixtures(),
+            {_id, %PlanDescription{kind: :interrupt} = edge} <- by_id(fixture.key),
+            String.ends_with?(edge.id, "/body"),
+            do: edge
+
+      for edge <- resumes do
+        assert fact(edge, "Goes to") =~ ~r/^the head of the body of /
+        assert edge.sentence =~ "resumes"
+      end
+    end
+
     # Sabotage: made edge/2 look for an `:exit` edge instead of the
     # `:sequence` one; the connector carried nothing and this went red.
     # Reverted from a copy.
@@ -213,7 +240,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
 
   describe "idle/4" do
     # Sabotage: counted the root among the steps; this went red. Reverted
-    # from a copy.
+    # from a copy. Sabotage: cut the dashed arrow from the how-to-read
+    # line; this went red. Reverted from a copy.
     test "the document: its name, description, what starts it, and its counts" do
       {_graph, _descriptions, loan} = described("library_loan")
 
@@ -222,6 +250,10 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert loan.title == "Library loan"
       assert loan.sentence =~ "A patron borrows a copy"
       assert loan.explanation =~ PlanMap.empty_text()
+      assert loan.explanation =~ "a dashed arrow runs from an interrupt rule"
+      assert loan.explanation =~ "An hourglass marks a step that waits"
+      assert loan.explanation =~ "a clock a message sent after a delay"
+      assert loan.explanation =~ "or point at the map"
       assert fact(loan, "What starts it") == "Starts when told to"
       assert fact(loan, "Listens for") == ["copy.returned", "copy.reported_lost"]
       assert fact(loan, "Steps") == "9"
@@ -304,7 +336,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
     %{} |> module.config_schema() |> Enum.find(&(&1.key == key)) |> Map.fetch!(:label)
   end
 
-  # Every id the graph draws below its root: nodes and connectors alike.
+  # Every id the graph draws below its root: nodes, connectors and
+  # interrupt edges alike.
   defp graph_ids(%{"children" => children}),
     do: children |> Enum.flat_map(&ids/1) |> Enum.sort()
 
@@ -312,6 +345,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
     own = [node["id"]]
     inside = node |> Map.get("children", []) |> Enum.flat_map(&ids/1)
     edges = node |> Map.get("edges", []) |> Enum.map(& &1["id"])
-    own ++ inside ++ edges
+    interrupts = node |> Map.get("interrupts", []) |> Enum.map(& &1["id"])
+    own ++ inside ++ edges ++ interrupts
   end
 end

@@ -11,7 +11,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   alias StatifierExamplesWeb.PlanMap
 
   @library ["library_loan", "patron_registration"]
-  @kinds ~w(block rule arm undecided_arm rules marker edge)
+  @kinds ~w(block rule arm undecided_arm rules marker edge interrupt)
 
   @region "#plan-description"
 
@@ -223,7 +223,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   defp ids(node) do
     [node["id"]] ++
       (node |> Map.get("children", []) |> Enum.flat_map(&ids/1)) ++
-      (node |> Map.get("edges", []) |> Enum.map(& &1["id"]))
+      (node |> Map.get("edges", []) |> Enum.map(& &1["id"])) ++
+      (node |> Map.get("interrupts", []) |> Enum.map(& &1["id"]))
   end
 
   defp block?(key, id), do: ViewModel.find_node(view_model(key), id) != nil
