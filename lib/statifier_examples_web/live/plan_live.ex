@@ -129,7 +129,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   |---|---|---|
   | a block's box | `select-row` | the row's sentence |
   | the "+" at a block's corner | `insert-open`, the gap after it | the row's "+" |
-  | an empty slot's marker | `insert-open` with the slot named, its head | none - no row stands for an empty slot |
+  | an empty slot's marker | `insert-open` with the slot named, its head | the selected block's "Add a step to" control in the panel |
   | the panel's Move up, Move down, Delete | `move`, `remove` | the row's buttons |
   | the panel's form | `config-change` (`update_config`) | the same form, reached from the row |
 
@@ -138,12 +138,14 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   The panel is the page's one form surface. It holds the selected block's
   name - its sentence under its title only where the two differ, as on the
-  map - any held draft, its `ConfigForm` and its move and delete controls;
-  or, for an insert armed at an empty slot, the picker. It sits after the
-  map and before the list, outside the `aria-hidden` region, and takes
-  focus: the selected row's "Its fields" link moves a keyboard into it. A
-  picker for the gap after a block opens under that block's row, whichever
-  view armed it; the hook scrolls it into view when the map did.
+  map - any held draft, its `ConfigForm`, its move and delete controls and
+  one "Add a step to" control per empty slot it has, which arms that
+  slot's head as the map's marker does; or, for an insert armed at an
+  empty slot, the picker. It sits after the map and before the list,
+  outside the `aria-hidden` region, and takes focus: the selected row's
+  "Its fields" link moves a keyboard into it. A picker for the gap after a
+  block opens under that block's row, whichever view armed it; the hook
+  scrolls it into view when the map did.
 
   ## The description region
 
@@ -322,8 +324,9 @@ defmodule StatifierExamplesWeb.PlanLive do
   # The map arms the same event two ways: with a block id, the gap right
   # after that block, exactly as the row's "+"; and with a block id and a
   # `slot`, the head of that slot - the map's empty-slot marker, a gap the
-  # list has no row to put a "+" under. `gap_key/1` is the one reading of
-  # the pair, and every insert handler below goes through it.
+  # list has no row to put a "+" under. The panel's empty-slot controls
+  # post that same payload for the selected block. `gap_key/1` is the one
+  # reading of the pair, and every insert handler below goes through it.
   #
   # Arming the head of an empty slot clears the selection: the panel shows
   # the slot's picker or a block's form, never both at once.
@@ -589,6 +592,11 @@ defmodule StatifierExamplesWeb.PlanLive do
   # it takes focus (`tabindex="-1"`), so the selected row's "Its fields" link
   # moves a keyboard straight into it. Every control in it posts the event
   # the list's own controls post.
+  #
+  # One control per empty slot of the selected block is the keyboard's way
+  # to the head of that slot, the gap the map's empty-slot marker arms and
+  # no row stands for. It posts the marker's own `insert-open` payload, so
+  # the slot's picker opens here exactly as a click on the marker opens it.
   defp panel(assigns) do
     ~H"""
     <aside
@@ -667,6 +675,20 @@ defmodule StatifierExamplesWeb.PlanLive do
             phx-value-block-id={@node.block_id}
           >
             Delete
+          </button>
+        </span>
+
+        <span :if={not @readonly? and empty_slots(@node) != []} class="myapp-plan__controls">
+          <button
+            :for={slot <- empty_slots(@node)}
+            class="myapp-plan__control"
+            type="button"
+            phx-click="insert-open"
+            phx-value-block-id={@node.block_id}
+            phx-value-slot={slot.name}
+            data-plan-empty-slot={slot.name}
+          >
+            Add a step to {slot.label}
           </button>
         </span>
       </div>
@@ -1147,6 +1169,17 @@ defmodule StatifierExamplesWeb.PlanLive do
   @spec gap_key(map()) :: gap()
   defp gap_key(%{"block-id" => id, "slot" => slot}) when is_binary(slot), do: {:slot, id, slot}
   defp gap_key(%{"block-id" => id}), do: id
+
+  # The selected block's empty slots, in the order the map draws their
+  # markers (`PlanMap`: body, then rails, then trays), one panel control each.
+  @spec empty_slots(ViewModel.Node.t()) :: [ViewModel.Slot.t()]
+  defp empty_slots(%ViewModel.Node{slots: slots} = node) do
+    drawn =
+      ViewModel.body_slots(node) ++
+        Enum.filter(slots, &ViewModel.rail?/1) ++ Enum.filter(slots, &ViewModel.tray?/1)
+
+    Enum.filter(drawn, &(&1.children == []))
+  end
 
   # The slot an armed empty-slot insert targets, labelled for the panel, or
   # nil when the armed gap is a row's.
