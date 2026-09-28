@@ -19,7 +19,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
   | Fact | Asked of |
   |---|---|
   | which elements there are, and their ids | `StatifierExamplesWeb.PlanMap.graph/1` |
-  | a block's title and sentence | `ViewModel.title/1`, `ViewModel.sentence/1` |
+  | a block's title and sentence | `ViewModel.title/1`, and `ViewModel.sentence/1` with its event names in words (`StatifierExamplesWeb.EventPhrasing.sentence/1`) |
   | a block's settings | `ViewModel.shown_fields/1`: the fields the type's `config_schema/1` declares, with their values |
   | where a block sits | `ViewModel.positions/1` |
   | its outcomes and where each goes | `StatifierBlocks.Describe.outline/3`'s `:sequence` and `:exit` edges |
@@ -58,6 +58,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
   alias StatifierBlocks.ViewModel
   alias StatifierBlocks.ViewModel.Node
   alias StatifierBlocks.ViewModel.Slot
+  alias StatifierExamplesWeb.EventPhrasing
   alias StatifierExamplesWeb.PlanMap
   alias StatifierExamplesWeb.TypeExplanation
 
@@ -279,7 +280,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
       id: id,
       kind: if(rule?, do: :rule, else: :block),
       title: ViewModel.title(node),
-      sentence: second(ViewModel.sentence(node), ViewModel.title(node)),
+      sentence: second(EventPhrasing.sentence(node), ViewModel.title(node)),
       explanation: TypeExplanation.explain(node),
       settings: settings(node),
       facts: arms(node) ++ facts ++ findings(node)
@@ -425,8 +426,17 @@ defmodule StatifierExamplesWeb.PlanDescription do
 
   @spec interrupt_line(Describe.Edge.t(), context()) :: String.t()
   defp interrupt_line(%Describe.Edge{} = edge, context) do
-    "On #{edge.event || "its event"}, #{does(edge)} #{named(edge.container, context)}" <>
-      history(edge)
+    "#{on(edge.event)}, #{does(edge)} #{named(edge.container, context)}" <> history(edge)
+  end
+
+  # What sets a rule off: its event in words where the library world has
+  # them (`StatifierExamplesWeb.EventPhrasing`), its name where not.
+  @spec on(String.t() | nil) :: String.t()
+  defp on(event) do
+    case EventPhrasing.phrase(event) do
+      nil -> "On #{event || "its event"}"
+      words -> "When #{words}"
+    end
   end
 
   @spec does(Describe.Edge.t()) :: String.t()
@@ -776,7 +786,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
   defp target(id, context) do
     case ViewModel.find_node(context.view_model, id) do
       nil -> "the document finishes"
-      node -> ViewModel.sentence(node)
+      node -> EventPhrasing.sentence(node)
     end
   end
 
@@ -786,7 +796,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
   defp first_step(id, context) do
     case ViewModel.find_node(context.view_model, id) do
       nil -> "no step yet (#{PlanMap.empty_text()})"
-      node -> ViewModel.sentence(node)
+      node -> EventPhrasing.sentence(node)
     end
   end
 
@@ -804,7 +814,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
 
   @spec sentence_of(String.t(), context()) :: String.t()
   defp sentence_of(id, context),
-    do: context.view_model |> ViewModel.find_node(id) |> ViewModel.sentence()
+    do: context.view_model |> ViewModel.find_node(id) |> EventPhrasing.sentence()
 
   @spec named(String.t(), context()) :: String.t()
   defp named(id, context) when is_binary(id),
@@ -814,7 +824,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
   # says more than the title does.
   @spec named(Node.t()) :: String.t()
   defp named(%Node{} = node) do
-    case second(ViewModel.sentence(node), ViewModel.title(node)) do
+    case second(EventPhrasing.sentence(node), ViewModel.title(node)) do
       nil -> ViewModel.title(node)
       sentence -> "#{ViewModel.title(node)} (#{sentence})"
     end

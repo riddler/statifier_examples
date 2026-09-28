@@ -969,6 +969,24 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       refute invoke =~ "myapp-plan__panel-sentence"
     end
 
+    # The panel names a block as the map draws it, event names in words;
+    # the row keeps the package's sentence, the name as authored.
+    #
+    # Sabotage: made the panel draw ViewModel.sentence/1 again; this went
+    # red. Reverted from a copy.
+    test "the panel reads an event name as words, the row keeps the name", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
+
+      html = render_hook(view, "select-row", %{"block-id" => "blk_ll_close"})
+      # The panel's own line, not the description region above it, which
+      # says the same words.
+      [_all, panel_sentence] =
+        Regex.run(~r/myapp-plan__panel-sentence"\s*>\s*([^<]*?)\s*</, html)
+
+      assert panel_sentence == "Send word that the loan is closed"
+      assert row_markup(html, "blk_ll_close") =~ "Send loan.closed"
+    end
+
     # The map redraws from the document the page holds, so a write made
     # through the list shows on it without the map being asked.
     #

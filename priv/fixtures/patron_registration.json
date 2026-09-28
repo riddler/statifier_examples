@@ -3,7 +3,7 @@
   "id": "bdoc_patron_registration_map",
   "revision": 1,
   "metadata": {
-    "name": "Patron registration",
+    "name": "Riverbend Public Library patron registration",
     "description": "A new patron has a week to verify their email address. A patron under thirteen also needs a guardian's consent before the card is issued; one the branch cannot place is asked to visit.",
     "domain": "library"
   },

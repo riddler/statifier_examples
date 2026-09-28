@@ -159,6 +159,45 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     end
   end
 
+  describe "event names in words" do
+    # The two teaching documents draw their event names as words, and
+    # every other document draws its sentences exactly as the package
+    # writes them.
+    #
+    # Sabotage: made block/1 draw ViewModel.sentence/1 again; this went
+    # red. Reverted from a copy.
+    test "a box's line reads the library world's event names as words" do
+      loan = graph("library_loan")
+      assert find(loan, "blk_ll_close")["lines"] == ["Send word that the loan is closed"]
+
+      assert find(loan, "blk_ll_late_return")["lines"] |> Enum.join(" ") =~
+               "Wait until the copy is returned"
+
+      for key <- ["library_loan", "patron_registration"],
+          node <- walk(graph(key)),
+          line <- Map.get(node, "lines", []),
+          event <- ~w(copy.returned loan.closed registration.deadline email.verified) do
+        refute line =~ event, "#{key}: #{node["id"]} draws #{event} as a name"
+      end
+    end
+
+    # Sabotage: made EventPhrasing.sentence/1 end every sentence with a
+    # full stop; this went red. Reverted from a copy.
+    test "a document whose events have no words draws the package's sentence" do
+      for fixture <- Charts.fixtures(),
+          fixture.key not in ["library_loan", "patron_registration"] do
+        view_model = view_model(fixture)
+
+        for %{"kind" => "block", "id" => id, "lines" => [_ | _] = lines} = node <-
+              walk(PlanMap.graph(view_model)),
+            not Map.has_key?(node, "children") do
+          sentence = view_model |> ViewModel.find_node(id) |> ViewModel.sentence()
+          assert Enum.join(lines, " ") == sentence, "#{fixture.key}: #{id}"
+        end
+      end
+    end
+  end
+
   describe "sizes" do
     # A word longer than a line keeps its own line, whole, and widens its
     # box to fit rather than running out of it.

@@ -3,7 +3,7 @@
   "id": "bdoc_library_loan",
   "revision": 1,
   "metadata": {
-    "name": "Library loan",
+    "name": "Riverbend Public Library loan",
     "description": "A patron borrows a copy from a branch for three weeks. A return ends the loan early; at the due date the loan either closes, renews, or sends an overdue notice and waits two more weeks for the copy.",
     "domain": "library"
   },

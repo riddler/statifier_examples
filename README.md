@@ -72,8 +72,8 @@ and `mix statifier_examples.migrate_waiting` runs it.
    | `signup_bulk_invites` | the fan-out shape: a `core.assign` seeding ten chunk descriptors, then a `core.map` running `signup_invite_chunk` once per descriptor with `collect: "results"` and `on: "all"`, then a confirmation step. Ids are what fan out, never invitee rows - the list is serialized on every persisted step |
    | `signup_bulk_invites_strict` | the same document with two characters changed: one descriptor is a deliberate bad id, and the `core.map` runs `on: "first_error"`. It is the pair that makes the two failure policies readable side by side |
    | `signup_guarded_step` | one `myapp.guarded_step` block: a call, and a `myapp.notify` on its error path. The second composite, and the pairing an author forgets - which is the argument for having composites at all |
-   | `library_loan` | the library world, from `core.*` blocks alone: a three-week loan with a return or a lost-copy report ending it early, then a branch at the due date - close, renew, or an overdue notice and two more weeks - whose "cannot be decided" arm is left empty |
-   | `patron_registration` | a week to verify an email address, with abandonment and a deadline on the group's rail; inside the same group, after the email step, a branch on the patron's age - a guardian's consent, a card, or a visit to the branch - whose "otherwise" arm is left empty, and the welcome. The group is the document's last step, so the deadline ends the registration |
+   | `library_loan` | the library world, from `core.*` blocks alone: a three-week loan at Riverbend Public Library, a fictional library, with a return or a lost-copy report ending it early, then a branch at the due date - close, renew, or an overdue notice and two more weeks - whose "cannot be decided" arm is left empty |
+   | `patron_registration` | a new patron at Riverbend Public Library, a fictional library, has a week to verify an email address, with abandonment and a deadline on the group's rail; inside the same group, after the email step, a branch on the patron's age - a guardian's consent, a card, or a visit to the branch - whose "otherwise" arm is left empty, and the welcome. The group is the document's last step, so the deadline ends the registration |
    | `signup_invite_chunk` | the child the two bulk documents fan out over: one `core.invoke` of `myapp:process_rows` for the chunk a descriptor stands for, answering a summary. It is offered in the switcher because a child chart is a document like any other |
 
 2. Switch documents with the header's DOCUMENT select. Edits live in
@@ -222,6 +222,16 @@ The page's own `PlanInfo` hook (`assets/js/plan_info.mjs`) does it in the
 browser from the descriptions the server already rendered into a hidden
 store, so a hover pushes nothing to the server. The list stays the keyboard
 and screen-reader path to the same words.
+
+The library world's event names read as words wherever the Plan view
+writes a sentence: on the map, in the panel and in the region,
+`copy.returned` reads as "the copy is returned", so a send reads "Send
+word that the loan is closed", a wait "Wait until the copy is returned"
+and a rule "When the registration week is up, abandon". The words are
+this app's, keyed by event name, in `StatifierExamplesWeb.EventPhrasing`;
+a name it has no words for is drawn as it is. The list keeps the name as
+authored, and so do the places a name is a value rather than prose: a
+block's settings, and what a document or a rule listens for.
 
 ### What it costs
 
@@ -1104,9 +1114,12 @@ resolution, and the reference embedder is worth more compiling clean than it
 is demonstrating a package's chrome.
 
 `library_loan.json` and `patron_registration.json` are the library world's
-two documents, written from `core.*` blocks alone and listed by
-`StatifierExamples.Library`. Each has a branch with one arm left empty on
-purpose: it is what the Plan view's map marks rather than hides.
+two documents, both set at Riverbend Public Library, a fictional library
+that names each of them ("Riverbend Public Library loan", "Riverbend
+Public Library patron registration"); they are written from `core.*`
+blocks alone and listed by `StatifierExamples.Library`. Each has a branch
+with one arm left empty on purpose: it is what the Plan view's map marks
+rather than hides.
 
 The registration ends at its deadline. A rule that abandons a group leaves
 the group and goes on to whatever follows it, so the age branch and the

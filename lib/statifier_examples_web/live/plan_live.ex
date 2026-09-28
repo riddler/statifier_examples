@@ -137,15 +137,17 @@ defmodule StatifierExamplesWeb.PlanLive do
   and arms nothing from the map; its clicks only select.
 
   The panel is the page's one form surface. It holds the selected block's
-  name - its sentence under its title only where the two differ, as on the
-  map - any held draft, its `ConfigForm`, its move and delete controls and
-  one "Add a step to" control per empty slot it has, which arms that
-  slot's head as the map's marker does; or, for an insert armed at an
-  empty slot, the picker. It sits after the map and before the list,
-  outside the `aria-hidden` region, and takes focus: the selected row's
-  "Its fields" link moves a keyboard into it. A picker for the gap after a
-  block opens under that block's row, whichever view armed it; the hook
-  scrolls it into view when the map did.
+  name - its sentence under its title only where the two differ, and with
+  the library world's event names in words, both as on the map
+  (`StatifierExamplesWeb.EventPhrasing.sentence/1`; a list row keeps the
+  package's sentence) - any held draft, its `ConfigForm`, its move and
+  delete controls and one "Add a step to" control per empty slot it has,
+  which arms that slot's head as the map's marker does; or, for an insert
+  armed at an empty slot, the picker. It sits after the map and before the
+  list, outside the `aria-hidden` region, and takes focus: the selected
+  row's "Its fields" link moves a keyboard into it. A picker for the gap
+  after a block opens under that block's row, whichever view armed it; the
+  hook scrolls it into view when the map did.
 
   ## The description region
 
@@ -215,6 +217,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamples.Documents
+  alias StatifierExamplesWeb.EventPhrasing
   alias StatifierExamplesWeb.PlanDescription
   alias StatifierExamplesWeb.PlanMap
 
@@ -620,10 +623,10 @@ defmodule StatifierExamplesWeb.PlanLive do
       <div :if={@node}>
         <p class="myapp-plan__panel-title">{ViewModel.title(@node)}</p>
         <p
-          :if={ViewModel.sentence(@node) != ViewModel.title(@node)}
+          :if={EventPhrasing.sentence(@node) != ViewModel.title(@node)}
           class="myapp-plan__panel-sentence"
         >
-          {ViewModel.sentence(@node)}
+          {EventPhrasing.sentence(@node)}
         </p>
 
         <div :if={@node.form} class="myapp-plan__form">
