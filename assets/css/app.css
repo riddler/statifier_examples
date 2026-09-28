@@ -585,6 +585,7 @@
   --plan-map-empty-stroke: var(--sb-fg-subtle);
   --plan-map-edge: var(--sb-fg-subtle);
   --plan-map-mark: var(--sb-fg-muted);
+  --plan-map-band-fill: var(--sb-bg-sunken);
 
   flex: 1;
   min-width: 0;
@@ -615,6 +616,11 @@
 .plan-map__sentence,
 .plan-map__slot-label {
   fill: var(--sb-fg-muted);
+}
+
+.plan-map__svg .plan-map__end-text {
+  fill: var(--sb-fg-muted);
+  font-weight: 600;
 }
 
 .plan-map__svg .plan-map__empty-text {

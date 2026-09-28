@@ -9,7 +9,10 @@
 // "error"), the drawn markup, every box and edge of the SAME layout that
 // markup was drawn from in absolute coordinates, `interrupts` - every
 // interrupt path in the markup, with its dash and its path data as drawn -
-// `marks`, each block's timer marks as the markup carries them, and
+// `marks`, each block's timer marks as the markup carries them,
+// `bands` - each branch's band and fork mark as drawn - `rejoins`, every
+// rejoin path with its join dot, and `headers`, the lines under each
+// block's title in the order they are drawn - and
 // `gestures` - for every clickable element the markup carries, the event
 // and payload the hook's own mapGesture/2 turns a click on it into - and
 // `childGestures`, the same
@@ -37,6 +40,7 @@ if (laid) {
       id: edge.id,
       source: edge.sources[0],
       target: edge.targets[0],
+      kind: edge.kind,
       sections: sections.length,
       start: sections.length ? sections[0].startPoint : null,
       end: sections.length ? sections[sections.length - 1].endPoint : null,
@@ -127,4 +131,40 @@ for (const el of all.filter((e) => e.dataset.mapMark !== undefined)) {
   if (box) (marks[box.dataset.mapNode] ||= []).push(el.dataset.mapMark)
 }
 
-process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, gestures, childGestures}))
+// Every branch's band: the rect marked data-map-band, the block group it
+// is drawn in, and the first point of the fork mark drawn in that group.
+const num = (el, name) => Number((el.token.match(new RegExp(`\\s${name}="([^"]*)"`)) || [])[1])
+const bands = {}
+for (const el of all.filter((e) => e.dataset.mapBand !== undefined)) {
+  const box = el.closest("[data-map-kind=block]")
+  const fork = all.find((f) => f.dataset.mapFork !== undefined &&
+    f.closest("[data-map-kind=block]") === box)
+  const [, fx, fy] = fork ? fork.token.match(/d="M(-?[\d.]+) (-?[\d.]+)/) : [null, null, null]
+  ;(bands[el.dataset.mapBand] ||= []).push({
+    in: box ? box.dataset.mapNode : null,
+    x: num(el, "x"), y: num(el, "y"), width: num(el, "width"), height: num(el, "height"),
+    fork: fork ? {x: Number(fx), y: Number(fy)} : null,
+  })
+}
+
+// Every rejoin path, with its path data, and the join dot drawn for it.
+const rejoins = []
+for (const el of all.filter((e) => e.dataset.mapEdgeKind === "rejoin")) {
+  const dot = all.find((c) => c.dataset.mapJoin === el.dataset.mapEdge)
+  rejoins.push({
+    id: el.dataset.mapEdge,
+    d: unescape((el.token.match(/\sd="([^"]*)"/) || [])[1] || ""),
+    dot: dot ? {x: num(dot, "cx"), y: num(dot, "cy")} : null,
+  })
+}
+
+// The lines under each block's title, read off the markup from the block's
+// own group to the next node's.
+const headers = {}
+const html = target.innerHTML
+for (const [, id, rest] of html.matchAll(/data-map-node="([^"]*)" data-map-kind="block">(.*?)(?=data-map-node=|$)/g)) {
+  headers[unescape(id)] = [...rest.matchAll(/<text class="plan-map__sentence"[^>]*>([^<]*)<\/text>/g)]
+    .map((m) => unescape(m[1]))
+}
+
+process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, bands, rejoins, headers, gestures, childGestures}))

@@ -131,6 +131,19 @@ fire after the step has moved on are two different timers. A send with no
 delay carries neither. A mark is part of its block's box: a click on it
 selects the block, as a click anywhere else on the box does.
 
+### The Branch
+
+A branch is drawn as one decision. Its header names every arm with its
+condition as authored, numbered in the order the branch tries them, under
+the package's "one of"; the branch type's own sentence, which the list
+draws, is unchanged. The arms sit under one band spanning all of them, with
+a small fork mark at its left. The edge out of the branch is its rejoin,
+drawn with a join dot where it leaves the branch's bottom edge, into the
+next step - or, where the branch is the document's last step, into an
+"End" mark. The band, the fork mark, the join dot and the end mark are
+drawn from the laid-out boxes and add no gesture: a click on the band
+selects the branch, and the end mark is not clickable.
+
 ### Editing from the map
 
 Every gesture on the map is one the list already makes, sent to the same
@@ -171,8 +184,9 @@ and open slots it has.
 
 `StatifierExamplesWeb.PlanDescription` builds one such description for
 every element the map draws - blocks, interrupt rules, arms (the undecided
-arm included), a group's rules, empty-slot markers, connectors and the
-dashed interrupt edges - from
+arm included), a group's rules, empty-slot markers, the end mark,
+connectors (a branch's rejoin among them) and the dashed interrupt
+edges - from
 the view model and `StatifierBlocks.Describe.outline/3`, keyed by the map's
 own ids. The region is `aria-live="polite"` and every row of the list names
 it with `aria-describedby`, so a screen reader hears what a sighted reader

@@ -332,6 +332,87 @@ defmodule StatifierExamplesWeb.PlanMapTest do
     end
   end
 
+  describe "the Branch" do
+    # The header is the map's own; the branch type's sentence, which the
+    # list draws, is what it was.
+    #
+    # Sabotage: made arm_lines/1 drop the arms with no condition; this went
+    # red. Made it reverse the arms; this went red. Each reverted from a
+    # copy.
+    test "a branch's header names every arm, and its sentence is unchanged" do
+      for {key, id, sentence, arms} <- [
+            {"library_loan", "blk_ll_due", ~s(Decide: When "returned", otherwise),
+             [~s(When "returned"), ~s(When "renew"), "Otherwise", "Cannot be decided"]},
+            {"patron_registration", "blk_pr_age", ~s(Decide: When "child", otherwise),
+             [~s(When "child"), ~s(When "adult"), "Otherwise", "Cannot be decided"]}
+          ] do
+        {:ok, fixture} = Charts.fixture(key)
+        node = ViewModel.find_node(view_model(fixture), id)
+        assert ViewModel.sentence(node) == sentence
+
+        assert %{"band" => true, "lines" => lines} = find(graph(key), id)
+        header = Enum.join(lines, " ")
+
+        positions =
+          for {label, n} <- Enum.with_index(arms, 1) do
+            assert {at, _len} = :binary.match(header, "#{n}. #{label}")
+            at
+          end
+
+        assert positions == Enum.sort(positions), key
+      end
+    end
+
+    # Only a branch carries a band, and only the edge out of a branch is a
+    # rejoin.
+    #
+    # Sabotage: made put_band/2 band every container; this went red.
+    # Reverted from a copy.
+    test "every fixture bands only its branches and rejoins only out of them" do
+      for fixture <- Charts.fixtures() do
+        view_model = view_model(fixture)
+        graph = PlanMap.graph(view_model)
+
+        branches =
+          for {%Node{type: "core.branch", block_id: id}, _depth, _kind} <-
+                ViewModel.outline(view_model),
+              do: id
+
+        assert Enum.sort(for(%{"band" => true, "id" => id} <- walk(graph), do: id)) ==
+                 Enum.sort(branches),
+               fixture.key
+
+        for %{"edges" => edges} <- walk(graph), %{"kind" => kind, "sources" => [from]} <- edges do
+          assert kind == if(from in branches, do: "rejoin", else: "sequence"),
+                 "#{fixture.key}: #{from}"
+        end
+      end
+    end
+
+    # The loan's branch ends its document, so it rejoins into an end mark;
+    # the registration's is followed by a step and needs none.
+    #
+    # Sabotage: made put_end/2 add no end mark; this went red. Reverted
+    # from a copy.
+    test "an end mark follows a branch that ends the document, and nothing else" do
+      root = find(graph("library_loan"), "blk_ll_root")
+
+      assert Enum.map(root["children"], & &1["id"]) ==
+               ["blk_ll_on_loan", "blk_ll_due", "blk_ll_root/end"]
+
+      assert %{"kind" => "end", "title" => "End"} = List.last(root["children"])
+
+      assert List.last(root["edges"]) == %{
+               "id" => "blk_ll_due->blk_ll_root/end",
+               "sources" => ["blk_ll_due"],
+               "targets" => ["blk_ll_root/end"],
+               "kind" => "rejoin"
+             }
+
+      refute Enum.any?(walk(graph("patron_registration")), &(&1["kind"] == "end"))
+    end
+  end
+
   # Sabotage: made sequence_edges/1 carry its source as a tuple; Jason
   # refused it and this went red. Reverted from a copy.
   test "the graph encodes to JSON for the hook" do
