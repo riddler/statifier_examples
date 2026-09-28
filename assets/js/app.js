@@ -74,11 +74,23 @@ import { StatifierUIHooks } from "statifier_ui/assets/js/index.js"
 // largest thing in this bundle.
 import PlanMapHooks from "./plan_map.mjs"
 
+// The Plan view's description region on hover (`PlanInfo`): pointing at
+// anything the map draws shows the description the server already put in
+// the page's hidden store, and pointing away puts the region back. This
+// app's own hook too, and it pushes nothing to the server.
+import PlanInfoHooks from "./plan_info.mjs"
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, ...StatifierBlocks, ...StatifierUIHooks, ...PlanMapHooks},
+  hooks: {
+    ...colocatedHooks,
+    ...StatifierBlocks,
+    ...StatifierUIHooks,
+    ...PlanMapHooks,
+    ...PlanInfoHooks,
+  },
 })
 
 // Show progress bar on live navigation and form submits
