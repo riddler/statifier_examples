@@ -19,12 +19,15 @@ step against this app's own database:
 
 It prints one line per step. If a step does not answer as this guide says,
 it stops with a non-zero exit and names the step. That covers a call that
-answers an error, and also a batch that answers with other counts than the
-ones quoted below: `migrate_batch/3` answers `{:ok, report}` even when it
-refused every loan, so the task checks each report's counts itself. At the end it cancels
-the two loans it opened, because the batch below takes every waiting
-execution on a chart, not only the ones one run opened. The next run
-starts from an empty chart.
+answers an error, and also every count and class quoted below that comes
+out otherwise: the publish warnings, the mapped and unmapped states, both
+diffs, each batch and each count. `migrate_batch/3` answers
+`{:ok, report}` even when it refused every loan, so the task checks each
+of those values itself.
+
+At the end it cancels the two loans it opened, because the batch below
+takes every waiting execution on a chart, not only the ones one run
+opened. The next run starts from an empty chart.
 
 ## The pins
 
