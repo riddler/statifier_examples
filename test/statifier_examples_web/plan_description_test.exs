@@ -290,16 +290,64 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
 
       assert fact(loan["blk_ll_close"], "Arms, in order") == nil
 
-      rejoin = loan["blk_ll_due->blk_ll_root/end"]
+      rejoin = loan["blk_ll_due->blk_ll_root/end/done"]
       assert %PlanDescription{kind: :edge, title: "Rejoin"} = rejoin
       assert fact(rejoin, "To") == "the document finishes"
+      assert fact(rejoin, "Outcome") == "done"
       assert fact(rejoin, "Inside") =~ ~r/^Sequence/
 
-      assert %PlanDescription{kind: :end, title: "End"} = loan["blk_ll_root/end"]
+      assert %PlanDescription{kind: :end, title: "End"} = loan["blk_ll_root/end/done"]
 
       patron = by_id("patron_registration")["blk_pr_age->blk_pr_welcome"]
       assert %PlanDescription{kind: :edge, title: "Rejoin"} = patron
       assert fact(patron, "To") == "Send patron.welcomed"
+    end
+
+    # Each end mark says the document finishes there and with which
+    # outcome, the solid ring and the dashed one told apart in words; the
+    # edge into an abandon end names the rules that abandon the last step.
+    # No other edge carries an outcome.
+    #
+    # Sabotage: made end_explanation/1 answer the done text for every
+    # outcome; this went red. Made the end clause of edge/2 leave out the
+    # interrupt rules; this went red. Made outcome/1 answer an Outcome fact
+    # for a rejoin into a step; this went red. Each reverted from a copy.
+    test "every end mark and the edge into it name the outcome" do
+      patron = by_id("patron_registration")
+
+      done = patron["blk_pr_root/end/done"]
+
+      assert %PlanDescription{kind: :end, title: "End", sentence: "The document finishes: done"} =
+               done
+
+      assert fact(done, "Outcome") == "done"
+      assert done.explanation =~ "solid ring"
+
+      abandon = patron["blk_pr_root/end/abandon"]
+      assert %PlanDescription{kind: :end, sentence: "The document finishes: abandon"} = abandon
+      assert fact(abandon, "Outcome") == "abandon"
+      assert abandon.explanation =~ "dashed ring"
+
+      into_done = patron["blk_pr_verify->blk_pr_root/end/done"]
+      assert %PlanDescription{kind: :edge, title: "Finish"} = into_done
+
+      assert into_done.sentence ==
+               "When Run interruptible steps finishes, the document finishes: done"
+
+      assert fact(into_done, "Outcome") == "done"
+      assert fact(into_done, "Interrupt rules") == nil
+
+      into_abandon = patron["blk_pr_verify->blk_pr_root/end/abandon"]
+      assert %PlanDescription{kind: :edge, title: "Finish"} = into_abandon
+      assert into_abandon.sentence =~ ~r/^When an interrupt rule abandons Group/
+      assert fact(into_abandon, "Outcome") == "abandon"
+      assert [_one, _two] = fact(into_abandon, "Interrupt rules")
+
+      for key <- @library,
+          {id, %PlanDescription{kind: :edge} = edge} <- by_id(key),
+          not String.contains?(id, "/end/") do
+        assert fact(edge, "Outcome") == nil, "#{key}: #{id}"
+      end
     end
 
     # The start dot and its edge: where the document starts, in the map's
@@ -354,7 +402,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
   describe "idle/4" do
     # Sabotage: counted the root among the steps; this went red. Reverted
     # from a copy. Sabotage: cut the dashed arrow from the how-to-read
-    # line; this went red. Reverted from a copy.
+    # line; this went red. Reverted from a copy. Sabotage: cut the ring
+    # from the how-to-read line; this went red. Reverted from a copy.
     test "the document: its name, description, what starts it, and its counts" do
       {_graph, _descriptions, loan} = described("library_loan")
 
@@ -364,6 +413,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert loan.sentence =~ "A patron borrows a copy"
       assert loan.explanation =~ PlanMap.empty_text()
       assert loan.explanation =~ "a dashed arrow runs from an interrupt rule"
+      assert loan.explanation =~ "a dot inside a ring where it finishes"
       assert loan.explanation =~ "An hourglass marks a step that waits"
       assert loan.explanation =~ "a clock a message sent after a delay"
       assert loan.explanation =~ "or point at the map"

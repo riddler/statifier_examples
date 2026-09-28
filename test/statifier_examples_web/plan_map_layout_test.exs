@@ -14,6 +14,8 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
 
   use ExUnit.Case, async: true
 
+  alias StatifierBlocks.Describe
+  alias StatifierBlocks.Describe.Edge
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamplesWeb.PlanMap
@@ -85,8 +87,8 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
         graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
         %{"drawn" => "map", "boxes" => boxes} = run(dir, fixture.key, graph)
 
-        # The start dot carries no text.
-        for node <- walk(graph), node["id"] != "plan-map", node["kind"] != "start" do
+        # The start dot and the end marks carry no text.
+        for node <- walk(graph), node["id"] != "plan-map", node["kind"] not in ["start", "end"] do
           texts =
             if node["kind"] == "slot",
               do: node["lines"] ++ List.wrap(node["caption"]),
@@ -193,10 +195,10 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
 
   describe "the Branch, as drawn" do
     # The two library branches and the step each rejoins into: the loan's
-    # branch is the last step of its document, so it rejoins into the end
-    # mark; the registration's rejoins into the welcome.
+    # branch is the last step of its document, so it rejoins into its done
+    # end; the registration's rejoins into the welcome.
     @branches [
-      {"library_loan", "blk_ll_due", "blk_ll_root/end",
+      {"library_loan", "blk_ll_due", "blk_ll_root/end/done",
        [
          "One of, in order:",
          "1. When \"returned\": loan.returned",
@@ -273,7 +275,7 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     # bottom edge, with its join dot there, into the top of the next node.
     #
     # Sabotage: made the server mark the edge out of a branch "sequence";
-    # this went red. Made put_end/2 add no end mark; the loan's rejoin went
+    # this went red. Made put_ends/2 add no end mark; the loan's rejoin went
     # missing and this went red. Made drawEdge draw no join dot; this went
     # red. Dropped the dot's data-map-edge; this went red. Each reverted
     # from a copy.
@@ -337,7 +339,8 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
         refute end_tag =~ "data-map-kind"
 
         # It still carries its id, so the description region can name it.
-        if key == "library_loan", do: assert(end_tag =~ ~s(data-map-node="blk_ll_root/end"))
+        if key == "library_loan",
+          do: assert(end_tag =~ ~s(data-map-node="blk_ll_root/end/done"))
       end
     end
   end
@@ -442,6 +445,174 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
 
         assert [%{"id" => id}] = Enum.filter(edges, &(&1["kind"] == "start"))
         assert [%{"text" => "Starts when told to"}] = captions[id]
+      end
+    end
+  end
+
+  describe "the end, as drawn" do
+    # Each library fixture's root, its last step, and the ends after it,
+    # each with its outcome and whether its ring is dashed. The loan
+    # finishes when its branch does; the registration's group is its last
+    # step and its rules abandon it, so it finishes done or abandoned.
+    @ends [
+      {"library_loan", "blk_ll_root", "blk_ll_due", [{"done", false}]},
+      {"patron_registration", "blk_pr_root", "blk_pr_verify",
+       [{"done", false}, {"abandon", true}]}
+    ]
+
+    # Every end of the document's own flow - every one the outline names,
+    # read off it here rather than off the map's code - is a dot inside a
+    # ring, joined to the last step by an edge that leaves the step's
+    # bottom, enters the ring's top, and carries its outcome as a caption
+    # drawn beside it, between the two.
+    #
+    # Sabotage: made drawNode draw the end mark's ring only; this went red.
+    # Made drawEdge draw no caption for an end edge; this went red. Made
+    # end_edge/4 hand the layout no label; the caption went missing and
+    # this went red. Each reverted from a copy.
+    test "every flow-graph end of both library fixtures draws a final mark, its outcome on the edge",
+         %{tmp_dir: dir} do
+      for {key, root, last, expected} <- @ends do
+        {:ok, fixture} = Charts.fixture(key)
+        outline = Describe.outline(fixture.document, Charts.palette(), [])
+
+        described =
+          for %Edge{kind: :exit, container: ^root, from: {:block, ^last}} <- outline.edges,
+              do: "done"
+
+        described =
+          described ++
+            for(
+              %Edge{kind: :interrupt, container: ^last, to: {:exit, ^last}} <- outline.edges,
+              uniq: true,
+              do: "abandon"
+            )
+
+        assert described == Enum.map(expected, &elem(&1, 0)), key
+
+        %{
+          "drawn" => "map",
+          "boxes" => boxes,
+          "edges" => edges,
+          "captions" => captions,
+          "ends" => ends
+        } =
+          run(dir, key, library_graph(key))
+
+        assert Enum.map(ends, & &1["outcome"]) == described, key
+        step = boxes[last]
+
+        for {outcome, _dashed} <- expected do
+          id = "#{root}/end/#{outcome}"
+          edge_id = "#{last}->#{id}"
+          mark = boxes[id] || flunk("#{key}: #{id} is not laid out")
+
+          assert %{
+                   "node" => ^id,
+                   "children" => ["circle", "circle"],
+                   "ring" => ring,
+                   "dot" => %{"filled" => true} = dot
+                 } = Enum.find(ends, &(&1["id"] == id))
+
+          assert_in_delta ring["x"], mark["x"] + mark["width"] / 2, 0.5, id
+          assert_in_delta ring["y"], mark["y"] + mark["height"] / 2, 0.5, id
+          assert dot["r"] < ring["r"], id
+
+          assert %{"source" => ^last, "target" => ^id, "labels" => [label]} =
+                   edge = Enum.find(edges, &(&1["id"] == edge_id)) || flunk("#{key}: #{edge_id}")
+
+          assert_in_delta edge["start"]["y"], step["y"] + step["height"], 0.5, edge_id
+          assert_in_delta edge["end"]["y"], mark["y"], 0.5, edge_id
+          assert edge["end"]["x"] >= mark["x"] and edge["end"]["x"] <= mark["x"] + mark["width"]
+
+          assert [%{"text" => ^outcome, "x" => x, "y" => y}] = captions[edge_id]
+          assert y > step["y"] + step["height"] and y < mark["y"], "#{edge_id}: caption at #{y}"
+          assert_in_delta x, label["x"], 0.5, edge_id
+          assert label["width"] >= text_width([outcome])
+
+          line = edge["start"]["x"]
+          right = x + label["width"]
+
+          assert (line >= right and line - right <= 4) or (line <= x and x - line <= 4),
+                 "#{edge_id}: the caption spans #{x}..#{right}, the edge runs at #{line}"
+        end
+      end
+    end
+
+    # A done end is a solid ring and the edge into it a solid line; an
+    # abandon end is a dashed ring, and the edge into it is dashed like the
+    # interrupt edges that lead there.
+    #
+    # Sabotage: made drawNode dash every end mark's ring; this went red.
+    # Made drawNode dash none; this went red. Made drawEdge dash no end
+    # edge; this went red. Each reverted from a copy.
+    test "done and abandon ends are drawn apart: a solid ring and a dashed one",
+         %{tmp_dir: dir} do
+      for {key, root, last, expected} <- @ends do
+        %{"ends" => ends, "endEdges" => end_edges} = run(dir, key, library_graph(key))
+
+        for {outcome, dashed} <- expected do
+          id = "#{root}/end/#{outcome}"
+          mark = Enum.find(ends, &(&1["id"] == id))
+          edge = Enum.find(end_edges, &(&1["id"] == "#{last}->#{id}"))
+
+          assert mark["ring"]["dashed"] == dashed, "#{id}: its ring"
+          assert edge["dashed"] == dashed, "#{id}: the edge into it"
+          assert edge["outcome"] == outcome, id
+        end
+
+        assert length(end_edges) == length(expected), key
+      end
+    end
+
+    # A step that is last in a nested flow hands back to the block around
+    # it, which goes on, so nothing is drawn after it. Every Send in the two
+    # library fixtures is such a step, and no drawn edge from one ends at a
+    # mark; the only ends drawn are the ones above.
+    #
+    # Sabotage: made put_ends/2 join the end to the last step of its last
+    # step's first slot - a Send in both fixtures - rather than to the last
+    # step itself; this went red. Reverted from a copy.
+    test "a send that continues draws no end after it", %{tmp_dir: dir} do
+      for {key, _root, last, expected} <- @ends do
+        {:ok, fixture} = Charts.fixture(key)
+        view_model = ViewModel.build(fixture.document, Charts.palette(), [])
+
+        sends =
+          for {%ViewModel.Node{type: "core.send", block_id: id}, _depth, _kind} <-
+                ViewModel.outline(view_model),
+              do: id
+
+        refute sends == [], key
+
+        %{"edges" => edges, "ends" => ends, "html" => html} = run(dir, key, library_graph(key))
+
+        assert length(ends) == length(expected), key
+        assert length(Regex.scan(~r/data-map-end=/, html)) == length(expected), key
+
+        for %{"source" => from, "target" => to} <- edges, String.contains?(to, "/end/") do
+          assert from == last, "#{key}: an end after #{from}"
+          refute from in sends
+        end
+      end
+    end
+
+    # A click on an end mark, or on either circle a real click lands on,
+    # selects nothing and arms nothing, on a page that can edit or not.
+    #
+    # Sabotage: gave the end mark data-map-kind="block"; a click on it
+    # selected a block and this went red. Reverted from a copy.
+    test "the end marks select nothing", %{tmp_dir: dir} do
+      for {key, _root, _last, expected} <- @ends, mode <- [nil, "editable"] do
+        %{"ends" => ends, "gestures" => gestures} = run(dir, key, library_graph(key), mode)
+
+        assert length(ends) == length(expected)
+
+        for mark <- ends do
+          assert %{"kind" => nil, "gestures" => [nil, nil, nil]} = mark
+        end
+
+        refute Enum.any?(gestures, &String.contains?(&1["element"], "/end"))
       end
     end
   end
@@ -553,10 +724,11 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     # document's own flow after it.
     # The registration's group is the root's last step - its age branch and
     # welcome sit inside the body, so the deadline rule ends the document -
-    # and nothing follows it, so it has no edge out to draw.
+    # and only its ends follow it; a body holding a branch carries no
+    # ports, so those are not held to the line.
     @happy [
       {"library_loan", "blk_ll_on_loan", ["blk_ll_loan_period"],
-       ["blk_ll_due", "blk_ll_root/end"]},
+       ["blk_ll_due", "blk_ll_root/end/done"]},
       {"patron_registration", "blk_pr_verify", ["blk_pr_deadline", "blk_pr_email"], []}
     ]
 

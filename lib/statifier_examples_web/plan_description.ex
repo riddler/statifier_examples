@@ -38,7 +38,9 @@ defmodule StatifierExamplesWeb.PlanDescription do
   `:arm`, `:undecided_arm`, `:rules`, `:body` and `:tray` are a block's
   slots drawn as boxes of their own, `:body` being a group's body, drawn as
   a pane beside its rules; `:marker` is an empty slot's "Nothing here yet";
-  `:end` is the end mark a branch that ends the document rejoins into;
+  `:end` is a final mark where the document finishes, one per outcome it
+  finishes with (`done`, and `abandon` where an interrupt rule abandons its
+  last step), and the edge into it is an `:edge` that names the outcome;
   `:start` is the filled dot the document starts at, and its edge into the
   first step is a `:start` too;
   `:edge` is a connector, a branch's rejoin among them; `:interrupt` is
@@ -98,7 +100,10 @@ defmodule StatifierExamplesWeb.PlanDescription do
   defstruct [:id, :kind, :title, :explanation, sentence: nil, settings: [], facts: []]
 
   @how_to_read "Every box on the map is a step, drawn inside the step that holds it. " <>
-                 "The filled dot is where the document starts. " <>
+                 "The filled dot is where the document starts, and a dot inside a ring " <>
+                 "where it finishes: a solid ring when its last step finishes, a dashed " <>
+                 "ring when an interrupt rule abandons that step, the outcome named on " <>
+                 "the arrow into it. " <>
                  "An arrow runs from a step to the one after it; a dashed arrow runs " <>
                  "from an interrupt rule to where it takes its group, out of it or " <>
                  "back to the head of its body. An hourglass marks a step that waits, " <>
@@ -218,14 +223,14 @@ defmodule StatifierExamplesWeb.PlanDescription do
     slot(style, id, node, slot, context)
   end
 
-  defp describe(%{"kind" => "end", "id" => id, "title" => title}, _context) do
+  defp describe(%{"kind" => "end", "id" => id, "outcome" => outcome}, _context) do
     %__MODULE__{
       id: id,
       kind: :end,
-      title: title,
-      explanation:
-        "Where the document finishes. The branch above it is the document's last step, " <>
-          "so whichever of its arms runs, the document finishes when that arm does."
+      title: "End",
+      sentence: "The document finishes: #{outcome}",
+      explanation: end_explanation(outcome),
+      facts: [{"Outcome", outcome}]
     }
   end
 
@@ -240,6 +245,19 @@ defmodule StatifierExamplesWeb.PlanDescription do
           "starts one, and runs the step the arrow from this dot points at first."
     }
   end
+
+  # The solid ring and the dashed one; see `StatifierExamplesWeb.PlanMap`'s
+  # "The end".
+  @spec end_explanation(String.t()) :: String.t()
+  defp end_explanation("abandon"),
+    do:
+      "Where the document finishes when an interrupt rule abandons its last step, drawn " <>
+        "as a dashed ring: the rule leaves the group, and nothing comes after the group."
+
+  defp end_explanation(_done),
+    do:
+      "Where the document finishes when its last step does, drawn as a solid ring: " <>
+        "whichever way that step finishes, nothing comes after it."
 
   # ----------------------------------------------------------------- blocks
 
@@ -632,7 +650,30 @@ defmodule StatifierExamplesWeb.PlanDescription do
     }
   end
 
-  defp edge(%{"id" => id, "kind" => "rejoin", "sources" => [from], "targets" => [to]}, context) do
+  defp edge(%{"id" => id, "kind" => "end", "sources" => [from], "outcome" => outcome}, context) do
+    rules =
+      case {outcome, interrupts(from, context)} do
+        {"abandon", [_first | _rest] = lines} -> [{"Interrupt rules", lines}]
+        _none -> []
+      end
+
+    %__MODULE__{
+      id: id,
+      kind: :edge,
+      title: "Finish",
+      sentence: "#{finishing(outcome, from, context)}, the document finishes: #{outcome}",
+      explanation:
+        "The arrow into a final mark: the document's last step is behind it, so when " <>
+          "control leaves that step this way, the document finishes with the outcome " <>
+          "it names.",
+      facts: [{"From", sentence_of(from, context)}, {"Outcome", outcome}] ++ rules
+    }
+  end
+
+  defp edge(
+         %{"id" => id, "kind" => "rejoin", "sources" => [from], "targets" => [to]} = e,
+         context
+       ) do
     onto = target(to, context)
 
     %__MODULE__{
@@ -645,6 +686,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
           "finishes, what this points at comes next.",
       facts:
         [{"From", sentence_of(from, context)}, {"To", onto}] ++
+          outcome(e) ++
           carries(from, to, context) ++ [{"Inside", finishes_inside(from, context)}]
     }
   end
@@ -663,6 +705,19 @@ defmodule StatifierExamplesWeb.PlanDescription do
           carries(from, to, context) ++ [{"Inside", finishes_inside(from, context)}]
     }
   end
+
+  # How the last step hands control to an end: by finishing, or by one of
+  # its interrupt rules abandoning it.
+  @spec finishing(String.t(), String.t(), context()) :: String.t()
+  defp finishing("abandon", from, context),
+    do: "When an interrupt rule abandons #{named(from, context)}"
+
+  defp finishing(_done, from, context), do: "When #{sentence_of(from, context)} finishes"
+
+  # The outcome an edge into an end mark names; none for any other edge.
+  @spec outcome(map()) :: [fact()]
+  defp outcome(%{"outcome" => outcome}), do: [{"Outcome", outcome}]
+  defp outcome(%{}), do: []
 
   # A dashed interrupt edge, off the outline's `:interrupt` edge from the
   # same rule: the event it waits for, what it does to its group, and where

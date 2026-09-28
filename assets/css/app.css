@@ -626,13 +626,11 @@
   font-style: italic;
 }
 
-.plan-map__svg .plan-map__end-text {
-  fill: var(--sb-fg-muted);
-  font-weight: 600;
-}
-
-/* The start dot selects nothing, so it does not look clickable. */
-.plan-map__svg .plan-map__start {
+/* The start dot and the end marks select nothing, so they do not look
+   clickable. An end mark's ring, solid for done and dashed for abandon,
+   is drawn by the hook; the outcome on the edge into it is a caption. */
+.plan-map__svg .plan-map__start,
+.plan-map__svg .plan-map__end {
   cursor: default;
 }
 
