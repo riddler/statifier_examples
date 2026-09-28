@@ -411,6 +411,14 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # accept any stored value; the config half went red on the drawer row
     # and on the compiler's `:config` finding, while the receipt half
     # stayed green. Reverted from a backup copy.
+    #
+    # 2026-09-28: from `statifier_blocks` 0.38.0 a declared field type
+    # binds, so `true` in the `:integer` field `retries` is refused by the
+    # package's binding check before `check_retries` runs, and the type's
+    # own finding follows it: the capture now carries two `:config`
+    # findings, the package's first. Sabotage re-run on 0.38.0: the same
+    # `check_retries` mutation went red on the second `:config` finding.
+    # Reverted from a copy.
     test "a config error on one block does not hide a refused read on another",
          %{conn: conn} do
       fixture = TwoStageDocument.fixture()
@@ -428,6 +436,13 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
                  block_id: config_block,
                  config_key: "retries",
                  code: :invalid_config
+               },
+               %Compiler.Finding{
+                 stage: :config,
+                 block_id: config_block,
+                 config_key: "retries",
+                 code: :invalid_config,
+                 message: "must be a whole number"
                },
                %Compiler.Finding{
                  stage: :structure,

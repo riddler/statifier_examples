@@ -1227,13 +1227,25 @@ defmodule StatifierExamples.MixProject do
   # The release's one visible change is the card line of a `core.send`
   # with a delay, which now names the delay ("In 7 days, send ..."); the
   # pins here carry the new lines.
+  #
+  # 2026-09-28: the floor moves to `~> 0.38.0`, published, so the arm stays
+  # a Hex requirement. 0.38.0 makes a block type's declared field types
+  # bind: a config its declared field types refuse is refused before
+  # `validate_config/1`, at compile, at the edit gate and in the view model.
+  # The suite runs the package's pre-flight
+  # (`StatifierBlocks.Palette.preflight/1` and `/2`) over every palette this
+  # app mounts and every shipped block document, and validates each of
+  # those documents against `StatifierBlocks.Schema.for_palette/1`; both
+  # answer clean, so no type or fixture here changed. The dependency update
+  # also took `phoenix` from 1.8.14 to 1.8.15 in `mix.lock`, which no floor
+  # here requires.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.37.0"}
+        {:statifier_blocks, "~> 0.38.0"}
     end
   end
 

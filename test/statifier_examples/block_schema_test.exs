@@ -10,12 +10,25 @@ defmodule StatifierExamples.BlockSchemaTest do
   checked without anyone remembering to add it here. The two files under
   `priv/fixtures/` that are not block documents are named below, and the
   test proves that each is not one.
+
+  From `statifier_blocks` 0.38.0 a block type's declared field types bind,
+  so the same documents are also checked against the stricter,
+  palette-aware schema `StatifierBlocks.Schema.for_palette/1` answers for
+  the palette that authored them, and every palette this app mounts is run
+  through the package's pre-flight (`StatifierBlocks.Palette.preflight/1`
+  and `preflight/2`), which must answer no finding. The app mounts two:
+  `StatifierExamples.Charts.palette/0`, which authored every shipped
+  document and which the editor, the Plan view and every compile use, and
+  `StatifierBlocks.Palette.core/0`, which the Plan map reads type
+  explanations from.
   """
 
   use ExUnit.Case, async: true
 
   alias StatifierBlocks.Document
+  alias StatifierBlocks.Palette
   alias StatifierBlocks.Schema
+  alias StatifierExamples.Charts
 
   @globs ["priv/fixtures/*.json", "priv/first_workflow/*.json"]
 
@@ -35,6 +48,14 @@ defmodule StatifierExamples.BlockSchemaTest do
   defp block_documents, do: shipped_json() -- @not_block_documents
 
   defp root_schema, do: Schema.json() |> Jason.decode!() |> ExJsonSchema.Schema.resolve()
+
+  defp palette_schema(palette),
+    do: palette |> Schema.for_palette() |> ExJsonSchema.Schema.resolve()
+
+  # Every palette this app mounts, by the name a failure message uses.
+  defp mounted_palettes do
+    [{"Charts.palette/0", Charts.palette()}, {"Palette.core/0", Palette.core()}]
+  end
 
   # Sabotage: added a required property to the root of the dependency's
   # shipped schema file and recompiled it; the package still accepted every
@@ -56,6 +77,50 @@ defmodule StatifierExamples.BlockSchemaTest do
       assert :ok == ExJsonSchema.Validator.validate(schema, Jason.decode!(bytes)),
              "#{path} fails the published block-document schema"
     end
+  end
+
+  # Sabotage: set `"assign_to"` of the `core.invoke` block in
+  # priv/first_workflow/hold_pickup.json to an integer; this went red on the
+  # palette-schema assertion while the published-schema test stayed green.
+  # Restored from a copy.
+  test "every shipped block document validates against its palette's schema" do
+    schema = palette_schema(Charts.palette())
+    documents = block_documents()
+
+    assert "priv/first_workflow/hold_pickup.json" in documents
+    assert "priv/fixtures/library_loan.json" in documents
+
+    for path <- documents do
+      assert :ok ==
+               ExJsonSchema.Validator.validate(schema, path |> File.read!() |> Jason.decode!()),
+             "#{path} fails the schema for the palette that authored it"
+    end
+  end
+
+  # Sabotage: set the `retries` default of `myapp.capture` to the string
+  # "2" in lib/statifier_examples/card_auth/capture.ex; this went red naming
+  # the type. Restored from a copy.
+  test "the pre-flight finds nothing in any palette this app mounts" do
+    host_types =
+      Charts.palette().types |> Map.keys() |> Enum.filter(&String.starts_with?(&1, "myapp."))
+
+    assert host_types != [], "the pre-flight has no host type to judge"
+
+    for {name, palette} <- mounted_palettes() do
+      assert {name, []} == {name, Palette.preflight(palette)}
+    end
+  end
+
+  # Sabotage: the same integer `"assign_to"` in hold_pickup.json as above;
+  # this went red with a finding naming the block. Restored from a copy.
+  test "the pre-flight finds nothing in any shipped block document" do
+    documents =
+      for path <- block_documents() do
+        {:ok, document} = path |> File.read!() |> Document.from_json()
+        document
+      end
+
+    assert [] == Palette.preflight(Charts.palette(), documents)
   end
 
   test "each skipped file is not a block document" do
