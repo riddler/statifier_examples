@@ -18,6 +18,9 @@ defmodule StatifierExamples.MigrateWaitingTest do
     :ok = Sandbox.checkout(Repo)
   end
 
+  # Sabotage: made the walk expect one publish warning, then 15 mapped
+  # states, then a :mapped class for the plan diff (three runs); each run
+  # stopped the walk at that step and this went red. Reverted from a copy.
   # Sabotage: removed the `supports_content_hash_query?/1` delegation from
   # `StatifierExamples.Persistence`; the walk stopped at `:dry_run` with
   # `:content_hash_query_unsupported` and this went red. Reverted from a copy.
@@ -94,6 +97,10 @@ defmodule StatifierExamples.MigrateWaitingTest do
     report = fn counts -> %{from: "a", to: "b", dry_run: false, results: [], counts: counts} end
 
     for {step, answer, expected} <- [
+          {:published, %{warnings: 1}, %{warnings: 0}},
+          {:mapped, %{kept: 21, unmapped: 0}, %{kept: 16, unmapped: 5}},
+          {:diff, %{class: :mapped, unresolved: 0}, %{class: :breaking, unresolved: 0}},
+          {:diff, %{class: :breaking, unresolved: 4}, %{class: :breaking, unresolved: 5}},
           {:dry_run, report.(%{would_migrate: 1, would_refuse: 1, skipped: 0}),
            %{would_migrate: 0, would_refuse: 2}},
           {:dry_run, report.(%{would_migrate: 1, would_refuse: 1, skipped: 0}),

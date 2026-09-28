@@ -26,8 +26,9 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
 
   A step that does not answer as the guide says stops the task with a
   non-zero exit and names the step: an error or a refusal from a call, and
-  also a batch or a count that answered but not with what the guide shows
-  (`expect/3` holds each one to its expected counts). Run
+  also any count or class the guide quotes that answered otherwise - the
+  publish warnings, the mapped and unmapped states, both diffs, and every
+  batch and count after them (`expect/3` holds each one). Run
   `mix ecto.migrate` first.
   """
 
@@ -46,6 +47,11 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
 
   # The one step revision 2 renames: its block id, old to new.
   @renamed {"blk_awaiting_return", "blk_on_loan"}
+
+  # What the blocks mapping answers for the two revisions `document/1`
+  # builds: every state of revision 1 but the five the renamed step mints.
+  @kept_states 16
+  @renamed_states 5
 
   @serialization {ExecutionLock, ExecutionLock}
 
@@ -76,11 +82,19 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
     with {:ok, old} <- step(:registered, register(document(1))),
          :ok <- step(:waiting, open(store, old, loans)),
          {:ok, new, warnings} <- step(:published, publish(document(2))),
+         :ok <- expect(:published, %{warnings: length(warnings)}, %{warnings: 0}),
          {:ok, mapping} <- step(:mapped, Migration.plan(old.compiled, new.compiled)),
+         mapped = %{kept: map_size(mapping["states"]), unmapped: length(mapping["unmapped"])},
+         :ok <- expect(:mapped, mapped, %{kept: @kept_states, unmapped: @renamed_states}),
          plan =
            completed_plan(old, new, mapping, [{:add, "damaged", false}, {:add, "repair", false}]),
          {:ok, blocks_only} <- step(:planned, plan(old, new, mapping["states"], [], [])),
          {:ok, forward} <- step(:planned, plan),
+         diff_blocks = diff(old, new, mapping["states"]),
+         :ok <-
+           expect(:diff, diff_blocks, %{class: :breaking, unresolved: @renamed_states}),
+         diff_plan = diff(old, new, forward.states),
+         :ok <- expect(:diff, diff_plan, %{class: :breaking, unresolved: 0}),
          {:ok, preview_blocks} <- step(:dry_run, batch(store, blocks_only, old, new, true)),
          :ok <- expect(:dry_run, preview_blocks, %{would_migrate: 0, would_refuse: n}),
          {:ok, preview} <- step(:dry_run, batch(store, forward, old, new, true)),
@@ -110,10 +124,10 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
          "migrate waiting on statifier_persistence #{Application.spec(:statifier_persistence, :vsn)}",
          "waiting      #{length(loans)} loan(s) on revision 1, #{old.hash}, each with its due-date timer",
          "published    revision 2, #{new.hash}, #{length(warnings)} warning(s)",
-         "diff         #{diff_line(old, new, mapping["states"])} with the blocks mapping, " <>
-           "#{diff_line(old, new, forward.states)} with the plan",
-         "plan         the blocks mapping maps #{map_size(mapping["states"])} state(s) and leaves " <>
-           "#{length(mapping["unmapped"])} unmapped; the plan maps those to #{elem(@renamed, 1)}",
+         "diff         #{diff_line(diff_blocks)} with the blocks mapping, " <>
+           "#{diff_line(diff_plan)} with the plan",
+         "plan         the blocks mapping maps #{mapped.kept} state(s) and leaves " <>
+           "#{mapped.unmapped} unmapped; the plan maps those to #{elem(@renamed, 1)}",
          "dry run      blocks mapping alone: #{counts(preview_blocks)}; the plan: #{counts(preview)}",
          "applied      #{counts(applied)}",
          "drained      revision 1: #{on(drained)}; revision 2: #{on(landed)}",
@@ -131,10 +145,13 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
   end
 
   @doc """
-  Holds one step's answer to the counts the guide shows for it: `:ok` when
+  Holds one step's answer to the values the guide shows for it: `:ok` when
   every key of `expected` has its value in `answer`, and
   `{:error, step, {:unexpected, counts}}` otherwise, naming the step and
-  every count it did answer.
+  every value it did answer. Every count and class the guide quotes is held
+  this way: the publish warnings, the blocks mapping's mapped and unmapped
+  states, both diffs' class and unresolved states, and each batch and count
+  after them.
 
   `answer` is a `StatifierPersistence.Executions.migrate_batch/3` report,
   whose `counts` are read, or a plain map of counts such as
@@ -143,7 +160,7 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
   apply that refuses every loan is still `{:ok, report}`; this is what
   stops the task on it.
   """
-  @spec expect(atom(), map(), %{atom() => non_neg_integer()}) ::
+  @spec expect(atom(), map(), %{atom() => term()}) ::
           :ok | {:error, atom(), {:unexpected, map()}}
   def expect(step, %{counts: counts}, expected), do: expect(step, counts, expected)
 
@@ -342,11 +359,14 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
 
   # ---------------------------------------------------------- the output
 
-  defp diff_line(from, to, states) do
+  # The pair's class and how many held states it could not resolve.
+  defp diff(from, to, states) do
     %{class: class, reasons: reasons} = Chart.diff(from.machine, to.machine, mapping: states)
-    unresolved = Enum.count(reasons, &match?({:state_unresolved, _}, &1))
-    "#{class} (#{unresolved} unresolved)"
+    %{class: class, unresolved: Enum.count(reasons, &match?({:state_unresolved, _}, &1))}
   end
+
+  defp diff_line(%{class: class, unresolved: unresolved}),
+    do: "#{class} (#{unresolved} unresolved)"
 
   defp counts(%{counts: counts}),
     do: counts |> Enum.sort() |> Enum.map_join(", ", fn {outcome, n} -> "#{outcome} #{n}" end)
