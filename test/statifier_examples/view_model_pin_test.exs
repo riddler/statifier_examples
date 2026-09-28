@@ -152,11 +152,16 @@ defmodule StatifierExamples.ViewModelPinTest do
   # "Run interruptible steps" where they read the labels; `core.await` is
   # in neither, so the claim above now holds for every core type but that
   # one.
+  #
+  # 2026-09-28: statifier_blocks 0.37.0 gives a `core.send` with a delay a
+  # sentence that names it. Each fixture's delayed sends now read "In 15
+  # minutes, send ..." and the like where they read "Send ..."; an
+  # undelayed send reads as before.
   @card_processing_steps [
     {"blk_cp_root", 0, "Run its steps in order"},
     {"blk_cp_intake", 1, "Intake"},
     {"blk_cp_validation", 1, "Decide: When \"valid\", otherwise"},
-    {"blk_cp_authz_deadline", 3, "Send card.authz_timed_out"},
+    {"blk_cp_authz_deadline", 3, "In 15 minutes, send card.authz_timed_out"},
     {"blk_cp_lanes", 3, "Run 3 lanes at the same time"},
     {"blk_cp_risk_rating", 5, "Risk rating"},
     {"blk_cp_fraud_wait", 5, "Wait 2m"},
@@ -185,11 +190,11 @@ defmodule StatifierExamples.ViewModelPinTest do
     {"blk_su_verify", 1, "Run interruptible steps"},
     {"blk_su_send_verification", 2, "Signup step"},
     {"blk_su_reminder_window", 2, "Run interruptible steps"},
-    {"blk_su_reminder_timer", 3, "Send signup.reminder_due"},
+    {"blk_su_reminder_timer", 3, "In 45 seconds, send signup.reminder_due"},
     {"blk_su_verify_wait", 3, "Wait 24h"},
     {"blk_su_reminder_notice", 2, "Notify"},
     {"blk_su_onboarding", 1, "Run interruptible steps"},
-    {"blk_su_onboarding_deadline", 2, "Send signup.abandoned"},
+    {"blk_su_onboarding_deadline", 2, "In 2 hours, send signup.abandoned"},
     {"blk_su_plan", 2, "Decide: When \"business\", otherwise"},
     {"blk_su_provision", 2, "Provision"}
   ]

@@ -92,7 +92,7 @@ defmodule StatifierExamples.DescribeOutlineTest do
     assert length(interrupts(outline)) == 2
 
     for line <- [
-          "Run interruptible steps starts with Send registration.deadline",
+          "Run interruptible steps starts with In 7 days, send registration.deadline",
           "Run interruptible steps (done) ends Run its steps in order",
           "On registration.deadline, When registration.deadline, abandon abandons " <>
             "Run interruptible steps",
@@ -102,7 +102,9 @@ defmodule StatifierExamples.DescribeOutlineTest do
           # The arm its author left empty goes straight to the branch's end.
           ~s|Decide: When "child", otherwise: otherwise, the end of | <>
             ~s|Decide: When "child", otherwise|,
-          ~s|Decide: When "child", otherwise: if undecided, Send patron.asked_to_visit|
+          ~s|Decide: When "child", otherwise: if undecided, Send patron.asked_to_visit|,
+          # The deadline send arms the rule that abandons the registration.
+          "In 7 days, registration.deadline reaches When registration.deadline, abandon"
         ] do
       assert line in lines, line
     end

@@ -987,6 +987,29 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert row_markup(html, "blk_ll_close") =~ "Send loan.closed"
     end
 
+    # A delayed send's clock mark has its twin in words: the row reads the
+    # send's sentence, which names the delay, and so do the panel and the
+    # map's own graph, which also carries the dotted edge the delay arms.
+    #
+    # Sabotage: blanked the deadline send's delay in the registration
+    # fixture; the panel lost the delay and this went red. Reverted from a
+    # copy.
+    test "the registration's delayed send names its delay in the row and the panel",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+
+      html = render_hook(view, "select-row", %{"block-id" => "blk_pr_deadline"})
+
+      [_all, panel_sentence] =
+        Regex.run(~r/myapp-plan__panel-sentence"\s*>\s*([^<]*?)\s*</, html)
+
+      assert panel_sentence == "In 7 days, send word that the registration week is up"
+      assert row_markup(html, "blk_pr_deadline") =~ "In 7 days, send registration.deadline"
+
+      assert [%{"from" => "blk_pr_deadline", "to" => "blk_pr_expired", "delay" => "7d"}] =
+               PlanMap.timers(map_graph(html))
+    end
+
     # The map redraws from the document the page holds, so a write made
     # through the list shows on it without the map being asked.
     #

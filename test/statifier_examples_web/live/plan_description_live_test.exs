@@ -11,7 +11,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   alias StatifierExamplesWeb.PlanMap
 
   @library ["library_loan", "patron_registration"]
-  @kinds ~w(block rule arm undecided_arm rules marker start edge interrupt)
+  @kinds ~w(block rule arm undecided_arm rules marker start edge interrupt timer)
 
   @region "#plan-description"
 
@@ -221,8 +221,9 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   defp view_model(key), do: ViewModel.build(fixture(key).document, Charts.palette(), [])
 
   defp drawn_ids(key) do
-    %{"children" => children} = key |> view_model() |> PlanMap.graph()
-    children |> Enum.flat_map(&ids/1) |> Enum.sort()
+    %{"children" => children} = graph = key |> view_model() |> PlanMap.graph()
+    timers = graph |> Map.get("timers", []) |> Enum.map(& &1["id"])
+    (Enum.flat_map(children, &ids/1) ++ timers) |> Enum.sort()
   end
 
   defp ids(node) do

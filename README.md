@@ -126,7 +126,7 @@ execution starts when its host starts one; the events a document accepts
 are what it listens for while it runs, and the description region names
 them. The dot is not a block: a click on it selects nothing.
 
-### Interrupt edges and timer marks
+### Interrupt edges, timer edges and timer marks
 
 A group's interrupt rules sit on its rail, and each one is drawn with a
 dashed edge to where it leads: an `abandon` rule down to the group's bottom
@@ -139,6 +139,15 @@ a delay a clock face, because a wait inside the step and an event armed to
 fire after the step has moved on are two different timers. A send with no
 delay carries neither. A mark is part of its block's box: a click on it
 selects the block, as a click anywhere else on the box does.
+
+A send with a delay also draws a dotted edge, labelled with the delay, to
+each interrupt rule or wait that names the event it sends: the patron
+registration's deadline send reaches the rule that abandons the
+registration seven days later. They are the timer edges
+`StatifierBlocks.Describe` answers for the same document, drawn after the
+layout like the interrupt edges, dotted where those are dashed because a
+timer edge is not a way out of anything: it says which block hears the
+event.
 
 ### The Branch
 
@@ -161,9 +170,9 @@ steps sit in a pane of their own, the group's first box, held wider than
 the interrupt rules and at least as tall. The rules stand beside the pane
 in one column, top to bottom in the order the group lists them, under a
 one-line caption below the column's label. The pane and the caption add no
-gesture. Both captions, the column's and the branch band's, are this app's
-fixed text in `StatifierExamplesWeb.TypeExplanation`, the one place they
-change.
+gesture. Both captions, the column's and the branch band's, are the first
+sentence of the type's own explanation, `StatifierBlocks.BlockType.explain/1`,
+cut to one line; the description region shows the whole paragraph.
 
 ### Editing from the map
 
@@ -206,15 +215,16 @@ and open slots it has.
 every element the map draws - blocks, interrupt rules, arms (the undecided
 arm included), a group's body and its rules, empty-slot markers, the end mark,
 the start dot and its edge,
-connectors (a branch's rejoin among them) and the dashed interrupt
-edges - from
+connectors (a branch's rejoin among them), the dashed interrupt
+edges and the dotted timer edges - from
 the view model and `StatifierBlocks.Describe.outline/3`, keyed by the map's
 own ids. The region is `aria-live="polite"` and every row of the list names
 it with `aria-describedby`, so a screen reader hears what a sighted reader
 sees on the map. It shows values, never controls, and adds no event: the
-row's own selection is what fills it. What a core type is for is this app's
-fixed text (`StatifierExamplesWeb.TypeExplanation`) until `statifier_blocks`
-answers it; any other type falls back to its palette description.
+row's own selection is what fills it. What a type is for is the type's own
+explanation, `StatifierBlocks.BlockType.explain/1` through the page's
+palette, which falls back to the palette description for a type that does
+not explain itself.
 
 Pointing at anything the map draws shows that element's description in the
 region, and pointing away puts back the selected block's or the document's.

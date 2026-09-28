@@ -175,6 +175,63 @@ export function interruptsOf(laid) {
   return out
 }
 
+// Every timer edge, each with the points it is drawn through and where its
+// label goes, absolute. Like the interrupt edges they are not ELK's: the
+// server hands them over on the graph's root as `timers`, so the layout
+// never sees them and they never move a box. Each runs from the side of
+// the delayed send's box to the side of the box that hears its event, an
+// interrupt rule or a wait: across to the right when that box stands to the
+// right, to the left when it stands to the left, and out past both right
+// sides and back when the two share a column. The label, the delay as the
+// send holds it, is written beside the vertical run.
+const TIMER_REACH = 16
+
+export function timersOf(laid) {
+  const byId = new Map(boxes(laid).map((box) => [box.id, box]))
+  const out = []
+
+  for (const edge of laid.timers || []) {
+    const send = byId.get(edge.sources[0])
+    const hears = byId.get(edge.targets[0])
+    if (!send || !hears) continue
+    const sy = send.y + send.height / 2
+    const hy = hears.y + hears.height / 2
+    let from
+    let x
+    let to
+
+    if (hears.x >= send.x + send.width) {
+      from = send.x + send.width
+      to = hears.x
+      x = (from + to) / 2
+    } else if (hears.x + hears.width <= send.x) {
+      from = send.x
+      to = hears.x + hears.width
+      x = (from + to) / 2
+    } else {
+      from = send.x + send.width
+      to = hears.x + hears.width
+      x = Math.max(from, to) + TIMER_REACH
+    }
+
+    const points = [{x: from, y: sy}, {x, y: sy}, {x, y: hy}, {x: to, y: hy}]
+    const label = Math.abs(hy - sy) >= LINE_HEIGHT
+      ? {x: x + 4, y: (sy + hy) / 2 + 4}
+      : {x: Math.min(from, x) + 4, y: sy - 4}
+
+    out.push({
+      id: edge.id,
+      source: edge.sources[0],
+      target: edge.targets[0],
+      delay: edge.delay,
+      points,
+      label,
+    })
+  }
+
+  return out
+}
+
 // A branch's band: one strip spanning every arm, in the room the server
 // left between the branch's header and its arms, with the fork mark at its
 // left and the branch's caption after it. Read from the boxes the layout
@@ -228,8 +285,8 @@ function drawBand(node) {
 }
 
 // A container's one-line caption: on a branch's band, or under a group's
-// rules column's label. The text is the server's, from the host's one
-// module of fixed type text.
+// rules column's label. The text is the server's: the first sentence of
+// the type's own explanation, cut to one line.
 function drawCaption(at, text) {
   if (!at || !text) return ""
   return `<text class="plan-map__caption" data-map-caption="true" x="${at.x}" y="${at.y}">` +
@@ -405,6 +462,20 @@ function drawInterrupt(edge) {
     `style="fill: none; stroke: var(--plan-map-edge, #64748b); stroke-dasharray: 5 4"/>`
 }
 
+// A timer edge, dotted where an interrupt edge is dashed: it is not a way
+// out of anything but the event a delayed send arms, drawn to the rule or
+// the wait that hears it, labelled with the delay. Its label carries the
+// edge's id, so pointing at either names the edge.
+function drawTimer(edge) {
+  const d = edge.points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ")
+  const id = escapeText(edge.id)
+  return `<path class="plan-map__edge plan-map__edge--timer" data-map-edge="${id}" ` +
+    `data-map-edge-kind="timer" d="${d}" marker-end="url(#plan-map-arrow)" ` +
+    `style="fill: none; stroke: var(--plan-map-edge, #64748b); stroke-dasharray: 2 3"/>` +
+    `<text class="plan-map__caption plan-map__timer-caption" data-map-caption="true" ` +
+    `data-map-edge="${id}" x="${edge.label.x}" y="${edge.label.y}">${escapeText(edge.delay)}</text>`
+}
+
 // The laid-out graph as one SVG string. The picture is decoration over the
 // list, which is the accessible path through the same document, so the SVG
 // is hidden from assistive technology and takes no focus.
@@ -415,7 +486,8 @@ export function renderSvg(laid, {editable = false} = {}) {
   const all = boxes(laid)
   const nodes = all.map(drawNode).join("")
   const gaps = editable ? all.map(drawGap).join("") : ""
-  const edges = edgesOf(laid).map(drawEdge).join("") + interruptsOf(laid).map(drawInterrupt).join("")
+  const edges = edgesOf(laid).map(drawEdge).join("") +
+    interruptsOf(laid).map(drawInterrupt).join("") + timersOf(laid).map(drawTimer).join("")
   const width = Math.ceil(laid.width)
   const height = Math.ceil(laid.height)
 
