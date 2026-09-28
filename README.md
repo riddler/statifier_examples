@@ -153,7 +153,7 @@ Every gesture on the map is one the list already makes, sent to the same
 |---|---|---|
 | a block's box | selects it, and its form opens in the panel beside the map | the row's sentence, then the row's "Its fields" link into the panel |
 | the "+" at a block's lower right corner | opens the picker for the place right after it | the row's "+" |
-| an empty slot's marker | opens the picker, in the panel, for the head of that slot | none yet - see below |
+| an empty slot's marker | opens the picker, in the panel, for the head of that slot | select the block the slot belongs to, then its "Add a step to" button for that slot in the panel |
 | the panel's Move up, Move down, Delete | moves or deletes the selected block | the same buttons on every row that is not selected, and the panel's |
 | the panel's form | changes the selected block's config | the same form, reached through the row's link |
 
@@ -163,11 +163,10 @@ and takes focus. The map's region is hidden from assistive technology and
 out of the tab order, so a keyboard or a screen reader meets every step once,
 in the list and the panel.
 
-**Not yet keyboard-reachable:** inserting at the head of an empty slot. The
-list has no row for an empty slot, so the marker on the map is the only way
-to arm that gap today. The editor at `/editor` has a focusable gap button in
-every slot, empty ones included, which is the keyboard path to the same
-insert until the Plan view grows one (`se-jdez`).
+The list has no row for an empty slot, so the panel carries the keyboard's
+way to one: with a block selected, it shows an "Add a step to" button for
+each of that block's empty slots, named by the slot's label. The button arms
+the same insert the slot's marker arms, and the picker opens in the panel.
 
 On a read-only page (`readonly=1`) the map draws no "+" and a click only
 selects; the panel shows the block's fields as values.
