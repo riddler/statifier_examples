@@ -631,6 +631,11 @@
   font-weight: 600;
 }
 
+/* The start dot selects nothing, so it does not look clickable. */
+.plan-map__svg .plan-map__start {
+  cursor: default;
+}
+
 .plan-map__svg .plan-map__empty-text {
   fill: var(--sb-fg-subtle);
   font-style: italic;

@@ -85,7 +85,8 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
         graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
         %{"drawn" => "map", "boxes" => boxes} = run(dir, fixture.key, graph)
 
-        for node <- walk(graph), node["id"] != "plan-map" do
+        # The start dot carries no text.
+        for node <- walk(graph), node["id"] != "plan-map", node["kind"] != "start" do
           texts =
             if node["kind"] == "slot",
               do: node["lines"] ++ List.wrap(node["caption"]),
@@ -337,6 +338,110 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
 
         # It still carries its id, so the description region can name it.
         if key == "library_loan", do: assert(end_tag =~ ~s(data-map-node="blk_ll_root/end"))
+      end
+    end
+  end
+
+  describe "the start, as drawn" do
+    # Each library fixture's root and the first step of its flow.
+    @starts [
+      {"library_loan", "blk_ll_root", "blk_ll_on_loan"},
+      {"patron_registration", "blk_pr_root", "blk_pr_verify"}
+    ]
+
+    # One filled dot with no text, one edge from its bottom into the top of
+    # the first step, and the caption written between the two where the
+    # layout left it room, beside the edge. The loan declares the events it
+    # accepts and the caption still reads the one sentence: those events are
+    # the description region's to name.
+    #
+    # Sabotage: made drawNode draw nothing for the start dot; this went red.
+    # Made drawEdge leave the start edge's caption out; this went red. Made
+    # edgesOf leave the labels relative to their container; the caption
+    # stood off the edge by the root's offset and this went red. Each
+    # reverted from a copy.
+    test "both library fixtures draw the start dot and its captioned edge into the first step",
+         %{tmp_dir: dir} do
+      for {key, root, first} <- @starts do
+        %{
+          "drawn" => "map",
+          "html" => html,
+          "boxes" => boxes,
+          "edges" => edges,
+          "captions" => captions
+        } = run(dir, key, library_graph(key))
+
+        start = "#{root}/start"
+        id = "#{start}->#{first}"
+        dot = boxes[start] || flunk("#{key}: no start dot laid out")
+        step = boxes[first]
+
+        assert [group] = Regex.run(~r/<g class="plan-map__start"[^>]*>.*?<\/g>/, html)
+        assert group =~ ~s(data-map-start="#{start}")
+        assert [_circle] = Regex.scan(~r/<circle /, group)
+        assert group =~ "fill: var(--plan-map-edge"
+        refute group =~ "<text"
+
+        assert [%{"id" => ^id, "source" => ^start, "target" => ^first} = edge] =
+                 Enum.filter(edges, &(&1["kind"] == "start"))
+
+        assert_in_delta edge["start"]["y"], dot["y"] + dot["height"], 0.5, key
+        assert_in_delta edge["end"]["y"], step["y"], 0.5, key
+        assert edge["end"]["x"] >= step["x"] and edge["end"]["x"] <= step["x"] + step["width"]
+
+        assert [%{"text" => "Starts when told to", "x" => x, "y" => y}] = captions[id]
+        assert [%{"width" => width, "height" => height} = label] = edge["labels"]
+        assert y > dot["y"] + dot["height"] and y < step["y"], "#{key}: caption at #{y}"
+        assert label["y"] >= dot["y"] + dot["height"] and label["y"] + height <= step["y"]
+        assert width >= text_width(["Starts when told to"])
+        assert_in_delta x, label["x"], 0.5, key
+
+        # Beside the edge, not across it: the caption's box ends within a
+        # few pixels of the edge's line on one side of it, in the same
+        # coordinates the edge is drawn in.
+        line = edge["start"]["x"]
+        right = x + width
+
+        assert (line >= right and line - right <= 4) or (line <= x and x - line <= 4),
+               "#{key}: the caption spans #{x}..#{right}, the edge runs at #{line}"
+      end
+    end
+
+    # A click on the dot, or on the circle a real click lands on, selects
+    # nothing and arms nothing; the dot keeps its id, so the description
+    # region can name it.
+    #
+    # Sabotage: gave the dot data-map-kind="block"; a click on it selected
+    # a block and this went red. Reverted from a copy.
+    test "the start dot selects nothing", %{tmp_dir: dir} do
+      for {key, root, _first} <- @starts, mode <- [nil, "editable"] do
+        %{"starts" => starts, "gestures" => gestures} = run(dir, key, library_graph(key), mode)
+        start = "#{root}/start"
+
+        assert [
+                 %{
+                   "id" => ^start,
+                   "kind" => nil,
+                   "children" => ["circle"],
+                   "gestures" => [nil, nil]
+                 }
+               ] =
+                 starts
+
+        refute Enum.any?(gestures, &String.contains?(&1["element"], "/start"))
+      end
+    end
+
+    # A document that declares no events it accepts reads the same.
+    test "every fixture captions its start edge with the one sentence", %{tmp_dir: dir} do
+      for fixture <- Charts.fixtures() do
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+
+        %{"drawn" => "map", "edges" => edges, "captions" => captions} =
+          run(dir, fixture.key, graph)
+
+        assert [%{"id" => id}] = Enum.filter(edges, &(&1["kind"] == "start"))
+        assert [%{"text" => "Starts when told to"}] = captions[id]
       end
     end
   end

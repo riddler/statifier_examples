@@ -1,9 +1,11 @@
 defmodule StatifierExamplesWeb.PlanDescriptionTest do
   use ExUnit.Case, async: true
 
+  alias StatifierBlocks.Block
   alias StatifierBlocks.Core.Await
   alias StatifierBlocks.Core.Wait
   alias StatifierBlocks.Describe
+  alias StatifierBlocks.Document
   alias StatifierBlocks.Palette
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
@@ -55,6 +57,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
             :body,
             :marker,
             :end,
+            :start,
             :edge,
             :interrupt
           ] do
@@ -298,6 +301,54 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert %PlanDescription{kind: :edge, title: "Rejoin"} = patron
       assert fact(patron, "To") == "Send patron.welcomed"
     end
+
+    # The start dot and its edge: where the document starts, in the map's
+    # own sentence, and the step that runs first. The loan's events are not
+    # the edge's: the idle description lists them as what it listens for.
+    #
+    # Sabotage: made describe/2 answer :end for the start dot; this went
+    # red. Reverted from a copy.
+    test "the start dot and its edge are described" do
+      loan = by_id("library_loan")
+
+      assert %PlanDescription{kind: :start, title: "Start", sentence: "Starts when told to"} =
+               loan["blk_ll_root/start"]
+
+      edge = loan["blk_ll_root/start->blk_ll_on_loan"]
+      assert %PlanDescription{kind: :start, title: "Start"} = edge
+      assert fact(edge, "What starts it") == "Starts when told to"
+      assert fact(edge, "First step") == "Run interruptible steps"
+      refute edge.sentence =~ "copy.returned"
+    end
+
+    # The two shapes no fixture has: a document with no step yet, whose
+    # edge goes into the empty marker, and a root drawn with its flow in a
+    # pane of its own, whose edge the graph itself carries.
+    #
+    # Sabotage: made the start edge read its first step with target/2,
+    # which calls a marker "the document finishes"; this went red. Made
+    # elements/3 drop the graph's own edges; this went red. Each reverted
+    # from a copy.
+    test "a start into an empty slot, and one the graph carries, are described" do
+      empty = Block.new("core.sequence", id: "root", slots: %{"body" => []})
+
+      assert %{"root/start->root/body/empty" => edge} = describe_root(empty)
+      assert fact(edge, "First step") == "no step yet (#{PlanMap.empty_text()})"
+
+      group =
+        Block.new("core.group",
+          id: "held",
+          slots: %{
+            "body" => [
+              Block.new("core.await", id: "wait", config: %{"event" => "hold.collected"})
+            ],
+            "interrupts" => []
+          }
+        )
+
+      assert %{"held/start->held" => edge, "held/start" => %{kind: :start}} = describe_root(group)
+      assert fact(edge, "First step") == "Run interruptible steps"
+    end
   end
 
   describe "idle/4" do
@@ -385,6 +436,15 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
      PlanDescription.idle(document, graph, view_model, outline)}
   end
 
+  defp describe_root(root) do
+    document = Document.new(root)
+    view_model = ViewModel.build(document, Charts.palette(), [])
+    graph = PlanMap.graph(view_model)
+    outline = Describe.outline(document, Charts.palette(), [])
+
+    graph |> PlanDescription.elements(view_model, outline) |> Map.new(&{&1.id, &1})
+  end
+
   defp by_id(key) do
     {_graph, descriptions, _idle} = described(key)
     Map.new(descriptions, &{&1.id, &1})
@@ -399,9 +459,11 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
   end
 
   # Every id the graph draws below its root: nodes, connectors and
-  # interrupt edges alike.
-  defp graph_ids(%{"children" => children}),
-    do: children |> Enum.flat_map(&ids/1) |> Enum.sort()
+  # interrupt edges alike, and an edge the root itself carries.
+  defp graph_ids(%{"children" => children} = graph) do
+    edges = graph |> Map.get("edges", []) |> Enum.map(& &1["id"])
+    (Enum.flat_map(children, &ids/1) ++ edges) |> Enum.sort()
+  end
 
   defp ids(node) do
     own = [node["id"]]

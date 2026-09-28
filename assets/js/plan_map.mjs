@@ -114,9 +114,9 @@ export function boxes(laid) {
   return out
 }
 
-// Every edge with its points made absolute. An edge's points are relative
-// to the node it is declared in, which is the container holding both of
-// its ends.
+// Every edge with its points, and its labels' boxes, made absolute. An
+// edge's points are relative to the node it is declared in, which is the
+// container holding both of its ends; so are its labels'.
 export function edgesOf(laid) {
   const out = []
   const shift = (p, dx, dy) => ({x: dx + p.x, y: dy + p.y})
@@ -127,7 +127,8 @@ export function edgesOf(laid) {
         endPoint: shift(section.endPoint, dx, dy),
         bendPoints: (section.bendPoints || []).map((p) => shift(p, dx, dy)),
       }))
-      out.push({...edge, sections})
+      const labels = (edge.labels || []).map((label) => ({...label, ...shift(label, dx, dy)}))
+      out.push({...edge, sections, labels})
     }
     for (const child of node.children || []) walk(child, dx + child.x, dy + child.y)
   }
@@ -286,6 +287,16 @@ function drawNode(node) {
       `</g>`
   }
 
+  // Where the document starts: the state chart's initial mark, a filled
+  // dot with no text. Like the end mark it is not a block, and it carries
+  // no data-map-kind, so a click on it selects nothing.
+  if (node.kind === "start") {
+    return `<g class="plan-map__start" data-map-start="${id}" data-map-node="${id}">` +
+      `<circle cx="${x + w / 2}" cy="${y + h / 2}" r="${Math.min(w, h) / 2}" ` +
+      `style="fill: var(--plan-map-edge, #64748b)"/>` +
+      `</g>`
+  }
+
   // A slot's box: an arm, a rail, a tray, or a group's body pane. A group's
   // rules column carries its caption on the line under its label.
   if (node.kind === "slot") {
@@ -350,7 +361,18 @@ function drawEdge(edge) {
         `style="fill: var(--plan-map-edge, #64748b)"/>`
       : ""
     return path + dot
-  }).join("")
+  }).join("") + (edge.kind === "start" ? drawEdgeLabels(edge) : "")
+}
+
+// The start edge's caption, written where the layout placed its label (the
+// server sized it, so the layout left it room). It carries the edge's id,
+// so pointing at the caption names the edge.
+function drawEdgeLabels(edge) {
+  return (edge.labels || []).map((label) =>
+    `<text class="plan-map__caption plan-map__start-caption" data-map-caption="true" ` +
+    `data-map-edge="${escapeText(edge.id)}" ` +
+    `x="${label.x}" y="${label.y + label.height - 4}">${escapeText(label.text)}</text>`,
+  ).join("")
 }
 
 // An interrupt edge, dashed: it is not a step that follows the one before

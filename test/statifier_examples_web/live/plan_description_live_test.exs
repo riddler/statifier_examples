@@ -11,7 +11,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   alias StatifierExamplesWeb.PlanMap
 
   @library ["library_loan", "patron_registration"]
-  @kinds ~w(block rule arm undecided_arm rules marker edge interrupt)
+  @kinds ~w(block rule arm undecided_arm rules marker start edge interrupt)
 
   @region "#plan-description"
 

@@ -39,6 +39,8 @@ defmodule StatifierExamplesWeb.PlanDescription do
   slots drawn as boxes of their own, `:body` being a group's body, drawn as
   a pane beside its rules; `:marker` is an empty slot's "Nothing here yet";
   `:end` is the end mark a branch that ends the document rejoins into;
+  `:start` is the filled dot the document starts at, and its edge into the
+  first step is a `:start` too;
   `:edge` is a connector, a branch's rejoin among them; `:interrupt` is
   the dashed edge an interrupt rule draws to where it takes its group;
   and `:idle` is the document, described when nothing is selected. A
@@ -68,6 +70,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
           | :tray
           | :marker
           | :end
+          | :start
           | :edge
           | :interrupt
           | :idle
@@ -95,6 +98,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
   defstruct [:id, :kind, :title, :explanation, sentence: nil, settings: [], facts: []]
 
   @how_to_read "Every box on the map is a step, drawn inside the step that holds it. " <>
+                 "The filled dot is where the document starts. " <>
                  "An arrow runs from a step to the one after it; a dashed arrow runs " <>
                  "from an interrupt rule to where it takes its group, out of it or " <>
                  "back to the head of its body. An hourglass marks a step that waits, " <>
@@ -114,9 +118,14 @@ defmodule StatifierExamplesWeb.PlanDescription do
   `Describe.outline/3` of the same document.
   """
   @spec elements(PlanMap.t(), ViewModel.t(), Describe.t()) :: [t()]
-  def elements(%{"children" => children}, %ViewModel{} = view_model, %Describe{} = outline) do
+  def elements(
+        %{"children" => children} = graph,
+        %ViewModel{} = view_model,
+        %Describe{} = outline
+      ) do
     context = context(view_model, outline)
-    Enum.flat_map(children, &walk(&1, context))
+    edges = graph |> Map.get("edges", []) |> Enum.map(&edge(&1, context))
+    Enum.flat_map(children, &walk(&1, context)) ++ edges
   end
 
   @doc """
@@ -142,10 +151,10 @@ defmodule StatifierExamplesWeb.PlanDescription do
     }
   end
 
-  # What starts the document. The one place this is said, so the wording
-  # can change in one place: a document starts when its host starts an
-  # execution of it, and `accepts` names the events it listens for while it
-  # runs.
+  # What starts the document, in the words the map's start edge carries
+  # (`PlanMap.start_text/0`, so the wording changes in one place): a
+  # document starts when its host starts an execution of it, and `accepts`
+  # names the events it listens for while it runs.
   @spec starts(Document.t()) :: [fact()]
   defp starts(%Document{accepts: accepts}) do
     listens =
@@ -154,7 +163,7 @@ defmodule StatifierExamplesWeb.PlanDescription do
         _none -> "No events"
       end
 
-    [{"What starts it", "Starts when told to"}, {"Listens for", listens}]
+    [{"What starts it", PlanMap.start_text()}, {"Listens for", listens}]
   end
 
   # ------------------------------------------------------------------- walk
@@ -217,6 +226,18 @@ defmodule StatifierExamplesWeb.PlanDescription do
       explanation:
         "Where the document finishes. The branch above it is the document's last step, " <>
           "so whichever of its arms runs, the document finishes when that arm does."
+    }
+  end
+
+  defp describe(%{"kind" => "start", "id" => id}, _context) do
+    %__MODULE__{
+      id: id,
+      kind: :start,
+      title: "Start",
+      sentence: PlanMap.start_text(),
+      explanation:
+        "Where the document starts. An execution of it begins here when its host " <>
+          "starts one, and runs the step the arrow from this dot points at first."
     }
   end
 
@@ -596,6 +617,21 @@ defmodule StatifierExamplesWeb.PlanDescription do
   # ------------------------------------------------------------------ edges
 
   @spec edge(map(), context()) :: t()
+  defp edge(%{"id" => id, "kind" => "start", "targets" => [to]}, context) do
+    first = first_step(to, context)
+
+    %__MODULE__{
+      id: id,
+      kind: :start,
+      title: "Start",
+      sentence: "#{PlanMap.start_text()}, #{first}",
+      explanation:
+        "The arrow from the start dot: when the host starts an execution of the " <>
+          "document, the step it points at runs first.",
+      facts: [{"What starts it", PlanMap.start_text()}, {"First step", first}]
+    }
+  end
+
   defp edge(%{"id" => id, "kind" => "rejoin", "sources" => [from], "targets" => [to]}, context) do
     onto = target(to, context)
 
@@ -685,6 +721,16 @@ defmodule StatifierExamplesWeb.PlanDescription do
   defp target(id, context) do
     case ViewModel.find_node(context.view_model, id) do
       nil -> "the document finishes"
+      node -> ViewModel.sentence(node)
+    end
+  end
+
+  # What the start edge points at: the first step, or, in a document with
+  # none yet, its root's empty marker, which is no block.
+  @spec first_step(String.t(), context()) :: String.t()
+  defp first_step(id, context) do
+    case ViewModel.find_node(context.view_model, id) do
+      nil -> "no step yet (#{PlanMap.empty_text()})"
       node -> ViewModel.sentence(node)
     end
   end
