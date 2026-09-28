@@ -88,12 +88,12 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
       assert text =~ "Wait for"
       assert text =~ "21d"
       assert text =~ "Step 1 of 1 in Steps of Group (Run interruptible steps)"
-      assert text =~ "On copy.returned, abandons Group"
+      assert text =~ "When the copy is returned, abandons Group"
 
       html = view |> sentence_button("blk_ll_loan_period") |> render_click()
       region = region(html)
       assert LazyHTML.attribute(region, "data-plan-description") == ["idle"]
-      assert LazyHTML.text(region) =~ "Library loan"
+      assert LazyHTML.text(region) =~ "Riverbend Public Library loan"
     end
 
     # A rule is its own kind in the region too, and the root is described
@@ -182,13 +182,18 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
       assert stored_text(loan, "blk_ll_due/arm_renew") =~ "copy.holds == 0 AND loan.renewals"
       assert stored_text(loan, "blk_ll_due/undecided") =~ "cannot be decided"
       assert stored_text(loan, "blk_ll_due/undecided/empty") =~ PlanMap.empty_text()
-      assert stored_text(loan, "blk_ll_on_loan/interrupts") =~ "When copy.returned, abandon"
+
+      assert stored_text(loan, "blk_ll_on_loan/interrupts") =~
+               "When the copy is returned, abandon"
+
       assert stored_text(loan, "blk_ll_returned_early") =~ "abandons Group"
 
       assert stored_text(loan, "blk_ll_overdue_notice->blk_ll_late_return") =~
-               "After Send loan.overdue"
+               "After Send word that the loan is overdue"
 
-      assert stored_text(patron, "blk_pr_age/undecided") =~ "Send patron.asked_to_visit"
+      assert stored_text(patron, "blk_pr_age/undecided") =~
+               "Send word that the patron is asked to visit"
+
       assert stored_text(patron, "blk_pr_age/otherwise/empty") =~ "the end of Branch"
       assert stored_text(patron, "blk_pr_deadline") =~ "7d"
     end

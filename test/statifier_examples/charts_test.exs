@@ -179,8 +179,8 @@ defmodule StatifierExamples.ChartsTest do
              %{key: "signup_guarded_step"},
              %{key: "signup_guarded_section"},
              %{key: "signup_path"},
-             %{key: "library_loan", name: "Library loan"},
-             %{key: "patron_registration", name: "Patron registration"}
+             %{key: "library_loan", name: "Riverbend Public Library loan"},
+             %{key: "patron_registration", name: "Riverbend Public Library patron registration"}
            ] = Charts.fixtures()
   end
 

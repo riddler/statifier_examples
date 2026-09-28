@@ -113,7 +113,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       loan = by_id("library_loan")
 
       assert fact(loan["blk_ll_overdue_notice"], "Outcomes") == [
-               "done: goes on to Wait for copy.returned, giving up after 14d"
+               "done: goes on to Wait until the copy is returned, giving up after 14d"
              ]
 
       assert [received, timed_out] = fact(loan["blk_ll_late_return"], "Outcomes")
@@ -132,8 +132,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       loan = by_id("library_loan")
 
       assert fact(loan["blk_ll_loan_period"], "Interrupt rules") == [
-               "On copy.returned, abandons Group (Run interruptible steps)",
-               "On copy.reported_lost, abandons Group (Run interruptible steps)"
+               "When the copy is returned, abandons Group (Run interruptible steps)",
+               "When the copy is reported lost, abandons Group (Run interruptible steps)"
              ]
 
       assert fact(loan["blk_ll_on_loan"], "Interrupt rules") ==
@@ -157,8 +157,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert rules.kind == :rules
 
       assert fact(rules, "Rules") == [
-               "When registration.abandoned, abandon",
-               "When registration.deadline, abandon"
+               "When the registration is abandoned, abandon",
+               "When the registration week is up, abandon"
              ]
     end
 
@@ -175,10 +175,10 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert fact(body, "Group") == "Group (Run interruptible steps)"
 
       assert fact(body, "Steps") == [
-               "Send registration.deadline",
-               "Wait for email.verified",
+               "Send word that the registration week is up",
+               "Wait until the email address is verified",
                ~s(Decide: When "child", otherwise),
-               "Send patron.welcomed"
+               "Send word that the patron is welcomed"
              ]
     end
 
@@ -191,12 +191,12 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       renew = loan["blk_ll_due/arm_renew"]
       assert renew.kind == :arm
       assert fact(renew, "Condition") == "copy.holds == 0 AND loan.renewals < 2"
-      assert fact(renew, "Goes to") == "Send loan.renewed"
+      assert fact(renew, "Goes to") == "Send word that the loan is renewed"
       assert fact(renew, "Place") =~ ~r/^Arm 2 of 4 of Branch/
 
       otherwise = loan["blk_ll_due/otherwise"]
       assert fact(otherwise, "Condition") == "None of the arms before it holds"
-      assert fact(otherwise, "Goes to") == "Send loan.overdue"
+      assert fact(otherwise, "Goes to") == "Send word that the loan is overdue"
       assert fact(otherwise, "Steps") == "2"
     end
 
@@ -208,7 +208,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
     test "the undecided arm, wired and unwired" do
       wired = by_id("patron_registration")["blk_pr_age/undecided"]
       assert wired.kind == :undecided_arm
-      assert fact(wired, "Goes to") == "Send patron.asked_to_visit"
+      assert fact(wired, "Goes to") == "Send word that the patron is asked to visit"
 
       unwired = by_id("library_loan")["blk_ll_due/undecided"]
       assert unwired.kind == :undecided_arm
@@ -241,8 +241,11 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       edge = loan["blk_ll_returned_early->blk_ll_on_loan/exit"]
 
       assert edge.kind == :interrupt
-      assert edge.sentence == "On copy.returned, abandons Group (Run interruptible steps)"
-      assert fact(edge, "Rule") =~ "copy.returned"
+
+      assert edge.sentence ==
+               "When the copy is returned, abandons Group (Run interruptible steps)"
+
+      assert fact(edge, "Rule") =~ "the copy is returned"
       assert fact(edge, "Listens for") == "copy.returned"
       assert fact(edge, "Goes to") == "the end of Group (Run interruptible steps)"
 
@@ -265,8 +268,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       edge = by_id("library_loan")["blk_ll_overdue_notice->blk_ll_late_return"]
 
       assert edge.kind == :edge
-      assert fact(edge, "From") == "Send loan.overdue"
-      assert fact(edge, "To") == "Wait for copy.returned, giving up after 14d"
+      assert fact(edge, "From") == "Send word that the loan is overdue"
+      assert fact(edge, "To") == "Wait until the copy is returned, giving up after 14d"
       assert fact(edge, "Carries") == "done"
       assert fact(edge, "Inside") =~ ~r/^Branch \(/
     end
@@ -300,7 +303,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
 
       patron = by_id("patron_registration")["blk_pr_age->blk_pr_welcome"]
       assert %PlanDescription{kind: :edge, title: "Rejoin"} = patron
-      assert fact(patron, "To") == "Send patron.welcomed"
+      assert fact(patron, "To") == "Send word that the patron is welcomed"
     end
 
     # Each end mark says the document finishes there and with which
@@ -409,7 +412,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
 
       assert loan.kind == :idle
       assert loan.id == nil
-      assert loan.title == "Library loan"
+      assert loan.title == "Riverbend Public Library loan"
       assert loan.sentence =~ "A patron borrows a copy"
       assert loan.explanation =~ PlanMap.empty_text()
       assert loan.explanation =~ "a dashed arrow runs from an interrupt rule"
@@ -423,7 +426,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
       assert fact(loan, "Open slots") == "1"
 
       {_graph, _descriptions, patron} = described("patron_registration")
-      assert patron.title == "Patron registration"
+      assert patron.title == "Riverbend Public Library patron registration"
       assert fact(patron, "Steps") == "10"
       assert fact(patron, "Open slots") == "1"
     end

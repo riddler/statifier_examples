@@ -49,8 +49,10 @@ defmodule StatifierExamplesWeb.PlanMap do
   neither is a tray's. Connectors are drawn, never authored.
 
   A box's title is its type's name and the line under it is the block's
-  sentence; where the two are the same words ("Invoke", "Raise") the
-  line is left off rather than said twice.
+  sentence, with the library world's event names read as words
+  (`StatifierExamplesWeb.EventPhrasing.sentence/1`); where the two are the
+  same words ("Invoke", "Raise") the line is left off rather than said
+  twice.
 
   ## The Branch
 
@@ -244,6 +246,7 @@ defmodule StatifierExamplesWeb.PlanMap do
   alias StatifierBlocks.ViewModel
   alias StatifierBlocks.ViewModel.Node
   alias StatifierBlocks.ViewModel.Slot
+  alias StatifierExamplesWeb.EventPhrasing
   alias StatifierExamplesWeb.TypeExplanation
 
   @char_width 7
@@ -361,7 +364,7 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   @spec block(Node.t()) :: graph_node()
   defp block(%Node{slots: []} = node) do
-    lines = node |> ViewModel.sentence() |> under(ViewModel.title(node))
+    lines = node |> EventPhrasing.sentence() |> under(ViewModel.title(node))
     title = ViewModel.title(node)
 
     %{
@@ -760,8 +763,8 @@ defmodule StatifierExamplesWeb.PlanMap do
   @spec header(Node.t()) :: String.t()
   defp header(%Node{} = node) do
     case ViewModel.fan_label(node) do
-      nil -> ViewModel.sentence(node)
-      label -> "#{ViewModel.sentence(node)} (#{label})"
+      nil -> EventPhrasing.sentence(node)
+      label -> "#{EventPhrasing.sentence(node)} (#{label})"
     end
   end
 
