@@ -21,7 +21,7 @@ The recipe is written and checked against these releases, which are what
 |---|---|---|
 | `statifier` | 2.9.0 | compiling the chart and running it |
 | `statifier_blocks` | 0.35.0 | the document, `Plan.expressible/3`, the compile |
-| `statifier_persistence` | 0.19.0 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_persistence` | 0.21.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.13.0 | the invoke job and its `:invoke_timeout`, the timer job |
 | `statifier_router` | 0.6.0 | two of the publish-time checks |
 
@@ -231,3 +231,8 @@ The later move to statifier 2.9.0, statifier_persistence 0.19.0 and
 statifier_router 0.6.0 needed nothing in this recipe;
 `docs/guides/first-workflow-routed.md`, "Moving the first-workflow host to
 these pins", says why for each.
+
+The move after it, to `statifier_persistence ~> 0.20` with `mix.lock` at
+0.21.0, needed nothing here either: neither release adds a migration, and
+nothing in this recipe calls back into the execution it is stepping, which
+is the one thing 0.21.0 refuses that it used to take.

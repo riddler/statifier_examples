@@ -51,6 +51,9 @@ is the routed version, and `mix statifier_examples.first_workflow_routed` runs
 it: where the first guide opens its execution by hand, this one lets
 `statifier_router` open it, routing each event from a source to the one
 execution its key names and handing the finished execution's answer to a sink.
+[`docs/guides/migrating-waiting-executions.md`](docs/guides/migrating-waiting-executions.md)
+moves waiting library loans onto a new revision of their document and back,
+and `mix statifier_examples.migrate_waiting` runs it.
 
 ## Opening a document in the editor
 

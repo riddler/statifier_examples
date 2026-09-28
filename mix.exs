@@ -370,7 +370,21 @@ defmodule StatifierExamples.MixProject do
       # `statifier_persistence` (0.19.0), the release the routed recipe is
       # written and checked against. `~> 0.18` would resolve the same
       # `mix.lock` entry; the floor says which release the guide promises.
-      {:statifier_persistence, "~> 0.19"},
+      #
+      # 2026-09-27: the floor moves to 0.20.0, and this time the app asks
+      # for it rather than a guide's pin: 0.20.0 adds
+      # `Executions.migrate_batch/3`, its dry run, and the content-hash
+      # listing behind it, which `mix statifier_examples.migrate_waiting`
+      # and `docs/guides/migrating-waiting-executions.md` walk. `mix.lock`
+      # resolves 0.21.0, the published release on that line, and the two
+      # first-workflow guides' pin tables name it. Neither release adds a
+      # migration. 0.21.0's one new refusal, a door of `Executions` called
+      # from inside the executor of the execution being stepped, reaches
+      # nothing here. `StatifierExamples.Persistence` now declares the
+      # content-hash query the batch lists with, and still declares no
+      # chart retirement: on this SQLite database `retire_chart/4` answers
+      # `{:error, :chart_retirement_unsupported}`, as the guide shows.
+      {:statifier_persistence, "~> 0.20"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so

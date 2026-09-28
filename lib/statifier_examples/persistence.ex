@@ -12,8 +12,10 @@ defmodule StatifierExamples.Persistence do
   byte-identically. On SQLite they are `BLOB` columns, and they do.
 
   As an adapter it delegates every callback to
-  `StatifierPersistence.Storage.Adapter`'s Ecto implementation, with one
-  deliberate omission.
+  `StatifierPersistence.Storage.Adapter`'s Ecto implementation, with the
+  exceptions the sections below and the callbacks' own docs name: it does
+  not export `lock_execution/3` or a chart retirement, and it writes the
+  metadata listings and the content-hash count's `children` key itself.
 
   ## Why this module exists rather than using the Ecto adapter directly
 
@@ -193,6 +195,103 @@ defmodule StatifierExamples.Persistence do
   defdelegate list_inputs(opts, execution_id), to: EctoAdapter
 
   @doc """
+  Declares the content-hash query (the optional
+  `c:StatifierPersistence.Storage.Adapter.supports_content_hash_query?/1`),
+  and the three callbacks behind it.
+
+  This is what lets the app ask which executions are on a chart: it is
+  what `StatifierPersistence.Executions.executions_on/2` counts with, what
+  `StatifierPersistence.Executions.migrate_batch/3` lists the waiting
+  executions of a chart with, and what
+  `StatifierPersistence.Executions.retire_chart/4` refuses without.
+  `mix statifier_examples.migrate_waiting` walks all three.
+
+  The two listings are delegated for the input log's reason: each is an
+  equality predicate on the `content_hash` column, which SQLite answers
+  unchanged, and V07 in `priv/repo/migrations` indexes that column on
+  either backend. The count is delegated for its five status arms and
+  written here for its `children` key, for `list_executions_by_metadata/2`'s
+  reason: the Ecto adapter counts a durable child's linkage pin with a
+  `jsonb` containment join, which it runs only where its own
+  `supports_metadata?/1` is true and answers `0` otherwise, while this app
+  does store linkage pins. So the pins are read and tested in Elixir, over
+  the same table scan that callback's moduledoc states.
+
+  No chart retirement is declared beside them. A retirement nulls a
+  chart's two blob columns, and V07 makes them nullable on Postgres only,
+  so here they keep `NOT NULL` and the Ecto adapter's `retire_chart/3`
+  fails on the constraint. Not exporting
+  `c:StatifierPersistence.Storage.Adapter.supports_chart_retirement?/1`
+  is the storage contract's way of saying so, and
+  `StatifierPersistence.Executions.retire_chart/4` then answers
+  `{:error, :chart_retirement_unsupported}` before anything is counted or
+  written. The tombstone read goes with it: no tombstone is ever written
+  here, so there is none to read.
+  """
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate supports_content_hash_query?(opts), to: EctoAdapter
+
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate list_active_execution_ids_by_content_hash(opts, content_hash), to: EctoAdapter
+
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate list_execution_ids_by_content_hash(opts, content_hash, statuses),
+    to: EctoAdapter
+
+  @impl StatifierPersistence.Storage.Adapter
+  @spec count_executions_by_content_hash(Adapter.opts(), Adapter.content_hash()) ::
+          {:ok, Adapter.execution_counts()} | {:error, Adapter.error()}
+  def count_executions_by_content_hash(opts, content_hash) do
+    with {:ok, counts} <- EctoAdapter.count_executions_by_content_hash(opts, content_hash) do
+      {:ok, %{counts | children: children_pinned_to(content_hash)}}
+    end
+  end
+
+  # The durable-child linkage pins naming `content_hash` whose parent is
+  # `:active` or `:needs_migration`, whatever arm the child is in: the
+  # count the Ecto adapter's containment join takes on Postgres.
+  @spec children_pinned_to(Adapter.content_hash()) :: non_neg_integer()
+  defp children_pinned_to(content_hash) do
+    rows =
+      StatifierExamples.Repo.all(
+        from(r in __MODULE__.Execution, select: {r.execution_id, r.status, r.metadata})
+      )
+
+    pinning =
+      for {execution_id, status, _metadata} <- rows,
+          status in ["active", "needs_migration"],
+          into: MapSet.new(),
+          do: execution_id
+
+    Enum.count(rows, fn {_execution_id, _status, metadata} ->
+      case Map.get(metadata || %{}, Linkage.reserved_key()) do
+        %{"content_hash" => ^content_hash, "parent_execution_id" => parent} ->
+          MapSet.member?(pinning, parent)
+
+        _no_pin ->
+          false
+      end
+    end)
+  end
+
+  @doc """
+  Declares the tree migration unit (the optional
+  `c:StatifierPersistence.Storage.Adapter.supports_tree_migration?/1`),
+  and the write behind it.
+
+  `StatifierPersistence.Executions.migrate_batch/3` moves a durable child
+  through `migrate_tree/4`, which writes a whole tree's re-pins and parks
+  in one call to this callback. Delegated: its writes are `UPDATE`s of
+  existing columns keyed on `execution_id` inside one transaction, which
+  SQLite answers unchanged.
+  """
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate supports_tree_migration?(opts), to: EctoAdapter
+
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate write_tree_migration(opts, writes), to: EctoAdapter
+
+  @doc """
   Declares metadata support (the optional
   `c:StatifierPersistence.Storage.Adapter.supports_metadata?/1`), which
   this adapter answers for itself rather than delegating.
@@ -369,9 +468,10 @@ defmodule StatifierExamples.Persistence do
   # The five statuses `StatifierPersistence.Storage.Adapter` defines, read
   # off the string column the schema stores them in. No fall-through: see
   # the callback's doc. `needs_migration` is the fifth, from
-  # `statifier_persistence` 0.14.0: a parked execution this app never
-  # writes, since it calls no `migrate/4`, but one the storage contract
-  # can hand back, so it is read like the other four (se-1tro).
+  # `statifier_persistence` 0.14.0: a parked execution, which a migration
+  # writes only under `on_failure: :park` and this app never asks for, but
+  # one the storage contract can hand back, so it is read like the other
+  # four (se-1tro).
   @spec status(String.t()) :: Adapter.execution_status()
   defp status("active"), do: :active
   defp status("completed"), do: :completed
