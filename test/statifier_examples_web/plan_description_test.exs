@@ -46,7 +46,18 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
         |> Enum.flat_map(fn key -> key |> described() |> elem(1) |> Enum.map(& &1.kind) end)
         |> MapSet.new()
 
-      for kind <- [:block, :rule, :arm, :undecided_arm, :rules, :marker, :end, :edge, :interrupt] do
+      for kind <- [
+            :block,
+            :rule,
+            :arm,
+            :undecided_arm,
+            :rules,
+            :body,
+            :marker,
+            :end,
+            :edge,
+            :interrupt
+          ] do
         assert kind in kinds, "no #{kind} described"
       end
     end
@@ -146,6 +157,20 @@ defmodule StatifierExamplesWeb.PlanDescriptionTest do
                "When registration.abandoned, abandon",
                "When registration.deadline, abandon"
              ]
+    end
+
+    # A group's body is a pane of its own on the map, and says which group
+    # it is the body of and which steps it holds, in order.
+    #
+    # Sabotage: made slot/5 describe a "body" slot as an arm; the :body
+    # kind went missing and this went red. Reverted from a copy.
+    test "a group's body pane says whose body it is and what it holds" do
+      body = by_id("patron_registration")["blk_pr_verify/body"]
+
+      assert body.kind == :body
+      assert body.title == "Steps"
+      assert fact(body, "Group") == "Group (Run interruptible steps)"
+      assert fact(body, "Steps") == ["Send registration.deadline", "Wait for email.verified"]
     end
 
     # Sabotage: paired the branch edges with the wired slots in reverse
