@@ -16,7 +16,10 @@
 // with its text and place, keyed by the node it is drawn in - and
 // `gestures` - for every clickable element the markup carries, the event
 // and payload the hook's own mapGesture/2 turns a click on it into - and
-// `starts`, every start dot as drawn with what a click on it asks, and
+// `starts`, every start dot as drawn with what a click on it asks, `ends`,
+// every end mark as drawn - its outcome, its circles, whether its ring is
+// dashed, and what a click on it asks - and `endEdges`, every path drawn
+// into an end mark with its outcome and whether it is dashed, and
 // `childGestures`, the same
 // asked of a click on each of that element's children (the rect, text,
 // circle or path a real click lands on), which reach the element by walking
@@ -97,6 +100,9 @@ const all = []
 const walk = (el) => { for (const child of el.children) { all.push(child); walk(child) } }
 walk(parse(target.innerHTML))
 
+// A number attribute off an element's own tag.
+const num = (el, name) => Number((el.token.match(new RegExp(`\\s${name}="([^"]*)"`)) || [])[1])
+
 const keyOf = (el) =>
   el.dataset.mapGap !== undefined ? `gap:${el.dataset.mapGap}` : `${el.dataset.mapKind}:${el.dataset.mapNode}`
 
@@ -119,6 +125,33 @@ for (const el of all.filter((e) => e.dataset.mapStart !== undefined)) {
     children: el.children.map((c) => c.tag),
     gestures: [el, ...el.children].map((c) => mapGesture(c, editable)),
   })
+}
+
+// Every end mark, read off the markup the same way: the group marked
+// data-map-end, its circles in order (the ring, then the dot), the ring's
+// dash, and what a click on the group or any of its children asks.
+const styleOf = (el) => unescape((el.token.match(/\sstyle="([^"]*)"/) || [])[1] || "")
+const dashed = (el) => /stroke-dasharray:\s*[1-9]/.test(styleOf(el))
+const ends = []
+for (const el of all.filter((e) => e.dataset.mapEnd !== undefined)) {
+  const [ring] = el.children
+  ends.push({
+    id: el.dataset.mapEnd,
+    node: el.dataset.mapNode === undefined ? null : el.dataset.mapNode,
+    outcome: el.dataset.mapOutcome === undefined ? null : el.dataset.mapOutcome,
+    kind: el.dataset.mapKind === undefined ? null : el.dataset.mapKind,
+    children: el.children.map((c) => c.tag),
+    ring: ring ? {x: num(ring, "cx"), y: num(ring, "cy"), r: num(ring, "r"), dashed: dashed(ring)} : null,
+    dot: el.children[1] ? {r: num(el.children[1], "r"), filled: /fill:\s*var/.test(styleOf(el.children[1]))} : null,
+    gestures: [el, ...el.children].map((c) => mapGesture(c, editable)),
+  })
+}
+
+// Every path drawn into an end mark: a branch's rejoin or an end edge,
+// with the outcome it carries and its dash as drawn.
+const endEdges = []
+for (const el of all.filter((e) => e.tag === "path" && e.dataset.mapOutcome !== undefined)) {
+  endEdges.push({id: el.dataset.mapEdge, kind: el.dataset.mapEdgeKind, outcome: el.dataset.mapOutcome, dashed: dashed(el)})
 }
 
 // An interrupt edge is read off the markup: a path marked
@@ -148,7 +181,6 @@ for (const el of all.filter((e) => e.dataset.mapMark !== undefined)) {
 
 // Every branch's band: the rect marked data-map-band, the block group it
 // is drawn in, and the first point of the fork mark drawn in that group.
-const num = (el, name) => Number((el.token.match(new RegExp(`\\s${name}="([^"]*)"`)) || [])[1])
 const bands = {}
 for (const el of all.filter((e) => e.dataset.mapBand !== undefined)) {
   const box = el.closest("[data-map-kind=block]")
@@ -195,4 +227,4 @@ for (const [, id, rest] of html.matchAll(/data-map-node="([^"]*)" data-map-kind=
     .map((m) => unescape(m[1]))
 }
 
-process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, bands, rejoins, headers, captions, gestures, childGestures, starts}))
+process.stdout.write(JSON.stringify({drawn, html: target.innerHTML, boxes: laidOut, edges, interrupts, marks, bands, rejoins, headers, captions, gestures, childGestures, starts, ends, endEdges}))

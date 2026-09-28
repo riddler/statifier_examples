@@ -276,14 +276,24 @@ function drawNode(node) {
       `</g>`
   }
 
-  // The end of the document's flow, where a last branch rejoins. It is not
-  // a block: it carries its id (so the description region can name it) but
-  // no data-map-kind, so a click on it does nothing.
+  // Where the document finishes: the state chart's final mark, a dot inside
+  // a ring, one per outcome it finishes with - a solid ring for done, a
+  // dashed one where an interrupt rule abandons the last step. It carries
+  // no text (the outcome is named on the edge into it). Like the start dot
+  // it is not a block: it carries its id, so the description region can
+  // name it, but no data-map-kind, so a click on it selects nothing.
   if (node.kind === "end") {
-    return `<g class="plan-map__end" data-map-end="${id}" data-map-node="${id}">` +
-      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" ` +
-      `style="fill: var(--plan-map-block-fill, #ffffff); stroke: var(--plan-map-edge, #64748b); stroke-width: 1.5"/>` +
-      `<text class="plan-map__end-text" x="${x + w / 2}" y="${y + h / 2 + 4}" text-anchor="middle">${escapeText(node.title)}</text>` +
+    const abandon = node.outcome === "abandon"
+    const cx = x + w / 2
+    const cy = y + h / 2
+    const r = Math.min(w, h) / 2 - 1
+    return `<g class="plan-map__end plan-map__end--${abandon ? "abandon" : "done"}" ` +
+      `data-map-end="${id}" data-map-node="${id}" data-map-outcome="${escapeText(node.outcome)}">` +
+      `<circle class="plan-map__end-ring" cx="${cx}" cy="${cy}" r="${r}" ` +
+      `style="fill: none; stroke: var(--plan-map-edge, #64748b); stroke-width: 1.5` +
+      `${abandon ? "; stroke-dasharray: 3 2" : ""}"/>` +
+      `<circle class="plan-map__end-dot" cx="${cx}" cy="${cy}" r="${r / 2}" ` +
+      `style="fill: var(--plan-map-edge, #64748b)"/>` +
       `</g>`
   }
 
@@ -342,18 +352,25 @@ function drawMark(node) {
 
 // A layout edge. A branch's rejoin is drawn heavier, with a join dot where
 // it leaves the branch's bottom edge: the point the arms come back
-// together.
+// together. An edge into an end mark carries its outcome, and the one into
+// an abandon end is dashed, as the interrupt edges that lead there are.
 function drawEdge(edge) {
   const rejoin = edge.kind === "rejoin"
+  const outcome = edge.outcome === undefined ? "" : ` data-map-outcome="${escapeText(edge.outcome)}"`
   return (edge.sections || []).map((section) => {
     const points = [section.startPoint, ...(section.bendPoints || []), section.endPoint]
     const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ")
     const path = rejoin
       ? `<path class="plan-map__edge plan-map__edge--rejoin" data-map-edge="${escapeText(edge.id)}" ` +
-        `data-map-edge-kind="rejoin" d="${d}" marker-end="url(#plan-map-arrow)" ` +
+        `data-map-edge-kind="rejoin"${outcome} d="${d}" marker-end="url(#plan-map-arrow)" ` +
         `style="fill: none; stroke: var(--plan-map-edge, #64748b); stroke-width: 1.5"/>`
-      : `<path class="plan-map__edge" data-map-edge="${escapeText(edge.id)}" d="${d}" ` +
-        `marker-end="url(#plan-map-arrow)" style="fill: none; stroke: var(--plan-map-edge, #64748b)"/>`
+      : edge.kind === "end"
+        ? `<path class="plan-map__edge plan-map__edge--end" data-map-edge="${escapeText(edge.id)}" ` +
+          `data-map-edge-kind="end"${outcome} d="${d}" marker-end="url(#plan-map-arrow)" ` +
+          `style="fill: none; stroke: var(--plan-map-edge, #64748b)` +
+          `${edge.outcome === "abandon" ? "; stroke-dasharray: 5 4" : ""}"/>`
+        : `<path class="plan-map__edge" data-map-edge="${escapeText(edge.id)}" d="${d}" ` +
+          `marker-end="url(#plan-map-arrow)" style="fill: none; stroke: var(--plan-map-edge, #64748b)"/>`
     const dot = rejoin
       ? `<circle class="plan-map__join" data-map-join="${escapeText(edge.id)}" ` +
         `data-map-edge="${escapeText(edge.id)}" ` +
@@ -361,15 +378,17 @@ function drawEdge(edge) {
         `style="fill: var(--plan-map-edge, #64748b)"/>`
       : ""
     return path + dot
-  }).join("") + (edge.kind === "start" ? drawEdgeLabels(edge) : "")
+  }).join("") + drawEdgeLabels(edge)
 }
 
-// The start edge's caption, written where the layout placed its label (the
-// server sized it, so the layout left it room). It carries the edge's id,
-// so pointing at the caption names the edge.
+// An edge's caption - the start edge's sentence, or the outcome on an edge
+// into an end mark - written where the layout placed its label (the server
+// sized it, so the layout left it room). It carries the edge's id, so
+// pointing at the caption names the edge.
 function drawEdgeLabels(edge) {
+  const which = edge.kind === "start" ? "start" : "end"
   return (edge.labels || []).map((label) =>
-    `<text class="plan-map__caption plan-map__start-caption" data-map-caption="true" ` +
+    `<text class="plan-map__caption plan-map__${which}-caption" data-map-caption="true" ` +
     `data-map-edge="${escapeText(edge.id)}" ` +
     `x="${label.x}" y="${label.y + label.height - 4}">${escapeText(label.text)}</text>`,
   ).join("")

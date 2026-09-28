@@ -189,8 +189,8 @@ defmodule StatifierExamplesWeb.PlanMapTest do
       for fixture <- Charts.fixtures(),
           node <- walk(PlanMap.graph(view_model(fixture))),
           Map.has_key?(node, "width"),
-          # The start dot carries no text to be wide enough for.
-          node["kind"] != "start" do
+          # The start dot and the end marks carry no text to be wide enough for.
+          node["kind"] not in ["start", "end"] do
         assert node["width"] >= String.length(node["title"]) * 7 + 24, node["id"]
       end
     end
@@ -470,11 +470,13 @@ defmodule StatifierExamplesWeb.PlanMapTest do
                  Enum.sort(branches),
                fixture.key
 
-        for %{"edges" => edges} <- walk(graph), %{"kind" => kind, "sources" => [from]} <- edges do
+        for %{"edges" => edges} <- walk(graph),
+            %{"kind" => kind, "sources" => [from], "targets" => [to]} <- edges do
           expected =
             cond do
               String.ends_with?(from, "/start") -> "start"
               from in branches -> "rejoin"
+              String.contains?(to, "/end/") -> "end"
               true -> "sequence"
             end
 
@@ -483,28 +485,194 @@ defmodule StatifierExamplesWeb.PlanMapTest do
         end
       end
     end
+  end
 
-    # The loan's branch ends its document, so it rejoins into an end mark;
-    # the registration's is followed by a step and needs none.
+  describe "the end" do
+    # Every end of every fixture's own flow is one of the outline's: a
+    # `done` end for the `:exit` edge from the root's last step into the
+    # root's exit, and an `abandon` end where that step is a group one of
+    # whose rules abandons it. `done` is the outline's own outcome for the
+    # root, which is why the map may write it rather than read it. No end
+    # mark is a block.
     #
-    # Sabotage: made put_end/2 add no end mark; this went red. Reverted
-    # from a copy.
-    test "an end mark follows a branch that ends the document, and nothing else" do
+    # Sabotage: made put_ends/2 draw no end; this went red. Made
+    # abandons/1 answer [] for every step; the registration's abandon end
+    # went missing and this went red. Made abandons/1 read every rule as an
+    # abandon; no fixture has a resume rule on its last step, so this
+    # stayed green - the test after next holds that. Each reverted from a
+    # copy.
+    test "every fixture's ends are Describe's, one per way it finishes" do
+      for fixture <- Charts.fixtures() do
+        view_model = view_model(fixture)
+        graph = PlanMap.graph(view_model)
+        outline = Describe.outline(fixture.document, Charts.palette(), [])
+        root = view_model.root.block_id
+
+        done =
+          for %Edge{kind: :exit, container: ^root, from: {:block, last}} <- outline.edges,
+              do: {last, "done"}
+
+        abandon =
+          for {last, "done"} <- done,
+              %Edge{kind: :interrupt, container: ^last, to: {:exit, ^last}} <- outline.edges,
+              uniq: true,
+              do: {last, "abandon"}
+
+        drawn =
+          for node <- walk(graph),
+              %{"sources" => [from], "targets" => [to], "outcome" => outcome} <-
+                Map.get(node, "edges", []),
+              do: {from, outcome, to}
+
+        assert Enum.map(drawn, fn {from, outcome, _to} -> {from, outcome} end) ==
+                 done ++ abandon,
+               fixture.key
+
+        refute done == [], fixture.key
+        assert %Describe.Node{outcomes: ["done"]} = Enum.find(outline.nodes, &(&1.id == root))
+
+        for {_from, outcome, to} <- drawn do
+          assert to == "#{root}/end/#{outcome}"
+          assert %{"kind" => "end", "outcome" => ^outcome} = find(graph, to)
+          refute to in PlanMap.nodes(graph)
+        end
+      end
+    end
+
+    # The loan finishes when its branch does: the branch rejoins into one
+    # solid end. The registration's group is its last step and its rules
+    # abandon it, so it finishes done or abandoned: two ends, the edge into
+    # each captioned with its outcome.
+    #
+    # Sabotage: made end_edge/4 caption every edge "done"; this went red.
+    # Made put_ends/2 give the edge out of a branch kind "end"; this went
+    # red. Each reverted from a copy.
+    test "the loan ends done after its branch, the registration done or abandoned" do
       root = find(graph("library_loan"), "blk_ll_root")
 
       assert Enum.map(root["children"], & &1["id"]) ==
-               ["blk_ll_root/start", "blk_ll_on_loan", "blk_ll_due", "blk_ll_root/end"]
+               ["blk_ll_root/start", "blk_ll_on_loan", "blk_ll_due", "blk_ll_root/end/done"]
 
-      assert %{"kind" => "end", "title" => "End"} = List.last(root["children"])
+      assert %{"kind" => "end", "outcome" => "done"} = done = List.last(root["children"])
+      refute Map.has_key?(done, "title")
 
       assert List.last(root["edges"]) == %{
-               "id" => "blk_ll_due->blk_ll_root/end",
+               "id" => "blk_ll_due->blk_ll_root/end/done",
                "sources" => ["blk_ll_due"],
-               "targets" => ["blk_ll_root/end"],
-               "kind" => "rejoin"
+               "targets" => ["blk_ll_root/end/done"],
+               "kind" => "rejoin",
+               "outcome" => "done",
+               "labels" => [
+                 %{
+                   "id" => "blk_ll_due->blk_ll_root/end/done/caption",
+                   "text" => "done",
+                   "width" => 52,
+                   "height" => 16
+                 }
+               ]
              }
 
-      refute Enum.any?(walk(graph("patron_registration")), &(&1["kind"] == "end"))
+      root = find(graph("patron_registration"), "blk_pr_root")
+
+      assert Enum.map(root["children"], & &1["id"]) ==
+               [
+                 "blk_pr_root/start",
+                 "blk_pr_verify",
+                 "blk_pr_root/end/done",
+                 "blk_pr_root/end/abandon"
+               ]
+
+      assert [
+               %{"kind" => "end", "outcome" => "done", "labels" => [%{"text" => "done"}]},
+               %{"kind" => "end", "outcome" => "abandon", "labels" => [%{"text" => "abandon"}]}
+             ] = Enum.filter(root["edges"], &Map.has_key?(&1, "outcome"))
+
+      assert Enum.map(Enum.filter(root["edges"], &Map.has_key?(&1, "outcome")), & &1["sources"]) ==
+               [["blk_pr_verify"], ["blk_pr_verify"]]
+    end
+
+    # A group whose rules only resume it is never left by them, so it ends
+    # the document done and nothing else; a group of abandon rules adds the
+    # one abandon end however many rules there are.
+    #
+    # Sabotage: made abandons/1 read every rule as an abandon; the resume
+    # group drew an abandon end and this went red. Made abandons/1 add two
+    # abandon ends; this went red. Each reverted from a copy.
+    test "only an abandon rule adds an abandon end, once" do
+      for {outcomes, ends} <- [
+            {["resume"], ["done"]},
+            {["abandon", "abandon"], ["done", "abandon"]},
+            {["resume", "abandon"], ["done", "abandon"]}
+          ] do
+        rules =
+          for {outcome, n} <- Enum.with_index(outcomes),
+              do:
+                Block.new("core.on_event",
+                  id: "rule#{n}",
+                  config: %{"event" => "e#{n}", "outcome" => outcome}
+                )
+
+        group =
+          Block.new("core.group",
+            id: "held",
+            slots: %{
+              "body" => [Block.new("core.send", id: "s", config: %{"event" => "x"})],
+              "interrupts" => rules
+            }
+          )
+
+        root = Block.new("core.sequence", id: "root", slots: %{"body" => [group]})
+
+        graph =
+          root
+          |> Document.new()
+          |> ViewModel.build(Charts.palette(), [])
+          |> PlanMap.graph()
+
+        assert for(%{"kind" => "end", "outcome" => outcome} <- walk(graph), do: outcome) == ends,
+               inspect(outcomes)
+      end
+    end
+
+    # A step that is last in a nested flow hands back to the block around
+    # it, which goes on: no end follows it. Every Send in the two library
+    # fixtures is such a step - at the foot of an arm or of the
+    # registration's body - and none is joined to an end; every end is
+    # joined to the root's last step alone.
+    #
+    # Sabotage: made put_ends/2 join the end to the last step of its last
+    # step's first slot - a Send in both fixtures - rather than to the last
+    # step itself; this went red. Reverted from a copy.
+    test "a send that continues is followed by no end" do
+      for key <- ["library_loan", "patron_registration"] do
+        {:ok, fixture} = Charts.fixture(key)
+        view_model = view_model(fixture)
+        graph = PlanMap.graph(view_model)
+
+        sends =
+          for {%Node{type: "core.send", block_id: id}, _depth, _kind} <-
+                ViewModel.outline(view_model),
+              do: id
+
+        refute sends == [], key
+
+        [last | _rest] =
+          view_model.root
+          |> ViewModel.body_slots()
+          |> hd()
+          |> ViewModel.flow_children()
+          |> Enum.reverse()
+
+        into_ends =
+          for node <- walk(graph),
+              %{"sources" => [from], "targets" => [to]} <- Map.get(node, "edges", []),
+              String.contains?(to, "/end/"),
+              do: from
+
+        refute into_ends == [], key
+        assert Enum.uniq(into_ends) == [last.block_id], key
+        for send <- sends, do: refute(send in into_ends, "#{key}: #{send}")
+      end
     end
   end
 

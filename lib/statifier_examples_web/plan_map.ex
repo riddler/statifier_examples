@@ -41,7 +41,8 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   Consecutive blocks in one body slot are joined by a `sequence` edge, in
   `ViewModel.flow_children/1` order (a `rejoin` edge where the first is a
-  branch; see "The Branch" below); nothing else is an edge the layout
+  branch; see "The Branch" below); besides the edges out of the start
+  dot and into the end marks (below), nothing else is an edge the layout
   sees (a group's interrupt edges are drawn after it, below). A rail's
   blocks are not joined - a group's interrupt rules are alternatives that
   each watch the whole body, not steps that run one after another - and
@@ -71,11 +72,9 @@ defmodule StatifierExamplesWeb.PlanMap do
   - **The arms rejoin at its bottom edge.** The edge from a branch to the
     step after it carries `kind: "rejoin"`, and the hook draws it with a
     join dot where it leaves the branch. A branch that is the last step of
-    the document's own flow rejoins into an end mark (`kind: "end"`, keyed
-    `<root id>/end`), because nothing else comes next; a branch that ends a
-    nested flow needs none, since the flow it ends is itself joined to what
-    follows it. An end mark is not a block: it is in no outline, selects
-    nothing and arms no insert.
+    the document's own flow rejoins into the document's end (see "The
+    end"); a branch that ends a nested flow needs none, since the flow it
+    ends is itself joined to what follows it.
   - **The band carries a caption.** The branch's node carries `caption`,
     `StatifierExamplesWeb.TypeExplanation.caption/1` of its type, and
     `caption_width`, the room the caption and the fork mark need; the hook
@@ -96,8 +95,39 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   A root whose flow is not drawn inside it has no first step there, so its
   dot stands above the root's box and the edge goes into the box itself.
-  Like the end mark, the dot is not a block: it is in no outline, selects
+  Like the end marks, the dot is not a block: it is in no outline, selects
   nothing and arms no insert.
+
+  ## The end
+
+  Where the document finishes is drawn the way a state chart draws it too:
+  a final mark, a dot inside a ring, at every end of the document's own
+  flow, one per way it finishes, with the outcome named on the edge into
+  it. The ends are the ones `StatifierBlocks.Describe.outline/3` answers,
+  read here off the same view model, and the test beside this module holds
+  the two equal for every fixture:
+
+  | End | Where it comes from | Mark | Edge into it |
+  |---|---|---|---|
+  | `done` | the `:exit` edge from the last step of the root's flow into the root's exit | a solid ring | from that step, captioned `done` |
+  | `abandon` | an `abandon` interrupt rule of a group that is that last step, which leaves the group with nothing after it | a dashed ring | from the group, dashed, captioned `abandon` |
+
+  Each mark is a node of `kind: "end"` carrying its `outcome`, keyed
+  `<root id>/end/<outcome>`, drawn right after the last step; its edge
+  carries the same `outcome` and one ELK label, the outcome's name, so the
+  layout leaves the caption its room. The edge out of a branch stays a
+  rejoin (see "The Branch"); any other edge into a mark is of
+  `kind: "end"`. `done` is written here rather than read from the palette:
+  it is the outcome every block type declaring no outcomes of its own has,
+  the one a root that runs its steps finishes with, and the test holds it
+  equal to the outline's own outcome for every fixture's root.
+
+  Only the document's own flow ends. A step that is last in a nested flow
+  - a Send at the foot of an arm or of a group's body - hands back to the
+  block around it, which goes on, so nothing is drawn after it and it does
+  not read as an end. A root whose flow is not drawn inside it, or that has
+  no step yet, draws no end. Like the start dot, an end mark is not a
+  block: it is in no outline, selects nothing and arms no insert.
 
   ## The Group
 
@@ -227,8 +257,9 @@ defmodule StatifierExamplesWeb.PlanMap do
   @group_types ["core.group", "core.resumable_group"]
   @branch_type "core.branch"
   @band_room 24
-  @end_text "End"
-  @end_height 28
+  @done "done"
+  @abandon "abandon"
+  @end_size 20
   @start_text "Starts when told to"
   @start_size 14
   @rule_spacing 24
@@ -255,7 +286,8 @@ defmodule StatifierExamplesWeb.PlanMap do
 
   @typedoc """
   One graph node, in elkjs's JSON shape plus the fields the hook draws
-  from: `kind` (all the start dot carries), `title` and `lines`, on a slot `style`, on a timer block
+  from: `kind` (with `outcome`, all the start dot and an end mark carry),
+  `title` and `lines`, on a slot `style`, on a timer block
   `mark`, on a group with interrupt rules `interrupts`, on a branch `band`,
   `caption` and `caption_width`, on a group's rules column `caption`, and
   on a group whose body is all leaves the `ports` its edges attach to.
@@ -277,7 +309,7 @@ defmodule StatifierExamplesWeb.PlanMap do
     %{
       "id" => "plan-map",
       "layoutOptions" => @root_options,
-      "children" => [root |> block() |> Map.put("gap", false) |> put_end(root)],
+      "children" => [root |> block() |> Map.put("gap", false) |> put_ends(root)],
       "edges" => []
     }
     |> put_start(root)
@@ -471,42 +503,79 @@ defmodule StatifierExamplesWeb.PlanMap do
   @spec part_height(graph_node()) :: pos_integer()
   defp part_height(part), do: Map.get(part, "height", @header_base + 2 * @line_height)
 
-  # The end mark after a branch that is the last step of the root's own
-  # flow, joined to it by a rejoin edge; every other root is left as it is.
-  @spec put_end(graph_node(), Node.t()) :: graph_node()
-  defp put_end(%{"children" => children} = graph_node, %Node{} = root) do
+  # ---------------------------------------------------------------- the end
+
+  # The document's ends, after the last step of the root's own flow: one
+  # final mark per way the document finishes, each joined to that step by
+  # an edge captioned with its outcome; see the moduledoc's "The end". A
+  # root whose flow is not drawn inside it, or is empty, is left as it is.
+  @spec put_ends(graph_node(), Node.t()) :: graph_node()
+  defp put_ends(%{"children" => children} = graph_node, %Node{block_id: root_id} = root) do
     with [%Slot{} = body] <- ViewModel.body_slots(root),
          true <- inline?(root, body),
-         %Node{block_id: last} = branch <- List.last(ViewModel.flow_children(body)),
-         true <- branch?(branch) do
-      id = "#{root.block_id}/end"
+         %Node{block_id: last} = step <- List.last(ViewModel.flow_children(body)) do
+      done = if branch?(step), do: "rejoin", else: "end"
+      ends = [{@done, done} | abandons(step)]
+      marks = for {outcome, _kind} <- ends, do: end_mark(root_id, outcome)
+      edges = for {outcome, kind} <- ends, do: end_edge(last, root_id, outcome, kind)
       {before, [drawn | rest]} = Enum.split_while(children, &(&1["id"] != last))
 
-      mark = %{
-        "id" => id,
-        "kind" => "end",
-        "title" => @end_text,
-        "lines" => [],
-        "width" => text_width([@end_text]),
-        "height" => @end_height
-      }
-
-      edge = %{
-        "id" => "#{last}->#{id}",
-        "sources" => [last],
-        "targets" => [id],
-        "kind" => "rejoin"
-      }
-
       graph_node
-      |> Map.put("children", before ++ [drawn, mark | rest])
-      |> Map.update!("edges", &(&1 ++ [edge]))
+      |> Map.put("children", before ++ [drawn | marks] ++ rest)
+      |> Map.update!("edges", &(&1 ++ edges))
     else
       _no_end -> graph_node
     end
   end
 
-  defp put_end(graph_node, %Node{}), do: graph_node
+  defp put_ends(graph_node, %Node{}), do: graph_node
+
+  # A group that is the root's last step ends the document when one of its
+  # rules abandons it: nothing runs after the group. One end, however many
+  # rules abandon; a group whose rules only resume has none.
+  @spec abandons(Node.t()) :: [{String.t(), String.t()}]
+  defp abandons(%Node{slots: slots} = node) do
+    abandoned? =
+      group?(node) and
+        Enum.any?(
+          for(%Slot{name: "interrupts"} = slot <- slots, do: ViewModel.flow_children(slot)),
+          fn rules -> Enum.any?(rules, &(leads_to(&1.outcome) == "exit")) end
+        )
+
+    if abandoned?, do: [{@abandon, "end"}], else: []
+  end
+
+  @spec end_mark(String.t(), String.t()) :: graph_node()
+  defp end_mark(root_id, outcome),
+    do: %{
+      "id" => "#{root_id}/end/#{outcome}",
+      "kind" => "end",
+      "outcome" => outcome,
+      "width" => @end_size,
+      "height" => @end_size
+    }
+
+  @spec end_edge(String.t(), String.t(), String.t(), String.t()) :: map()
+  defp end_edge(from, root_id, outcome, kind) do
+    to = "#{root_id}/end/#{outcome}"
+    id = "#{from}->#{to}"
+
+    %{
+      "id" => id,
+      "sources" => [from],
+      "targets" => [to],
+      "kind" => kind,
+      "outcome" => outcome,
+      "labels" => [
+        %{
+          "id" => "#{id}/caption",
+          "text" => outcome,
+          "width" => text_width([outcome]),
+          "height" => @line_height
+        }
+      ]
+    }
+  end
 
   # ------------------------------------------------------------- the start
 
