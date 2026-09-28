@@ -874,10 +874,19 @@ defmodule StatifierExamples.MixDepsTest do
   # `~> 0.18` the router forces, because it follows the pin
   # `docs/guides/first-workflow-routed.md` names; `mix.exs` says so beside
   # the dep.
+  #
+  # 2026-09-27: the requirement moves to `~> 0.20`, the release that adds
+  # `Executions.migrate_batch/3`, which
+  # `mix statifier_examples.migrate_waiting` and
+  # `docs/guides/migrating-waiting-executions.md` walk. `mix.lock` resolves
+  # 0.21.0, the published release on that line; neither adds a migration.
+  # Sabotage: pointed the LOCK assertion back at `"0.19.` and left
+  # `mix.lock` alone; it went red reporting the resolved 0.21.0 entry.
+  # Reverted from a copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.19"} in deps
+    assert {:statifier_persistence, "~> 0.20"} in deps
 
     lock_line =
       "mix.lock"
@@ -886,7 +895,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.19.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.21.)
     refute lock_line =~ ":git,"
   end
 

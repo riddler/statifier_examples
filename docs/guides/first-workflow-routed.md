@@ -24,15 +24,18 @@ The recipe is written and checked against these releases, which are what
 | Package | Version | What the recipe uses it for |
 |---|---|---|
 | `statifier_router` | 0.6.0 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
-| `statifier_persistence` | 0.19.0 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_persistence` | 0.21.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_blocks` | 0.35.0 | the document and the compile |
 | `statifier` | 2.9.0 | compiling the chart and running it |
 
 `statifier_router` 0.6.0 requires `statifier ~> 2.9` and
 `statifier_persistence ~> 0.18`, which is what moved those two with it.
-`mix.exs` asks for `statifier_persistence ~> 0.19` all the same, the
-release this table names. The jobs run on this app's own Oban. The first
-line the command prints names the versions it actually loaded.
+`mix.exs` asks for `statifier_persistence ~> 0.20` all the same: 0.20.0
+adds `Executions.migrate_batch/3`, which
+`docs/guides/migrating-waiting-executions.md` walks, and `mix.lock`
+resolves 0.21.0, the release this table names. The jobs run on this
+app's own Oban. The first line the command prints names the versions it
+actually loaded.
 
 ## The workflow
 
