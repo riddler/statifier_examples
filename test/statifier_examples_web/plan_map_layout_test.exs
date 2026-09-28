@@ -114,6 +114,79 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
     end
   end
 
+  describe "interrupt edges and timer marks, as drawn" do
+    # Every interrupt edge of both library fixtures is a dashed path from
+    # the bottom of its rule's box straight down to the bottom edge of the
+    # group it abandons, read off the markup's own path data; and the
+    # layout's own edges are not dashed.
+    #
+    # Sabotage: made interruptsOf end an exit edge on the group's top
+    # edge; this went red. Dropped the dash from drawInterrupt; this went
+    # red. Left interruptsOf out of renderSvg; this went red. Each
+    # reverted from a copy.
+    test "both library fixtures draw their interrupt edges dashed from the rule to its target",
+         %{tmp_dir: dir} do
+      for key <- ["library_loan", "patron_registration"] do
+        {:ok, fixture} = Charts.fixture(key)
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+
+        %{"drawn" => "map", "html" => html, "boxes" => boxes, "interrupts" => drawn} =
+          run(dir, key, graph)
+
+        expected = PlanMap.interrupts(graph)
+        refute expected == []
+        assert length(drawn) == length(expected), key
+
+        for %{"from" => rule, "group" => group, "to" => "exit"} <- expected do
+          id = "#{rule}->#{group}/exit"
+          edge = Enum.find(drawn, &(&1["id"] == id)) || flunk("#{key}: #{id} is not drawn")
+
+          assert %{"source" => ^rule, "target" => ^group, "to" => "exit", "dashed" => true} =
+                   edge
+
+          [start | _rest] = points = path_points(edge["d"])
+          stop = List.last(points)
+          from = boxes[rule]
+          to = boxes[group]
+
+          assert_in_delta start.y, from["y"] + from["height"], 0.5, "#{key}: #{id} start"
+          assert start.x > from["x"] and start.x < from["x"] + from["width"]
+          assert_in_delta stop.y, to["y"] + to["height"], 0.5, "#{key}: #{id} end"
+          assert stop.x > to["x"] and stop.x < to["x"] + to["width"]
+        end
+
+        for [path] <- Regex.scan(~r/<path [^>]*class="plan-map__edge"[^>]*>/, html) do
+          refute path =~ "stroke-dasharray", "#{key}: #{path}"
+        end
+      end
+    end
+
+    # Every await box of both library fixtures carries the wait mark, the
+    # one delayed send the clock mark, and every other box - an undelayed
+    # send included - neither, as the markup carries them.
+    #
+    # Sabotage: made drawMark draw nothing; this went red. Reverted from a
+    # copy.
+    test "both library fixtures mark their awaits and their delayed send, and nothing else",
+         %{tmp_dir: dir} do
+      for {key, expected} <- [
+            {"library_loan", %{"blk_ll_late_return" => ["wait"]}},
+            {"patron_registration",
+             %{
+               "blk_pr_deadline" => ["clock"],
+               "blk_pr_email" => ["wait"],
+               "blk_pr_guardian" => ["wait"]
+             }}
+          ] do
+        {:ok, fixture} = Charts.fixture(key)
+        graph = PlanMap.graph(ViewModel.build(fixture.document, Charts.palette(), []))
+        %{"drawn" => "map", "marks" => marks} = run(dir, key, graph)
+
+        assert marks == expected, key
+      end
+    end
+  end
+
   describe "the error-pane test" do
     # An edge to a node the graph does not hold is a graph elkjs refuses
     # outright, which is the failure the pane is for.
@@ -274,6 +347,18 @@ defmodule StatifierExamplesWeb.PlanMapLayoutTest do
   # `StatifierExamplesWeb.PlanMap`).
   defp text_width(texts),
     do: (texts |> Enum.map(&String.length/1) |> Enum.max(fn -> 0 end)) * 7 + 24
+
+  # The points of an SVG path drawn as `M x y L x y ...`.
+  defp path_points(d) do
+    for [_all, x, y] <- Regex.scan(~r/[ML](-?[\d.]+) (-?[\d.]+)/, d) do
+      %{x: number(x), y: number(y)}
+    end
+  end
+
+  defp number(text) do
+    {value, ""} = Float.parse(text)
+    value
+  end
 
   defp walk(%{} = node), do: [node | Enum.flat_map(Map.get(node, "children", []), &walk/1)]
 

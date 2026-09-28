@@ -114,6 +114,20 @@ container, and `considerModelOrder` on the root only.
 `StatifierExamplesWeb.PlanMapLayoutTest` lays every fixture out through the
 real layout library and reads the order off the boxes it placed.
 
+### Interrupt edges and timer marks
+
+A group's interrupt rules sit on its rail, and each one is drawn with a
+dashed edge to where it leads: an `abandon` rule down to the group's bottom
+edge, where the group is left, and a `resume` rule back to the head of the
+group's body. They are the interrupt edges `StatifierBlocks.Describe`
+answers for the same document, drawn after the layout from the boxes it
+placed, so they never move a box. Two blocks that wait on a clock carry a
+mark at their top right: a `core.await` an hourglass, and a `core.send` with
+a delay a clock face, because a wait inside the step and an event armed to
+fire after the step has moved on are two different timers. A send with no
+delay carries neither. A mark is part of its block's box: a click on it
+selects the block, as a click anywhere else on the box does.
+
 ### Editing from the map
 
 Every gesture on the map is one the list already makes, sent to the same
