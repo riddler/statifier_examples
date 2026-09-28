@@ -117,6 +117,14 @@ container, and `considerModelOrder` on the root only.
 `StatifierExamplesWeb.PlanMapLayoutTest` lays every fixture out through the
 real layout library and reads the order off the boxes it placed.
 
+The steps that run when nothing goes wrong are drawn down one vertical
+line, and what can interrupt them stands to the side. A group is wider
+than its body by its rules column, so it attaches its edge in and its edge
+out where its body's steps stand rather than at its middle, and the steps
+before and after it line up under its body. It does so only when every
+step in its body is a leaf or an empty marker, because the line is placed
+from the widths the server estimates for leaves.
+
 ### The start
 
 Where the document starts is drawn the way a state chart draws it: one
@@ -125,6 +133,21 @@ edge is captioned "Starts when told to" on every document, because an
 execution starts when its host starts one; the events a document accepts
 are what it listens for while it runs, and the description region names
 them. The dot is not a block: a click on it selects nothing.
+
+### The ends
+
+Where the document finishes is drawn the way a state chart draws it too:
+a dot inside a ring after the document's last step, one per way it
+finishes, with the outcome named on the edge into it. A solid ring is
+`done`, where the last step finishes; a dashed ring is `abandon`, where
+the last step is a group with an `abandon` interrupt rule, and the edge
+from the group into it is dashed as well. They are the ends
+`StatifierBlocks.Describe` answers for the same document. Only the
+document's own flow ends: a step that is last inside an arm or a group's
+body, such as a Send at the foot of an arm, hands back to the block
+around it, which goes on, so no mark is drawn after it. A document with
+no step yet draws no end. Like the start dot, an end mark is not a block:
+a click on it selects nothing.
 
 ### Interrupt edges, timer edges and timer marks
 
@@ -158,10 +181,10 @@ draws, is unchanged. The arms sit under one band spanning all of them, with
 a small fork mark at its left and a one-line caption after it. The edge out
 of the branch is its rejoin,
 drawn with a join dot where it leaves the branch's bottom edge, into the
-next step - or, where the branch is the document's last step, into an
-"End" mark. The band, the fork mark, the join dot and the end mark are
-drawn from the laid-out boxes and add no gesture: a click on the band
-selects the branch, and the end mark is not clickable.
+next step - or, where the branch is the document's last step, into the
+`done` end mark. The band, the fork mark and the join dot are drawn from
+the laid-out boxes and add no gesture: a click on the band selects the
+branch.
 
 ### The Group
 
@@ -213,16 +236,17 @@ and open slots it has.
 
 `StatifierExamplesWeb.PlanDescription` builds one such description for
 every element the map draws - blocks, interrupt rules, arms (the undecided
-arm included), a group's body and its rules, empty-slot markers, the end mark,
-the start dot and its edge,
-connectors (a branch's rejoin among them), the dashed interrupt
-edges and the dotted timer edges - from
-the view model and `StatifierBlocks.Describe.outline/3`, keyed by the map's
-own ids. The region is `aria-live="polite"` and every row of the list names
-it with `aria-describedby`, so a screen reader hears what a sighted reader
-sees on the map. It shows values, never controls, and adds no event: the
-row's own selection is what fills it. What a type is for is the type's own
-explanation, `StatifierBlocks.BlockType.explain/1` through the page's
+arm included), a group's body and its rules, empty-slot markers, the end
+marks and the edges into them, the start dot and its edge, connectors (a
+branch's rejoin among them), the dashed interrupt edges and the dotted
+timer edges - from the view model and `StatifierBlocks.Describe.outline/3`,
+keyed by the map's own ids. The region is `aria-live="polite"` and every
+row of the list names it with `aria-describedby`, so a screen reader hears
+what a sighted reader sees on the map. It shows values, never controls, and
+adds no event of its own: the selection the list already makes is what
+fills it, and pointing at the map (below) shows another element's words
+there for as long as the pointer stays, without changing the selection.
+What a type is for is the type's own explanation, `StatifierBlocks.BlockType.explain/1` through the page's
 palette, which falls back to the palette description for a type that does
 not explain itself.
 
@@ -242,6 +266,28 @@ this app's, keyed by event name, in `StatifierExamplesWeb.EventPhrasing`;
 a name it has no words for is drawn as it is. The list keeps the name as
 authored, and so do the places a name is a value rather than prose: a
 block's settings, and what a document or a rule listens for.
+
+### The two documents to read it on
+
+The library world's two documents, both set at Riverbend Public Library, a
+fictional library, carry every mark this section describes between them:
+
+- `library_loan` ("Riverbend Public Library loan"): the loan period is a
+  group whose two `abandon` rules, the early return and the lost-copy
+  report, each draw a dashed edge out of it. The due-date branch after it
+  names its arms under its band and marks its "Cannot be decided" arm as
+  an empty slot; as the document's last step it rejoins into the `done`
+  end. The overdue arm ends in a wait for the copy, with its hourglass
+  and no end mark after it.
+- `patron_registration` ("Riverbend Public Library patron registration"):
+  the verification group is the document's last step, so the map draws
+  both ends, a solid `done` ring and a dashed `abandon` ring. The
+  deadline send at the head of its body carries the clock mark and a
+  dotted edge labelled `7d` to the rule that abandons the registration at
+  the deadline; the email wait and the guardian's wait carry the
+  hourglass. The age branch sits inside the body with its "Otherwise" arm
+  empty, and the welcome Send at the body's foot draws no end mark after
+  it.
 
 ### What it costs
 
