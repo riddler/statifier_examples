@@ -41,13 +41,60 @@ export function escapeText(value) {
 // reason ELK gave - including a result with nothing in it, which is a
 // failure rather than a picture.
 export async function layout(graph, elk = elkInstance()) {
-  const laid = await elk.layout(graph)
+  const {graph: attached, owners} = onPorts(graph)
+  const laid = await elk.layout(attached)
 
   if (!laid || !Array.isArray(laid.children) || laid.children.length === 0 ||
       !(laid.width > 0) || !(laid.height > 0)) {
     throw new Error("the layout came back empty")
   }
 
+  return offPorts(laid, owners)
+}
+
+const PORT_SIDE = "org.eclipse.elk.port.side"
+
+// A copy of `graph` with every edge into or out of a node that carries
+// ports moved onto them: an edge out of the node leaves by its bottom
+// port, an edge into it arrives by its top one. The server places a
+// group's ports where its body's steps stand, so the happy path runs
+// straight through the group (the PlanMap moduledoc's "The happy path
+// runs straight"). Answers the copy and each port's owner.
+export function onPorts(graph) {
+  const copy = structuredClone(graph)
+  const sides = new Map()
+  const owners = new Map()
+  const collect = (node) => {
+    for (const port of node.ports || []) {
+      const side = (port.layoutOptions || {})[PORT_SIDE]
+      sides.set(`${node.id}|${side}`, port.id)
+      owners.set(port.id, node.id)
+    }
+    for (const child of node.children || []) collect(child)
+  }
+  const attach = (node) => {
+    for (const edge of node.edges || []) {
+      edge.sources = edge.sources.map((id) => sides.get(`${id}|SOUTH`) || id)
+      edge.targets = edge.targets.map((id) => sides.get(`${id}|NORTH`) || id)
+    }
+    for (const child of node.children || []) attach(child)
+  }
+  collect(copy)
+  if (owners.size > 0) attach(copy)
+  return {graph: copy, owners}
+}
+
+// The laid-out graph with every edge given back its own ends: a port's
+// owner in place of the port, so an edge joins block to block again.
+export function offPorts(laid, owners) {
+  const detach = (node) => {
+    for (const edge of node.edges || []) {
+      edge.sources = edge.sources.map((id) => owners.get(id) || id)
+      edge.targets = edge.targets.map((id) => owners.get(id) || id)
+    }
+    for (const child of node.children || []) detach(child)
+  }
+  if (owners.size > 0) detach(laid)
   return laid
 }
 
