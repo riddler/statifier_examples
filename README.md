@@ -248,7 +248,8 @@ and open slots it has.
 The region is the package's `StatifierBlocks.Editor.MapRegions.description_region/1`,
 and `StatifierBlocks.Map.Info` builds one such description for every
 element the map draws - blocks, interrupt rules, arms (the undecided arm
-included), a group's body and its rules, empty-slot markers, the end marks
+included), a group's body and its rules, a drafts shelf and the steps it
+keeps to one side, empty-slot markers, the end marks
 and the edges into them, the start dot and its edge, connectors (a
 branch's rejoin among them), the dashed interrupt edges and the dotted
 timer edges - keyed by the map's own ids. The page hands it the document,

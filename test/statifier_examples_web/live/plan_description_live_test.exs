@@ -173,6 +173,39 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
       assert LazyHTML.text(region) =~ "Riverbend Public Library loan"
     end
 
+    # The panel's accessible name follows what the region describes: the
+    # document while nothing is selected - on mount, after a deselect and
+    # while a slot's picker is open - and a step while one is.
+    #
+    # Sabotage: labelled the panel "Selected step" in both states; this
+    # went red on mount. Named an open picker a step; this went red on the
+    # picker. Each reverted from a copy.
+    test "the panel's name says what it holds, selected or not", %{conn: conn} do
+      for key <- @library do
+        {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: key]}")
+        assert panel_label(html) == "About this document"
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
+
+      selected = select(view, "blk_ll_due")
+      assert panel_label(selected) == "Selected step"
+      assert LazyHTML.attribute(region(selected), "data-map-description") == ["block"]
+
+      armed =
+        view
+        |> element(~s(#plan-panel button[data-plan-empty-slot="undecided"]))
+        |> render_click()
+
+      assert armed =~ ~s(data-plan-picker="open")
+      assert panel_label(armed) == "About this document"
+
+      select(view, "blk_ll_loan_period")
+      deselected = select(view, "blk_ll_loan_period")
+      assert panel_label(deselected) == "About this document"
+      assert LazyHTML.attribute(region(deselected), "data-map-description") == ["idle"]
+    end
+
     # A rule is its own kind in the region too, and the root is described
     # as the root.
     #
@@ -325,6 +358,12 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   defp region(html) do
     [region] = html |> LazyHTML.from_document() |> LazyHTML.query(@region) |> Enum.to_list()
     region
+  end
+
+  defp panel_label(html) do
+    [panel] = html |> LazyHTML.from_document() |> LazyHTML.query("#plan-panel") |> Enum.to_list()
+    [label] = LazyHTML.attribute(panel, "aria-label")
+    label
   end
 
   # `{id, kind}` for every stored description, in page order.
