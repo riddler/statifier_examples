@@ -107,23 +107,39 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   ## The map
 
-  The page opens on a map of the same document above the list:
-  `StatifierExamplesWeb.PlanMap.graph/1` turns the view model this page
-  already builds into a graph, and the `PlanMap` hook in
-  `assets/js/plan_map.mjs` lays it out with elkjs and draws it. The map is a
-  projection and nothing more - no position it draws is stored anywhere, and
-  the next change lays the document out again.
+  The page opens on a map of the same document above the list, and the map
+  is the package's, not this page's: it mounts
+  `StatifierBlocks.Editor.MapRegions.map_region/1`, where the package's
+  `StatifierBlocksMap` hook lays out and draws the graph
+  `StatifierBlocks.Map.graph/2` builds from the view model this page
+  already builds. The package README's "Mounting the Map" section is the
+  contract, and this page brings the four things it names, each of them
+  its own:
 
-  The list stays, complete and in the tab order, because it is the path a
-  keyboard and a screen reader take through the document. The map region is
-  `aria-hidden`: a reader of the list would otherwise meet every step twice.
-  Its scroll box carries `tabindex="-1"`, because a browser makes a
-  scrolling element with nothing focusable inside it a Tab stop of its own,
-  and a Tab stop inside a region hidden from assistive technology is one a
-  keyboard user lands on with nothing announced.
+    * the view model, rebuilt on every change - the map is a projection
+      and nothing more, no position it draws is stored anywhere, and the
+      next change lays the document out again;
+    * the selection, the list's `selected_id`, which the map marks;
+    * the list's own event names, `select-row` and `insert-open`, which a
+      gesture on the map is sent under, so the handlers below cannot tell
+      a click on the map from the same click on the list;
+    * the list itself, which stays complete and in the tab order.
+
+  It also passes `StatifierExamplesWeb.EventPhrasing.phrase/1` as the
+  map's `:phrase`, so the library world's event names read as words in the
+  boxes and in the description region alike.
+
+  The list is the path a keyboard and a screen reader take through the
+  document. The map region is `aria-hidden`: a reader of the list would
+  otherwise meet every step twice. Its scroll box carries `tabindex="-1"`,
+  because a browser makes a scrolling element with nothing focusable inside
+  it a Tab stop of its own, and a Tab stop inside a region hidden from
+  assistive technology is one a keyboard user lands on with nothing
+  announced. Both are the package's markup; the LiveView tests hold this
+  page to them.
 
   Every gesture on the map is one the list already makes, sent to the same
-  handler with the same payload (`mapGesture` in the hook says which):
+  handler with the same payload:
 
   | On the map | The event | The list's own way to it |
   |---|---|---|
@@ -133,8 +149,9 @@ defmodule StatifierExamplesWeb.PlanLive do
   | the panel's Move up, Move down, Delete | `move`, `remove` | the row's buttons |
   | the panel's form | `config-change` (`update_config`) | the same form, reached from the row |
 
-  A click on a slot's box selects nothing. A read-only page draws no "+"
-  and arms nothing from the map; its clicks only select.
+  A click on a slot's box selects nothing. A read-only page mounts the map
+  with `editable` off, so it draws no "+" and arms nothing; its clicks
+  only select.
 
   The panel is the page's one form surface. It holds the selected block's
   name - its sentence under its title only where the two differ, and with
@@ -147,21 +164,21 @@ defmodule StatifierExamplesWeb.PlanLive do
   list, outside the `aria-hidden` region, and takes focus: the selected
   row's "Its fields" link moves a keyboard into it. A picker for the gap
   after a block opens under that block's row, whichever view armed it; the
-  hook scrolls it into view when the map did.
+  map scrolls it into view when the map armed it, because this page names
+  it as the map region's `insert_reveal`.
 
   ## The description region
 
-  The panel is always drawn, and at its top is the description region:
-  the selected block described in words - its title and sentence, what
-  its type is for, its settings as values, where it sits, its outcomes
-  and where each goes, the interrupt rules that can leave it and any
-  findings - or, when no block is selected, the document: its name and
-  description, what starts it, how to read the map, and how many steps
-  and open slots it has. `StatifierExamplesWeb.PlanDescription` builds
-  every one of those descriptions, one per element the map draws, from
-  the view model and `StatifierBlocks.Describe.outline/3`; the page draws
-  the region from them and holds the rest in a hidden store keyed by the
-  map's own ids.
+  The panel is always drawn, and at its top is the package's description
+  region, `StatifierBlocks.Editor.MapRegions.description_region/1`: the
+  selected block described in words by `StatifierBlocks.Map.Info` - its
+  title and sentence, what its type is for, its settings as values, where
+  it sits, its outcomes and where each goes, the interrupt rules that can
+  leave it and any findings - or, when no block is selected, the document.
+  This page hands it the document, the palette, the view model, the
+  selection and the same `:phrase` it hands the map, so the region says
+  what the box says. Beside the region the component renders the hidden
+  store the map's hover reads, one entry per element the map draws.
 
   The region is `aria-live="polite"`, so selecting a row announces what
   the region now says, and every row of the list names it with
@@ -170,13 +187,11 @@ defmodule StatifierExamplesWeb.PlanLive do
   `aria-hidden` region. It shows values and never controls, and it adds no
   event of its own: what fills it is the selection the list already makes.
 
-  Pointing at anything the map draws - a block, a rule, an arm, a marker,
-  a connector, an interrupt edge - shows that element's description in the
-  region, and pointing away puts back the selected block's or the
-  document's. That is the page's `PlanInfo` hook (`assets/js/plan_info.mjs`),
-  on an element of its own beside the store: it copies the store's entry
-  into the region in the browser and pushes nothing to the server. A
-  keyboard and a screen reader reach the same words through the list.
+  Pointing at anything the map draws shows that element's description in
+  the region, and pointing away puts back the selected block's or the
+  document's. The package's hook does that in the browser from the store
+  and pushes nothing to the server. A keyboard and a screen reader reach
+  the same words through the list.
 
   ## Read-only
 
@@ -206,20 +221,18 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   alias StatifierBlocks.Assignability
   alias StatifierBlocks.Block
-  alias StatifierBlocks.Describe
   alias StatifierBlocks.Document
   alias StatifierBlocks.Edit
   alias StatifierBlocks.Edit.History
   alias StatifierBlocks.Edit.Session
   alias StatifierBlocks.Edit.Targets
   alias StatifierBlocks.Editor.ConfigForm
+  alias StatifierBlocks.Editor.MapRegions
   alias StatifierBlocks.Palette
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamples.Documents
   alias StatifierExamplesWeb.EventPhrasing
-  alias StatifierExamplesWeb.PlanDescription
-  alias StatifierExamplesWeb.PlanMap
 
   @default_theme :light
 
@@ -483,22 +496,23 @@ defmodule StatifierExamplesWeb.PlanLive do
 
         <div class="myapp-plan__body">
           <div class="myapp-plan__top">
-            <section class="myapp-plan__map" data-plan-section="map" aria-hidden="true">
-              <div
-                id="plan-map"
-                class="myapp-plan__map-canvas"
-                phx-hook="PlanMap"
-                tabindex="-1"
-                data-graph={@map_graph}
-                data-selected={@selected_id}
-                data-editable={to_string(not @readonly?)}
-              >
-                <div id="plan-map-canvas" data-map-canvas phx-update="ignore"></div>
-              </div>
-            </section>
+            <MapRegions.map_region
+              id="plan-map"
+              class="myapp-plan__map"
+              view_model={@view_model}
+              selected={@selected_id}
+              select_event="select-row"
+              insert_event="insert-open"
+              editable={not @readonly?}
+              phrase={&EventPhrasing.phrase/1}
+              description="plan-description"
+              insert_reveal="[data-plan-picker=open]"
+            />
 
             <.panel
-              description={@description}
+              session={@session}
+              view_model={@view_model}
+              selected_id={@selected_id}
               node={@panel}
               slot_insert={@slot_insert}
               insertable={@insertable}
@@ -551,40 +565,23 @@ defmodule StatifierExamplesWeb.PlanLive do
               />
             </ol>
           </footer>
-
-          <div id="plan-descriptions" hidden>
-            <div
-              :for={description <- @descriptions}
-              data-describes={description.id}
-              data-describes-kind={description.kind}
-            >
-              <.description description={description} />
-            </div>
-          </div>
-
-          <div
-            id="plan-info"
-            phx-hook="PlanInfo"
-            data-region="plan-description"
-            data-store="plan-descriptions"
-            hidden
-          >
-          </div>
         </div>
       </div>
     </div>
     """
   end
 
-  attr(:description, PlanDescription, required: true)
+  attr(:session, Session, required: true)
+  attr(:view_model, ViewModel, required: true)
+  attr(:selected_id, :string, default: nil)
   attr(:node, ViewModel.Node, default: nil)
   attr(:slot_insert, :map, default: nil)
   attr(:insertable, :list, default: [])
   attr(:readonly?, :boolean, default: false)
   attr(:drafted?, :boolean, default: false)
 
-  # The panel beside the map, always drawn: the description region at its
-  # top, then the page's one form surface. The selected
+  # The panel beside the map, always drawn: the package's description region
+  # at its top, then the page's one form surface. The selected
   # block's name, its held draft if there is one, its `ConfigForm` and the
   # block's move and delete controls - its row hides its own while it is
   # selected, so a screen reader meets one set; or, when an insert was armed
@@ -610,15 +607,14 @@ defmodule StatifierExamplesWeb.PlanLive do
       tabindex="-1"
       aria-label="Selected step"
     >
-      <section
+      <MapRegions.description_region
         id="plan-description"
-        class="myapp-plan__description"
-        aria-live="polite"
-        aria-label="Description"
-        data-plan-description={@description.kind}
-      >
-        <.description description={@description} />
-      </section>
+        document={@session.document}
+        view_model={@view_model}
+        palette={@session.palette}
+        selected={@selected_id}
+        phrase={&EventPhrasing.phrase/1}
+      />
 
       <div :if={@node}>
         <p class="myapp-plan__panel-title">{ViewModel.title(@node)}</p>
@@ -725,42 +721,6 @@ defmodule StatifierExamplesWeb.PlanLive do
         </button>
       </div>
     </aside>
-    """
-  end
-
-  attr(:description, PlanDescription, required: true)
-
-  # One `PlanDescription`, in words: the region draws the current one and
-  # the hidden store draws every one. Values, never controls.
-  defp description(assigns) do
-    ~H"""
-    <p class="myapp-plan__description-title">{@description.title}</p>
-    <p :if={@description.sentence} class="myapp-plan__description-sentence">
-      {@description.sentence}
-    </p>
-    <p class="myapp-plan__description-text">{@description.explanation}</p>
-    <.facts :if={@description.settings != []} heading="Settings" facts={@description.settings} />
-    <.facts :if={@description.facts != []} facts={@description.facts} />
-    """
-  end
-
-  attr(:heading, :string, default: nil)
-  attr(:facts, :list, required: true)
-
-  defp facts(assigns) do
-    ~H"""
-    <p :if={@heading} class="myapp-plan__description-heading">{@heading}</p>
-    <dl class="myapp-plan__description-facts">
-      <%= for {label, value} <- @facts do %>
-        <dt>{label}</dt>
-        <dd :if={is_binary(value)}>{value}</dd>
-        <dd :if={is_list(value)}>
-          <ul>
-            <li :for={item <- value}>{item}</li>
-          </ul>
-        </dd>
-      <% end %>
-    </dl>
     """
   end
 
@@ -1010,9 +970,6 @@ defmodule StatifierExamplesWeb.PlanLive do
       socket.assigns.session
 
     view_model = ViewModel.build(document, palette, [])
-    graph = PlanMap.graph(view_model)
-    described = Describe.outline(document, palette, [])
-    descriptions = PlanDescription.elements(graph, view_model, described, palette)
 
     outline =
       view_model
@@ -1021,16 +978,6 @@ defmodule StatifierExamplesWeb.PlanLive do
 
     socket
     |> assign(:view_model, view_model)
-    |> assign(:map_graph, Jason.encode!(graph))
-    |> assign(:descriptions, descriptions)
-    |> assign(
-      :description,
-      description(
-        descriptions,
-        socket.assigns.selected_id,
-        PlanDescription.idle(document, graph, view_model, described)
-      )
-    )
     |> assign(:panel, panel(outline, socket.assigns.selected_id))
     |> assign(:positions, ViewModel.positions(view_model))
     |> assign(:plan, Enum.filter(outline, fn {_node, _depth, kind} -> kind in [:step, :arm] end))
@@ -1038,15 +985,6 @@ defmodule StatifierExamplesWeb.PlanLive do
     |> assign(:trays, Enum.filter(outline, fn {_node, _depth, kind} -> kind == :tray end))
     |> assign_insertable()
   end
-
-  # What the description region says: the selected block's description,
-  # or the document's when nothing is selected.
-  @spec description([PlanDescription.t()], Block.id() | nil, PlanDescription.t()) ::
-          PlanDescription.t()
-  defp description(_descriptions, nil, idle), do: idle
-
-  defp description(descriptions, id, idle),
-    do: Enum.find(descriptions, idle, &(&1.id == id))
 
   # The block the map's panel shows: the selected one, off the outline the
   # list draws, so a held draft shows there exactly as it does in its row.
@@ -1174,7 +1112,8 @@ defmodule StatifierExamplesWeb.PlanLive do
   defp gap_key(%{"block-id" => id}), do: id
 
   # The selected block's empty slots, in the order the map draws their
-  # markers (`PlanMap`: body, then rails, then trays), one panel control each.
+  # markers (`StatifierBlocks.Map`: body, then rails, then trays), one panel
+  # control each.
   @spec empty_slots(ViewModel.Node.t()) :: [ViewModel.Slot.t()]
   defp empty_slots(%ViewModel.Node{slots: slots} = node) do
     drawn =

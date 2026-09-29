@@ -102,20 +102,31 @@ dashed "Nothing here yet" marker rather than a gap in the picture. It is the
 Plan view's default reading; the list below it is unchanged, complete, and
 the page's keyboard and screen-reader path.
 
-The map is a projection and stores nothing. `StatifierExamplesWeb.PlanMap`
-builds a graph from the same `StatifierBlocks.ViewModel` the list is drawn
-from, on every change; the `PlanMap` hook in `assets/js/plan_map.mjs` lays it
-out in the browser and draws plain SVG. No position, size or connector is
-written to the document or to any table, and nothing is placed by hand: the
-next change lays the whole document out again. Connectors are drawn, never
-authored. A layout that fails draws an error pane in the map's place, never a
-blank one.
+The map is `statifier_blocks`', not this app's. The page mounts the
+package's two regions, `StatifierBlocks.Editor.MapRegions.map_region/1`
+and `description_region/1`, as the package README's "Mounting the Map"
+section describes, and the package's `StatifierBlocksMap` hook lays the
+graph out in the browser and draws plain SVG. What this host passes is its
+own:
 
-Two ELK options keep the order the document means rather than the order that
-saves a crossing: `crossingMinimization.forceNodeModelOrder` on every
-container, and `considerModelOrder` on the root only.
-`StatifierExamplesWeb.PlanMapLayoutTest` lays every fixture out through the
-real layout library and reads the order off the boxes it placed.
+- its **list**, which stays the keyboard and screen-reader path: the map
+  region is `aria-hidden` and nothing in it takes focus;
+- its **selection**, the block the list has selected;
+- its **events**, `select-row` and `insert-open` (with `slot` for an empty
+  slot), which a gesture on the map is sent under, so the page's handlers
+  cannot tell a click on the map from the same click on the list;
+- its **words**, `StatifierExamplesWeb.EventPhrasing.phrase/1`, as the
+  regions' `:phrase`.
+
+The map is a projection and stores nothing. `StatifierBlocks.Map.graph/2`
+builds the graph from the same `StatifierBlocks.ViewModel` the list is
+drawn from, on every change. No position, size or connector is written to
+the document or to any table, and nothing is placed by hand: the next
+change lays the whole document out again. Connectors are drawn, never
+authored. A layout that fails draws an error pane in the map's place,
+never a blank one. How the drawing keeps the order the document means,
+and the layout tests that pin it, are the package's; the subsections
+below say what it draws on this app's documents.
 
 The steps that run when nothing goes wrong are drawn down one vertical
 line, and what can interrupt them stands to the side. A group is wider
@@ -234,28 +245,29 @@ selected it describes the document: its name and description, what starts
 it and the events it listens for, how to read the map, and how many steps
 and open slots it has.
 
-`StatifierExamplesWeb.PlanDescription` builds one such description for
-every element the map draws - blocks, interrupt rules, arms (the undecided
-arm included), a group's body and its rules, empty-slot markers, the end
-marks and the edges into them, the start dot and its edge, connectors (a
+The region is the package's `StatifierBlocks.Editor.MapRegions.description_region/1`,
+and `StatifierBlocks.Map.Info` builds one such description for every
+element the map draws - blocks, interrupt rules, arms (the undecided arm
+included), a group's body and its rules, empty-slot markers, the end marks
+and the edges into them, the start dot and its edge, connectors (a
 branch's rejoin among them), the dashed interrupt edges and the dotted
-timer edges - from the view model and `StatifierBlocks.Describe.outline/3`,
-keyed by the map's own ids. The region is `aria-live="polite"` and every
-row of the list names it with `aria-describedby`, so a screen reader hears
-what a sighted reader sees on the map. It shows values, never controls, and
-adds no event of its own: the selection the list already makes is what
-fills it, and pointing at the map (below) shows another element's words
-there for as long as the pointer stays, without changing the selection.
-What a type is for is the type's own explanation, `StatifierBlocks.BlockType.explain/1` through the page's
-palette, which falls back to the palette description for a type that does
-not explain itself.
+timer edges - keyed by the map's own ids. The page hands it the document,
+the palette, the view model, the selection and the same `:phrase` it
+hands the map, so the region says what the box says. The region is
+`aria-live="polite"` and every row of the list names it with
+`aria-describedby`, so a screen reader hears what a sighted reader sees on
+the map. It shows values, never controls, and adds no event of its own:
+the selection the list already makes is what fills it, and pointing at
+the map (below) shows another element's words there for as long as the
+pointer stays, without changing the selection. What a type is for is the
+type's own explanation, `StatifierBlocks.BlockType.explain/1` through the
+page's palette.
 
 Pointing at anything the map draws shows that element's description in the
 region, and pointing away puts back the selected block's or the document's.
-The page's own `PlanInfo` hook (`assets/js/plan_info.mjs`) does it in the
-browser from the descriptions the server already rendered into a hidden
-store, so a hover pushes nothing to the server. The list stays the keyboard
-and screen-reader path to the same words.
+The package's hook does it in the browser from the hidden store the region
+renders beside itself, so a hover pushes nothing to the server. The list
+stays the keyboard and screen-reader path to the same words.
 
 The library world's event names read as words wherever the Plan view
 writes a sentence: on the map, in the panel and in the region,
@@ -291,18 +303,17 @@ fictional library, carry every mark this section describes between them:
 
 ### What it costs
 
-The layout library is [elkjs](https://github.com/kieler/elkjs) 0.9.3, under
-the Eclipse Public License 2.0, vendored whole as
-`assets/vendor/elk.bundled.js` beside its licence,
-`assets/vendor/elkjs-LICENSE.md`. It is 1,606,238 bytes as shipped and
-466,990 bytes gzipped, the largest thing in the page bundle. The file is
-byte-identical to `lib/elk.bundled.js` in the npm tarball, and
-`.claude/firewall-vendor.txt` pins its SHA-256.
-
-The map's layout tests run `assets/js/plan_map.mjs` through the real elkjs,
-so they need **Node** on the `PATH`. It is the one tool the suite asks for
-beyond Elixir; without it those tests fail with that sentence rather than
-skipping, because a skipped order test is an unpinned order.
+The `StatifierBlocksMap` hook has its own entry point in `statifier_blocks`,
+outside the package's default export, because it imports the package's
+vendored [elkjs](https://github.com/kieler/elkjs) 0.9.3, under the Eclipse
+Public License 2.0, whole: 1,606,238 bytes as shipped and 466,990 bytes
+gzipped, the largest thing in this app's page bundle. `assets/js/app.js`
+imports it through the same esbuild `NODE_PATH` route as the editor's hooks,
+as `statifier_blocks/assets/js/statifier_blocks_map.js`. This app vendors no
+layout library of its own, and its suite needs no Node: the map's layout and
+gesture tests are the package's, and what this app's LiveView tests hold it
+to is the wiring - the list's events, the selection, the words, and the
+list as the accessible path.
 
 ## What the Plan view copied, measured
 
@@ -1068,10 +1079,6 @@ bundle** job on every pull request. It lives here rather than in those
 packages because their own gates never bundle - statifier-ui's ADR-0009
 decides that, and names an example host as where the bundle should actually be
 built. Run it locally the same way; it needs no server and no npm install.
-
-The suite itself needs Node for one thing: the Plan view's map is laid out
-in the browser, so its layout and gesture tests run `assets/js/plan_map.mjs`
-through Node (see "The Plan view's map" above).
 
 The job runs two legs. **`hex`** bundles the `statifier_ui` this app actually
 depends on, the last published release, and it is a required check.

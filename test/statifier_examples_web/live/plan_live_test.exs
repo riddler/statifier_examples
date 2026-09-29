@@ -9,13 +9,14 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   alias StatifierBlocks.Block
   alias StatifierBlocks.Composite
   alias StatifierBlocks.Document
+  alias StatifierBlocks.Map, as: BlockMap
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.CardAuth.AuthorizeWithDeadline
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.Messaging.Notify
   alias StatifierExamples.Documents
   alias StatifierExamples.Signup.{GuardedSection, GuardedStep}
-  alias StatifierExamplesWeb.PlanMap
+  alias StatifierExamplesWeb.EventPhrasing
 
   @themes ["light", "dark", "brand"]
 
@@ -872,10 +873,11 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   describe "the map" do
     # The map is the page's first section, and the graph it carries is the
     # whole document: every block, every arm, every empty slot's marker.
-    # What the browser draws from it is `PlanMapLayoutTest`'s; what this
-    # asserts is that the page hands over the right graph.
+    # What the browser draws from it is the package's to prove; what this
+    # asserts is that the page hands the package's map region this page's
+    # view model and its words for event names.
     #
-    # Sabotage: rendered the map section after the list; this went red on
+    # Sabotage: rendered the map region after the list; this went red on
     # the order. Reverted from a copy.
     test "both library fixtures open on a map of the whole document, above the list",
          %{conn: conn} do
@@ -887,15 +889,16 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
         fixture = fixture(key)
         graph = map_graph(html)
 
-        assert graph == Jason.decode!(Jason.encode!(PlanMap.graph(view_model_of(fixture))))
+        expected = BlockMap.graph(view_model_of(fixture), phrase: &EventPhrasing.phrase/1)
+        assert graph == Jason.decode!(Jason.encode!(expected))
 
-        assert PlanMap.nodes(graph) ==
+        assert BlockMap.nodes(graph) ==
                  for({node, _depth, _kind} <- outline_of(fixture), do: node.block_id)
 
         assert empty in map_ids(graph)
 
         [before_list | _rest] = String.split(html, ~s(data-plan-section="plan"))
-        assert before_list =~ ~s(data-plan-section="map")
+        assert before_list =~ ~s(id="plan-map")
       end
     end
 
@@ -904,31 +907,74 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     # focus - so a keyboard or a screen reader meets the document once, in
     # the list.
     #
-    # Sabotage: dropped aria-hidden from the map section; this went red.
-    # Dropped tabindex="-1" from the canvas; this went red. Each reverted
-    # from a copy.
+    # Sabotage: replaced the page's `MapRegions.map_region` call with the
+    # same markup written out without `aria-hidden`; this went red.
+    # Reverted from a copy.
     test "the list stays complete and the map stays out of its path", %{conn: conn} do
       for key <- ["library_loan", "patron_registration"] do
         {:ok, view, html} = live(conn, ~p"/plan?#{[doc: key]}")
 
         assert rows_in(html) == length(outline_of(fixture(key)))
 
-        assert html =~
-                 ~s(<section class="myapp-plan__map" data-plan-section="map" aria-hidden="true">)
-
         # With a block selected, so the panel's markup is inside the check.
         [_root, {second, _depth, _kind} | _rest] = outline_of(fixture(key))
         selected = render_hook(view, "select-row", %{"block-id" => second.block_id})
         assert selected =~ ~s(data-plan-panel="#{second.block_id}")
 
-        map = section(selected, "map")
+        region = map_region(selected)
+        map = LazyHTML.to_html(region)
+        assert map =~ ~s(class="sb-map__region myapp-plan__map")
         refute map =~ ~r/<(button|input|select|textarea|a)[\s>]/
+        refute map =~ "plan-panel"
         # The canvas scrolls, and a scroll box with nothing focusable in it
         # is a Tab stop unless it says otherwise: it is taken out of the tab
         # order, and it is the only thing in the region with a tabindex.
-        assert map =~ ~r/id="plan-map"[^>]*tabindex="-1"/
-        assert map |> String.split("tabindex") |> length() == 2
+        assert [["-1"]] =
+                 region |> LazyHTML.query("[tabindex]") |> Enum.map(&tabindex/1)
+
+        assert region |> LazyHTML.query("#plan-map[tabindex=\"-1\"]") |> Enum.count() == 1
       end
+    end
+
+    # The hook on the map is the package's, and what it is handed is this
+    # page's: the list's own event names, whether the page edits, the
+    # description region's id and its store, and the picker to scroll into
+    # view after an insert armed from the map.
+    #
+    # Sabotage: passed `select_event="select"` to the page's map region;
+    # this went red. Reverted from a copy.
+    test "the map's hook is handed the list's events and the description region",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
+      [map] = html |> LazyHTML.from_document() |> LazyHTML.query("#plan-map") |> Enum.to_list()
+
+      assert LazyHTML.attribute(map, "phx-hook") == ["StatifierBlocksMap"]
+      assert LazyHTML.attribute(map, "data-select-event") == ["select-row"]
+      assert LazyHTML.attribute(map, "data-insert-event") == ["insert-open"]
+      assert LazyHTML.attribute(map, "data-editable") == ["true"]
+      assert LazyHTML.attribute(map, "data-info-region") == ["plan-description"]
+      assert LazyHTML.attribute(map, "data-info-store") == ["plan-description-store"]
+      assert LazyHTML.attribute(map, "data-insert-reveal") == ["[data-plan-picker=open]"]
+
+      # The two ids it names are on the page, once each.
+      page = LazyHTML.from_document(html)
+      assert page |> LazyHTML.query("#plan-description") |> Enum.count() == 1
+      assert page |> LazyHTML.query("#plan-description-store[hidden]") |> Enum.count() == 1
+    end
+
+    # The boxes read the library world's event names as words, because the
+    # page hands the package `EventPhrasing.phrase/1` as `:phrase`.
+    #
+    # Sabotage: dropped `phrase={&EventPhrasing.phrase/1}` from the page's
+    # map region; the box read "Send loan.closed" and this went red.
+    # Reverted from a copy.
+    test "the map's boxes read event names as words", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
+      close = html |> map_graph() |> graph_node("blk_ll_close")
+      lines = Enum.join(close["lines"] || [], " ")
+
+      assert lines =~ "Send word that the loan is closed"
+      refute lines =~ "loan.closed"
     end
 
     # A click on the map sends the list's own event: the row is selected,
@@ -1007,29 +1053,34 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert row_markup(html, "blk_pr_deadline") =~ "In 7 days, send registration.deadline"
 
       assert [%{"from" => "blk_pr_deadline", "to" => "blk_pr_expired", "delay" => "7d"}] =
-               PlanMap.timers(map_graph(html))
+               BlockMap.timers(map_graph(html))
     end
 
     # The map redraws from the document the page holds, so a write made
     # through the list shows on it without the map being asked.
     #
-    # Sabotage: made rebuild/1 keep the first graph it assigned; this went
-    # red. Reverted from a copy.
+    # Sabotage: assigned the view model with `assign_new/3` in rebuild/1,
+    # so the first one stuck; this went red. Reverted from a copy.
     test "a change made through the list reaches the map", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
-      assert "blk_pr_welcome" in PlanMap.nodes(map_graph(html))
+      assert "blk_pr_welcome" in BlockMap.nodes(map_graph(html))
 
       after_remove = render_hook(view, "remove", %{"block-id" => "blk_pr_welcome"})
-      refute "blk_pr_welcome" in PlanMap.nodes(map_graph(after_remove))
+      refute "blk_pr_welcome" in BlockMap.nodes(map_graph(after_remove))
     end
 
-    # Read-only draws the same map, and selecting still names the block.
+    # Read-only draws the same map, with editing off, so the hook arms no
+    # insert; and selecting still names the block.
     #
-    # Sabotage: drew the map section only when the page is not read-only;
-    # this went red. Reverted from a copy.
+    # Sabotage: passed `editable={true}` to the page's map region; the
+    # read-only page said data-editable="true" and this went red. Reverted
+    # from a copy.
     test "a read-only page draws the map too", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/plan?#{[doc: "library_loan", readonly: "1"]}")
-      assert html =~ ~s(phx-hook="PlanMap")
+      assert html =~ ~s(phx-hook="StatifierBlocksMap")
+      [map] = html |> LazyHTML.from_document() |> LazyHTML.query("#plan-map") |> Enum.to_list()
+      assert LazyHTML.attribute(map, "data-editable") == ["false"]
+      assert LazyHTML.attribute(map, "data-select-event") == ["select-row"]
 
       selected = render_hook(view, "select-row", %{"block-id" => "blk_ll_loan_period"})
       assert selected =~ ~s(data-plan-panel="blk_ll_loan_period")
@@ -1037,20 +1088,22 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   end
 
   describe "editing from the map" do
-    # What the map sends is read off the hook itself: the Node driver draws
-    # the document with `plan_map.mjs`, and for every clickable element it
-    # draws, asks the hook's own `mapGesture` what a click there sends. The
-    # cases below send exactly that, so a hook that sent a different event or
-    # payload than the list's would fail here rather than in a browser.
+    # What the map sends is read off the page: the event names the page
+    # hands the package's hook on `#plan-map`, and the payload the package
+    # README's "Mounting the Map" section says the hook sends for each
+    # element of the graph it draws (`"block-id"`, and `"slot"` for an empty
+    # slot's marker). That the hook's clicks send exactly that is the
+    # package's to prove; what the cases below hold this page to is that the
+    # names it hands over are the ones its own handlers answer.
 
-    # Sabotage: made mapGesture send "select" rather than "select-row" for a
-    # block; this went red, with the move, remove and update_config cases.
+    # Sabotage: passed `select_event="select"` to the page's map region;
+    # this went red, with the move, remove and update_config cases.
     # Reverted from a copy.
     test "a block selected from the map opens the one form, in the panel", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
 
       %{event: event, payload: payload} =
-        map_gesture("patron_registration", "block:blk_pr_deadline")
+        map_gesture(view, "block:blk_pr_deadline")
 
       html = render_hook(view, event, payload)
 
@@ -1074,23 +1127,22 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       assert row_markup(html, "blk_pr_deadline") =~ ~r/<a[^>]*href="#plan-panel"/
       assert html =~ ~r/<aside[^>]*id="plan-panel"[^>]*tabindex="-1"/
-      [_before, after_map] = String.split(html, ~s(data-plan-section="map"), parts: 2)
-      [map_region | _rest] = String.split(after_map, "</section>", parts: 2)
-      refute map_region =~ "plan-panel"
-      refute map_region =~ "sb-form"
+      map = html |> map_region() |> LazyHTML.to_html()
+      refute map =~ "plan-panel"
+      refute map =~ "sb-form"
       refute section(html, "panel") =~ "aria-hidden"
     end
 
     # Insert at a gap after a block: the map's "+" arms the same gap the
     # row's "+" arms, and the same pick lands the same step.
     #
-    # Sabotage: made mapGesture send the gap's block id as "id" rather than
-    # "block-id"; nothing was armed and this went red. Reverted from a copy.
+    # Sabotage: passed `insert_event="insert"` to the page's map region;
+    # nothing was armed and this went red. Reverted from a copy.
     test "insert at a gap: map and list give the same document", %{conn: conn} do
       from_map =
         edit(conn, "patron_registration", fn view ->
           %{event: event, payload: payload} =
-            map_gesture("patron_registration", "gap:blk_pr_deadline")
+            map_gesture(view, "gap:blk_pr_deadline")
 
           render_hook(view, event, payload)
           pick(view, ~s(li[data-block-id="blk_pr_deadline"] [data-plan-picker="open"] button))
@@ -1127,7 +1179,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       from_map =
         edit(conn, "patron_registration", fn view ->
           %{event: event, payload: payload} =
-            map_gesture("patron_registration", "empty:blk_pr_age/otherwise/empty")
+            map_gesture(view, "empty:blk_pr_age/otherwise/empty")
 
           html = render_hook(view, event, payload)
           assert section(html, "panel") =~ ~s(data-plan-slot-insert="blk_pr_age/otherwise")
@@ -1259,7 +1311,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       map_select(view, "blk_pr_deadline")
 
       %{event: event, payload: payload} =
-        map_gesture("patron_registration", "empty:blk_pr_age/otherwise/empty")
+        map_gesture(view, "empty:blk_pr_age/otherwise/empty")
 
       html = render_hook(view, event, payload)
       panel = section(html, "panel")
@@ -1280,7 +1332,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
 
       %{event: event, payload: payload} =
-        map_gesture("patron_registration", "empty:blk_pr_age/otherwise/empty")
+        map_gesture(view, "empty:blk_pr_age/otherwise/empty")
 
       assert render_hook(view, event, payload) =~ "data-plan-slot-insert"
 
@@ -1290,18 +1342,25 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert document("patron_registration") == fixture("patron_registration").document
     end
 
-    # A read-only page's map draws no gaps and arms nothing, and a crafted
-    # slot payload naming a slot the block does not have arms nothing.
+    # A read-only page hands the map `editable` off, so its hook draws no
+    # gaps and arms nothing; the insert its marker would have sent is
+    # refused by the page's write gate all the same; and a crafted slot
+    # payload naming a slot the block does not have arms nothing.
     #
-    # Sabotage: made mapGesture ignore `editable` for an empty marker; the
-    # read-only gesture came back as an insert and this went red. Reverted
-    # from a copy.
+    # Sabotage: dropped "insert-open" from the read-only write gate's
+    # event list; the crafted read-only insert armed a picker and this
+    # went red. Reverted from a copy.
     test "nothing inserts where it cannot", %{conn: conn} do
-      read_only = map_gestures("patron_registration", false)
-      refute Enum.any?(read_only, &String.starts_with?(&1["element"], "gap:"))
+      {:ok, read_only, html} =
+        live(conn, ~p"/plan?#{[doc: "patron_registration", readonly: "1"]}")
 
-      assert %{"gesture" => nil} =
-               Enum.find(read_only, &(&1["element"] == "empty:blk_pr_age/otherwise/empty"))
+      [map] = html |> LazyHTML.from_document() |> LazyHTML.query("#plan-map") |> Enum.to_list()
+      assert LazyHTML.attribute(map, "data-editable") == ["false"]
+
+      armed =
+        render_hook(read_only, "insert-open", %{"block-id" => "blk_pr_age", "slot" => "otherwise"})
+
+      refute armed =~ "data-plan-slot-insert"
 
       {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
 
@@ -1335,6 +1394,26 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
   defp map_ids(%{} = node),
     do: [node["id"] | Enum.flat_map(Map.get(node, "children", []), &map_ids/1)]
+
+  # One graph node by its id, wherever it sits.
+  defp graph_node(%{"id" => id} = node, id), do: node
+
+  defp graph_node(%{} = node, id),
+    do: node |> Map.get("children", []) |> Enum.find_value(&graph_node(&1, id))
+
+  # The package's map region on the page: the one `aria-hidden` section
+  # it renders, which holds the hook's element.
+  defp map_region(html) do
+    assert [region] =
+             html
+             |> LazyHTML.from_document()
+             |> LazyHTML.query(~s(section.sb-map__region[aria-hidden="true"]))
+             |> Enum.to_list()
+
+    region
+  end
+
+  defp tabindex(element), do: LazyHTML.attribute(element, "tabindex")
 
   defp view_model_of(fixture), do: ViewModel.build(fixture.document, Charts.palette(), [])
 
@@ -1406,40 +1485,43 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     hd(String.split(rest, ">", parts: 2))
   end
 
-  # The hook's own answer, for every clickable element it draws on `key`'s
-  # map: `%{"element" => ..., "gesture" => %{"event" => ..., "payload" => ...} | nil}`.
-  defp map_gestures(key, editable) do
-    fixture = fixture(key)
-    graph = fixture.document |> ViewModel.build(Charts.palette(), []) |> PlanMap.graph()
-    dir = Path.join(System.tmp_dir!(), "plan-map-#{System.unique_integer([:positive])}")
-    File.mkdir_p!(dir)
-    path = Path.join(dir, "graph.json")
-    File.write!(path, Jason.encode!(graph))
+  # What a click on `element` of the page's map sends: the event name the
+  # page handed the hook for that gesture, read off `#plan-map`, and the
+  # payload the package README says the hook sends for it. `element` is
+  # `block:<id>`, `gap:<id>` or `empty:<marker id>`, and it has to be one
+  # the graph on the page actually draws.
+  defp map_gesture(view, element) do
+    [map] =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#plan-map")
+      |> Enum.to_list()
 
-    node =
-      System.find_executable("node") || flunk("the map's gesture tests need Node on the PATH")
+    [graph] = LazyHTML.attribute(map, "data-graph")
+    graph = Jason.decode!(graph)
+    [select] = LazyHTML.attribute(map, "data-select-event")
+    [insert] = LazyHTML.attribute(map, "data-insert-event")
 
-    driver = Path.expand("../../support/js/plan_map_layout.mjs", __DIR__)
-    args = if editable, do: [driver, path, "editable"], else: [driver, path]
-    {out, 0} = System.cmd(node, args, stderr_to_stdout: true)
-    File.rm_rf!(dir)
-    Jason.decode!(out)["gestures"]
-  end
+    case element do
+      "block:" <> id ->
+        assert %{"kind" => "block"} = graph_node(graph, id)
+        %{event: select, payload: %{"block-id" => id}}
 
-  defp map_gesture(key, element) do
-    %{"gesture" => %{"event" => event, "payload" => payload}} =
-      Enum.find(map_gestures(key, true), &(&1["element"] == element))
+      "gap:" <> id ->
+        assert %{"kind" => "block", "gap" => true} = graph_node(graph, id)
+        %{event: insert, payload: %{"block-id" => id}}
 
-    %{event: event, payload: payload}
+      "empty:" <> id ->
+        assert %{"kind" => "empty", "parent" => parent, "slot" => slot} = graph_node(graph, id)
+        %{event: insert, payload: %{"block-id" => parent, "slot" => slot}}
+    end
   end
 
   defp map_select(view, block_id) do
-    %{event: event, payload: payload} = map_gesture(view_key(view), "block:#{block_id}")
+    %{event: event, payload: payload} = map_gesture(view, "block:#{block_id}")
     render_hook(view, event, payload)
   end
-
-  # Every editing case here runs on patron registration.
-  defp view_key(_view), do: "patron_registration"
 
   # A fresh store, one mount, `gesture` run against it, and the stored
   # document that results with any block the gesture created renamed "new".

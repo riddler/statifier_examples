@@ -9,11 +9,11 @@ defmodule StatifierExamplesWeb.PlanEmptySlotLiveTest do
   alias StatifierBlocks.Block
   alias StatifierBlocks.Document
   alias StatifierBlocks.Edit
+  alias StatifierBlocks.Map, as: BlockMap
   alias StatifierBlocks.Palette
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
   alias StatifierExamples.Documents
-  alias StatifierExamplesWeb.PlanMap
 
   # The map's empty-slot marker is the one insert the list has no row for.
   # These cases reach the same gap from the keyboard: select a row in the
@@ -31,8 +31,9 @@ defmodule StatifierExamplesWeb.PlanEmptySlotLiveTest do
     # Parity with the map, asked of every fixture: for every block the map
     # draws an empty marker in, selecting that block's row offers exactly
     # the markers' slots, each as the payload the marker sends. The
-    # expectation is read off `PlanMap.graph/1`, so a slot the map marks and
-    # the panel misses, or the reverse, is a difference here.
+    # expectation is read off `StatifierBlocks.Map.graph/2`, the graph the
+    # page's map region draws, so a slot the map marks and the panel
+    # misses, or the reverse, is a difference here.
     #
     # Sabotage: made the panel offer only a block's body slots; the rail
     # markers (an invoke's failure slot) had no button and this went red.
@@ -164,7 +165,7 @@ defmodule StatifierExamplesWeb.PlanEmptySlotLiveTest do
   defp markers(%Document{} = document) do
     document
     |> ViewModel.build(Charts.palette(), [])
-    |> PlanMap.graph()
+    |> BlockMap.graph()
     |> Map.fetch!("children")
     |> Enum.flat_map(&empties/1)
     |> Enum.group_by(fn {parent, _slot} -> parent end, fn {_parent, slot} -> slot end)

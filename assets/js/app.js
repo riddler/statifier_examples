@@ -67,18 +67,17 @@ import StatifierBlocks from "statifier_blocks/assets/js/statifier_blocks.js"
 // esbuild NODE_PATH as the one above.
 import { StatifierUIHooks } from "statifier_ui/assets/js/index.js"
 
-// The Plan view's map (`StatifierExamplesWeb.PlanMap` builds the graph; the
-// hook lays it out and draws it). It is this app's own hook, not a package's,
-// and it carries elkjs 0.9.3, vendored whole under `assets/vendor/` beside its
-// licence (EPL-2.0) - about 1.6 MB as shipped and about 467 KB gzipped, the
-// largest thing in this bundle.
-import PlanMapHooks from "./plan_map.mjs"
-
-// The Plan view's description region on hover (`PlanInfo`): pointing at
-// anything the map draws shows the description the server already put in
-// the page's hidden store, and pointing away puts the region back. This
-// app's own hook too, and it pushes nothing to the server.
-import PlanInfoHooks from "./plan_info.mjs"
+// The Map on the Plan page, `statifier_blocks`' own hook for
+// `StatifierBlocks.Editor.MapRegions.map_region/1`. It has its own entry
+// point rather than riding the default export above, because it pulls in
+// the package's vendored elkjs 0.9.3 (EPL-2.0, its licence ships beside it
+// in the package) - about 1.6 MB as shipped, the largest thing in this
+// bundle. It only draws: a gesture on the map goes out under the list's
+// own event names (`select-row`, `insert-open`), and its hover copies the
+// description region's hidden store into the region without a push. The
+// specifier is the NODE_PATH route the package README's "Mounting the
+// Map" section names.
+import { StatifierBlocksMap } from "statifier_blocks/assets/js/statifier_blocks_map.js"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -88,8 +87,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
     ...colocatedHooks,
     ...StatifierBlocks,
     ...StatifierUIHooks,
-    ...PlanMapHooks,
-    ...PlanInfoHooks,
+    StatifierBlocksMap,
   },
 })
 
