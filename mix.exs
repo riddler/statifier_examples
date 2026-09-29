@@ -1239,13 +1239,21 @@ defmodule StatifierExamples.MixProject do
   # answer clean, so no type or fixture here changed. The dependency update
   # also took `phoenix` from 1.8.14 to 1.8.15 in `mix.lock`, which no floor
   # here requires.
+  #
+  # 2026-09-28: the floor moves to `~> 0.39.0`, published, so the arm stays
+  # a Hex requirement; `mix.lock` moves only its `statifier_blocks` line.
+  # 0.39.0 is REQUIRED rather than tidy: it ships the Map -
+  # `StatifierBlocks.Map`, `StatifierBlocks.Map.Info`,
+  # `StatifierBlocks.Editor.MapRegions` and the `StatifierBlocksMap` hook
+  # with elkjs vendored beside it - which the Plan page now mounts in place
+  # of its own.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.38.0"}
+        {:statifier_blocks, "~> 0.39.0"}
     end
   end
 

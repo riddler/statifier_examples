@@ -6,22 +6,24 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias StatifierBlocks.Map, as: BlockMap
   alias StatifierBlocks.ViewModel
   alias StatifierExamples.Charts
-  alias StatifierExamplesWeb.PlanMap
+  alias StatifierExamplesWeb.EventPhrasing
 
   @library ["library_loan", "patron_registration"]
   @kinds ~w(block rule arm undecided_arm rules marker start edge interrupt timer)
 
   @region "#plan-description"
+  @store "#plan-description-store"
 
   describe "the region" do
     # The region is always drawn, at the top of the panel and outside the
     # map's `aria-hidden` region, and with nothing selected it describes the
     # document.
     #
-    # Sabotage: put the panel back behind `:if={@panel || @slot_insert}`;
-    # the region was gone on mount and this went red. Reverted from a copy.
+    # Sabotage: drew a line of the panel's own above the page's
+    # `description_region`; this went red. Reverted from a copy.
     test "is at the top of the panel, aria-live polite, and idle on mount", %{conn: conn} do
       for key <- @library do
         {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: key]}")
@@ -29,7 +31,12 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
         [region] = page |> LazyHTML.query(@region) |> Enum.to_list()
         assert LazyHTML.attribute(region, "aria-live") == ["polite"]
-        assert LazyHTML.attribute(region, "data-plan-description") == ["idle"]
+
+        assert page
+               |> LazyHTML.query("section#plan-description.sb-map__description")
+               |> Enum.count() == 1
+
+        assert LazyHTML.attribute(region, "data-map-description") == ["idle"]
 
         # First thing in the panel.
         [first | _rest] = page |> LazyHTML.query("#plan-panel > *") |> Enum.to_list()
@@ -70,18 +77,50 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
       end
     end
 
+    # Keyboard reachability, as the markup proves it: every control that
+    # sends an event - the list's rows and the panel's controls - is a real
+    # `<button>` or a form, none of them inside the map's `aria-hidden`
+    # region, and pressing a row's button (its `select-row`) changes what
+    # the region says.
+    #
+    # Sabotage: drew the panel's Delete control as a `<span phx-click>`
+    # instead of a `<button>`; this went red. Reverted from a copy.
+    test "every control is a real button outside the hidden map", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
+      assert LazyHTML.attribute(region(html), "data-map-description") == ["idle"]
+
+      selected = view |> sentence_button("blk_ll_loan_period") |> render_click()
+      page = LazyHTML.from_document(selected)
+
+      clickable = page |> LazyHTML.query("[phx-click]") |> Enum.to_list()
+      assert clickable != []
+
+      for element <- clickable do
+        assert LazyHTML.tag(element) == ["button"], LazyHTML.to_html(element)
+      end
+
+      assert page |> LazyHTML.query("#plan-panel button") |> Enum.count() > 0
+      assert page |> LazyHTML.query("ol.myapp-plan__list button") |> Enum.count() > 0
+      assert page |> LazyHTML.query("[aria-hidden] [phx-click]") |> Enum.count() == 0
+      assert page |> LazyHTML.query("[aria-hidden] [phx-change]") |> Enum.count() == 0
+
+      region = region(selected)
+      assert LazyHTML.attribute(region, "data-map-description") == ["block"]
+      assert LazyHTML.text(region) =~ "Wait 21d"
+    end
+
     # The keyboard path: a row's sentence is a button, and pressing it fills
     # the region with that block; pressing it again returns the idle text.
     #
-    # Sabotage: made the page's description/3 always answer the idle
-    # description; this went red. Reverted from a copy.
+    # Sabotage: passed `selected={nil}` to the page's `description_region`
+    # instead of the list's selection; this went red. Reverted from a copy.
     test "selecting a row fills it, deselecting returns it to idle", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
 
       html = view |> sentence_button("blk_ll_loan_period") |> render_click()
       region = region(html)
 
-      assert LazyHTML.attribute(region, "data-plan-description") == ["block"]
+      assert LazyHTML.attribute(region, "data-map-description") == ["block"]
       text = LazyHTML.text(region)
       assert text =~ "Wait 21d"
       assert text =~ "Settings"
@@ -92,20 +131,20 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
       html = view |> sentence_button("blk_ll_loan_period") |> render_click()
       region = region(html)
-      assert LazyHTML.attribute(region, "data-plan-description") == ["idle"]
+      assert LazyHTML.attribute(region, "data-map-description") == ["idle"]
       assert LazyHTML.text(region) =~ "Riverbend Public Library loan"
     end
 
     # A rule is its own kind in the region too, and the root is described
     # as the root.
     #
-    # Sabotage: cut the root's place to "The root"; this went red. Reverted
-    # from a copy.
+    # Sabotage: passed `selected={nil}` to the page's `description_region`;
+    # this went red on the rule. Reverted from a copy.
     test "selecting a rule or the root", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
 
       rule = view |> sentence_button("blk_pr_expired") |> render_click() |> region()
-      assert LazyHTML.attribute(rule, "data-plan-description") == ["rule"]
+      assert LazyHTML.attribute(rule, "data-map-description") == ["rule"]
       assert LazyHTML.text(rule) =~ "registration.deadline"
 
       root = view |> sentence_button("blk_pr_root") |> render_click() |> region()
@@ -115,8 +154,9 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
     # Values, never controls, and nothing that posts: the region and the
     # store add no command to the page.
     #
-    # Sabotage: drew each single value in facts/1 as a read-only `<input>`;
-    # this went red on the first control. Reverted from a copy.
+    # Sabotage: none on this side. The markup inside the region and the
+    # store is the package's, and no change to this page puts a control
+    # there; the case stays as the embedder's check on that promise.
     test "shows values and never controls, and adds no command", %{conn: conn} do
       for key <- @library, readonly <- [nil, "1"] do
         {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: key, readonly: readonly]}")
@@ -125,7 +165,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
           html = if block?(key, id), do: select(view, id), else: render(view)
           described = LazyHTML.from_document(html)
 
-          for area <- [@region, "#plan-descriptions"],
+          for area <- [@region, @store],
               control <- ["input", "select", "textarea", "button", "a", "form"] do
             assert described |> LazyHTML.query("#{area} #{control}") |> Enum.count() == 0,
                    "#{key} #{id}: a #{control} in #{area}"
@@ -133,7 +173,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
           # `phx-r` is LiveView's own render bookkeeping; every binding that
           # sends an event is `phx-<event>` or a hook.
-          for area <- [@region, "#plan-descriptions"] do
+          for area <- [@region, @store] do
             markup = described |> LazyHTML.query(area) |> LazyHTML.to_html()
             refute markup =~ ~r/phx-(click|change|submit|blur|focus|key|hook|window|value)/
           end
@@ -148,8 +188,9 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
     # Every element the map draws is described on the page, under the map's
     # own id, and the two library fixtures between them draw every kind.
     #
-    # Sabotage: left the edges out of PlanDescription.walk/2; the
-    # connector kind went missing and this went red. Reverted from a copy.
+    # Sabotage: gave the page's `description_region` a different id from
+    # the one its map region names (`plan-description-x`); the store moved
+    # off `#plan-description-store` and this went red. Reverted from a copy.
     test "describes every drawn element on the two fixtures", %{conn: conn} do
       kinds =
         for key <- @library, reduce: MapSet.new() do
@@ -162,7 +203,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
             assert html
                    |> LazyHTML.from_document()
-                   |> LazyHTML.query("#plan-descriptions[hidden]")
+                   |> LazyHTML.query("#{@store}[hidden]")
                    |> Enum.count() == 1
 
             MapSet.union(acc, stored |> Enum.map(&elem(&1, 1)) |> MapSet.new())
@@ -173,15 +214,16 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
     # Each kind's words are on the page, on each fixture that draws it.
     #
-    # Sabotage: titled the marker "Empty" instead of the map's own empty
-    # text; this went red. Reverted from a copy.
+    # Sabotage: dropped `phrase={&EventPhrasing.phrase/1}` from the page's
+    # `description_region`; the event names read as authored and this went
+    # red. Reverted from a copy.
     test "each kind carries its own facts", %{conn: conn} do
       {:ok, _view, loan} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
       {:ok, _view, patron} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
 
       assert stored_text(loan, "blk_ll_due/arm_renew") =~ "copy.holds == 0 AND loan.renewals"
       assert stored_text(loan, "blk_ll_due/undecided") =~ "cannot be decided"
-      assert stored_text(loan, "blk_ll_due/undecided/empty") =~ PlanMap.empty_text()
+      assert stored_text(loan, "blk_ll_due/undecided/empty") =~ BlockMap.empty_text()
 
       assert stored_text(loan, "blk_ll_on_loan/interrupts") =~
                "When the copy is returned, abandon"
@@ -200,8 +242,8 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
     # The store follows the document: a write through the list reaches it.
     #
-    # Sabotage: assigned the descriptions with `assign_new/3`, so the first
-    # set stuck; this went red. Reverted from a copy.
+    # Sabotage: assigned the view model with `assign_new/3` in rebuild/1,
+    # so the first one stuck; this went red. Reverted from a copy.
     test "a change made through the list reaches the store", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
       assert "blk_pr_welcome" in Enum.map(stored(html), &elem(&1, 0))
@@ -221,7 +263,9 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   defp view_model(key), do: ViewModel.build(fixture(key).document, Charts.palette(), [])
 
   defp drawn_ids(key) do
-    %{"children" => children} = graph = key |> view_model() |> PlanMap.graph()
+    %{"children" => children} =
+      graph = key |> view_model() |> BlockMap.graph(phrase: &EventPhrasing.phrase/1)
+
     timers = graph |> Map.get("timers", []) |> Enum.map(& &1["id"])
     (Enum.flat_map(children, &ids/1) ++ timers) |> Enum.sort()
   end
@@ -249,7 +293,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   defp stored(html) do
     html
     |> LazyHTML.from_document()
-    |> LazyHTML.query("#plan-descriptions > [data-describes]")
+    |> LazyHTML.query("#{@store} > [data-describes]")
     |> Enum.map(fn entry ->
       {entry |> LazyHTML.attribute("data-describes") |> hd(),
        entry |> LazyHTML.attribute("data-describes-kind") |> hd()}
@@ -259,7 +303,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   defp stored_text(html, id) do
     html
     |> LazyHTML.from_document()
-    |> LazyHTML.query(~s(#plan-descriptions > [data-describes="#{id}"]))
+    |> LazyHTML.query(~s(#{@store} > [data-describes="#{id}"]))
     |> LazyHTML.text()
   end
 end
