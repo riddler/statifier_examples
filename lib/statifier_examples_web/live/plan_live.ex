@@ -603,6 +603,11 @@ defmodule StatifierExamplesWeb.PlanLive do
   # moves a keyboard straight into it. Every control in it posts the event
   # the list's own controls post.
   #
+  # Its accessible name says what it holds, which is what the description
+  # region at its top describes (`panel_label/1`): "Selected step" while a
+  # block is selected, and "About this document" while nothing is - the
+  # region then describes the document, and an armed picker is no step.
+  #
   # One control per empty slot of the selected block is the keyboard's way
   # to the head of that slot, the gap the map's empty-slot marker arms and
   # no row stands for. It posts the marker's own `insert-open` payload, so
@@ -621,7 +626,7 @@ defmodule StatifierExamplesWeb.PlanLive do
       data-plan-section="panel"
       data-plan-panel={@node && @node.block_id}
       tabindex="-1"
-      aria-label="Selected step"
+      aria-label={panel_label(@node)}
     >
       <MapRegions.description_region
         id="plan-description"
@@ -1019,6 +1024,12 @@ defmodule StatifierExamplesWeb.PlanLive do
   defp panel(outline, id) do
     Enum.find_value(outline, fn {node, _depth, _kind} -> if node.block_id == id, do: node end)
   end
+
+  # The panel's accessible name, off the block it shows: a step while one
+  # is selected, the document the description region describes otherwise.
+  @spec panel_label(ViewModel.Node.t() | nil) :: String.t()
+  defp panel_label(nil), do: "About this document"
+  defp panel_label(%ViewModel.Node{}), do: "Selected step"
 
   # One outline entry with its draft over it, where a draft is held. Both
   # halves are the package's now: `ViewModel.overlay_draft/2` puts the
