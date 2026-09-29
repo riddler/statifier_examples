@@ -188,10 +188,14 @@ defmodule StatifierExamplesWeb.PlanLive do
   event of its own: what fills it is the selection the list already makes.
 
   Pointing at anything the map draws shows that element's description in
-  the region, and pointing away puts back the selected block's or the
-  document's. The package's hook does that in the browser from the store
-  and pushes nothing to the server. A keyboard and a screen reader reach
-  the same words through the list.
+  the region's place, and pointing away puts back the selected block's or
+  the document's. The package's hook does that in the browser from the
+  store and pushes nothing to the server. What it writes to is a hover
+  layer the component renders beside the region, `aria-hidden` and left
+  alone by LiveView, so a hover changes what is shown and not what is
+  announced: the live region changes only when this page renders a new
+  selection. That rule is the package's and this page adds nothing to it.
+  A keyboard and a screen reader reach the same words through the list.
 
   ## Read-only
 

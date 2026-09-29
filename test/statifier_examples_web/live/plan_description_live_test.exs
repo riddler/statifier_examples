@@ -38,9 +38,11 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
         assert LazyHTML.attribute(region, "data-map-description") == ["idle"]
 
-        # First thing in the panel.
+        # First thing in the panel: the package's frame, which holds the
+        # region and, beside it, the hover layer the map's hover writes to.
         [first | _rest] = page |> LazyHTML.query("#plan-panel > *") |> Enum.to_list()
-        assert LazyHTML.attribute(first, "id") == ["plan-description"]
+        assert LazyHTML.attribute(first, "class") == ["sb-map__description-frame"]
+        assert first |> LazyHTML.query(@region) |> Enum.count() == 1
 
         # Not inside the map, which a screen reader never reaches.
         assert page |> LazyHTML.query("[aria-hidden] #{@region}") |> Enum.count() == 0
@@ -49,6 +51,42 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
         assert text =~ fixture(key).document.metadata["name"]
         assert text =~ "Starts when told to"
         assert text =~ "Open slots"
+      end
+    end
+
+    # A hover is shown and not announced: the map's hover writes to a layer
+    # beside the live region, hidden from assistive technology and left
+    # alone by LiveView, and the map is handed that layer's id. The live
+    # region is outside the layer and the layer outside the region, so
+    # what the region holds changes only with the selection this page
+    # renders. The rule is the package's; this page only mounts it.
+    #
+    # Sabotage: passed `map={false}` to the page's `description_region`,
+    # which renders no hover layer; this went red on the layer's count.
+    # Reverted from a copy.
+    test "a hover is shown beside the region, not announced by it", %{conn: conn} do
+      for key <- @library do
+        {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: key]}")
+        page = LazyHTML.from_document(html)
+
+        [map] = page |> LazyHTML.query("#plan-map") |> Enum.to_list()
+        [hover_id] = LazyHTML.attribute(map, "data-info-hover")
+        refute hover_id == "plan-description"
+
+        layers = page |> LazyHTML.query(~s([id="#{hover_id}"])) |> Enum.to_list()
+        assert length(layers) == 1, "#{key}: no hover layer named #{hover_id}"
+        [layer] = layers
+        assert LazyHTML.attribute(layer, "aria-hidden") == ["true"]
+        assert LazyHTML.attribute(layer, "hidden") == [""]
+        assert LazyHTML.attribute(layer, "phx-update") == ["ignore"]
+        assert LazyHTML.attribute(layer, "aria-live") == []
+
+        assert page |> LazyHTML.query("#{@region} [id=\"#{hover_id}\"]") |> Enum.count() == 0
+        assert layer |> LazyHTML.query(@region) |> Enum.count() == 0
+
+        assert page
+               |> LazyHTML.query(".sb-map__description-frame > [id=\"#{hover_id}\"]")
+               |> Enum.count() == 1
       end
     end
 
