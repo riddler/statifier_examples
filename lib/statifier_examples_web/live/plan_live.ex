@@ -167,6 +167,12 @@ defmodule StatifierExamplesWeb.PlanLive do
   map scrolls it into view when the map armed it, because this page names
   it as the map region's `insert_reveal`.
 
+  Every control that arms a picker is gone once the picker opens - a
+  row's "+" gives its place to the picker, and the panel's "Add a step
+  to" goes with the selection - so each picker takes the focus that
+  control held: it moves focus to its first control when it is added to
+  the page (`JS.focus_first/0`, as its `phx-mounted`).
+
   ## The description region
 
   The panel is always drawn, and at its top is the package's description
@@ -601,6 +607,12 @@ defmodule StatifierExamplesWeb.PlanLive do
   # to the head of that slot, the gap the map's empty-slot marker arms and
   # no row stands for. It posts the marker's own `insert-open` payload, so
   # the slot's picker opens here exactly as a click on the marker opens it.
+  #
+  # Arming a slot clears the selection, so the control just pressed goes
+  # with it. The picker takes the focus that control held: it runs
+  # `JS.focus_first/0` on itself when it is added to the page, and its id
+  # names its slot, so arming another slot adds a new picker rather than
+  # patching this one. The row's picker does the same for its "+".
   defp panel(assigns) do
     ~H"""
     <aside
@@ -698,9 +710,11 @@ defmodule StatifierExamplesWeb.PlanLive do
 
       <div
         :if={@slot_insert}
+        id={"plan-picker-#{@slot_insert.block_id}-#{@slot_insert.slot}"}
         class="myapp-plan__picker"
         data-plan-picker="open"
         data-plan-slot-insert={"#{@slot_insert.block_id}/#{@slot_insert.slot}"}
+        phx-mounted={JS.focus_first()}
       >
         <p class="myapp-plan__panel-title">
           Add a step to {@slot_insert.label} of {@slot_insert.block}
@@ -818,7 +832,13 @@ defmodule StatifierExamplesWeb.PlanLive do
           +
         </button>
 
-        <div :if={@inserting == @node.block_id} class="myapp-plan__picker" data-plan-picker="open">
+        <div
+          :if={@inserting == @node.block_id}
+          id={"plan-picker-#{@node.block_id}"}
+          class="myapp-plan__picker"
+          data-plan-picker="open"
+          phx-mounted={JS.focus_first()}
+        >
           <p :if={@insertable == []} class="myapp-plan__picker-empty">
             Nothing this palette carries fits here.
           </p>
