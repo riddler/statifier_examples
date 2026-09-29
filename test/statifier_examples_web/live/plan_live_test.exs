@@ -788,6 +788,79 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     end
   end
 
+  describe "focus when a picker opens" do
+    # Both controls that arm a picker go away as it opens: a row's "+"
+    # gives its place to the picker under that row, and the panel's "Add a
+    # step to" control goes with the selection that arming a slot clears.
+    # The browser has nowhere to keep a focus whose element is gone, so it
+    # falls back to the document. The picker takes it instead: on being
+    # added to the page it runs `JS.focus_first/0` on itself, which moves
+    # focus to its first control. Each open picker carries an id of its own
+    # gap, so arming another gap adds a new element (and runs the command
+    # again) rather than patching the old one.
+    #
+    # LiveViewTest runs no JavaScript, so what these hold is the markup
+    # the browser acts on: the control is gone, and the picker in its place
+    # carries the focus command.
+
+    # Sabotage: dropped `phx-mounted` from the row's picker; the attribute
+    # was missing and this went red. Reverted from a copy.
+    test "a row's \"+\" is replaced by a picker that takes focus", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+      plus = ~s(li[data-block-id="blk_pr_welcome"] button.myapp-plan__add)
+      assert has_element?(view, plus)
+
+      html = view |> element(plus) |> render_click()
+      refute has_element?(view, plus)
+
+      picker = picker(html, ~s(li[data-block-id="blk_pr_welcome"] [data-plan-picker="open"]))
+      assert focus_command(picker) == [["focus_first", %{}]]
+      assert LazyHTML.attribute(picker, "id") == ["plan-picker-blk_pr_welcome"]
+      assert first_control(picker) == "button"
+    end
+
+    # Sabotage: dropped `phx-mounted` from the panel's slot picker; the
+    # attribute was missing and this went red. Reverted from a copy.
+    test "the panel's \"Add a step to\" is replaced by a picker that takes focus",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+      select(view, "blk_pr_age")
+      control = ~s(#plan-panel button[data-plan-empty-slot="otherwise"])
+      assert has_element?(view, control)
+
+      html = view |> element(control) |> render_click()
+      refute has_element?(view, control)
+
+      picker = picker(html, ~s(#plan-panel [data-plan-picker="open"]))
+      assert focus_command(picker) == [["focus_first", %{}]]
+      assert LazyHTML.attribute(picker, "id") == ["plan-picker-blk_pr_age-otherwise"]
+      assert first_control(picker) == "button"
+    end
+
+    # Two gaps, two ids: the picker for one gap is never the element the
+    # next gap's picker patches into, so its mount command runs each time.
+    #
+    # Sabotage: gave every row picker the one id "plan-picker"; the two
+    # gaps' pickers shared it and this went red. Reverted from a copy.
+    test "each gap's picker is its own element", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "patron_registration"]}")
+
+      first =
+        view
+        |> element(~s(li[data-block-id="blk_pr_welcome"] button.myapp-plan__add))
+        |> render_click()
+        |> picker(~s([data-plan-picker="open"]))
+
+      second =
+        view
+        |> element(~s(li[data-block-id="blk_pr_verify"] button.myapp-plan__add))
+        |> render_click()
+        |> picker(~s([data-plan-picker="open"]))
+
+      refute LazyHTML.attribute(first, "id") == LazyHTML.attribute(second, "id")
+    end
+  end
+
   describe "the transparent-container readers" do
     # `se-6jn`. `sb-6xkf` promoted the three readers a host that FLATTENS
     # containers out of its own outline needs - `ViewModel.transparent?/2`,
@@ -1628,6 +1701,29 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     view
     |> element(~s(li[data-block-id="#{block_id}"] button.myapp-plan__add))
     |> render_click()
+  end
+
+  # The one open picker `selector` finds in `html`.
+  defp picker(html, selector) do
+    [picker] = html |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.to_list()
+    picker
+  end
+
+  # The picker's mount command, decoded: the JS the browser runs when the
+  # picker is added to the page.
+  defp focus_command(picker) do
+    case LazyHTML.attribute(picker, "phx-mounted") do
+      [json] -> Jason.decode!(json)
+      [] -> nil
+    end
+  end
+
+  # The tag of the first control inside the picker, the element
+  # `focus_first` lands on.
+  defp first_control(picker) do
+    [first | _rest] = picker |> LazyHTML.query("button, a[href], input, select") |> Enum.to_list()
+    [tag] = LazyHTML.tag(first)
+    tag
   end
 
   defp picker_button(block_id),
