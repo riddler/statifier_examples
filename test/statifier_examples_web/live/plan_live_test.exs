@@ -938,8 +938,8 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
     # The hook on the map is the package's, and what it is handed is this
     # page's: the list's own event names, whether the page edits, the
-    # description region's id and its store, and the picker to scroll into
-    # view after an insert armed from the map.
+    # description region's id, its store and its hover layer, and the
+    # picker to scroll into view after an insert armed from the map.
     #
     # Sabotage: passed `select_event="select"` to the page's map region;
     # this went red. Reverted from a copy.
@@ -954,12 +954,14 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert LazyHTML.attribute(map, "data-editable") == ["true"]
       assert LazyHTML.attribute(map, "data-info-region") == ["plan-description"]
       assert LazyHTML.attribute(map, "data-info-store") == ["plan-description-store"]
+      assert LazyHTML.attribute(map, "data-info-hover") == ["plan-description-hover"]
       assert LazyHTML.attribute(map, "data-insert-reveal") == ["[data-plan-picker=open]"]
 
-      # The two ids it names are on the page, once each.
+      # The three ids it names are on the page, once each.
       page = LazyHTML.from_document(html)
       assert page |> LazyHTML.query("#plan-description") |> Enum.count() == 1
       assert page |> LazyHTML.query("#plan-description-store[hidden]") |> Enum.count() == 1
+      assert page |> LazyHTML.query("#plan-description-hover[hidden]") |> Enum.count() == 1
     end
 
     # The boxes read the library world's event names as words, because the
@@ -1130,7 +1132,16 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       map = html |> map_region() |> LazyHTML.to_html()
       refute map =~ "plan-panel"
       refute map =~ "sb-form"
-      refute section(html, "panel") =~ "aria-hidden"
+      # The panel is not hidden, and nothing around it is. The one
+      # `aria-hidden` element inside it is the package's hover layer beside
+      # the description region, which is silent by design.
+      page = LazyHTML.from_document(html)
+      [panel] = page |> LazyHTML.query("#plan-panel") |> Enum.to_list()
+      assert LazyHTML.attribute(panel, "aria-hidden") == []
+      assert page |> LazyHTML.query("[aria-hidden] #plan-panel") |> Enum.count() == 0
+
+      assert page |> LazyHTML.query("#plan-panel [aria-hidden]") |> Enum.map(&element_id/1) ==
+               ["plan-description-hover"]
     end
 
     # Insert at a gap after a block: the map's "+" arms the same gap the
@@ -1414,6 +1425,8 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   end
 
   defp tabindex(element), do: LazyHTML.attribute(element, "tabindex")
+
+  defp element_id(element), do: element |> LazyHTML.attribute("id") |> hd()
 
   defp view_model_of(fixture), do: ViewModel.build(fixture.document, Charts.palette(), [])
 

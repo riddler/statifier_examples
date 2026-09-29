@@ -74,7 +74,8 @@ import { StatifierUIHooks } from "statifier_ui/assets/js/index.js"
 // in the package) - about 1.6 MB as shipped, the largest thing in this
 // bundle. It only draws: a gesture on the map goes out under the list's
 // own event names (`select-row`, `insert-open`), and its hover copies the
-// description region's hidden store into the region without a push. The
+// description region's hidden store into the hover layer beside the region
+// (`aria-hidden`, so a hover is shown and not announced) without a push. The
 // specifier is the NODE_PATH route the package README's "Mounting the
 // Map" section names.
 import { StatifierBlocksMap } from "statifier_blocks/assets/js/statifier_blocks_map.js"

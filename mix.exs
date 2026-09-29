@@ -1247,13 +1247,27 @@ defmodule StatifierExamples.MixProject do
   # `StatifierBlocks.Editor.MapRegions` and the `StatifierBlocksMap` hook
   # with elkjs vendored beside it - which the Plan page now mounts in place
   # of its own.
+  #
+  # 2026-09-29: the floor moves to `~> 0.40.0`, published, so the arm stays
+  # a Hex requirement; `mix.lock` moves only its `statifier_blocks` line.
+  # 0.40.0 is REQUIRED rather than tidy: its description region announces
+  # a selection only, and a hover over the map shows in an `aria-hidden`
+  # layer beside the live region, which `description_region/1` renders and
+  # `map_region/1` names in `data-info-hover`. The Plan page mounts both,
+  # so it takes the rule without re-implementing it. The release's other
+  # additions ask nothing of this app: the editor page gets the editor's
+  # own description region and the inspector's Note field from the
+  # package, the region's new `label` and `map` attrs default to what it
+  # rendered before, and the `{:update_note, id, note}` edit needs no
+  # handling here because no host code matches every member of the edit
+  # union.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.39.0"}
+        {:statifier_blocks, "~> 0.40.0"}
     end
   end
 
