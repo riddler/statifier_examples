@@ -861,6 +861,195 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     end
   end
 
+  describe "focus when a picker closes" do
+    # Closing a picker takes its focused control away with it, the same
+    # loss opening one had: Cancel, a pick and a refused pick all remove
+    # the picker, and a browser whose focused element is gone falls back to
+    # the document. So every way out of a picker names the control the
+    # focus goes to next - the row's "+" after Cancel or a refused pick in
+    # a row's picker, the row of the slot's block after Cancel or a refused
+    # pick in a slot's picker, and the new step's row after a pick that
+    # lands.
+    #
+    # LiveViewTest runs no JavaScript, so what these hold is the command
+    # the browser runs: the hidden `plan-focus-return-` element the page
+    # adds on every close, whose `phx-mounted` is `JS.focus/1` naming that
+    # control, and the control itself, on the page under that id.
+
+    @patron "patron_registration"
+    @welcome_plus ~s(li[data-block-id="blk_pr_welcome"] button.myapp-plan__add)
+    @welcome_picker ~s(li[data-block-id="blk_pr_welcome"] [data-plan-picker="open"] button)
+    @slot_picker ~s(#plan-panel [data-plan-picker="open"] button)
+
+    # Sabotage: sent "insert-close" back to clearing the gap without
+    # `return_focus/2`; no focus element was drawn and this went red.
+    # Reverted from a copy.
+    test "Cancel in a row's picker hands the focus to that row's \"+\"", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+      view |> element(@welcome_plus) |> render_click()
+
+      html = view |> element(@welcome_picker, "Cancel") |> render_click()
+
+      assert focus_return(html) == "plan-add-blk_pr_welcome"
+      assert has_element?(view, "#plan-add-blk_pr_welcome", "+")
+    end
+
+    # Sabotage: made `gap_control/1` answer a slot with its block's "+";
+    # the focus named the "+" and this went red. Reverted from a copy.
+    test "Cancel in a slot's picker hands the focus to the row of the slot's block",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+      select(view, "blk_pr_age")
+      view |> element(~s(#plan-panel button[data-plan-empty-slot="otherwise"])) |> render_click()
+
+      html = view |> element(@slot_picker, "Cancel") |> render_click()
+
+      assert focus_return(html) == "plan-step-blk_pr_age"
+      assert has_element?(view, ~s(li[data-block-id="blk_pr_age"] #plan-step-blk_pr_age))
+    end
+
+    # Sabotage: made a landed pick return the focus as a Cancel does; the
+    # focus named the "+" rather than the new row and this went red.
+    # Reverted from a copy.
+    test "a pick in a row's picker hands the focus to the new step's row", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+      view |> element(@welcome_plus) |> render_click()
+
+      html = view |> element(@welcome_picker, ~r/^\s*Wait\s*$/) |> render_click()
+
+      new_id = block_after(@patron, "blk_pr_verify", "body", "blk_pr_welcome")
+      refute new_id in [nil | original_ids(@patron)]
+      assert focus_return(html) == "plan-step-#{new_id}"
+      assert has_element?(view, ~s(li[data-block-id="#{new_id}"] #plan-step-#{new_id}))
+    end
+
+    # A recipe can put down more than one block, and not at the armed gap:
+    # the core "deadline" recipe writes the head of the group's body and
+    # its interrupts rail. The focus goes to the first new row on the page,
+    # the send now heading the group's body.
+    #
+    # Sabotage: made the focus go to the last new row on the page rather
+    # than the first; it named the rail's new row and this went red.
+    # Reverted from a copy.
+    test "a recipe pick hands the focus to its first new row", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+      view |> element(@welcome_plus) |> render_click()
+
+      html = view |> element(@welcome_picker, ~r/^\s*Deadline\s*$/) |> render_click()
+
+      [new_id | _rest] = slot_ids_in(@patron, "blk_pr_verify", "body")
+      refute new_id in [nil | original_ids(@patron)]
+      assert focus_return(html) == "plan-step-#{new_id}"
+      assert has_element?(view, "#plan-step-#{new_id}")
+    end
+
+    # Sabotage: made a landed pick return the focus as a Cancel does; the
+    # focus named the slot's block rather than the new row and this went
+    # red. Reverted from a copy.
+    test "a pick in a slot's picker hands the focus to the new step's row", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+      select(view, "blk_pr_age")
+      view |> element(~s(#plan-panel button[data-plan-empty-slot="otherwise"])) |> render_click()
+
+      html = view |> element(@slot_picker, ~r/^\s*Wait\s*$/) |> render_click()
+
+      [new_id] = slot_ids_in(@patron, "blk_pr_age", "otherwise")
+      assert focus_return(html) == "plan-step-#{new_id}"
+      assert has_element?(view, "#plan-step-#{new_id}")
+    end
+
+    # Sabotage: sent the type handler's refusal branch back to clearing the
+    # gap without `return_focus/2`; no focus element was drawn and this
+    # went red. Reverted from a copy.
+    test "a refused type pick in a row's picker hands the focus to the row's \"+\"",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+      view |> element(@welcome_plus) |> render_click()
+
+      html =
+        render_hook(view, "insert", %{"block-id" => "blk_pr_welcome", "type" => "no.such.type"})
+
+      refute html =~ ~s(data-plan-picker="open")
+      assert document(@patron) == fixture(@patron).document
+      assert focus_return(html) == "plan-add-blk_pr_welcome"
+    end
+
+    # Sabotage: sent the recipe handler's refusal branch back to clearing
+    # the gap without `return_focus/2`; no focus element was drawn and this
+    # went red. Reverted from a copy.
+    test "a refused recipe pick in a row's picker hands the focus to the row's \"+\"",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+      view |> element(@welcome_plus) |> render_click()
+
+      html =
+        render_hook(view, "insert", %{
+          "block-id" => "blk_pr_welcome",
+          "kind" => "recipe",
+          "type" => "no.such.recipe"
+        })
+
+      refute html =~ ~s(data-plan-picker="open")
+      assert document(@patron) == fixture(@patron).document
+      assert focus_return(html) == "plan-add-blk_pr_welcome"
+    end
+
+    # Sabotage: made `gap_control/1` answer a slot with its block's "+";
+    # the focus named the "+" and this went red. Reverted from a copy.
+    test "a refused pick in a slot's picker hands the focus to the row of the slot's block",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+      select(view, "blk_pr_age")
+      view |> element(~s(#plan-panel button[data-plan-empty-slot="otherwise"])) |> render_click()
+
+      html =
+        render_hook(view, "insert", %{
+          "block-id" => "blk_pr_age",
+          "slot" => "otherwise",
+          "type" => "no.such.type"
+        })
+
+      refute html =~ "data-plan-slot-insert"
+      assert focus_return(html) == "plan-step-blk_pr_age"
+    end
+
+    # The command runs when its element is added to the page, so a second
+    # close has to add a second element rather than patch the first.
+    #
+    # Sabotage: gave every focus element the one sequence number 1; the
+    # two closes drew the same id and this went red. Reverted from a copy.
+    test "each close adds a focus element of its own", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+
+      first =
+        view
+        |> tap(&(&1 |> element(@welcome_plus) |> render_click()))
+        |> element(@welcome_picker, "Cancel")
+        |> render_click()
+        |> focus_element_id()
+
+      second =
+        view
+        |> tap(&(&1 |> element(@welcome_plus) |> render_click()))
+        |> element(@welcome_picker, "Cancel")
+        |> render_click()
+        |> focus_element_id()
+
+      refute first == second
+    end
+
+    # Sabotage: made `gap_control/1` answer no armed gap with the panel;
+    # a close with no picker open drew a focus element and this went red.
+    # Reverted from a copy.
+    test "a close with no picker open moves nothing", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: @patron]}")
+
+      html = render_hook(view, "insert-close", %{})
+
+      refute html =~ "data-plan-focus-return"
+    end
+  end
+
   describe "the transparent-container readers" do
     # `se-6jn`. `sb-6xkf` promoted the three readers a host that FLATTENS
     # containers out of its own outline needs - `ViewModel.transparent?/2`,
@@ -1716,6 +1905,55 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       [json] -> Jason.decode!(json)
       [] -> nil
     end
+  end
+
+  # The control a closed picker hands the focus to: the one hidden focus
+  # element in `html`, its `phx-mounted` checked to be `JS.focus/1` on the
+  # element its `data-plan-focus-return` names, and that name returned.
+  defp focus_return(html) do
+    assert [element] =
+             html
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("[data-plan-focus-return]")
+             |> Enum.to_list()
+
+    [target] = LazyHTML.attribute(element, "data-plan-focus-return")
+    assert focus_command(element) == [["focus", %{"to" => ~s([id="#{target}"])}]]
+    target
+  end
+
+  # The id of the one hidden focus element in `html`.
+  defp focus_element_id(html) do
+    assert [element] =
+             html
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("[data-plan-focus-return]")
+             |> Enum.to_list()
+
+    LazyHTML.attribute(element, "id")
+  end
+
+  # The ids of `key`'s document as its fixture ships it.
+  defp original_ids(key), do: key |> fixture() |> Map.fetch!(:document) |> block_ids()
+
+  defp block_ids(document), do: document |> Document.blocks() |> Enum.map(& &1.id)
+
+  # The ids in one slot of a block, as the store holds them.
+  defp slot_ids_in(key, block_id, slot) do
+    key
+    |> document()
+    |> Document.blocks()
+    |> Enum.find(&(&1.id == block_id))
+    |> Map.fetch!(:slots)
+    |> Map.get(slot, [])
+    |> Enum.map(& &1.id)
+  end
+
+  # The id standing right after `sibling` in one slot of a block, as the
+  # store holds it.
+  defp block_after(key, block_id, slot, sibling) do
+    ids = slot_ids_in(key, block_id, slot)
+    Enum.at(ids, Enum.find_index(ids, &(&1 == sibling)) + 1)
   end
 
   # The tag of the first control inside the picker, the element
