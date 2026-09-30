@@ -10,7 +10,12 @@ defmodule StatifierExamplesWeb.BasicHTTPController do
 
   The token is a bearer capability (ruled by the operator, 2026-09-30):
   holding it is the whole of the authorization, so this action checks
-  nothing else and never logs it.
+  nothing else. No request line or dispatch log carries it:
+  `StatifierExamplesWeb.Endpoint.log_level/1` skips the request line for
+  `/basichttp`, the route is `log: false`, and `:filter_parameters` names
+  `token`. At `:debug` Ecto's query log prints bound parameters, and the
+  router's location lookup binds the token, so a host keeps `:debug` out
+  of production.
   """
 
   use StatifierExamplesWeb, :controller

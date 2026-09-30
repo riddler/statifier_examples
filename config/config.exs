@@ -117,6 +117,10 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# A BasicHTTP location's token is a bearer capability, so a params log
+# names it filtered, beside Phoenix's own default.
+config :phoenix, :filter_parameters, ["password", "token"]
+
 # OpenTelemetry. `opentelemetry_statifier` brings only the API, so the SDK's
 # exporter is this app's choice - and the default choice is none. An example
 # app that shipped an OTLP exporter on by default would spend every boot

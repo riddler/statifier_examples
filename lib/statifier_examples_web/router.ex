@@ -26,9 +26,10 @@ defmodule StatifierExamplesWeb.Router do
 
   # The BasicHTTP front: a location of a durable execution. No pipeline:
   # the request is a machine's POST, not a browser's, and every method
-  # reaches the action so the front can answer 405 itself.
+  # reaches the action so the front can answer 405 itself. The dispatch is
+  # not logged: its path and params carry the location's token.
   scope "/basichttp", StatifierExamplesWeb do
-    match :*, "/:token", BasicHTTPController, :event
+    match :*, "/:token", BasicHTTPController, :event, log: false
   end
 
   # Other scopes may use custom stacks.
