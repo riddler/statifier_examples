@@ -76,6 +76,26 @@ defmodule StatifierExamplesWeb.EventPhrasingTest do
       assert EventPhrasing.line("Send old.loan.closed") == "Send old.loan.closed"
     end
 
+    # Sabotage: made the send rule match "Send" only, dropping the delayed
+    # send's lower-case "send"; this went red. Reverted from a copy.
+    test "a delayed send says what it announces" do
+      assert EventPhrasing.line("In 7 days, send registration.deadline") ==
+               "In 7 days, send word that the registration week is up"
+    end
+
+    # A known name is an event only after Send, Wait for or a rule's When;
+    # a decision's arm or a value a step sets keeps the name as written.
+    #
+    # Sabotage: put back the earlier rule that read a known name anywhere
+    # in the line as words; this went red. Reverted from a copy.
+    test "leaves a known name outside event position as written" do
+      assert EventPhrasing.line(~s(Decide: When "loan.closed", otherwise)) ==
+               ~s(Decide: When "loan.closed", otherwise)
+
+      assert EventPhrasing.line("Set loan.closed") == "Set loan.closed"
+      assert EventPhrasing.line("Wait 21d until copy.returned") == "Wait 21d until copy.returned"
+    end
+
     test "leaves a line with no known event name as it is" do
       assert EventPhrasing.line("Send payment.settled") == "Send payment.settled"
       assert EventPhrasing.line("Wait 21d") == "Wait 21d"
@@ -101,6 +121,42 @@ defmodule StatifierExamplesWeb.EventPhrasingTest do
                "Send word that the loan is closed"
 
       assert view_model |> ViewModel.find_node("wait") |> EventPhrasing.sentence() == "Wait 30s"
+    end
+
+    # A decision whose condition tests a value named like a known event,
+    # and a step that sets one, read exactly as the package writes them.
+    #
+    # Sabotage: put back the earlier rule that read a known name anywhere
+    # in the line as words; this went red on the set step. Reverted from a
+    # copy.
+    test "leaves a decision and a set step as the package writes them" do
+      root =
+        Block.new("core.sequence",
+          id: "root",
+          slots: %{
+            "body" => [
+              Block.new("core.assign",
+                id: "record",
+                config: %{"path" => "loan.closed", "expr" => "true"}
+              ),
+              Block.new("core.branch",
+                id: "decide",
+                config: %{"arms" => [%{"slot" => "arm_closed", "cond" => "loan.closed == true"}]},
+                slots: %{"arm_closed" => [Block.new("core.wait", id: "pause")]}
+              )
+            ]
+          }
+        )
+
+      view_model = root |> Document.new() |> ViewModel.build(Charts.palette(), [])
+
+      for id <- ["record", "decide"] do
+        node = ViewModel.find_node(view_model, id)
+        assert EventPhrasing.sentence(node) == ViewModel.sentence(node)
+      end
+
+      assert view_model |> ViewModel.find_node("record") |> EventPhrasing.sentence() ==
+               "Set loan.closed"
     end
   end
 

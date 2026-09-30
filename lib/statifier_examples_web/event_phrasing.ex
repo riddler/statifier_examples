@@ -7,9 +7,9 @@ defmodule StatifierExamplesWeb.EventPhrasing do
   and it names an event by its name: "Send loan.closed", "Wait for
   copy.returned". A name is what a host sends and what a document listens
   for, so it is the right thing to author; it is not what a reader of the
-  Plan view should have to decode. The Plan view's map, its panel and its
-  description region draw a block's sentence through `sentence/1` here, so
-  the two teaching documents read in words. The list keeps the package's
+  Plan view should have to decode. The Plan view's panel draws a block's
+  sentence through `sentence/1` here, and its map and description region
+  read `phrase/1`, so the two teaching documents read in words. The list keeps the package's
   sentence, the name as authored, and so do the places a name is a value
   rather than prose: a block's settings and what a document or a rule
   listens for.
@@ -26,7 +26,11 @@ defmodule StatifierExamplesWeb.EventPhrasing do
   |---|---|
   | sends an event | "Send word that" and the words |
   | waits for an event | "Wait until" and the words |
-  | names an event anywhere else | the words |
+  | starts a rule with an event | "When" and the words |
+
+  Only a name in one of those three places is an event, so only those are
+  read as words. A known name anywhere else - a value a step sets, a
+  decision's arm - is left as written.
   """
 
   alias StatifierBlocks.ViewModel
@@ -47,10 +51,12 @@ defmodule StatifierExamplesWeb.EventPhrasing do
     "registration.deadline" => "the registration week is up"
   }
 
-  # An event name is dotted words, so a match is only whole where neither
-  # side runs on into another word character or dot.
-  @left "(?<![\\w.])"
-  @right "(?![\\w.])"
+  # A name in event position: after "Send" (or a delayed "send"), after
+  # "Wait for", or after a rule's "When". An event name is dotted words, so
+  # the name runs until neither a word character nor a dot follows, and a
+  # name that only starts like a known one is a different name. Compiled
+  # once, with the module.
+  @event_position ~r/\b(?:([Ss]end)|([Ww]ait) for|When) ([\w.]+)(?![\w.])/u
 
   @doc """
   The words for `event`, or `nil` for a name the library world does not
@@ -61,29 +67,26 @@ defmodule StatifierExamplesWeb.EventPhrasing do
   def phrase(_other), do: nil
 
   @doc """
-  `line` with every whole event name it knows read as words; anything else
-  in the line is left as it is.
+  `line` with every whole event name it knows in event position read as
+  words; anything else in the line is left as it is.
   """
   @spec line(String.t()) :: String.t()
-  def line(line) when is_binary(line) do
-    Enum.reduce(@phrases, line, fn {event, words}, acc ->
-      if String.contains?(acc, event), do: phrased(acc, Regex.escape(event), words), else: acc
-    end)
-  end
+  def line(line) when is_binary(line),
+    do: Regex.replace(@event_position, line, &phrased/4)
 
   @doc "A block's sentence, its event name read as words."
   @spec sentence(Node.t()) :: String.t()
   def sentence(%Node{} = node), do: node |> ViewModel.sentence() |> line()
 
-  @spec phrased(String.t(), String.t(), String.t()) :: String.t()
-  defp phrased(line, name, words) do
-    line
-    |> replace("\\b([Ss]end) " <> @left <> name <> @right, "\\1 word that " <> words)
-    |> replace("\\b([Ww]ait) for " <> @left <> name <> @right, "\\1 until " <> words)
-    |> replace(@left <> name <> @right, words)
+  # One match of `@event_position`: the whole match, the "Send" or "send"
+  # it opened with (or ""), the "Wait" or "wait" (or ""), and the name.
+  @spec phrased(String.t(), String.t(), String.t(), String.t()) :: String.t()
+  defp phrased(whole, send, wait, event) do
+    case phrase(event) do
+      nil -> whole
+      words when send != "" -> send <> " word that " <> words
+      words when wait != "" -> wait <> " until " <> words
+      words -> "When " <> words
+    end
   end
-
-  @spec replace(String.t(), String.t(), String.t()) :: String.t()
-  defp replace(line, pattern, replacement),
-    do: pattern |> Regex.compile!() |> Regex.replace(line, replacement)
 end
