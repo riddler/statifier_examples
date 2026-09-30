@@ -131,7 +131,10 @@ defmodule StatifierExamples.ViewModelPinTest do
 
     # The library world. Each branch keeps every arm it declares, the empty
     # one included - an empty slot has no row, because a slot is not a block.
-    "library_loan" => {10, %{step: 4, arm: 4, rail: 2}},
+    # 2026-09-30: the loan's drafts shelf adds two rows, the shelf itself as
+    # a step at the root and the draft on it as a tray; the shelf is there so
+    # a library-world page draws a tray.
+    "library_loan" => {12, %{step: 5, arm: 4, rail: 2, tray: 1}},
     "patron_registration" => {11, %{step: 6, arm: 3, rail: 2}}
   }
 

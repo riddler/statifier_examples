@@ -118,6 +118,23 @@
               }
             ]
           }
+        },
+        {
+          "type": "core.drafts",
+          "id": "blk_ll_drafts",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "core.send",
+                "id": "blk_ll_second_notice",
+                "type_version": 1,
+                "config": {
+                  "event": "loan.overdue"
+                }
+              }
+            ]
+          }
         }
       ]
     }
