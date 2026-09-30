@@ -123,7 +123,14 @@ defmodule StatifierExamples.MixProject do
       # 2.9.0 is REQUIRED: `statifier_router` 0.6.0, below, states
       # `{:statifier, "~> 2.9"}`. 2.9.0 adds `Statifier.Publish.findings/2`
       # and `MachineState.last_selection`, and this app reads neither.
-      {:statifier, "~> 2.9"},
+      #
+      # 2026-09-30: the requirement moves to the 2.10 line, and 2.10.0 is
+      # REQUIRED: `statifier_router` 0.9.2, below, states
+      # `{:statifier, "~> 2.10"}`. 2.10.0 ships `Statifier.Send.BasicHTTP`,
+      # the Basic HTTP Event I/O Processor and its decoder, which
+      # `StatifierExamples.HoldDesk` sends through and the router's front
+      # decodes with.
+      {:statifier, "~> 2.10"},
 
       # A note on every `statifier_persistence` name below, added with
       # se-20j. These comments record why each floor moved, release by
@@ -384,6 +391,14 @@ defmodule StatifierExamples.MixProject do
       # content-hash query the batch lists with, and still declares no
       # chart retirement: on this SQLite database `retire_chart/4` answers
       # `{:error, :chart_retirement_unsupported}`, as the guide shows.
+      #
+      # 2026-09-30: `mix.lock` moves to 0.24.0, which the update to
+      # `statifier_router` 0.9.2 brought with it; the requirement stays. None
+      # of 0.22.0, 0.23.0 and 0.24.0 adds a migration. 0.22.0 refuses a
+      # migration plan that keeps a timer for an event the new chart no
+      # longer handles, 0.23.0 closes a race with a chart retirement this
+      # adapter does not offer, and 0.24.0 renames the conformance suite's
+      # helpers, which this app reaches only through the case template.
       {:statifier_persistence, "~> 0.20"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
@@ -569,7 +584,23 @@ defmodule StatifierExamples.MixProject do
       # `:unmatched_event` drop and the `reason` on every
       # `:unregistered_routes` entry reach `StatifierExamples.Publish`
       # through a `%{route: _, location: _}` match that still holds.
-      {:statifier_router, "~> 0.6.0"},
+      #
+      # 2026-09-30: the requirement moves to `~> 0.9.2`, and 0.9.2 is
+      # REQUIRED: it is the first release whose migrations and address
+      # reaper both run on this app's SQLite database. 0.8.0 added V03,
+      # which renames the subscription index with an `ALTER INDEX` SQLite
+      # does not have, so the migration above failed on a fresh database
+      # until 0.9.1 made V03 do nothing on SQLite; 0.8.0 also wrote
+      # `Addresses.reap/3`'s stamp and delete with Postgres's `= ANY(...)`,
+      # which failed `StatifierExamples.RoutedWorkflow.AddressReaper` until
+      # 0.9.2 wrote them as an IN list. 0.9.0 ships what `StatifierExamples.HoldDesk`
+      # uses: the `:basichttp` configuration key, a location for each
+      # execution it creates, `StatifierRouter.BasicHTTP.Front` and the
+      # location table, which
+      # `priv/repo/migrations/20260930120001_add_statifier_router_locations.exs`
+      # creates. 0.7.0's `:unchecked` entry for a `:bindings_resolver`
+      # reaches nothing here, since no configuration sets one.
+      {:statifier_router, "~> 0.9.2"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of

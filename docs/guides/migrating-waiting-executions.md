@@ -34,7 +34,7 @@ opened. The next run starts from an empty chart.
 
 The migration surface is `statifier_persistence`'s. `mix.exs` asks for
 `~> 0.20`, the release that adds `Executions.migrate_batch/3`, and
-`mix.lock` resolves 0.21.0. The first line the command prints names the
+`mix.lock` resolves 0.24.0. The first line the command prints names the
 version it loaded.
 
 The migration surface is the verb and its report. A dry run is the

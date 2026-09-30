@@ -24,6 +24,13 @@ defmodule StatifierExamplesWeb.Router do
     live "/signup-journey", SignupJourneyLive
   end
 
+  # The BasicHTTP front: a location of a durable execution. No pipeline:
+  # the request is a machine's POST, not a browser's, and every method
+  # reaches the action so the front can answer 405 itself.
+  scope "/basichttp", StatifierExamplesWeb do
+    match :*, "/:token", BasicHTTPController, :event
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", StatifierExamplesWeb do
   #   pipe_through :api

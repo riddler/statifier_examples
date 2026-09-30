@@ -1,0 +1,23 @@
+<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="requested" name="hold_desk">
+  <!-- A patron's hold on a library copy, at one branch's desk. The hold
+       tells the desk it was placed, over the Basic HTTP Event I/O
+       Processor, and hands the desk its own location to answer at; the
+       desk posts copy.shelved there once the copy is on the holds shelf.
+       A desk that cannot be told comes back as error.communication, and
+       the hold ends unreached. -->
+  <state id="requested">
+    <transition event="hold.requested" target="waiting">
+      <send type="basichttp" event="hold.placed" targetexpr="_event.data.desk">
+        <param name="hold_id" expr="_event.data.hold_id"/>
+        <param name="copy_id" expr="_event.data.copy_id"/>
+        <param name="reply_to" expr="_ioprocessors['basichttp']['location']"/>
+      </send>
+    </transition>
+  </state>
+  <state id="waiting">
+    <transition event="copy.shelved" target="shelved"/>
+    <transition event="error.communication" target="desk_unreached"/>
+  </state>
+  <final id="shelved"/>
+  <final id="desk_unreached"/>
+</scxml>

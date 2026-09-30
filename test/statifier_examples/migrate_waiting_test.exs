@@ -30,7 +30,7 @@ defmodule StatifierExamples.MigrateWaitingTest do
     assert {:ok, lines} = MigrateWaiting.walk(loans: loans)
 
     assert [
-             "migrate waiting on statifier_persistence 0.21." <> _patch,
+             "migrate waiting on statifier_persistence 0.24." <> _patch,
              "waiting      2 loan(s) on revision 1, sha256:" <> _old,
              "published    revision 2, sha256:" <> _new,
              "diff         breaking (5 unresolved) with the blocks mapping, " <>

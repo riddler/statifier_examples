@@ -54,6 +54,9 @@ execution its key names and handing the finished execution's answer to a sink.
 [`docs/guides/migrating-waiting-executions.md`](docs/guides/migrating-waiting-executions.md)
 moves waiting library loans onto a new revision of their document and back,
 and `mix statifier_examples.migrate_waiting` runs it.
+[`docs/guides/basichttp-front.md`](docs/guides/basichttp-front.md) gives a
+library hold its own HTTP location through `statifier_router`'s BasicHTTP
+front, and answers the branch desk's POST at it.
 
 ## Opening a document in the editor
 
