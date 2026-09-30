@@ -1,0 +1,52 @@
+# Tracker ids already present in lib/.
+# Read by the "no lib/ file gains a tracker id" test in
+# test/statifier_examples/tracker_id_test.exs, which defines the id shape.
+# One line per file and id: the file, the id, and how many times the file
+# carries it, tab-separated. A new id is refused, not added here; a line is
+# lowered or deleted when an id leaves its file.
+lib/statifier_examples/application.ex	se-1cl	1
+lib/statifier_examples/card_auth.ex	se-0u1	1
+lib/statifier_examples/card_auth.ex	se-2ox	1
+lib/statifier_examples/card_auth.ex	se-bv9	1
+lib/statifier_examples/card_auth.ex	se-ihm	1
+lib/statifier_examples/card_auth/legacy_check.ex	se-bv9	1
+lib/statifier_examples/charts.ex	se-06z	2
+lib/statifier_examples/charts.ex	se-4dt	3
+lib/statifier_examples/charts.ex	se-6ag	1
+lib/statifier_examples/charts/async_calls.ex	se-d74	1
+lib/statifier_examples/charts/durable.ex	se-29d	1
+lib/statifier_examples/charts/durable.ex	se-4dt	3
+lib/statifier_examples/charts/durable.ex	se-6ag	2
+lib/statifier_examples/charts/durable.ex	se-cqr	1
+lib/statifier_examples/charts/durable.ex	se-j87	1
+lib/statifier_examples/charts/durable.ex	se-w4i	2
+lib/statifier_examples/charts/durable.ex	sp-2yx	1
+lib/statifier_examples/charts/execution.ex	se-0ay	1
+lib/statifier_examples/charts/execution.ex	se-29d	1
+lib/statifier_examples/charts/execution.ex	se-b2f	1
+lib/statifier_examples/charts/fan_out.ex	sb-kha0	1
+lib/statifier_examples/charts/fan_out.ex	se-j87	1
+lib/statifier_examples/charts/fixture.ex	se-06z	1
+lib/statifier_examples/charts/step.ex	se-06z	1
+lib/statifier_examples/charts/subchart.ex	se-4dt	1
+lib/statifier_examples/charts/subchart.ex	se-6ag	1
+lib/statifier_examples/charts/subchart.ex	st-pvpz	1
+lib/statifier_examples/charts/sync_adapter.ex	se-4dt	2
+lib/statifier_examples/documents.ex	se-1cl	1
+lib/statifier_examples/persistence.ex	se-1tro	1
+lib/statifier_examples/persistence.ex	se-6ag	1
+lib/statifier_examples/persistence.ex	se-j87	1
+lib/statifier_examples/persistence.ex	sp-11w	1
+lib/statifier_examples/signup.ex	st-pvpz	1
+lib/statifier_examples/signup/handlers.ex	se-dyo	1
+lib/statifier_examples/signup/invites.ex	se-j87	1
+lib/statifier_examples/signup/journey.ex	se-19h	1
+lib/statifier_examples/signup/journey.ex	se-e68	2
+lib/statifier_examples/signup/journey.ex	se-w4i	1
+lib/statifier_examples/signup/promotion.ex	se-j87	1
+lib/statifier_examples/signup/screens.ex	se-19h	1
+lib/statifier_examples/signup/screens.ex	se-e68	1
+lib/statifier_examples/signup/signup_step.ex	se-1mc	1
+lib/statifier_examples_web/components/signup_elements.ex	se-19h	1
+lib/statifier_examples_web/live/editor_live.ex	se-1cl	1
+lib/statifier_examples_web/live/signup_screens_live.ex	se-19h	2
