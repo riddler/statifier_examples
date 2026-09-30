@@ -17,7 +17,8 @@ defmodule StatifierExamples.HoldDesk do
   2026-09-30): anyone who holds it can post events to that execution, and
   the router authenticates nothing beyond possession of it. This module
   hands the location to the desk the hold request names and to nobody
-  else, and never logs it.
+  else, and never logs it; `StatifierExamplesWeb.BasicHTTPController`
+  says what keeps it out of the request log.
 
   `config/0` is a router configuration of its own, separate from
   `StatifierExamples.RoutedWorkflow.config/0`: only this configuration

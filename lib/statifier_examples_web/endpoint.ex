@@ -36,7 +36,7 @@ defmodule StatifierExamplesWeb.Endpoint do
   end
 
   plug Plug.RequestId
-  plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
+  plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint], log: {__MODULE__, :log_level, []}
 
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
@@ -48,4 +48,13 @@ defmodule StatifierExamplesWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
   plug StatifierExamplesWeb.Router
+
+  @doc """
+  The level `Plug.Telemetry` logs a request line at: none for a request
+  under `/basichttp`, whose path carries a BasicHTTP location's token, a
+  bearer capability that must not reach a log; `:info` for every other.
+  """
+  @spec log_level(Plug.Conn.t()) :: Logger.level() | false
+  def log_level(%Plug.Conn{path_info: ["basichttp" | _]}), do: false
+  def log_level(_conn), do: :info
 end

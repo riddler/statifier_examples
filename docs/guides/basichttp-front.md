@@ -19,7 +19,14 @@ which drives the whole of it through the controller.
 Anyone who holds a location can post events to that execution, and the
 router authenticates nothing beyond possession of it (ruled by the
 operator, 2026-09-30). The hold hands its location to the one desk its
-request names and to nobody else, and nothing here logs it. A host serves
+request names and to nobody else. No request line or dispatch log carries
+it: the endpoint's `Plug.Telemetry` logs no request line under
+`/basichttp` (`StatifierExamplesWeb.Endpoint.log_level/1`), the route is
+`log: false`, and `:filter_parameters` names `token`. Ecto's query log at
+`:debug` prints bound parameters, and the router binds the token to look
+a location up and to store it, so a host keeps `:debug` out of
+production; at `:info`, the production level here, no query is logged.
+A host serves
 the base URL over TLS and rotates a location that may have leaked with
 `StatifierRouter.BasicHTTP.rotate_location/2`, after which the old one
 answers 404.

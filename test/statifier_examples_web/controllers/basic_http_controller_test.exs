@@ -1,6 +1,8 @@
 defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
   use StatifierExamplesWeb.ConnCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias StatifierExamples.{FirstWorkflow, HoldDesk, RoutedWorkflow}
   alias StatifierPersistence.{Execution, Executions, Storage}
   alias StatifierRouter.BasicHTTP
@@ -93,6 +95,33 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
 
     unknown = HoldDesk.base_url() <> "/" <> BasicHTTP.mint_token()
     assert build_conn() |> post_event(unknown, "_scxmleventname=copy.shelved") |> response(404)
+  end
+
+  # Ecto's own query lines are set aside: at :debug they print bound
+  # parameters, which the guide says. They also prove the capture is live.
+  # sabotage: the endpoint's Plug.Telemetry log option removed -> the
+  # request line carried the token, red; restored, green.
+  # sabotage: the route's log: false removed and "token" dropped from
+  # :filter_parameters -> the dispatch params carried the token, red;
+  # restored, green.
+  test "a POST at the location leaves the token out of the request log", %{conn: conn} do
+    {_execution_id, _headers, %{"reply_to" => location}} = placed_hold()
+    level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: level) end)
+
+    log =
+      capture_log([level: :debug], fn ->
+        assert conn |> post_event(location, "_scxmleventname=copy.shelved") |> response(204)
+      end)
+
+    {queries, others} =
+      log
+      |> String.split(~r/^(?=\d{2}:\d{2}:\d{2}\.\d{3} )/m, trim: true)
+      |> Enum.split_with(&(&1 =~ ~r/\] QUERY (OK|ERROR)/))
+
+    assert queries != []
+    refute Enum.any?(others, &(&1 =~ token(location)))
   end
 
   # sabotage: the controller handed the front "POST" whatever the method
