@@ -9,6 +9,11 @@ defmodule StatifierExamples.DescribeOutlineTest do
   reader of either chart would check first (where the root starts, the
   interrupt rules, a branch arm, the step after an arm), so a change to an
   unrelated sentence does not re-pin this file.
+
+  An edge line names a container by the package's noun for it ("the
+  steps", "the group", "the branch"), and a step it names by that step's
+  sentence, a delayed send's in double quotation marks; the node lines,
+  the first of them the root's, keep each block's sentence.
   """
 
   use ExUnit.Case, async: true
@@ -56,6 +61,14 @@ defmodule StatifierExamples.DescribeOutlineTest do
   # Sabotage: changed the interrupt edge's verb in the dependency's
   # `Describe` from "abandons" to "leaves" and recompiled it; this went red
   # on the first interrupt line. Restored from a copy.
+  #
+  # 2026-09-29: an edge line names a container by the package's noun.
+  # Sabotage: changed the dependency's noun for a group from "the group" to
+  # "the region" and recompiled it; both cases went red, the library loan
+  # on its first interrupt line and patron registration on the group's
+  # first step. Then dropped the quotation marks the dependency sets round
+  # a delayed send in an edge line; patron registration went red on the
+  # group's first step. Each restored from a copy.
   test "the library loan reads as its chart" do
     outline = outline("library_loan")
     lines = Describe.render(outline, [])
@@ -65,11 +78,10 @@ defmodule StatifierExamples.DescribeOutlineTest do
     assert length(interrupts(outline)) == 2
 
     for line <- [
-          "Run its steps in order starts with Run interruptible steps",
-          "On copy.returned, When copy.returned, abandon abandons Run interruptible steps",
-          "On copy.reported_lost, When copy.reported_lost, abandon abandons " <>
-            "Run interruptible steps",
-          ~s|Decide: When "returned", otherwise: when loan.returned, Send loan.closed|,
+          "The steps start with Run interruptible steps",
+          "On copy.returned, When copy.returned, abandon abandons the group",
+          "On copy.reported_lost, When copy.reported_lost, abandon abandons the group",
+          "The branch: when loan.returned, Send loan.closed",
           "After Send loan.overdue (done), Wait for copy.returned, giving up after 14d"
         ] do
       assert line in lines, line
@@ -92,17 +104,15 @@ defmodule StatifierExamples.DescribeOutlineTest do
     assert length(interrupts(outline)) == 2
 
     for line <- [
-          "Run interruptible steps starts with In 7 days, send registration.deadline",
-          "Run interruptible steps (done) ends Run its steps in order",
-          "On registration.deadline, When registration.deadline, abandon abandons " <>
-            "Run interruptible steps",
+          ~s|The group starts with "In 7 days, send registration.deadline"|,
+          "Run interruptible steps (done) ends the steps",
+          "On registration.deadline, When registration.deadline, abandon abandons the group",
           ~s|After Wait for email.verified (received, timed_out), Decide: When "child", otherwise|,
           ~s|After Decide: When "child", otherwise (done), Send patron.welcomed|,
-          "Send patron.welcomed (done) ends Run interruptible steps",
+          "Send patron.welcomed (done) ends the group",
           # The arm its author left empty goes straight to the branch's end.
-          ~s|Decide: When "child", otherwise: otherwise, the end of | <>
-            ~s|Decide: When "child", otherwise|,
-          ~s|Decide: When "child", otherwise: if undecided, Send patron.asked_to_visit|,
+          "The branch: otherwise, the end of the branch",
+          "The branch: if undecided, Send patron.asked_to_visit",
           # The deadline send arms the rule that abandons the registration.
           "In 7 days, registration.deadline reaches When registration.deadline, abandon"
         ] do

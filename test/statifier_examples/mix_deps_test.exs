@@ -378,12 +378,18 @@ defmodule StatifierExamples.MixDepsTest do
   # the Plan page to. Sabotage: pointed the LOCK assertion back at
   # `"0.39.` and left `mix.lock` alone; it went red reporting the resolved
   # 0.40.0 entry. Reverted from a copy.
+  #
+  # 2026-09-29: both halves move to 0.41. 0.41.0's Describe names a
+  # container by a noun in its edge lines, which
+  # `StatifierExamples.DescribeOutlineTest` pins. Sabotage: pointed the
+  # LOCK assertion back at `"0.40.` and left `mix.lock` alone; it went red
+  # reporting the resolved 0.41.0 entry. Reverted from a copy.
   test "with STATIFIER_BLOCKS_PATH unset the statifier_blocks dep is the Hex requirement" do
     refute System.get_env("STATIFIER_BLOCKS_PATH")
 
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_blocks, "~> 0.40.0"} in deps
+    assert {:statifier_blocks, "~> 0.41.0"} in deps
 
     lock_line =
       "mix.lock"
@@ -392,7 +398,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_blocks": )))
 
     assert lock_line, "statifier_blocks has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.40.)
+    assert lock_line =~ ~s({:hex, :statifier_blocks, "0.41.)
     refute lock_line =~ ":git,"
   end
 

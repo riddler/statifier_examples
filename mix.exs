@@ -1261,13 +1261,25 @@ defmodule StatifierExamples.MixProject do
   # rendered before, and the `{:update_note, id, note}` edit needs no
   # handling here because no host code matches every member of the edit
   # union.
+  #
+  # 2026-09-29: the floor moves to `~> 0.41.0`, published, so the arm stays
+  # a Hex requirement; `mix.lock` moves only its `statifier_blocks` line.
+  # 0.41.0 changes what `StatifierBlocks.Describe.render/2` answers: an
+  # edge line names a container by a noun ("the steps", "the group", "the
+  # branch") rather than by its sentence, and sets a delayed send's
+  # sentence in double quotation marks; the outline pins here carry the
+  # new lines. The Map's other changes (the straight path through a group
+  # whose body holds a container, the clock on a timed wait, the
+  # how-to-read paragraph) ask nothing of this app, and the hook's new
+  # console warning cannot fire here: the Plan page mounts `map_region/1`,
+  # which renders the `data-map-canvas` child the hook draws into.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.40.0"}
+        {:statifier_blocks, "~> 0.41.0"}
     end
   end
 
