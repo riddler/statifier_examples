@@ -174,6 +174,26 @@ defmodule StatifierExamplesWeb.PlanLive do
   control held: it moves focus to its first control when it is added to
   the page (`JS.focus_first/0`, as its `phx-mounted`).
 
+  Closing a picker removes the control that held the focus too, so every
+  way it closes hands the focus to a control that is on the page once it
+  has closed:
+
+  | The picker closes by | Focus goes to |
+  |---|---|
+  | Cancel, or a refused pick, in a row's picker | that row's "+" |
+  | Cancel, or a refused pick, in a slot's picker | the row of the block whose slot it was |
+  | a pick that lands | the new step's row, the first new one on the page for a recipe |
+
+  A refused pick is one the page or the package turns away: a gap or a
+  type the page cannot resolve, a recipe that does not land at the gap,
+  or a command the session refuses.
+  The row's "+" and each row's sentence carry ids built from the block id
+  (`plan-add-` and `plan-step-`), and the page moves the focus with
+  `JS.focus/1` from a hidden element it adds each time a picker closes,
+  as that element's `phx-mounted`, so the command runs after the patch
+  has drawn the control it names. Each close adds a new element with an
+  id of its own, which is what makes the command run again.
+
   ## The description region
 
   The panel is always drawn, and at its top is the package's description
@@ -259,7 +279,9 @@ defmodule StatifierExamplesWeb.PlanLive do
        fixtures: Charts.fixtures(),
        session: nil,
        selected_id: nil,
-       inserting: nil
+       inserting: nil,
+       focus_return: nil,
+       focus_seq: 0
      )}
   end
 
@@ -368,7 +390,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   end
 
   def handle_event("insert-close", _params, socket) do
-    {:noreply, socket |> assign(:inserting, nil) |> assign_insertable()}
+    {:noreply, close_picker(socket)}
   end
 
   # A recipe row. The package answers what the arrangement IS at this
@@ -389,27 +411,18 @@ defmodule StatifierExamplesWeb.PlanLive do
 
     with {_parent_id, _slot, _index} = target <- gap_target(socket, gap_key(params)),
          {:ok, commands} <- Targets.recipe_inserts(document, palette, name, target) do
-      {:noreply,
-       socket
-       |> assign(:inserting, nil)
-       |> apply_session(Session.commit(socket.assigns.session, {:compound, commands}))}
+      {:noreply, commit_pick(socket, {:compound, commands})}
     else
-      _no_gap_or_refused_recipe ->
-        {:noreply, socket |> assign(:inserting, nil) |> assign_insertable()}
+      _no_gap_or_refused_recipe -> {:noreply, close_picker(socket)}
     end
   end
 
   def handle_event("insert", %{"block-id" => _id, "type" => type} = params, socket) do
     with {_parent_id, _slot, _index} = target <- gap_target(socket, gap_key(params)),
          {:ok, %Block{} = block} <- Palette.new_block(socket.assigns.session.palette, type) do
-      socket =
-        socket
-        |> assign(:inserting, nil)
-        |> apply_session(Session.commit(socket.assigns.session, {:insert, target, block}))
-
-      {:noreply, socket}
+      {:noreply, commit_pick(socket, {:insert, target, block})}
     else
-      _no_gap_or_type -> {:noreply, socket |> assign(:inserting, nil) |> assign_insertable()}
+      _no_gap_or_type -> {:noreply, close_picker(socket)}
     end
   end
 
@@ -454,6 +467,14 @@ defmodule StatifierExamplesWeb.PlanLive do
       data-theme={@theme}
       data-readonly={if @readonly?, do: "true"}
     >
+      <span
+        :if={@focus_return}
+        id={"plan-focus-return-#{@focus_return.seq}"}
+        hidden
+        data-plan-focus-return={@focus_return.to}
+        phx-mounted={JS.focus(to: id_selector(@focus_return.to))}
+      />
+
       <div class="sb-editor myapp-plan">
         <div class="myapp-header">
           <div class="myapp-header__identity">
@@ -619,6 +640,13 @@ defmodule StatifierExamplesWeb.PlanLive do
   # `JS.focus_first/0` on itself when it is added to the page, and its id
   # names its slot, so arming another slot adds a new picker rather than
   # patching this one. The row's picker does the same for its "+".
+  #
+  # Closing a picker takes its focused control away as well, so every way
+  # out of one hands the focus on (`close_picker/1`, `commit_pick/2`):
+  # Cancel or a refused pick sends it to the row's "+" for a row's picker
+  # and to the row of the slot's block for this one, and a pick that
+  # lands sends it to the new step's row. The page's hidden
+  # `plan-focus-return-` element carries the `JS.focus/1` that does it.
   defp panel(assigns) do
     ~H"""
     <aside
@@ -772,6 +800,7 @@ defmodule StatifierExamplesWeb.PlanLive do
     >
       <div class="myapp-plan__line">
         <button
+          id={step_dom_id(@node.block_id)}
           class="myapp-plan__sentence"
           type="button"
           aria-describedby="plan-description"
@@ -830,6 +859,7 @@ defmodule StatifierExamplesWeb.PlanLive do
       <div :if={not @readonly?} class="myapp-plan__gap">
         <button
           :if={@inserting != @node.block_id}
+          id={add_dom_id(@node.block_id)}
           class="myapp-plan__add"
           type="button"
           phx-click="insert-open"
@@ -952,6 +982,102 @@ defmodule StatifierExamplesWeb.PlanLive do
 
   defp apply_session(socket, {:error, %Session{} = session}),
     do: socket |> assign(:session, session) |> rebuild()
+
+  # ----------------------------------------------------------------- focus
+
+  # A picker closing without a step landing: Cancel, or a pick refused
+  # before or at the write. The focus goes back to the control that armed
+  # the gap, or to the row standing for the block whose slot it was
+  # (`gap_control/1`). A close with no picker open moves nothing.
+  @spec close_picker(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp close_picker(socket) do
+    armed = socket.assigns.inserting
+
+    socket
+    |> assign(:inserting, nil)
+    |> assign_insertable()
+    |> return_focus(gap_control(armed))
+  end
+
+  # A pick committed through the session. When the step lands, the focus
+  # goes to its row: the first row on the page whose block was not in the
+  # document before the pick. A type puts down one block; a recipe can put
+  # down more than one, and not always at the armed gap (the core
+  # `"deadline"` recipe writes the head of the group's body and its
+  # interrupts rail), so the row is found by what is new rather than by
+  # where the gap was. When the session refuses the command, the picker
+  # has still closed, and the focus goes where a Cancel sends it.
+  @spec commit_pick(Phoenix.LiveView.Socket.t(), Edit.t()) :: Phoenix.LiveView.Socket.t()
+  defp commit_pick(socket, command) do
+    armed = socket.assigns.inserting
+    before = row_ids(socket)
+
+    case Session.commit(socket.assigns.session, command) do
+      {:ok, _session} = landed ->
+        socket = socket |> assign(:inserting, nil) |> apply_session(landed)
+        return_focus(socket, new_step_row(socket, before) || gap_control(armed))
+
+      {:error, _session} = refused ->
+        socket
+        |> assign(:inserting, nil)
+        |> apply_session(refused)
+        |> return_focus(gap_control(armed))
+    end
+  end
+
+  # The row's control an armed gap stands for once its picker is gone: a
+  # row's "+" for the gap after that row, the row of the slot's block for
+  # the head of a slot.
+  @spec gap_control(gap() | nil) :: String.t() | nil
+  defp gap_control(nil), do: nil
+  defp gap_control({:slot, id, _name}), do: step_dom_id(id)
+  defp gap_control(id), do: add_dom_id(id)
+
+  # The first row, in the page's order, whose block was not among
+  # `before`, the rows from ahead of the pick.
+  @spec new_step_row(Phoenix.LiveView.Socket.t(), MapSet.t(Block.id())) :: String.t() | nil
+  defp new_step_row(socket, before) do
+    socket
+    |> rows()
+    |> Enum.find_value(fn {node, _depth, _kind} ->
+      if not MapSet.member?(before, node.block_id), do: step_dom_id(node.block_id)
+    end)
+  end
+
+  # The page's rows in the order it draws them: the plan, the rails, the
+  # trays.
+  @spec rows(Phoenix.LiveView.Socket.t()) :: [{ViewModel.Node.t(), non_neg_integer(), atom()}]
+  defp rows(%{assigns: %{plan: plan, rails: rails, trays: trays}}), do: plan ++ rails ++ trays
+
+  @spec row_ids(Phoenix.LiveView.Socket.t()) :: MapSet.t(Block.id())
+  defp row_ids(socket),
+    do: socket |> rows() |> MapSet.new(fn {node, _depth, _kind} -> node.block_id end)
+
+  # Names the element the focus goes to next. Every call bumps the
+  # sequence the hidden element's id carries, so each close adds a new
+  # element and its `phx-mounted` runs again.
+  @spec return_focus(Phoenix.LiveView.Socket.t(), String.t() | nil) ::
+          Phoenix.LiveView.Socket.t()
+  defp return_focus(socket, nil), do: socket
+
+  defp return_focus(socket, dom_id) do
+    seq = socket.assigns.focus_seq + 1
+    assign(socket, focus_seq: seq, focus_return: %{seq: seq, to: dom_id})
+  end
+
+  @spec add_dom_id(Block.id()) :: String.t()
+  defp add_dom_id(id), do: "plan-add-#{id}"
+
+  @spec step_dom_id(Block.id()) :: String.t()
+  defp step_dom_id(id), do: "plan-step-#{id}"
+
+  # A block id is opaque, so the selector quotes the element's id rather
+  # than writing it after a `#`, which only some characters survive.
+  @spec id_selector(String.t()) :: String.t()
+  defp id_selector(dom_id) do
+    escaped = dom_id |> String.replace("\\", "\\\\") |> String.replace("\"", "\\\"")
+    ~s([id="#{escaped}"])
+  end
 
   # `key` is the field's identity, and a key naming no field in the
   # selected block edits nothing - the same crafted-payload guard
