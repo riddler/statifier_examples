@@ -25,7 +25,7 @@ The recipe is written and checked against these releases, which are what
 |---|---|---|
 | `statifier_router` | 0.6.0 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
 | `statifier_persistence` | 0.21.0 | the chart registry, the execution, the input log, `ended_at` |
-| `statifier_blocks` | 0.35.0 | the document and the compile |
+| `statifier_blocks` | 0.41.0 | the document and the compile |
 | `statifier` | 2.9.0 | compiling the chart and running it |
 
 `statifier_router` 0.6.0 requires `statifier ~> 2.9` and
@@ -334,7 +334,7 @@ Each of these is in `statifier_router`'s README and not needed here:
   that names its executions gives an `:execution_id` callback.
 - **Route sends from the chart.** This chart sends nothing: its one route is
   reached through `:on_complete`, because a block document at
-  statifier_blocks 0.35.0 cannot author a routed `<send>` - `core.send`
+  statifier_blocks 0.41.0 cannot author a routed `<send>` - `core.send`
   declares no `type` or `target`. A `<send>` of the router's type to a
   registered route reaches the same adapter, and a delayed one needs a
   `:timer_queue`.

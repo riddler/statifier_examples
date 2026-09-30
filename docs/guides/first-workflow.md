@@ -20,12 +20,12 @@ The recipe is written and checked against these releases, which are what
 | Package | Version | What the recipe uses it for |
 |---|---|---|
 | `statifier` | 2.9.0 | compiling the chart and running it |
-| `statifier_blocks` | 0.35.0 | the document, `Plan.expressible/3`, the compile |
+| `statifier_blocks` | 0.41.0 | the document, `Plan.expressible/3`, the compile |
 | `statifier_persistence` | 0.21.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.13.0 | the invoke job and its `:invoke_timeout`, the timer job |
 | `statifier_router` | 0.6.0 | two of the publish-time checks |
 
-`statifier_datamodel` 0.4.0 arrives through `statifier_blocks`. The first
+`statifier_datamodel` 0.5.0 arrives through `statifier_blocks`. The first
 line the command prints names the versions it actually loaded.
 
 The same workflow shape with every event arriving through
