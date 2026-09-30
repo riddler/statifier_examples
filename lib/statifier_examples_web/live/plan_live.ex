@@ -29,9 +29,10 @@ defmodule StatifierExamplesWeb.PlanLive do
   | names the data-flow context | `StatifierBlocks.Assignability.context/1` |
   | builds an inserted block | `StatifierBlocks.Palette.new_block/2` |
 
-  `se-avi` is where that table stopped being an aspiration. The page used
-  to hold its own copy of fourteen of these - a `find_node/2`, a
-  `positions/1`, a commit funnel, a draft treatment, a fit filter - written
+  Moving those answers into the package is where that table stopped being
+  an aspiration. The page used to hold its own copy of fourteen of these -
+  a `find_node/2`, a `positions/1`, a commit funnel, a draft treatment, a
+  fit filter - written
   against the same document the package's editor was written against and
   free to drift from it. `statifier_blocks` promoted them, and this module
   deleted its copies. What is left below the render is this app's: the
@@ -68,8 +69,8 @@ defmodule StatifierExamplesWeb.PlanLive do
   ## Editing
 
   A row is selected by clicking it, and a selected row expands to its
-  config fields - the ones `sb-21gm` did not flag `hidden?`, drawn by the
-  package's own `Editor.ConfigForm.config_form/1` so the control an author
+  config fields - the ones its block type does not declare `hidden?`,
+  drawn by the package's own `Editor.ConfigForm.config_form/1` so the control an author
   types into here is the control they type into on the canvas. Two of that
   component's attrs are what make it a call a host composes rather than the
   editor's private markup: `event` names what the form posts under, and
@@ -78,8 +79,8 @@ defmodule StatifierExamplesWeb.PlanLive do
   without being asked for - the form posts it as a hidden `block-id` input,
   which is what `handle_event("config-change", ...)` below reads it out of.
 
-  `se-7p1` is where the read-only/editable pair around `Field.field/1` that
-  this page used to write itself went. `sb-ykkl` promoted it, and the page
+  The read-only/editable pair around `Field.field/1` that this page used
+  to write itself went into the package's `config_form/1`, and the page
   now passes what it used to spell out: the node, the event, no target,
   whether this mount edits, and its own layout class.
 
@@ -97,10 +98,10 @@ defmodule StatifierExamplesWeb.PlanLive do
   nowhere drawn at the head of the form by `config_form/1` itself. A
   refused draft names the field it was about.
 
-  `se-f4a` derived those findings here instead, by re-running
+  This page once derived those findings itself, by re-running
   `BlockType.validate_config/1` over the draft, because the funnel
   discarded the findings its own refusal carried. That was this page's one
-  standing piece of residue against the package and `sb-8fa8` closed it:
+  standing piece of residue against the package, and the package closed it:
   `change_config/3` keeps them in the session's `draft_findings`, so the
   form draws what the refusal said rather than a second derivation of it.
   Two host functions went with the residue.
@@ -212,12 +213,12 @@ defmodule StatifierExamplesWeb.PlanLive do
   `Editor.ConfigForm.config_form/1` with `read_only={true}`, which is that
   component's own read-only branch: a `<div>` of the same fields with their
   `readonly?` raised - label and value, no control, nothing that posts.
-  Raising the flag field by field was this page's job until `se-7p1`; it is
-  one attr now, and the page does not grow a second field renderer either
-  way.
+  Raising the flag field by field was this page's job until the package
+  took the pair; it is one attr now, and the page does not grow a second
+  field renderer either way.
 
-  `se-4v1` asked whether the package's own `read_only?` profile
-  (`statifier_blocks` 0.24.0) replaces this. It does not, for two reasons
+  Does the package's own `read_only?` profile (`statifier_blocks` 0.24.0)
+  replace this? It does not, for two reasons
   the package states itself. `profile` is an assign on the
   `StatifierBlocks.Editor` live component, and this page mounts no editor;
   and `docs/profiles.md` says `read_only?` "is not an authorization
@@ -293,7 +294,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   # and what this defends against is a crafted payload rather than a
   # button.
   #
-  # `se-4v1` asked for this clause to go once the package had its own
+  # This clause was a candidate to go once the package had its own
   # `read_only?` profile. It stays, and the package's own guide is why:
   # `docs/profiles.md` says in as many words that `read_only?` "is not an
   # authorization boundary... If you must prevent a write, enforce that
@@ -868,7 +869,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   end
 
   # What a refused draft is about, as the tail of the pending sentence.
-  # `se-f4a`: "Nothing is stored yet" on its own says a refusal happened
+  # Why the tail: "Nothing is stored yet" on its own says a refusal happened
   # and not what it was about, and the field it was about is the one the
   # author is looking at.
   @spec refused_fields(ViewModel.Node.t()) :: String.t()
@@ -1036,10 +1037,10 @@ defmodule StatifierExamplesWeb.PlanLive do
   # refused bytes back on the fields, and `ViewModel.overlay_findings/2`
   # routes the refusal's own per-field findings onto them.
   #
-  # `se-f4a` derived those findings here, by re-running the type's
+  # This page once derived those findings itself, by re-running the type's
   # `validate_config/1` over the draft, because `Edit.Session` threw away
   # the `{:invalid_config, id, findings}` it had already been handed. That
-  # was this page's residue and it is `sb-8fa8`'s answer now: a refused
+  # was this page's residue and it is the package's answer now: a refused
   # `Session.change_config/3` keeps them in `draft_findings` under the
   # block's id, so what reaches the form is what the funnel actually said
   # rather than a second derivation that could disagree with it.
@@ -1076,7 +1077,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   # names; `{kind, name}` is what identifies an entry, so both halves of
   # the pair are carried through to the click.
   #
-  # `se-ezz`: recipes used to be left out here on the grounds that
+  # Recipes used to be left out here on the grounds that
   # inserting one is more than one command. It is, and the extra command
   # is the package's to compose (`recipe_inserts/4`) rather than a reason
   # for a host to offer less of the palette than the palette holds.
