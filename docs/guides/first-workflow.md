@@ -236,3 +236,32 @@ The move after it, to `statifier_persistence ~> 0.20` with `mix.lock` at
 0.21.0, needed nothing here either: neither release adds a migration, and
 nothing in this recipe calls back into the execution it is stepping, which
 is the one thing 0.21.0 refuses that it used to take.
+
+The statifier_blocks moves after 0.35.0, one minor at a time to 0.41.0,
+needed nothing in this recipe either. statifier_blocks' `docs/upgrading.md`
+says what each asks of a host; this recipe calls `Decode.decode/1`,
+`Plan.expressible/3`, `Publish.findings/3`, `Compiler.compile/3` and
+`Graph.check/2` over a document of three core blocks, and against that:
+
+- **0.36.0 and 0.36.1** give `core.sequence`, `core.group` and `core.await`
+  card lines that read as sentences, and add `StatifierBlocks.Describe` and
+  the block document's JSON Schema. The recipe reads no card line and calls
+  neither new module.
+- **0.37.0** names a delayed `core.send`'s delay in its card line and adds
+  the `:timer` edge to `Describe.outline/3`. The document has no
+  `core.send`, and the recipe outlines nothing.
+- **0.38.0** makes a block type's declared field types bind, at compile, so
+  in steps 2 and 3. Every config value in the document is one its field's
+  declared type admits: `invoke_type` and `params` are strings, `assign_to`
+  is a path and `duration` is a duration. The package's pre-flight answers
+  clean over the palette and over the document;
+  `test/statifier_examples/block_schema_test.exs` runs both.
+- **0.39.0** lets a block carry an author `note`, which `Decode` now
+  admits. This document carries none, so its content hash is unchanged, and
+  a note changes the document's hash, not the compiled chart. The Map it
+  adds is an editor region, and the recipe mounts no editor.
+- **0.40.0** adds the `{:update_note, id, note}` edit and a description
+  region under the editor's canvas. The recipe applies no edit and mounts
+  no editor.
+- **0.41.0** changes the edge lines `Describe.render/2` answers and what
+  the Map draws. The recipe calls neither.
