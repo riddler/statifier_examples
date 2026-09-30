@@ -682,10 +682,17 @@ defmodule StatifierExamples.MixDepsTest do
   # this app reads neither. Sabotage: pointed the LOCK assertion back
   # at `"2.8.` and left `mix.lock` alone; it went red reporting the resolved
   # 2.9.0 entry. Reverted from a copy.
+  #
+  # 2026-09-30: the engine moves to the 2.10 line, and 2.10.0 is REQUIRED:
+  # `statifier_router` 0.9.2 states `{:statifier, "~> 2.10"}`, the release
+  # that ships the Basic HTTP Event I/O Processor and its decoder, which
+  # `StatifierExamples.HoldDesk` sends through. Sabotage: pointed the LOCK
+  # assertion back at `"2.9.` and left `mix.lock` alone; it went red
+  # reporting the resolved 2.10.0 entry. Reverted from a copy.
   test "the statifier dep is the Hex requirement, with no override" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier, "~> 2.9"} in deps
+    assert {:statifier, "~> 2.10"} in deps
 
     lock_line =
       "mix.lock"
@@ -694,7 +701,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier": )))
 
     assert lock_line, "statifier has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier, "2.9.)
+    assert lock_line =~ ~s({:hex, :statifier, "2.10.)
   end
 
   # The durable stepper. 0.3.0 was the floor two release lines back, as
@@ -919,6 +926,15 @@ defmodule StatifierExamples.MixDepsTest do
   # Sabotage: pointed the LOCK assertion back at `"0.19.` and left
   # `mix.lock` alone; it went red reporting the resolved 0.21.0 entry.
   # Reverted from a copy.
+  #
+  # 2026-09-30: the requirement stays `~> 0.20`, and `mix.lock` resolves
+  # 0.24.0, which the update to `statifier_router` 0.9.2 brought with it.
+  # None of 0.22.0, 0.23.0 and 0.24.0 adds a migration; 0.24.0 renames the
+  # conformance suite's helpers, which this app's conformance test uses
+  # only through the case template; the migration guide's test holds the
+  # one plan it builds against 0.22.0's new `migrate/4` refusal. Sabotage:
+  # pointed the LOCK assertion back at `"0.21.` and left `mix.lock` alone;
+  # it went red reporting the resolved 0.24.0 entry. Reverted from a copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
@@ -931,7 +947,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.21.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.24.)
     refute lock_line =~ ":git,"
   end
 
@@ -962,10 +978,19 @@ defmodule StatifierExamples.MixDepsTest do
   # through a `%{route: _, location: _}` match that still holds. Sabotage:
   # pointed the LOCK assertion back at `"0.4.` and left `mix.lock` alone; it
   # went red reporting the resolved 0.6.0 entry. Reverted from a copy.
+  #
+  # 2026-09-30: the requirement moves to `~> 0.9.2`, and 0.9.2 is REQUIRED:
+  # 0.9.0 ships the BasicHTTP front and the location table
+  # `StatifierExamples.HoldDesk` uses, and 0.9.2 is the first release whose
+  # migrations and address reaper both run on this app's SQLite database
+  # (0.8.0's V03 and its `Addresses.reap/3` did not). Sabotage: pointed the
+  # LOCK assertion back at `"0.6.` and left `mix.lock` alone; it went red
+  # reporting the resolved 0.9.2 entry.
+  # Reverted from a copy.
   test "the statifier_router dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_router, "~> 0.6.0"} in deps
+    assert {:statifier_router, "~> 0.9.2"} in deps
 
     lock_line =
       "mix.lock"
@@ -974,7 +999,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_router": )))
 
     assert lock_line, "statifier_router has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_router, "0.6.)
+    assert lock_line =~ ~s({:hex, :statifier_router, "0.9.2)
     refute lock_line =~ ":git,"
   end
 

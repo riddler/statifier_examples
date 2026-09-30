@@ -47,3 +47,8 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# The hold desk's outbound BasicHTTP POSTs go to a transport that hands
+# each one to the process that made it, so a test reads what the desk was
+# sent instead of reaching a branch desk over the network.
+config :statifier_examples, StatifierExamples.HoldDesk, transport: StatifierExamples.DeskTransport

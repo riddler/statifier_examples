@@ -1,0 +1,150 @@
+defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
+  use StatifierExamplesWeb.ConnCase, async: false
+
+  alias StatifierExamples.{FirstWorkflow, HoldDesk, RoutedWorkflow}
+  alias StatifierPersistence.{Execution, Executions, Storage}
+  alias StatifierRouter.BasicHTTP
+
+  # A patron's hold on a copy at the Riverside branch: the execution tells
+  # the desk it was placed, handing it the location to answer at, and the
+  # desk posts copy.shelved there through the controller.
+
+  @scope "branch_riverside"
+  @desk "https://riverside.example/holds-desk"
+  @form "application/x-www-form-urlencoded"
+
+  setup do
+    {:ok, _content_hash} = HoldDesk.register()
+    :ok
+  end
+
+  defp placed_hold(hold_id \\ "hold-0417") do
+    assert {:ok, [{:created_and_delivered, "hold_requests", execution_id}]} =
+             HoldDesk.request(@scope, %{
+               "hold_id" => hold_id,
+               "copy_id" => "copy-2231",
+               "desk" => @desk
+             })
+
+    assert_received {:desk_post, @desk, headers, body}
+    {execution_id, headers, URI.decode_query(body)}
+  end
+
+  defp token(location), do: String.replace_prefix(location, HoldDesk.base_url() <> "/", "")
+
+  defp post_event(conn, location, body, headers \\ []) do
+    conn =
+      Enum.reduce([{"content-type", @form} | headers], conn, fn {name, value}, conn ->
+        put_req_header(conn, name, value)
+      end)
+
+    post(conn, "/basichttp/" <> token(location), body)
+  end
+
+  defp status!(execution_id) do
+    {:ok, record} = Storage.fetch_execution(FirstWorkflow.store(), execution_id)
+    Execution.from_record(record).status
+  end
+
+  # sabotage: the :basichttp key dropped from HoldDesk.config/0 -> the
+  # chart's basichttp send was an unsupported type, no desk_post arrived
+  # and the route answered an error, red; restored, green.
+  # sabotage: execute/2's BasicHTTP clause made to answer :ok without
+  # performing -> assert_received {:desk_post, ...} failed, red; restored,
+  # green.
+  test "the hold tells the desk it was placed, with its own location to answer at" do
+    {execution_id, headers, params} = placed_hold()
+
+    assert params["_scxmleventname"] == "hold.placed"
+    assert params["hold_id"] == "hold-0417"
+    assert params["copy_id"] == "copy-2231"
+    assert {:ok, location} = BasicHTTP.location(HoldDesk.config(), execution_id)
+    assert params["reply_to"] == location
+    assert String.starts_with?(location, HoldDesk.base_url() <> "/")
+    refute String.contains?(location, execution_id)
+    assert {"content-type", @form} in headers
+    assert Enum.any?(headers, &match?({"scxml-send-key", _key}, &1))
+    assert status!(execution_id) == :active
+  end
+
+  # sabotage: the controller handed the front the parsed body ("") instead
+  # of the raw one -> the event decoded as HTTP.POST, the execution stayed
+  # active, red; restored, green.
+  # sabotage: Front.response/1's status replaced with a constant 200 in the
+  # controller -> red on the 204; restored, green.
+  test "a POST at the location through the controller delivers the desk's event", %{conn: conn} do
+    {execution_id, _headers, %{"reply_to" => location}} = placed_hold()
+
+    conn = post_event(conn, location, "_scxmleventname=copy.shelved")
+
+    assert response(conn, 204) == ""
+    assert status!(execution_id) == :completed
+
+    assert {:ok, [_requested, %{event: %{name: "copy.shelved"}}]} =
+             Executions.inputs(FirstWorkflow.store(), execution_id)
+  end
+
+  test "a finished hold and an unknown location answer 404", %{conn: conn} do
+    {_execution_id, _headers, %{"reply_to" => location}} = placed_hold()
+
+    assert conn |> post_event(location, "_scxmleventname=copy.shelved") |> response(204)
+
+    assert build_conn() |> post_event(location, "_scxmleventname=copy.shelved") |> response(404)
+
+    unknown = HoldDesk.base_url() <> "/" <> BasicHTTP.mint_token()
+    assert build_conn() |> post_event(unknown, "_scxmleventname=copy.shelved") |> response(404)
+  end
+
+  # sabotage: the controller handed the front "POST" whatever the method
+  # -> the GET was delivered and answered 204, red; restored, green.
+  test "another method answers 405 with allow: POST", %{conn: conn} do
+    {execution_id, _headers, %{"reply_to" => location}} = placed_hold()
+
+    conn = get(conn, "/basichttp/" <> token(location))
+
+    assert response(conn, 405) == ""
+    assert get_resp_header(conn, "allow") == ["POST"]
+    assert status!(execution_id) == :active
+  end
+
+  test "a malformed send key answers 400 and delivers nothing", %{conn: conn} do
+    {execution_id, _headers, %{"reply_to" => location}} = placed_hold()
+
+    conn =
+      post_event(conn, location, "_scxmleventname=copy.shelved", [
+        {"scxml-send-key", "not-eight-fields"}
+      ])
+
+    assert response(conn, 400) == ""
+    assert status!(execution_id) == :active
+  end
+
+  test "a repeated send key is delivered once", %{conn: conn} do
+    {execution_id, _headers, %{"reply_to" => location}} = placed_hold()
+    key = [{"scxml-send-key", "sess_desk/shelved_1/1/1/0/0/onentry.0.0/0"}]
+
+    assert conn |> post_event(location, "_scxmleventname=noted", key) |> response(204)
+    assert build_conn() |> post_event(location, "_scxmleventname=noted", key) |> response(204)
+
+    assert {:ok, [_requested, %{event: %{name: "noted"}}]} =
+             Executions.inputs(FirstWorkflow.store(), execution_id)
+  end
+
+  # sabotage: execute/2 made to answer :ok whatever perform/2 answered ->
+  # the execution stayed active in waiting and the location still took a
+  # POST, red; restored, green.
+  test "a desk that refuses the POST ends the hold unreached", %{conn: conn} do
+    Process.put(:desk_status, 503)
+    {execution_id, _headers, %{"reply_to" => location}} = placed_hold("hold-0418")
+
+    assert status!(execution_id) == :completed
+    assert conn |> post_event(location, "_scxmleventname=copy.shelved") |> response(404)
+  end
+
+  # sabotage: :basichttp added to RoutedWorkflow's configuration -> red;
+  # restored, green.
+  test "the parcel configuration carries no BasicHTTP location" do
+    assert RoutedWorkflow.config().basichttp == nil
+    assert HoldDesk.config().basichttp[:base_url] == HoldDesk.base_url()
+  end
+end

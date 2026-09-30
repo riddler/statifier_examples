@@ -19,11 +19,11 @@ The recipe is written and checked against these releases, which are what
 
 | Package | Version | What the recipe uses it for |
 |---|---|---|
-| `statifier` | 2.9.0 | compiling the chart and running it |
+| `statifier` | 2.10.0 | compiling the chart and running it |
 | `statifier_blocks` | 0.41.0 | the document, `Plan.expressible/3`, the compile |
-| `statifier_persistence` | 0.21.0 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_persistence` | 0.24.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.13.0 | the invoke job and its `:invoke_timeout`, the timer job |
-| `statifier_router` | 0.6.0 | two of the publish-time checks |
+| `statifier_router` | 0.9.2 | two of the publish-time checks |
 
 `statifier_datamodel` 0.5.0 arrives through `statifier_blocks`. The first
 line the command prints names the versions it actually loaded.
@@ -236,6 +236,13 @@ The move after it, to `statifier_persistence ~> 0.20` with `mix.lock` at
 0.21.0, needed nothing here either: neither release adds a migration, and
 nothing in this recipe calls back into the execution it is stepping, which
 is the one thing 0.21.0 refuses that it used to take.
+
+The move to statifier 2.10.0, statifier_router 0.9.2 and, with them,
+statifier_persistence 0.24.0 needed nothing in this recipe either. The
+router releases add a migration version and the BasicHTTP front, which
+`docs/guides/basichttp-front.md` walks; none of the persistence releases
+adds a migration, and none of what they refuse is something this recipe
+does.
 
 The statifier_blocks moves after 0.35.0, one minor at a time to 0.41.0,
 needed nothing in this recipe either. statifier_blocks' `docs/upgrading.md`

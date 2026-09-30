@@ -23,17 +23,17 @@ The recipe is written and checked against these releases, which are what
 
 | Package | Version | What the recipe uses it for |
 |---|---|---|
-| `statifier_router` | 0.6.0 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
-| `statifier_persistence` | 0.21.0 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_router` | 0.9.2 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
+| `statifier_persistence` | 0.24.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_blocks` | 0.41.0 | the document and the compile |
-| `statifier` | 2.9.0 | compiling the chart and running it |
+| `statifier` | 2.10.0 | compiling the chart and running it |
 
-`statifier_router` 0.6.0 requires `statifier ~> 2.9` and
+`statifier_router` 0.9.2 requires `statifier ~> 2.10` and
 `statifier_persistence ~> 0.18`, which is what moved those two with it.
 `mix.exs` asks for `statifier_persistence ~> 0.20` all the same: 0.20.0
 adds `Executions.migrate_batch/3`, which
 `docs/guides/migrating-waiting-executions.md` walks, and `mix.lock`
-resolves 0.21.0, the release this table names. The jobs run on this
+resolves 0.24.0, the release this table names. The jobs run on this
 app's own Oban. The first line the command prints names the versions it
 actually loaded.
 
@@ -341,8 +341,26 @@ Each of these is in `statifier_router`'s README and not needed here:
 
 ## Moving the first-workflow host to these pins
 
+The latest move, from statifier_router 0.6.0 to 0.9.2, is the one that
+touched a migration and the reapers. 0.8.0 added the router's third migration version,
+V03, which renames the subscription table's unique index on Postgres. The
+migration this recipe runs calls `StatifierRouter.Migrations.up/1` with no
+version, so on a fresh database it runs V03 too, and V03's `ALTER INDEX`
+failed on SQLite until 0.9.1 made it do nothing there; a database that
+already ran V02 needs no new migration of its own, since V03 has nothing
+to rename on SQLite. 0.8.0 also wrote the address reaper's stamp and
+delete with Postgres's `= ANY(...)`, so the `reaped` step failed on SQLite
+until 0.9.2 wrote them as an IN list. 0.9.2 is therefore the floor. The same move took statifier
+to 2.10.0 and statifier_persistence to 0.24.0, which changed nothing here.
+0.9.0's BasicHTTP front is not part of this recipe; its configuration sets
+no `:basichttp`, so its executions get no location.
+`docs/guides/basichttp-front.md` walks the front.
+
+The move before it, to the first pins this recipe was written against:
+
 This app moved from statifier 2.8.1, statifier_persistence 0.17.0 and
-statifier_router 0.4.1 to the pins above, and nothing in it changed but the
+statifier_router 0.4.1 to statifier 2.9.0, statifier_persistence 0.19.0 and
+statifier_router 0.6.0, and nothing in it changed but the
 requirements:
 
 - **statifier 2.9.0** adds `Statifier.Publish.findings/2` and
