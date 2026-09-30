@@ -12,7 +12,7 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
   alias StatifierExamplesWeb.EventPhrasing
 
   @library ["library_loan", "patron_registration"]
-  @kinds ~w(block rule arm undecided_arm rules marker start edge interrupt timer)
+  @kinds ~w(block rule arm undecided_arm rules marker start edge interrupt timer tray)
 
   @region "#plan-description"
   @store "#plan-description-store"
@@ -257,11 +257,14 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
   describe "the store" do
     # Every element the map draws is described on the page, under the map's
-    # own id, and the two library fixtures between them draw every kind.
+    # own id, and the two library fixtures between them draw every kind. The
+    # loan's drafts shelf is what draws the tray.
     #
     # Sabotage: gave the page's `description_region` a different id from
     # the one its map region names (`plan-description-x`); the store moved
     # off `#plan-description-store` and this went red. Reverted from a copy.
+    # Took the drafts shelf out of `library_loan.json`; this went red on
+    # "no tray on the page". Reverted from a copy.
     test "describes every drawn element on the two fixtures", %{conn: conn} do
       kinds =
         for key <- @library, reduce: MapSet.new() do
@@ -309,6 +312,11 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
       assert stored_text(patron, "blk_pr_age/otherwise/empty") =~ "the end of Branch"
       assert stored_text(patron, "blk_pr_deadline") =~ "7d"
+
+      assert stored_text(loan, "blk_ll_drafts/body") =~
+               "Kept to one side: the steps here are not part of the flow"
+
+      assert stored_text(loan, "blk_ll_second_notice") =~ "kept to one side in Drafts"
     end
 
     # The store follows the document: a write through the list reaches it.
