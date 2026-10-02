@@ -14,9 +14,10 @@ defmodule StatifierExamplesWeb.BasicHTTPController do
   nothing else. No request line or dispatch log carries it:
   `StatifierExamplesWeb.Endpoint.log_level/1` skips the request line for
   `/basichttp`, the route is `log: false`, and `:filter_parameters` names
-  `token`. At `:debug` Ecto's query log prints bound parameters, and the
-  router's location lookup binds the token, so a host keeps `:debug` out
-  of production.
+  `token`. The router's own lookup no longer prints the token at `:debug`
+  (`statifier_router` 0.10.0 runs it with Ecto's `log: false`);
+  `StatifierExamples.HoldDesk` says what still carries the token at that
+  level, and why a host keeps `:debug` out of production.
   """
 
   use StatifierExamplesWeb, :controller
