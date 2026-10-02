@@ -70,7 +70,7 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args, attempt: attempt}) when attempt <= @post_attempts do
-    {payload, ctx} = args["instruction"] |> Base.decode64!() |> :erlang.binary_to_term([:safe])
+    {payload, ctx} = decode(args["instruction"])
 
     case BasicHTTP.perform(payload, ctx) do
       :ok -> :ok
@@ -82,6 +82,14 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
   # Every POST attempt failed and the failure's delivery did not settle:
   # deliver it again, without posting again.
   def perform(%Oban.Job{args: args}), do: failed(args, :desk_post_attempts_spent)
+
+  # Read back without :safe, as the router README's recipe reads its own:
+  # :safe refuses an atom this node has not created yet, and a job queued
+  # before a restart can name one (a send's owner kind, a struct field)
+  # that no module has loaded since. The jobs table is written only
+  # through this app's repo, by `new/3`.
+  @spec decode(String.t()) :: {term(), map()}
+  defp decode(instruction), do: instruction |> Base.decode64!() |> :erlang.binary_to_term()
 
   # The POST has failed for good: tell the hold, or keep a dead letter.
   @spec failed(map(), term()) :: :ok | {:error, term()} | {:cancel, term()}
