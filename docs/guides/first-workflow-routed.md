@@ -23,13 +23,14 @@ The recipe is written and checked against these releases, which are what
 
 | Package | Version | What the recipe uses it for |
 |---|---|---|
-| `statifier_router` | 0.9.2 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
+| `statifier_router` | 0.10.0 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
 | `statifier_persistence` | 0.24.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_blocks` | 0.41.0 | the document and the compile |
 | `statifier` | 2.10.0 | compiling the chart and running it |
 
-`statifier_router` 0.9.2 requires `statifier ~> 2.10` and
-`statifier_persistence ~> 0.18`, which is what moved those two with it.
+`statifier_router` 0.10.0 requires `statifier ~> 2.10` and
+`statifier_persistence ~> 0.18`, as 0.9.2 did, which is what moved those
+two with it.
 `mix.exs` asks for `statifier_persistence ~> 0.20` all the same: 0.20.0
 adds `Executions.migrate_batch/3`, which
 `docs/guides/migrating-waiting-executions.md` walks, and `mix.lock`
@@ -341,7 +342,14 @@ Each of these is in `statifier_router`'s README and not needed here:
 
 ## Moving the first-workflow host to these pins
 
-The latest move, from statifier_router 0.6.0 to 0.9.2, is the one that
+The latest move, from statifier_router 0.9.2 to 0.10.0, needed nothing in
+this recipe: 0.10.0 adds no migration version; its one new option,
+`:around_delivery`, wraps nothing unless a configuration sets it, and this
+one sets none; its reap change is to the statement Postgres runs, so the
+`reaped` step on SQLite counts the same rows. Nothing in this recipe
+needs more than 0.9.2.
+
+The move before it, from statifier_router 0.6.0 to 0.9.2, is the one that
 touched a migration and the reapers. 0.8.0 added the router's third migration version,
 V03, which renames the subscription table's unique index on Postgres. The
 migration this recipe runs calls `StatifierRouter.Migrations.up/1` with no
@@ -350,7 +358,7 @@ failed on SQLite until 0.9.1 made it do nothing there; a database that
 already ran V02 needs no new migration of its own, since V03 has nothing
 to rename on SQLite. 0.8.0 also wrote the address reaper's stamp and
 delete with Postgres's `= ANY(...)`, so the `reaped` step failed on SQLite
-until 0.9.2 wrote them as an IN list. 0.9.2 is therefore the floor. The same move took statifier
+until 0.9.2 wrote them as an IN list. 0.9.2 was therefore the floor. The same move took statifier
 to 2.10.0 and statifier_persistence to 0.24.0, which changed nothing here.
 0.9.0's BasicHTTP front is not part of this recipe; its configuration sets
 no `:basichttp`, so its executions get no location.

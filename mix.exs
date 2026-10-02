@@ -600,7 +600,15 @@ defmodule StatifierExamples.MixProject do
       # `priv/repo/migrations/20260930120001_add_statifier_router_locations.exs`
       # creates. 0.7.0's `:unchecked` entry for a `:bindings_resolver`
       # reaches nothing here, since no configuration sets one.
-      {:statifier_router, "~> 0.9.2"},
+      #
+      # 2026-10-02: the requirement moves to `~> 0.10.0`, the published
+      # release after 0.9.2, to keep the reference embedder on what is
+      # published; nothing above needs more than 0.9.2. 0.10.0 keeps the
+      # location token out of the router's own debug query log on the
+      # statements that bind it, adds the opt-in `:around_delivery` option,
+      # which no configuration here sets, and on Postgres reaps with one
+      # array statement, which this SQLite database never reaches.
+      {:statifier_router, "~> 0.10.0"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
