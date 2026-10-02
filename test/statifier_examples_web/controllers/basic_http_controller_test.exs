@@ -4,7 +4,8 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
   import Ecto.Query, only: [from: 2]
   import ExUnit.CaptureLog
 
-  alias StatifierExamples.{FirstWorkflow, HoldDesk, Repo, RoutedWorkflow}
+  alias StatifierExamples.{DeskTransport, FirstWorkflow, HoldDesk, Repo, RoutedWorkflow}
+  alias StatifierExamples.HoldDesk.DeskPost
   alias StatifierPersistence.{Execution, Executions, Storage}
   alias StatifierRouter.BasicHTTP
 
@@ -235,6 +236,48 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
 
     assert [%{"key" => "ex_hold_0421/send_1/1/0/0/0/transition.0/0", "send_id" => "send_1"}] =
              desk_post_args()
+  end
+
+  # A job queued before a restart can name an atom this node has not
+  # created since. The instruction here is written with a placeholder atom
+  # whose bytes are then swapped for a name of the same length that no
+  # code creates, so the job decodes it as a node meeting it for the first
+  # time would.
+  # sabotage: the job's decode given [:safe] -> the instruction was refused
+  # and no POST was made, red; restored, green.
+  test "a job queued before a restart posts, whatever atoms this node has" do
+    payload_ctx =
+      {{:post,
+        %{
+          url: @desk,
+          headers: [{"content-type", @form}],
+          body: "_scxmleventname=hold.placed",
+          transport: DeskTransport,
+          send: hold_send(@desk)
+        }}, %{session_id: "ex_hold_0424", opts: [], restart_marker: :zz_desk_placeholder_atom}}
+
+    unseen = "zz_desk_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
+    assert byte_size(unseen) == byte_size("zz_desk_placeholder_atom")
+
+    instruction =
+      payload_ctx
+      |> :erlang.term_to_binary()
+      |> :binary.replace("zz_desk_placeholder_atom", unseen)
+
+    assert_raise ArgumentError, fn -> :erlang.binary_to_term(instruction, [:safe]) end
+
+    {:ok, _job} =
+      %{
+        "execution_id" => "ex_hold_0424",
+        "send_id" => "send_1",
+        "key" => "ex_hold_0424/send_1/1/0/0/0/transition.0/0",
+        "instruction" => Base.encode64(instruction)
+      }
+      |> DeskPost.new()
+      |> Oban.insert()
+
+    assert %{success: 1, failure: 0} = drain_desk_posts()
+    assert_received {:desk_post, @desk, _headers, "_scxmleventname=hold.placed"}
   end
 
   # The executor runs inside the delivery's transaction, and the job is
