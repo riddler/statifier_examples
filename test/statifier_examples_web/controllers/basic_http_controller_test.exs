@@ -1,9 +1,10 @@
 defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
   use StatifierExamplesWeb.ConnCase, async: false
 
+  import Ecto.Query, only: [from: 2]
   import ExUnit.CaptureLog
 
-  alias StatifierExamples.{FirstWorkflow, HoldDesk, RoutedWorkflow}
+  alias StatifierExamples.{FirstWorkflow, HoldDesk, Repo, RoutedWorkflow}
   alias StatifierPersistence.{Execution, Executions, Storage}
   alias StatifierRouter.BasicHTTP
 
@@ -20,7 +21,9 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
     :ok
   end
 
-  defp placed_hold(hold_id \\ "hold-0417") do
+  # The hold request's delivery returns before the desk is told: the POST
+  # is a job, performed when the test drains the desk's queue.
+  defp requested_hold(hold_id) do
     assert {:ok, [{:created_and_delivered, "hold_requests", execution_id}]} =
              HoldDesk.request(@scope, %{
                "hold_id" => hold_id,
@@ -28,6 +31,15 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
                "desk" => @desk
              })
 
+    execution_id
+  end
+
+  defp drain_desk_posts,
+    do: Oban.drain_queue(queue: :desk_posts, with_scheduled: true, with_recursion: true)
+
+  defp placed_hold(hold_id \\ "hold-0417") do
+    execution_id = requested_hold(hold_id)
+    assert %{success: 1, failure: 0} = drain_desk_posts()
     assert_received {:desk_post, @desk, headers, body}
     {execution_id, headers, URI.decode_query(body)}
   end
@@ -52,8 +64,8 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
   # chart's basichttp send was an unsupported type, no desk_post arrived
   # and the route answered an error, red; restored, green.
   # sabotage: execute/2's BasicHTTP clause made to answer :ok without
-  # performing -> assert_received {:desk_post, ...} failed, red; restored,
-  # green.
+  # inserting the job -> nothing drained and no desk_post arrived, red;
+  # restored, green.
   test "the hold tells the desk it was placed, with its own location to answer at" do
     {execution_id, headers, params} = placed_hold()
 
@@ -159,47 +171,135 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
              Executions.inputs(FirstWorkflow.store(), execution_id)
   end
 
-  # The chart has two finals, and a finished execution keeps no
-  # configuration to read the one it took from; the error.communication
-  # the refused POST re-entered is what names desk_unreached, since only
-  # that event leads there.
-  # sabotage: execute/2 made to answer :ok whatever perform/2 answered ->
-  # the execution stayed active in waiting and the location still took a
-  # POST, red; restored, green.
-  # sabotage: perform/3 made to continue past a failed POST -> no
-  # error.communication was re-entered, red; restored, green.
-  test "a desk that refuses the POST ends the hold unreached", %{conn: conn} do
-    reentered = [:statifier_persistence, :execution, :step, :reentered]
-    handler = "hold-desk-reentered-#{System.unique_integer([:positive])}"
+  # The delivery returns, and so has committed, before the desk is called;
+  # the desk is then called with no transaction open in the process that
+  # calls it, so however long it takes to answer it holds no delivery.
+  # sabotage: the executor made to perform the POST itself instead of
+  # inserting the job -> the desk was called before the delivery returned,
+  # red; restored, green.
+  # sabotage: the job's POST wrapped in a Repo transaction -> the desk was
+  # called inside one, red; restored, green.
+  test "a slow desk holds no delivery open: the POST is made after the commit" do
     test_pid = self()
 
-    forward = fn _event, _measurements, metadata, nil ->
-      send(test_pid, {:reentered, metadata})
-    end
+    Process.put(:desk_answering, fn ->
+      send(test_pid, {:desk_answering, Repo.in_transaction?()})
+    end)
 
-    :ok = :telemetry.attach(handler, reentered, forward, nil)
-    on_exit(fn -> :telemetry.detach(handler) end)
+    execution_id = requested_hold("hold-0420")
 
+    refute_received {:desk_answering, _in_transaction}
+    refute_received {:desk_post, _url, _headers, _body}
+    assert status!(execution_id) == :active
+    assert [%{"execution_id" => ^execution_id}] = desk_post_args()
+
+    assert %{success: 1, failure: 0} = drain_desk_posts()
+    assert_received {:desk_answering, false}
+    assert_received {:desk_post, @desk, _headers, _body}
+  end
+
+  # The chart has two finals, and a finished execution keeps no
+  # configuration to read the one it took from; the error.communication
+  # the job delivered is what names desk_unreached, since only that event
+  # leads there. It arrives as a delivered external event, in a step of
+  # its own, so it is in the execution's input log under the send's id.
+  # sabotage: the job's last failed POST made to cancel instead of
+  # delivering error.communication -> the hold stayed waiting, red;
+  # restored, green.
+  test "a desk that refuses the POST ends the hold unreached", %{conn: conn} do
     Process.put(:desk_status, 503)
-    {execution_id, _headers, %{"reply_to" => location}} = placed_hold("hold-0418")
+    execution_id = requested_hold("hold-0418")
 
-    assert_received {:reentered,
-                     %{execution_id: ^execution_id, name: "error.communication", opts: opts}}
+    assert %{success: 1, failure: 2} = drain_desk_posts()
+    assert_received {:desk_post, @desk, _headers, body}
+    %{"reply_to" => location} = URI.decode_query(body)
 
-    assert is_binary(opts[:sendid])
+    assert {:ok,
+            [
+              %{event: %{name: "hold.requested"}},
+              %{event: %{name: "error.communication", sendid: sendid}}
+            ]} = Executions.inputs(FirstWorkflow.store(), execution_id)
+
+    assert is_binary(sendid)
     assert status!(execution_id) == :completed
     assert conn |> post_event(location, "_scxmleventname=copy.shelved") |> response(404)
   end
 
+  # sabotage: the job's unique option removed -> two jobs, red; restored,
+  # green.
+  test "a redriven send inserts one job, keyed on the send's dedup key" do
+    send = hold_send("https://riverside.example/holds-desk")
+
+    assert :ok = HoldDesk.execute({:send, send}, %{execution_id: "ex_hold_0421"})
+    assert :ok = HoldDesk.execute({:send, send}, %{execution_id: "ex_hold_0421"})
+
+    assert [%{"key" => "ex_hold_0421/send_1/1/0/0/0/transition.0/0", "send_id" => "send_1"}] =
+             desk_post_args()
+  end
+
+  # The executor runs inside the delivery's transaction, and the job is
+  # inserted through the same repo, so a delivery that rolls back takes
+  # the job with it and no POST is made for it.
+  # sabotage: the insert moved to a Task outside the transaction -> the
+  # sandbox refused the Task a connection, so every hold test errored
+  # before any assertion; a sandboxed suite has one connection and cannot
+  # show this test red. Restored, green.
+  test "a delivery that rolls back takes its desk post with it" do
+    assert {:error, :rolled_back} =
+             Repo.transaction(fn ->
+               assert :ok =
+                        HoldDesk.execute({:send, hold_send(@desk)}, %{
+                          execution_id: "ex_hold_0423"
+                        })
+
+               assert [_job] = desk_post_args()
+               Repo.rollback(:rolled_back)
+             end)
+
+    assert desk_post_args() == []
+    assert %{success: 0} = drain_desk_posts()
+    refute_received {:desk_post, _url, _headers, _body}
+  end
+
+  # A failed POST whose hold has finished, or whose execution has no
+  # address row, reaches no execution: the job is cancelled, which keeps it
+  # in the jobs table with its reason.
+  # sabotage: a missing address row made to answer :ok -> one cancel
+  # short, red; restored, green.
+  # sabotage: a dropped delivery made to answer :ok -> one cancel short,
+  # red; restored, green.
+  test "a failed POST that reaches no hold is kept as a dead letter", %{conn: conn} do
+    {execution_id, _headers, %{"reply_to" => location}} = placed_hold("hold-0422")
+    assert conn |> post_event(location, "_scxmleventname=copy.shelved") |> response(204)
+
+    Process.put(:desk_status, 503)
+    send = hold_send(@desk)
+    assert :ok = HoldDesk.execute({:send, send}, %{execution_id: execution_id})
+    assert :ok = HoldDesk.execute({:send, send}, %{execution_id: "ex_hold_nowhere"})
+
+    assert %{success: 0, failure: 4, cancelled: 2} = drain_desk_posts()
+    assert status!(execution_id) == :completed
+  end
+
   # Statifier plans a send with no target as an error.communication raise
-  # and no request; the executor fails the send instead of performing it.
-  # sabotage: perform/3's raise clause made to continue -> execute/2
+  # and no request; the executor fails the send instead of performing it,
+  # and plans no job.
+  # sabotage: enqueue/3's raise clause made to continue -> execute/2
   # answered :ok, red; restored, green.
   test "a send with no target posts nothing and fails, naming the send" do
-    no_target = %Statifier.Effect.Send{
+    assert HoldDesk.execute({:send, hold_send(nil)}, %{execution_id: "ex_hold_0419"}) ==
+             {:error, {:basichttp_send_without_target, "send_1"}}
+
+    assert desk_post_args() == []
+    assert %{success: 0} = drain_desk_posts()
+    refute_received {:desk_post, _url, _headers, _body}
+  end
+
+  defp hold_send(target) do
+    %Statifier.Effect.Send{
       type: "basichttp",
       event: "hold.placed",
-      target: nil,
+      target: target,
       data: %{"hold_id" => "hold-0419"},
       send_id: "send_1",
       c_index: 0,
@@ -209,11 +309,10 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
       round: 0,
       ordinal: 0
     }
+  end
 
-    assert HoldDesk.execute({:send, no_target}, %{execution_id: "ex_hold_0419"}) ==
-             {:error, {:basichttp_send_without_target, "send_1"}}
-
-    refute_received {:desk_post, _url, _headers, _body}
+  defp desk_post_args do
+    Repo.all(from(job in Oban.Job, where: job.queue == "desk_posts", select: job.args))
   end
 
   # sabotage: :basichttp added to RoutedWorkflow's configuration -> red;

@@ -30,17 +30,23 @@ defmodule StatifierExamples.HoldDesk do
   processor's type strings, which is what lets the chart's `<send>` pass
   the engine's type check and read `_ioprocessors['basichttp']`. A
   durable execution has no session to perform the send, so the effect
-  reaches `execute/2`, which plans it with the router's processor and
-  performs what it planned, through the configuration's transport. That
-  runs inside the delivery's transaction: one POST to the desk, made
-  before the step commits. A POST the desk does not answer with a 2xx is
-  a failed send, which `statifier_persistence` enters into the execution
-  as `error.communication`, and the chart ends the hold unreached. A
-  send with no target, which statifier plans as an `error.communication`
-  raise and no request, fails without a POST and enters the execution the
-  same way. A delayed BasicHTTP send, whose timer would live in this
-  process rather than in the database, is refused, and enters the
-  execution the same way.
+  reaches `execute/2`, which plans it with the router's processor. That
+  runs inside the delivery's transaction, so the POST it planned is not
+  made there: it is handed to a `StatifierExamples.HoldDesk.DeskPost` job,
+  inserted in the same transaction and performed after the delivery
+  commits, through the configuration's transport. A desk that is slow to
+  answer then holds no transaction and no SQLite write lock, and no POST
+  leaves for a step that rolled back, as `statifier_router` recommends
+  (its ADR-0002, the Amendment on the outbound BasicHTTP send). A POST
+  the desk does not answer with a 2xx is retried, and a send that still
+  fails comes back into the execution as `error.communication`, delivered
+  by the job, and the chart ends the hold unreached. A send with no
+  target, which statifier plans as an `error.communication` raise and no
+  request, plans no job: it fails at once, and `statifier_persistence`
+  enters `error.communication` into the execution in the same step. A
+  delayed BasicHTTP send, whose timer would live in this process rather
+  than in the database, is refused, and enters the execution the same
+  way.
   """
 
   @behaviour StatifierRouter.Resolver
@@ -49,6 +55,7 @@ defmodule StatifierExamples.HoldDesk do
   alias Statifier.Machine
   alias Statifier.Send.Event, as: SendEvent
   alias StatifierExamples.FirstWorkflow
+  alias StatifierExamples.HoldDesk.DeskPost
   alias StatifierExamples.RoutedWorkflow.Stepper
   alias StatifierPersistence.Storage
   alias StatifierRouter.{BasicHTTP, Config}
@@ -163,9 +170,10 @@ defmodule StatifierExamples.HoldDesk do
 
   @doc """
   The executor every create and step hands its effects to. A BasicHTTP
-  `<send>` is planned with `StatifierRouter.BasicHTTP.deliver/3` and each
-  instruction it plans is performed with the processor's `perform/2`; a
-  send with no target, which statifier plans as an `error.communication`
+  `<send>` is planned with `StatifierRouter.BasicHTTP.deliver/3`, and each
+  POST it plans is handed to a `StatifierExamples.HoldDesk.DeskPost` job,
+  inserted in the delivery's transaction and performed after it commits;
+  a send with no target, which statifier plans as an `error.communication`
   raise and no request, fails as `{:basichttp_send_without_target,
   send_id}`, and a delayed one is refused as `{:delayed_basichttp_send,
   send_id}`. Every other effect is passed.
@@ -177,7 +185,7 @@ defmodule StatifierExamples.HoldDesk do
     ctx = %{session_id: execution_id, opts: basichttp()}
     event = SendEvent.build(send, execution_id)
     {:ok, instructions} = BasicHTTP.deliver(send, event, ctx)
-    perform(instructions, ctx, send)
+    enqueue(instructions, ctx, send)
   end
 
   def execute({:send_delayed, %SendDelayed{type: type} = send}, _context)
@@ -186,13 +194,13 @@ defmodule StatifierExamples.HoldDesk do
 
   def execute(_effect, _context), do: :ok
 
-  @spec perform([term()], map(), Send.t()) :: :ok | {:error, term()}
-  defp perform(instructions, ctx, send) do
+  @spec enqueue([term()], map(), Send.t()) :: :ok | {:error, term()}
+  defp enqueue(instructions, ctx, send) do
     Enum.reduce_while(instructions, :ok, fn
-      {:handler, module, payload}, :ok ->
-        case module.perform(payload, ctx) do
-          :ok -> {:cont, :ok}
-          {:error, _reason} = error -> {:halt, error}
+      {:handler, _module, payload}, :ok ->
+        case payload |> DeskPost.new(ctx, send) |> Oban.insert() do
+          {:ok, _job} -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, reason}}
         end
 
       # Statifier plans a send with no target as a raise of
