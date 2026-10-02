@@ -159,15 +159,61 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
              Executions.inputs(FirstWorkflow.store(), execution_id)
   end
 
+  # The chart has two finals, and a finished execution keeps no
+  # configuration to read the one it took from; the error.communication
+  # the refused POST re-entered is what names desk_unreached, since only
+  # that event leads there.
   # sabotage: execute/2 made to answer :ok whatever perform/2 answered ->
   # the execution stayed active in waiting and the location still took a
   # POST, red; restored, green.
+  # sabotage: perform/3 made to continue past a failed POST -> no
+  # error.communication was re-entered, red; restored, green.
   test "a desk that refuses the POST ends the hold unreached", %{conn: conn} do
+    reentered = [:statifier_persistence, :execution, :step, :reentered]
+    handler = "hold-desk-reentered-#{System.unique_integer([:positive])}"
+    test_pid = self()
+
+    forward = fn _event, _measurements, metadata, nil ->
+      send(test_pid, {:reentered, metadata})
+    end
+
+    :ok = :telemetry.attach(handler, reentered, forward, nil)
+    on_exit(fn -> :telemetry.detach(handler) end)
+
     Process.put(:desk_status, 503)
     {execution_id, _headers, %{"reply_to" => location}} = placed_hold("hold-0418")
 
+    assert_received {:reentered,
+                     %{execution_id: ^execution_id, name: "error.communication", opts: opts}}
+
+    assert is_binary(opts[:sendid])
     assert status!(execution_id) == :completed
     assert conn |> post_event(location, "_scxmleventname=copy.shelved") |> response(404)
+  end
+
+  # Statifier plans a send with no target as an error.communication raise
+  # and no request; the executor fails the send instead of performing it.
+  # sabotage: perform/3's raise clause made to continue -> execute/2
+  # answered :ok, red; restored, green.
+  test "a send with no target posts nothing and fails, naming the send" do
+    no_target = %Statifier.Effect.Send{
+      type: "basichttp",
+      event: "hold.placed",
+      target: nil,
+      data: %{"hold_id" => "hold-0419"},
+      send_id: "send_1",
+      c_index: 0,
+      owner: {:transition, 0},
+      macrostep: 1,
+      microstep: 0,
+      round: 0,
+      ordinal: 0
+    }
+
+    assert HoldDesk.execute({:send, no_target}, %{execution_id: "ex_hold_0419"}) ==
+             {:error, {:basichttp_send_without_target, "send_1"}}
+
+    refute_received {:desk_post, _url, _headers, _body}
   end
 
   # sabotage: :basichttp added to RoutedWorkflow's configuration -> red;
