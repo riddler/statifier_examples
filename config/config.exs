@@ -43,6 +43,9 @@ config :statifier_examples, StatifierExamples.Repo,
 # package leaves to the host: `parcel_notices` carries the hand-off its
 # one route makes, and `router_maintenance` the reapers. The recipe
 # checks that both reapers are on this crontab.
+#
+# `desk_posts` carries the hold desk's BasicHTTP POSTs, each made after the
+# delivery that planned it has committed (`StatifierExamples.HoldDesk.DeskPost`).
 config :statifier_examples, Oban,
   repo: StatifierExamples.Repo,
   engine: Oban.Engines.Lite,
@@ -51,7 +54,8 @@ config :statifier_examples, Oban,
     statifier_timers: 5,
     statifier_invocations: 5,
     parcel_notices: 1,
-    router_maintenance: 1
+    router_maintenance: 1,
+    desk_posts: 1
   ],
   plugins: [
     {Oban.Plugins.Cron,

@@ -9,7 +9,8 @@ path every routed event takes.
 
 This guide walks the pieces as this app wires them:
 `StatifierExamples.HoldDesk` (the router configuration, the chart's
-resolver and the executor), `priv/library/hold_desk.scxml` (the chart),
+resolver and the executor), `StatifierExamples.HoldDesk.DeskPost` (the job
+that makes the outbound POST), `priv/library/hold_desk.scxml` (the chart),
 `StatifierExamplesWeb.BasicHTTPController` (the front's action) and
 `test/statifier_examples_web/controllers/basic_http_controller_test.exs`,
 which drives the whole of it through the controller.
@@ -35,7 +36,7 @@ answers 404.
 
 | Package | Version | What this guide uses it for |
 |---|---|---|
-| `statifier_router` | 0.9.2 | the `:basichttp` key, the location, `StatifierRouter.BasicHTTP.Front`, the location table |
+| `statifier_router` | 0.9.2 | the `:basichttp` key, the location, `StatifierRouter.BasicHTTP.Front`, the location table, `deliver_event/4` for a failed send |
 | `statifier` | 2.10.0 | the Basic HTTP Event I/O Processor and its decoder |
 | `statifier_persistence` | 0.24.0 | the chart registry, the execution, the input log |
 
@@ -87,22 +88,53 @@ gives every router table.
 
 A durable execution has no session to perform its sends: the step hands
 each effect to the configuration's executor. `StatifierExamples.HoldDesk.execute/2`
-plans a BasicHTTP send with `StatifierRouter.BasicHTTP.deliver/3` and
-performs what it planned with the processor's `perform/2`, which POSTs a
-form body to the desk with the send's `scxml-send-key` header. The POST
-goes through the configuration's `:transport`: statifier's default,
-on OTP's `:httpc`, in the dev app, and a transport under test that hands
-the POST back to the test instead of sending it.
+plans a BasicHTTP send with `StatifierRouter.BasicHTTP.deliver/3`, which
+answers the POST to make - a form body for the desk, with the send's
+`scxml-send-key` header - and makes none.
 
-The POST is made inside the delivery's transaction, before the step
-commits. A desk that does not answer 2xx, or does not answer at all, is a
-failed send: `statifier_persistence` enters `error.communication`,
-carrying the send id, into the execution in the same step, and the chart
-takes it from `waiting` to its other final state, `desk_unreached`. A send
-with no target, which statifier plans as an `error.communication` raise and
-no request, fails without a POST and enters the execution the same way. A
-delayed BasicHTTP send is refused the same way, because its timer would
-live in the delivering process rather than in the database.
+The executor runs inside the delivery's transaction, so it does not make
+the POST there. It inserts a `StatifierExamples.HoldDesk.DeskPost` job on
+this app's own Oban, in the `desk_posts` queue. The job writes through the
+same repo, so it commits with the step that sent the POST and a delivery
+that rolls back takes the job with it: the jobs table is the outbox. The
+job is unique on the send's dedup key written out, so a step that is
+driven again, and re-emits the same send, inserts no second job.
+
+The job performs the POST after the delivery has committed, with the
+processor's `perform/2`, through the configuration's `:transport`:
+statifier's default, on OTP's `:httpc`, in the dev app, and a transport
+under test that hands the POST back to the test instead of sending it.
+This is why the example performs after the commit, as `statifier_router`
+recommends in `docs/adr/0002-addressing.md`, the Amendment of 2026-10-02
+on a durable execution's outbound BasicHTTP send.
+Made inside the delivery, the POST would keep the transaction, the
+execution's lock and SQLite's single write lock held for as long as the
+desk took to answer, and would leave even for a step that then rolled
+back. Made from the job, a slow desk holds none of them, and no POST
+leaves for a step that never committed.
+
+A desk that does not answer 2xx, or does not answer at all, is retried:
+the job makes the POST up to three times. A send that still fails comes
+back into the execution through `StatifierRouter.Delivery.deliver_event/4`,
+the one way back in the router's record names, with `create: :never` over
+the hold's address row from `StatifierRouter.Addresses.by_execution/2`: an
+external `error.communication` event carrying the send's id, delivered
+in a step of its own under the plan id `desk_post_failure`. The chart
+takes it from `waiting` to its other final state, `desk_unreached`. A
+failure that reaches no execution - the hold has finished, or its address
+row is gone - is cancelled, which keeps the job and its reason in the jobs
+table as the dead letter.
+
+A send with no target, which statifier plans as an `error.communication`
+raise and no request, plans no job: the executor fails it at once, and
+`statifier_persistence` enters `error.communication` into the execution
+in the same step. A delayed BasicHTTP send is refused the same way,
+because its timer would live in the delivering process rather than in the
+database.
+
+The job's arguments carry the planned POST as it was planned, body
+included, so the `reply_to` location the body hands the desk is written to
+the jobs table with it, and stays there until the host prunes the job.
 
 ## The front
 
@@ -128,8 +160,10 @@ body of a request under `/basichttp` for the action to hand on.
 
 ## Driving it
 
-The controller test routes a hold request, reads the `hold.placed` POST the
-desk was sent, takes `reply_to` from it and POSTs
+The controller test routes a hold request, drains the `desk_posts` queue
+with `Oban.drain_queue/2` (the suite runs Oban with `testing: :manual`),
+reads the `hold.placed` POST the desk was sent, takes `reply_to` from it
+and POSTs
 `_scxmleventname=copy.shelved` at that location through the endpoint:
 
 ```elixir
