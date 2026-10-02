@@ -36,9 +36,11 @@ defmodule StatifierExamples.HoldDesk do
   before the step commits. A POST the desk does not answer with a 2xx is
   a failed send, which `statifier_persistence` enters into the execution
   as `error.communication`, and the chart ends the hold unreached. A
-  delayed BasicHTTP send, whose timer would live in this process rather
-  than in the database, is refused, and enters the execution the same
-  way.
+  send with no target, which statifier plans as an `error.communication`
+  raise and no request, fails without a POST and enters the execution the
+  same way. A delayed BasicHTTP send, whose timer would live in this
+  process rather than in the database, is refused, and enters the
+  execution the same way.
   """
 
   @behaviour StatifierRouter.Resolver
@@ -163,8 +165,10 @@ defmodule StatifierExamples.HoldDesk do
   The executor every create and step hands its effects to. A BasicHTTP
   `<send>` is planned with `StatifierRouter.BasicHTTP.deliver/3` and each
   instruction it plans is performed with the processor's `perform/2`; a
-  delayed one is refused as `{:delayed_basichttp_send, send_id}`. Every
-  other effect is passed.
+  send with no target, which statifier plans as an `error.communication`
+  raise and no request, fails as `{:basichttp_send_without_target,
+  send_id}`, and a delayed one is refused as `{:delayed_basichttp_send,
+  send_id}`. Every other effect is passed.
   """
   @spec execute(Statifier.Effect.t(), StatifierPersistence.Executor.context()) ::
           :ok | {:error, term()}
@@ -191,8 +195,16 @@ defmodule StatifierExamples.HoldDesk do
           {:error, _reason} = error -> {:halt, error}
         end
 
-      _unperformed, :ok ->
-        {:halt, {:error, {:basichttp_send_not_planned, send.send_id}}}
+      # Statifier plans a send with no target as a raise of
+      # error.communication carrying the send id, and no request. There is
+      # no internal queue to raise on here, so the send fails instead:
+      # statifier_persistence enters a failed send as the same
+      # error.communication, from the same send, with the same send id.
+      {:raise, :platform, "error.communication", _origin, _opts}, :ok ->
+        {:halt, {:error, {:basichttp_send_without_target, send.send_id}}}
+
+      _unknown, :ok ->
+        {:halt, {:error, {:basichttp_instruction_unknown, send.send_id}}}
     end)
   end
 

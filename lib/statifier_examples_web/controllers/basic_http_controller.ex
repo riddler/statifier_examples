@@ -6,7 +6,8 @@ defmodule StatifierExamplesWeb.BasicHTTPController do
   status and headers `StatifierRouter.BasicHTTP.Front.response/1` maps
   its answer to - 204 for a delivered event or a duplicate, 404 for a
   location that reaches no execution, 405 with `allow: POST` for another
-  method, 400 for a body the decoder refuses.
+  method, 400 for a body the decoder refuses, and 500 for any other
+  answer, a delivery that did not settle, which the desk may retry.
 
   The token is a bearer capability (ruled by the operator, 2026-09-30):
   holding it is the whole of the authorization, so this action checks

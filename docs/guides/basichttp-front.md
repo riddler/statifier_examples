@@ -98,7 +98,9 @@ The POST is made inside the delivery's transaction, before the step
 commits. A desk that does not answer 2xx, or does not answer at all, is a
 failed send: `statifier_persistence` enters `error.communication`,
 carrying the send id, into the execution in the same step, and the chart
-takes it from `waiting` to its other final state, `desk_unreached`. A
+takes it from `waiting` to its other final state, `desk_unreached`. A send
+with no target, which statifier plans as an `error.communication` raise and
+no request, fails without a POST and enters the execution the same way. A
 delayed BasicHTTP send is refused the same way, because its timer would
 live in the delivering process rather than in the database.
 
@@ -118,6 +120,7 @@ the `scxml-send-key` header - hands it to
 | a POST at a location that reaches no execution: unknown, rotated away, or finished | 404 |
 | any other method | 405, with `allow: POST` |
 | a body or a send key the decoder refuses | 400 |
+| any other answer: a delivery that did not settle, which the desk may retry | 500 |
 
 A form body is read by `Plug.Parsers` before any action runs, so the
 endpoint's parsers use `StatifierExamplesWeb.RawBody`, which keeps the raw
