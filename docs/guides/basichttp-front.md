@@ -20,17 +20,39 @@ which drives the whole of it through the controller.
 Anyone who holds a location can post events to that execution, and the
 router authenticates nothing beyond possession of it (ruled by the
 operator, 2026-09-30). The hold hands its location to the one desk its
-request names and to nobody else. No request line or dispatch log carries
-it: the endpoint's `Plug.Telemetry` logs no request line under
-`/basichttp` (`StatifierExamplesWeb.Endpoint.log_level/1`), the route is
-`log: false`, and `:filter_parameters` names `token`. Ecto's query log at
-`:debug` prints bound parameters, and the router binds the token to look
-a location up and to store it, so a host keeps `:debug` out of
-production; at `:info`, the production level here, no query is logged.
-A host serves
-the base URL over TLS and rotates a location that may have leaked with
-`StatifierRouter.BasicHTTP.rotate_location/2`, after which the old one
-answers 404.
+request names. No request line or dispatch log carries it: the endpoint's
+`Plug.Telemetry` logs no request line under `/basichttp`
+(`StatifierExamplesWeb.Endpoint.log_level/1`), the route is
+`log: false`, and `:filter_parameters` names `token`.
+
+The location is also stored, and whoever can read where it is stored
+holds the capability as surely as the desk does. The router's location
+table holds the token, which the front looks the location up by. The
+location is part of the execution's persisted state: `_ioprocessors`
+names it, and the execution's `position_blob` carries it in the clear,
+because `StatifierExamples.Persistence` stores the blob as `:binary`.
+And the `StatifierExamples.HoldDesk.DeskPost` job that carries the POST
+holds it in its arguments, in a job row this app never prunes (see the
+end of "The outbound send runs in the executor").
+
+A host keeps `:debug` out of production; at `:info`, the production level
+here, no query is logged. `statifier_router` 0.10.0 runs its own three
+statements that bind the token with Ecto's `log: false`, so the router's
+query log no longer prints it, but other statements still bind it.
+`statifier_persistence` writes the position on the create and on every
+step, and Ecto's `:debug` query log prints those writes with the blob cut
+short by its inspect limit: the token is unreadable in the line, not
+absent from its parameters. Ecto's query telemetry event carries every
+statement's bound parameters whatever the `log` option says, so a handler
+on it receives the position writes and the desk post job's insert, whose
+own log line Oban suppresses. The router's
+`docs/adr/0002-addressing.md`, the Note of 2026-10-02 on the location
+token and the query log, records the router's half of this and the
+persisted state.
+
+A host serves the base URL over TLS and rotates a location that may have
+leaked with `StatifierRouter.BasicHTTP.rotate_location/2`, after which
+the old one answers 404.
 
 ## The pins
 
@@ -135,7 +157,12 @@ database.
 
 The job's arguments carry the planned POST as it was planned, body
 included, so the `reply_to` location the body hands the desk is written to
-the jobs table with it, and stays there until the host prunes the job.
+the jobs table with it. This app configures no Oban pruner, and Oban
+prunes nothing unless one is configured, so the row and the location in
+it stay, after the job completes or is cancelled, until a host deletes
+them; anyone who can read the jobs table holds the capability (see "A
+location is a bearer capability" above). A host that prunes sets Oban's
+`:pruner`.
 
 ## The front
 

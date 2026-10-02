@@ -16,9 +16,32 @@ defmodule StatifierExamples.HoldDesk do
   **A location is a bearer capability** (ruled by the operator,
   2026-09-30): anyone who holds it can post events to that execution, and
   the router authenticates nothing beyond possession of it. This module
-  hands the location to the desk the hold request names and to nobody
-  else, and never logs it; `StatifierExamplesWeb.BasicHTTPController`
-  says what keeps it out of the request log.
+  hands the location to the one desk the hold request names and writes
+  no log line of its own that carries it;
+  `StatifierExamplesWeb.BasicHTTPController` says what keeps it out of
+  the request log. Whoever can read this app's database holds the
+  capability too: the router's location table holds the token; the
+  location is part of the execution's persisted state, in
+  `_ioprocessors` inside the execution's `position_blob`, in the clear
+  (`StatifierExamples.Persistence` stores the blob as `:binary`); and the
+  arguments of the `StatifierExamples.HoldDesk.DeskPost` job that carries
+  the POST hold it, in a job row this app never prunes.
+
+  **The `:debug` limit.** `statifier_router` 0.10.0 runs its own three
+  statements that bind the token - the front's lookup, the location
+  insert at create and the rotation upsert - with Ecto's `log: false`,
+  so the router's query log no longer prints it. The token still reaches
+  a `:debug` repo through statements that are not the router's.
+  `statifier_persistence` binds the execution's position on the create
+  and on every step, and Ecto's query log prints those writes with the
+  blob cut short by its inspect limit, which makes the token unreadable
+  in the line but not absent from the parameters. And Ecto's query
+  telemetry event carries every statement's bound parameters whatever
+  the `log` option says, so a handler on it receives the position writes
+  and the desk post job's insert, whose own log line Oban suppresses. So
+  this app keeps `:debug` out of production, as the router's ADR-0002
+  advises in its Note on the location token and the query log, and
+  rotates a location that may have leaked.
 
   `config/0` is a router configuration of its own, separate from
   `StatifierExamples.RoutedWorkflow.config/0`: only this configuration

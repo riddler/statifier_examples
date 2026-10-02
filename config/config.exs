@@ -122,7 +122,10 @@ config :logger, :default_formatter,
 config :phoenix, :json_library, Jason
 
 # A BasicHTTP location's token is a bearer capability, so a params log
-# names it filtered, beside Phoenix's own default.
+# names it filtered, beside Phoenix's own default. Phoenix filters every
+# param whose key contains a listed string, so "token" also redacts any
+# other token-named param in those logs, the CSRF token (`_csrf_token`)
+# among them.
 config :phoenix, :filter_parameters, ["password", "token"]
 
 # OpenTelemetry. `opentelemetry_statifier` brings only the API, so the SDK's
