@@ -7,7 +7,8 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
   alias StatifierExamples.{DeskTransport, FirstWorkflow, HoldDesk, Repo, RoutedWorkflow}
   alias StatifierExamples.HoldDesk.DeskPost
   alias StatifierPersistence.{Execution, Executions, Storage}
-  alias StatifierRouter.BasicHTTP
+  alias StatifierRouter.{BasicHTTP, Config}
+  alias StatifierRouter.Schema.Address
 
   # A patron's hold on a copy at the Riverside branch: the execution tells
   # the desk it was placed, handing it the location to answer at, and the
@@ -322,6 +323,26 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
 
     assert %{success: 0, failure: 4, cancelled: 2} = drain_desk_posts()
     assert status!(execution_id) == :completed
+  end
+
+  # The hold tells the desk its request names, so a request that names no
+  # desk is not one the binding routes: no execution starts, and no send
+  # is planned for it.
+  # sabotage: the desk clause dropped from the binding's match -> the hold
+  # was created and delivered, red; restored, green.
+  test "a hold request without a desk starts no hold and posts nothing" do
+    assert HoldDesk.request(@scope, %{"hold_id" => "hold-0425", "copy_id" => "copy-2231"}) ==
+             {:ok, [{:no_match, "hold_requests"}]}
+
+    assert Repo.all(
+             from(address in Config.queryable(HoldDesk.config(), Address),
+               where: address.key == "hold-0425"
+             )
+           ) == []
+
+    assert desk_post_args() == []
+    assert %{success: 0} = drain_desk_posts()
+    refute_received {:desk_post, _url, _headers, _body}
   end
 
   # Statifier plans a send with no target as an error.communication raise
