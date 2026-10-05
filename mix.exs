@@ -608,7 +608,19 @@ defmodule StatifierExamples.MixProject do
       # statements that bind it, adds the opt-in `:around_delivery` option,
       # which no configuration here sets, and on Postgres reaps with one
       # array statement, which this SQLite database never reaches.
-      {:statifier_router, "~> 0.10.0"},
+      #
+      # 2026-10-04: the requirement moves to `~> 0.11.0`, the published
+      # release after 0.10.0, and the `mix.lock` line for the router is the
+      # only one that moves: 0.11.0 states the same `statifier ~> 2.10` and
+      # `statifier_persistence ~> 0.18` as 0.10.0, and its own lock resolves
+      # statifier 2.10.0, the release this app's lock keeps. Nothing here
+      # needs more than 0.9.2. 0.11.0's two new options, `:wrap_target`
+      # beside `:around_delivery` and `run_in_scope:` in
+      # `StatifierRouter.Delivery.deliver_event/4`'s envelope, are opt-in and
+      # no configuration or call here sets either; its V03 change reaches a
+      # repo whose adapter module wraps `Ecto.Adapters.SQLite3`, and this
+      # app's repo uses the stock adapter, on which V03 already did nothing.
+      {:statifier_router, "~> 0.11.0"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
