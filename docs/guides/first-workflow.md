@@ -23,7 +23,7 @@ The recipe is written and checked against these releases, which are what
 | `statifier_blocks` | 0.41.0 | the document, `Plan.expressible/3`, the compile |
 | `statifier_persistence` | 0.24.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.13.0 | the invoke job and its `:invoke_timeout`, the timer job |
-| `statifier_router` | 0.10.0 | two of the publish-time checks |
+| `statifier_router` | 0.11.0 | two of the publish-time checks |
 
 `statifier_datamodel` 0.5.0 arrives through `statifier_blocks`. The first
 line the command prints names the versions it actually loaded.
@@ -247,6 +247,11 @@ does.
 The move to statifier_router 0.10.0 needed nothing here either: it adds
 no migration version, and its one new option, `:around_delivery`, wraps
 nothing unless a configuration sets it.
+
+The move to statifier_router 0.11.0 needed nothing here either: it adds
+no migration version, and its two new options, `:wrap_target` and
+`run_in_scope:`, change nothing unless a configuration or a call sets
+them.
 
 The statifier_blocks moves after 0.35.0, one minor at a time to 0.41.0,
 needed nothing in this recipe either. statifier_blocks' `docs/upgrading.md`
