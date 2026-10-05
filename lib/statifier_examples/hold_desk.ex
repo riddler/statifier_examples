@@ -151,6 +151,8 @@ defmodule StatifierExamples.HoldDesk do
   @doc """
   Routes one hold request: `hold` carries `"hold_id"`, `"copy_id"` and
   `"desk"`, the URL of the branch desk the execution tells, in `scope`.
+  A hold that names no desk is not routed: the answer is
+  `{:ok, [{:no_match, "#{@binding_id}"}]}`, and no execution starts.
   """
   @spec request(String.t(), map()) :: {:ok, [StatifierRouter.outcome()]} | {:error, term()}
   def request(scope, %{"hold_id" => hold_id} = hold) do
@@ -249,12 +251,17 @@ defmodule StatifierExamples.HoldDesk do
     end
   end
 
+  # The chart sends to the desk the request names, so a request that names
+  # none (or names it as nil or the empty string) is not a hold this
+  # binding routes: the comparison reads `:undefined` or `false`, and the
+  # router answers `{:no_match, binding_id}` before any execution starts
+  # or any send is planned.
   @spec hold_binding() :: map()
   defp hold_binding do
     %{
       id: @binding_id,
       source: @source,
-      match: ~s(event.kind == "hold"),
+      match: ~s(event.kind == "hold" and event.desk != ""),
       key: "event.hold_id",
       document: @document_id,
       event: "hold.requested",

@@ -79,8 +79,8 @@ in `waiting` for `copy.shelved` and finishes in `shelved`.
 ## The configuration
 
 `StatifierExamples.HoldDesk.config/0` is a router configuration of its own:
-one binding, `hold_requests`, that routes each hold request to the
-execution keyed by its hold id, and the `:basichttp` key:
+one binding, `hold_requests`, that routes each hold request naming a desk
+to the execution keyed by its hold id, and the `:basichttp` key:
 
 ```elixir
 basichttp: [base_url: StatifierExamplesWeb.Endpoint.url() <> "/basichttp"]
@@ -94,6 +94,12 @@ URL, `/`, and a 43-character token the router mints, never the execution
 id. The parcel recipe's configuration,
 `StatifierExamples.RoutedWorkflow.config/0`, does not set the key, so its
 executions get no location.
+
+A hold request that names no desk does not match the binding:
+`StatifierExamples.HoldDesk.request/2` answers
+`{:ok, [{:no_match, "hold_requests"}]}`, no execution starts and no send
+is planned, where the chart's `targetexpr` would otherwise read an
+undefined desk and plan a POST to `:undefined`.
 
 The location token lives in the router's location table, which only a
 configuration with `:basichttp` needs. This app creates it in
