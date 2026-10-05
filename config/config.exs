@@ -46,6 +46,16 @@ config :statifier_examples, StatifierExamples.Repo,
 #
 # `desk_posts` carries the hold desk's BasicHTTP POSTs, each made after the
 # delivery that planned it has committed (`StatifierExamples.HoldDesk.DeskPost`).
+#
+# The pruner deletes a job seven days after it completed, was cancelled or
+# was discarded, in every queue: Oban's pruner keeps one age for the whole
+# table. The age is stated rather than left to Oban's default, which is
+# sixty seconds. It is a retention decision. A desk post job's arguments
+# carry the hold's location, so seven days is how long a location stays at
+# rest in the jobs table after its POST is done; it is also how long a
+# cancelled desk post stays readable as a dead letter, and how long a
+# completed job unique on a key keeps refusing a second job with that key.
+# A host sets its own age.
 config :statifier_examples, Oban,
   repo: StatifierExamples.Repo,
   engine: Oban.Engines.Lite,
@@ -63,7 +73,8 @@ config :statifier_examples, Oban,
        {"@hourly", StatifierExamples.RoutedWorkflow.DedupeReaper},
        {"@hourly", StatifierExamples.RoutedWorkflow.AddressReaper}
      ]}
-  ]
+  ],
+  pruner: [max_age: {7, :days}]
 
 # How long an unverified signup waits before the wizard nudges it.
 #

@@ -35,7 +35,9 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
   that does not settle is retried on the attempts left, without posting
   again; a failure that reaches no execution - a hold already finished, or an
   address row already reaped - is cancelled, which keeps the job and its
-  reason in the jobs table as the dead letter.
+  reason in the jobs table as the dead letter until this app's Oban pruner
+  deletes it, seven days after the cancel (`config/config.exs`). A
+  completed job is pruned at the same age, which lifts the guard on `key`.
   """
 
   use Oban.Worker,

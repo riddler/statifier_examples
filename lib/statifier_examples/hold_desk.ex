@@ -25,7 +25,8 @@ defmodule StatifierExamples.HoldDesk do
   `_ioprocessors` inside the execution's `position_blob`, in the clear
   (`StatifierExamples.Persistence` stores the blob as `:binary`); and the
   arguments of the `StatifierExamples.HoldDesk.DeskPost` job that carries
-  the POST hold it, in a job row this app never prunes.
+  the POST hold it, in a job row this app's Oban pruner deletes seven
+  days after the job finishes (`config/config.exs`).
 
   **The `:debug` limit.** `statifier_router` 0.10.0 runs its own three
   statements that bind the token - the front's lookup, the location
