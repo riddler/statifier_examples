@@ -12,7 +12,9 @@ defmodule StatifierExamples.RoutedWorkflow.DoorstepRoute do
 
   A route owes at-most-once on the key the router hands it. The job is
   unique on that key, so a redriven delivery that hands the same key over
-  again inserts nothing new.
+  again inserts nothing new while the job's row is in the jobs table, which
+  this app's Oban pruner keeps for seven days after the job finishes
+  (`config/config.exs`).
   """
 
   @behaviour StatifierRouter.Route

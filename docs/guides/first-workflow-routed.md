@@ -253,8 +253,9 @@ inserts a `StatifierExamples.RoutedWorkflow.DoorstepNotice` job on this
 app's Oban. The job is written through the same repo, so it commits or
 rolls back with the delivery. The router hands the route an idempotency
 key, and the job is unique on it, so a redriven delivery queues no second
-notice. The recipe checks that one notice was queued for the execution and
-that it ran.
+notice while the job's row is in the jobs table, which the app's Oban
+pruner keeps for seven days after the job finishes. The recipe checks that
+one notice was queued for the execution and that it ran.
 
 `:on_complete` fires on the delivery that finishes the execution and on no
 other: donedata exists only in the answer of the call that produced it.

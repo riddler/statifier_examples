@@ -32,8 +32,9 @@ location is part of the execution's persisted state: `_ioprocessors`
 names it, and the execution's `position_blob` carries it in the clear,
 because `StatifierExamples.Persistence` stores the blob as `:binary`.
 And the `StatifierExamples.HoldDesk.DeskPost` job that carries the POST
-holds it in its arguments, in a job row this app never prunes (see the
-end of "The outbound send runs in the executor").
+holds it in its arguments, in a job row this app's Oban pruner deletes
+seven days after the job finishes (see the end of "The outbound send
+runs in the executor").
 
 A host keeps `:debug` out of production; at `:info`, the production level
 here, no query is logged. `statifier_router` 0.10.0 runs its own three
@@ -161,7 +162,7 @@ in a step of its own under the plan id `desk_post_failure`. The chart
 takes it from `waiting` to its other final state, `desk_unreached`. A
 failure that reaches no execution - the hold has finished, or its address
 row is gone - is cancelled, which keeps the job and its reason in the jobs
-table as the dead letter.
+table as the dead letter until the pruner deletes it (below).
 
 A send with no target, which statifier plans as an `error.communication`
 raise and no request, plans no job: the executor fails it at once, and
@@ -172,12 +173,34 @@ database.
 
 The job's arguments carry the planned POST as it was planned, body
 included, so the `reply_to` location the body hands the desk is written to
-the jobs table with it. This app configures no Oban pruner, and Oban
-prunes nothing unless one is configured, so the row and the location in
-it stay, after the job completes or is cancelled, until a host deletes
-them; anyone who can read the jobs table holds the capability (see "A
-location is a bearer capability" above). A host that prunes sets Oban's
-`:pruner`.
+the jobs table with it. Anyone who can read the jobs table holds the
+capability (see "A location is a bearer capability" above), so how long
+the row stays is a retention decision, and this app makes it in its Oban
+configuration in `config/config.exs`:
+
+```elixir
+pruner: [max_age: {7, :days}]
+```
+
+Oban's pruner deletes a job once seven days have passed since it
+completed, was cancelled or was discarded. A location therefore stays at
+rest in the jobs table from the step that inserts its job until seven days
+after the job finishes; a job still waiting to retry is not pruned. The
+age is one for the whole table, every queue alike, because Oban's pruner
+keeps no age per queue, and it is written out because Oban's own default
+is sixty seconds. Seven days is longer than the 72 hours a BasicHTTP
+front keeps a send key, and leaves a week to read a dead letter.
+
+The age is a trade, because a job row does more than hold a location. A
+cancelled desk post, the dead letter, is deleted at the same age, so its
+reason can be read for seven days. And the uniqueness guard on the send's
+dedup key holds only while the job's row is there: once a completed job
+is pruned, a step driven again that re-emits the same send inserts a new
+job, which makes the POST again. From then on, what keeps that POST from
+being taken twice is the desk's dedupe on the `scxml-send-key` header,
+for as long as the desk keeps a send key. A host sets its own age: a
+shorter one leaves a location at rest for less time, a longer one keeps
+the guard and the dead letters for longer.
 
 ## The front
 
