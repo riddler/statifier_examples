@@ -287,7 +287,10 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
   # sabotage: the insert moved to a Task outside the transaction -> the
   # sandbox refused the Task a connection, so every hold test errored
   # before any assertion; a sandboxed suite has one connection and cannot
-  # show this test red. Restored, green.
+  # show that mutation red here. Restored, green.
+  # sabotage: the executor made to perform the POST inline, before the
+  # insert it keeps -> the desk was posted inside the transaction that
+  # then rolled back, and refute_received failed, red; restored, green.
   test "a delivery that rolls back takes its desk post with it" do
     assert {:error, :rolled_back} =
              Repo.transaction(fn ->

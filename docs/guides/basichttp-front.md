@@ -127,7 +127,11 @@ this app's own Oban, in the `desk_posts` queue. The job writes through the
 same repo, so it commits with the step that sent the POST and a delivery
 that rolls back takes the job with it: the jobs table is the outbox. The
 job is unique on the send's dedup key written out, so a step that is
-driven again, and re-emits the same send, inserts no second job.
+driven again, and re-emits the same send, inserts no second job. The
+guard holds while the job's row is in the jobs table and the job is
+neither cancelled nor discarded, the two states Oban's default unique
+states leave out: a send re-emitted after its job was cancelled,
+discarded or pruned inserts a new job, which makes the POST again.
 
 The job performs the POST after the delivery has committed, with the
 processor's `perform/2`, through the configuration's `:transport`:
@@ -143,7 +147,12 @@ back. Made from the job, a slow desk holds none of them, and no POST
 leaves for a step that never committed.
 
 A desk that does not answer 2xx, or does not answer at all, is retried:
-the job makes the POST up to three times. A send that still fails comes
+the job makes the POST up to three times. A POST that reached the desk
+but whose answer was lost is made again, and so is the POST of a new job
+inserted once the uniqueness guard above has lapsed, each with the same
+`scxml-send-key` header, so the desk deduplicates on that header: it
+takes a send key once, as this app's front does within the router's
+dedupe horizon, where a repeat answers 204 and delivers nothing. A send that still fails comes
 back into the execution through `StatifierRouter.Delivery.deliver_event/4`,
 the one way back in the router's record names, with `create: :never` over
 the hold's address row from `StatifierRouter.Addresses.by_execution/2`: an

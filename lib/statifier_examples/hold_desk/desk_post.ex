@@ -15,7 +15,13 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
 
   The job is unique on `key`, the send's dedup key written out: a
   redriven step re-emits the same send with the same fields and inserts
-  nothing new.
+  nothing new. The guard holds only while a job with that key is in the
+  jobs table in a state Oban's default unique states count, and those
+  leave out cancelled and discarded jobs. A send re-emitted after its job
+  was cancelled as a dead letter, was discarded with its attempts spent,
+  or was pruned from the table inserts a new job, which POSTs again. The
+  desk deduplicating on the `scxml-send-key` header is what keeps that
+  second POST from being taken twice.
 
   `perform/1` makes the POST with `StatifierRouter.BasicHTTP.perform/2`.
   It runs outside every delivery, so a slow desk holds no transaction, no
