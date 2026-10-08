@@ -77,14 +77,35 @@ defmodule StatifierExamples.FormPost.CardApplicationsTest do
     assert {:ok, %CardApplication{id: id}, :created} =
              CardApplications.receive_application("riverbend", form())
 
-    assert {:ok, %CardApplication{id: ^id, name: "Wren Alder"}, :repeat} =
+    assert {:ok, %CardApplication{id: ^id, status: "received"}, :repeat} =
              CardApplications.receive_application(
                "riverbend",
                form(%{"name" => "Someone Else", "email" => "someone.else@example.com"})
              )
 
     assert Repo.aggregate(CardApplication, :count) == 1
+    assert %CardApplication{name: "Wren Alder"} = Repo.get!(CardApplication, id)
     assert [%Oban.Job{}] = all_enqueued(worker: IntakeJob)
+  end
+
+  # Sabotage: made the repeat's read select the whole row; this went red
+  # on the four personal fields' nil match. Reverted.
+  test "a repeat's answer carries none of the personal fields" do
+    assert {:ok, %CardApplication{}, :created} =
+             CardApplications.receive_application("riverbend", form())
+
+    assert {:ok, repeat, :repeat} = CardApplications.receive_application("riverbend", form())
+
+    assert %CardApplication{
+             scope: "riverbend",
+             name: nil,
+             email: nil,
+             phone: nil,
+             street_address: nil,
+             wants_card: true,
+             wants_newsletter: false,
+             idempotency_key: "form-7f3a"
+           } = repeat
   end
 
   # Sabotage: made `receive_application/2` store every application under
