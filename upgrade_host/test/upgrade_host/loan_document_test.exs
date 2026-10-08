@@ -172,11 +172,13 @@ defmodule UpgradeHost.LoanDocumentTest do
     test "records the join between the document and the chart" do
       assert {:ok, %Compiled{record: record, warnings: []}} = LoanDocument.compile()
 
+      # The compiler version is the statifier_blocks version, so it moves
+      # with every release the host takes, a patch included.
       assert %CompilationRecord{
                document_id: document_id,
                revision: 1,
                document_hash: @document_hash,
-               compiler_version: "0.35.0",
+               compiler_version: "0.35.1",
                accepts: ["loan.renew", "loan.returned"]
              } = record
 
