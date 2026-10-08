@@ -7,7 +7,9 @@ defmodule UpgradeHost.Loans.Executor do
       and a `<cancel>` cancels the timer jobs under its send id;
     * an `<invoke>` is planned by its handler's own `start/2` and the
       instructions performed (`StatifierOban.Invoke.Handler` inserts the
-      job); leaving the invoking state is the same through `cancel/2`.
+      job); leaving the invoking state is the same through `cancel/2`, on
+      the handler `UpgradeHost.Loans.handler_for_invocation/1` finds for
+      the generated invoke id.
 
   The scope every job is stored under is the loan's execution id. A job
   that cannot be stored raises rather than answering `{:error, _}`: an
@@ -20,10 +22,6 @@ defmodule UpgradeHost.Loans.Executor do
 
   alias Statifier.Effect.{Cancel, CancelInvoke, Invoke, SendDelayed}
   alias UpgradeHost.Loans
-
-  # The chart writes its invoke ids, so the handler that served each one is
-  # known by id when the cancel comes.
-  @invocations %{"fine" => Loans.AssessFine, "notice" => Loans.NotifyPatron}
 
   @impl StatifierPersistence.Executor
   def execute({:send_delayed, %SendDelayed{target: nil} = effect}, %{execution_id: scope}) do
@@ -44,7 +42,7 @@ defmodule UpgradeHost.Loans.Executor do
   end
 
   def execute({:cancel_invoke, %CancelInvoke{invoke_id: invoke_id}}, %{execution_id: scope}) do
-    handler = Map.fetch!(@invocations, invoke_id)
+    {:ok, handler} = Loans.handler_for_invocation(invoke_id)
     ctx = plan_ctx(scope)
     {:ok, instructions} = handler.cancel(invoke_id, ctx)
     perform(instructions, ctx)
