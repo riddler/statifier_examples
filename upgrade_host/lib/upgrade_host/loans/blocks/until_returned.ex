@@ -14,8 +14,8 @@ defmodule UpgradeHost.Loans.Blocks.UntilReturned do
   from the helpers the `core.*` types share: `StatifierBlocks.Core.Config`
   for the event name and the verdict, and `StatifierBlocks.Core.Emit` for
   the state, the chained body, the transition and the final.
-  `StatifierBlocks.Core.Config` carries no published docs at
-  statifier_blocks 0.35.0; a production host calls it all the same, so this
+  `StatifierBlocks.Core.Config` carries no published docs, from
+  statifier_blocks 0.35.0 through 0.42.1; a production host calls it all the same, so this
   host does too, and a release that moves it is a finding here.
   """
 
