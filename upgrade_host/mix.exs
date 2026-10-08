@@ -38,7 +38,7 @@ defmodule UpgradeHost.MixProject do
       {:statifier, "== 2.12.1"},
       {:statifier_blocks, "== 0.42.1"},
       {:statifier_persistence, "== 0.24.1"},
-      {:statifier_oban, "== 0.16.0"},
+      {:statifier_oban, "== 0.17.1"},
       {:statifier_router, "== 0.7.0"},
       {:opentelemetry_statifier, "== 0.7.0"},
       {:statifier_ui, "== 0.10.2"},
