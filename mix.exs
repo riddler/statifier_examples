@@ -130,7 +130,23 @@ defmodule StatifierExamples.MixProject do
       # the Basic HTTP Event I/O Processor and its decoder, which
       # `StatifierExamples.HoldDesk` sends through and the router's front
       # decodes with.
-      {:statifier, "~> 2.10"},
+      #
+      # 2026-10-08: the requirement moves to the 2.12 line, and `mix.lock`
+      # resolves 2.12.1, to keep the reference embedder on what is
+      # published before the next recipe is written against it; nothing
+      # here needs more than 2.10.0. 2.11.0 adds
+      # `refresh_ioprocessors/1`, the optional `check_registration/2` and
+      # `Statifier.Session.HaltNotice`, and changes what a Basic HTTP send
+      # answers at its edges (a registration with no `:base_url`, a delayed
+      # send, a list or map parameter written as JSON text); the one Basic
+      # HTTP send this app makes, `StatifierExamples.HoldDesk`'s, is
+      # planned with `StatifierRouter.BasicHTTP.deliver/3` from a durable
+      # execution, and its tests pass unchanged. 2.12.0 raises the
+      # `predicator` floor to `~> 9.4`, which the resolved 9.4.3 meets, and
+      # refuses two `initial`/`<history>` shapes; every chart the suite
+      # compiles compiles as before. 2.12.1 changes documentation only.
+      # `docs/upgrading.md` there names each edge.
+      {:statifier, "~> 2.12"},
 
       # A note on every `statifier_persistence` name below, added with
       # se-20j. These comments record why each floor moved, release by
@@ -399,7 +415,13 @@ defmodule StatifierExamples.MixProject do
       # longer handles, 0.23.0 closes a race with a chart retirement this
       # adapter does not offer, and 0.24.0 renames the conformance suite's
       # helpers, which this app reaches only through the case template.
-      {:statifier_persistence, "~> 0.20"},
+      #
+      # 2026-10-08: the floor moves to `~> 0.24`, and `mix.lock` resolves
+      # 0.24.1, so the floor names the release the first-workflow guides'
+      # pin tables name, as se-rhk5's floor did. 0.24.1 is a documentation
+      # release: no migration, no library code, and the `statifier` floor
+      # stays `~> 2.9`.
+      {:statifier_persistence, "~> 0.24"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -489,7 +511,18 @@ defmodule StatifierExamples.MixProject do
       # requirement of `~> 0.13` the 0.17 line satisfies - and every option
       # 0.13.0 adds defaults to what 0.12.0 did, `:unresolved_handler`
       # included at `:retry`.
-      {:statifier_oban, "~> 0.13"},
+      #
+      # 2026-10-08: the requirement moves to the 0.17 line, and `mix.lock`
+      # resolves 0.17.2, to keep the reference embedder on what is
+      # published. Every release crossed is additive here: 0.14.0 lets an
+      # invoke handler answer `:deferred`, 0.15.0 adds the
+      # `[:statifier_oban, :invoke, :deferred]` event, 0.16.0 an optional
+      # `max_attempts:` on `use StatifierOban.Invoke.Handler`, and 0.17.0
+      # lets a timer delivery answer `{:snooze, seconds}`. No handler here
+      # defers or declares a cap, no timer delivery here snoozes, and no
+      # test here counts `StatifierOban.Telemetry.events/0`. 0.17.1 and
+      # 0.17.2 change documentation only.
+      {:statifier_oban, "~> 0.17"},
 
       # The OTel bridge for the family, and the app's telemetry consumer.
       # This app had no dependency on it before se-opg: nothing here
@@ -620,7 +653,13 @@ defmodule StatifierExamples.MixProject do
       # no configuration or call here sets either; its V03 change reaches a
       # repo whose adapter module wraps `Ecto.Adapters.SQLite3`, and this
       # app's repo uses the stock adapter, on which V03 already did nothing.
-      {:statifier_router, "~> 0.11.0"},
+      #
+      # 2026-10-08: the requirement moves to `~> 0.11.3`, the form the
+      # package recommends for its install snippet, and the `mix.lock` line
+      # for the router moves to 0.11.3. 0.11.1, 0.11.2 and 0.11.3 change the
+      # package's documentation only; its code and its `statifier ~> 2.10`
+      # requirement are 0.11.0's.
+      {:statifier_router, "~> 0.11.3"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
@@ -1324,13 +1363,25 @@ defmodule StatifierExamples.MixProject do
   # how-to-read paragraph) ask nothing of this app, and the hook's new
   # console warning cannot fire here: the Plan page mounts `map_region/1`,
   # which renders the `data-map-canvas` child the hook draws into.
+  #
+  # 2026-10-08: the floor moves to `~> 0.42.1`, published, so the arm stays
+  # a Hex requirement. 0.42.0 is a minor: `map_region/1` no longer stamps
+  # `data-info-region` on the map's element, which the hook has not read
+  # since 0.40.0, so the Plan page's hook test now says the attribute is
+  # absent while the hover and the store keep their own attributes; the
+  # editor stores a browser's CRLF note line breaks as LF; and a host's
+  # `:phrase` words reword an event name only in event position, which
+  # the Plan page's phrased boxes still read. Its fixes (a stored
+  # note-free block, a composite that cannot expand, the host's `class` on
+  # the hover layer) ask nothing of this app. 0.42.1 changes documentation
+  # only.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.41.0"}
+        {:statifier_blocks, "~> 0.42.1"}
     end
   end
 
