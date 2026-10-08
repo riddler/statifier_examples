@@ -11,7 +11,7 @@ defmodule UpgradeHost.LockTest do
   # SDK is the suite's own, test-only, and is held here too so its line
   # cannot move unnoticed either.
   @pinned %{
-    statifier: "2.11.0",
+    statifier: "2.12.1",
     statifier_blocks: "0.35.0",
     statifier_persistence: "0.19.0",
     statifier_oban: "0.15.0",
