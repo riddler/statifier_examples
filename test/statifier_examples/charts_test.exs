@@ -41,7 +41,8 @@ defmodule StatifierExamples.ChartsTest do
              "myapp.risk_rating",
              "myapp.screen",
              "myapp.signup_step",
-             "myapp.three_ds_challenge"
+             "myapp.three_ds_challenge",
+             "myapp.typed_send"
            ]
   end
 

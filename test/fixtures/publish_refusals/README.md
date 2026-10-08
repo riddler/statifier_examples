@@ -48,11 +48,12 @@ Every file is one JSON object with these keys.
   the document's own `metadata.domain` says the same.
 - `summary` - one sentence saying what is wrong.
 - `host` - the host state the document is judged against and run with:
-  - `block_types` - the block types the host registers on top of this
-    app's palette. `myapp.typed_send` is a leaf step writing one `<send>`
+  - `block_types` - the host block types the document needs in the
+    palette it is judged against. `myapp.typed_send` is a leaf step writing one `<send>`
     with a literal `type`, `target` and `event`, the three keys of its
-    config; this app's palette has no such step, so the test registers
-    `StatifierExamples.TypedSendStep` for the two cases that need it.
+    config; this app registers it in its own palette as
+    `StatifierExamples.TypedSendStep`, so every listed type is already
+    there.
   - `send_types` - the `<send>` types the host registers a processor for.
     `myapp:sink` is the router's.
   - `routes` - the route names the host registers with the router.

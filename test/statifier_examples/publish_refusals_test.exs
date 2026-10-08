@@ -47,8 +47,8 @@ defmodule StatifierExamples.PublishRefusalsTest do
       children the cases publish.
 
   The typed send two of the cases need is `StatifierExamples.TypedSendStep`,
-  in `test/support/`: this app's palette has no step that writes a
-  `<send>` with a `type`.
+  `myapp.typed_send`, which this app's own palette registers beside the
+  core vocabulary, so every case is judged against `Charts.palette/0`.
 
   Every session here is started with `trace: true` and this process as a
   subscriber, so what the engine dequeued - the platform error events
@@ -61,8 +61,8 @@ defmodule StatifierExamples.PublishRefusalsTest do
   use ExUnit.Case, async: false
 
   alias Statifier.Effect.Trace.EventDequeued
-  alias StatifierBlocks.{Compiled, Compiler, Decode, Document, Edit}
-  alias StatifierExamples.{Charts, Publish, TypedSendStep}
+  alias StatifierBlocks.{Compiled, Compiler, Decode, Document, Edit, Palette}
+  alias StatifierExamples.{Charts, Publish}
   alias StatifierExamples.Charts.Subchart
 
   @cases_dir "test/fixtures/publish_refusals"
@@ -353,10 +353,12 @@ defmodule StatifierExamples.PublishRefusalsTest do
     }
   end
 
+  # A case's `block_types` are the types its host registers; this app's
+  # own palette carries every one of them.
   defp palette(kase) do
-    if TypedSendStep.type_name() in kase.block_types,
-      do: TypedSendStep.palette(),
-      else: Charts.palette()
+    %Palette{types: types} = palette = Charts.palette()
+    assert Enum.all?(kase.block_types, &Map.has_key?(types, &1))
+    palette
   end
 
   defp send_types(kase), do: Map.new(kase.send_types, &{&1, RouterSends})
