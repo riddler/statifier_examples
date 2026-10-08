@@ -33,6 +33,7 @@ defmodule StatifierExamples.FormPost.CardApplications do
     :idempotency_key,
     :status,
     :external_reference,
+    :newsletter_reference,
     :inserted_at,
     :updated_at
   ]

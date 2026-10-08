@@ -8,7 +8,9 @@ defmodule StatifierExamples.FormPost.CardApplication do
   a street address, and whether they want a library card, the events
   newsletter or both - is cast by `changeset/2`; the library system
   (`scope`), the `status` and the outside system's `external_reference`
-  are the host's to set and never come from the form.
+  are the host's to set and never come from the form. So is the
+  `newsletter_reference`, the events newsletter list's reference, beside the
+  patron system's `external_reference`.
   """
 
   use Ecto.Schema
@@ -27,6 +29,7 @@ defmodule StatifierExamples.FormPost.CardApplication do
           idempotency_key: String.t() | nil,
           status: String.t() | nil,
           external_reference: String.t() | nil,
+          newsletter_reference: String.t() | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -42,6 +45,7 @@ defmodule StatifierExamples.FormPost.CardApplication do
     field(:idempotency_key, :string)
     field(:status, :string, default: "received")
     field(:external_reference, :string)
+    field(:newsletter_reference, :string)
 
     timestamps(type: :utc_datetime_usec)
   end
