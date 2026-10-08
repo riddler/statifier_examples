@@ -7,7 +7,7 @@ config :upgrade_host, ecto_repos: [UpgradeHost.Repo]
 config :upgrade_host, Oban,
   name: UpgradeHost.Oban,
   repo: UpgradeHost.Repo,
-  queues: [loan_timers: 5, loan_invocations: 5]
+  queues: [loan_timers: 5, loan_invocations: 5, registrations: 5]
 
 # opentelemetry_statifier depends on the API only; the SDK is test-only here
 # and exports nothing unless a test points it somewhere.
