@@ -185,3 +185,77 @@ jobs:
       # in one of them exits non-zero here.
       - name: Bundle the JavaScript
         run: mix assets.bundle
+
+  # The upgrade host: a standalone Mix project under upgrade_host/ that pins
+  # a production host's statifier family set exactly, on the database and
+  # toolchain such a host runs, and walks it forward one package at a time.
+  # It is not part of this app - nothing in the gate above compiles or tests
+  # it - so it is checked here, on its own. Runs on every pull request and
+  # push to main with no path filter, so the walk stays proven after each
+  # step lands (ruled by the operator, 2026-10-07).
+  upgrade-host:
+    name: Upgrade host
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: upgrade_host
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      MIX_ENV: test
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: upgrade_host_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fixed here rather than read out of mise.toml: this is the oldest
+      # Elixir and OTP pair a production host is known to run, not this
+      # app's toolchain, and it moves only when that host's does (ruled by
+      # the operator, 2026-10-07).
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "26.2.5"
+          elixir-version: "1.18.4-otp-26"
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            upgrade_host/deps
+            upgrade_host/_build
+          key: upgrade-host-${{ runner.os }}-otp26.2.5-ex1.18.4-${{ hashFiles('upgrade_host/mix.lock') }}
+          restore-keys: |
+            upgrade-host-${{ runner.os }}-otp26.2.5-ex1.18.4-
+
+      - name: Fetch dependencies
+        run: mix deps.get
+
+      # The committed lock is the host's set; a fetch that would move it is
+      # a failure, never an update.
+      - name: Check the lock did not move
+        run: mix deps.get --check-locked
+
+      - name: Compile with warnings as errors
+        run: mix compile --warnings-as-errors
+
+      # The suite creates and migrates its own database (the test alias).
+      - name: Test
+        run: mix test
