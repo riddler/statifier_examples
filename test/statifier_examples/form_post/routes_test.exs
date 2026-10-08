@@ -96,6 +96,8 @@ defmodule StatifierExamples.FormPost.RoutesTest do
            } = stored(id)
   end
 
+  # Sabotage: gave the newsletter route the patron prefix "RPL-P-"; this
+  # went red at the outbox row's reference match. Reverted from a copy.
   test "the newsletter route records an outbox row and leaves the patron reference alone" do
     id = store!()
     reference = "RPL-N-" <> String.pad_leading(Integer.to_string(id), 6, "0")
@@ -117,6 +119,9 @@ defmodule StatifierExamples.FormPost.RoutesTest do
            } = stored(id)
   end
 
+  # Sabotage: made the writer put the newsletter reference in
+  # `external_reference`; this went red at the stored row's match.
+  # Reverted from a copy.
   test "both routes on one application keep both references" do
     id = store!()
 
@@ -147,6 +152,9 @@ defmodule StatifierExamples.FormPost.RoutesTest do
     assert [%CardApplicationSend{application_id: ^id, route: "patron_system"}] = sends()
   end
 
+  # Sabotage: made `Sends.record/5` write every outbox row under
+  # "patron_system"; the newsletter send hit the unique index and wrote
+  # nothing, and this went red at the two-row match. Reverted from a copy.
   test "the same key on the other route is a different send" do
     id = store!()
 
@@ -156,6 +164,9 @@ defmodule StatifierExamples.FormPost.RoutesTest do
     assert [_patron, _newsletter] = sends()
   end
 
+  # Sabotage: made `Sends.application_id/1` name the data's values instead
+  # of its keys; this went red at the first refusal match. Reverted from a
+  # copy.
   test "an event with no application id is refused with its keys" do
     id = store!()
 
@@ -174,6 +185,9 @@ defmodule StatifierExamples.FormPost.RoutesTest do
     assert_unchanged(id)
   end
 
+  # Sabotage: made the newsletter route answer the reader's bare
+  # `:not_found` instead of `{:application_not_found, id}`; this went red
+  # at the newsletter refusal match. Reverted from a copy.
   test "an id that names no application is refused" do
     id = store!()
     missing = id + 1000
