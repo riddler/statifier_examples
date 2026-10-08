@@ -12,7 +12,7 @@ defmodule UpgradeHost.LockTest do
   # cannot move unnoticed either.
   @pinned %{
     statifier: "2.12.1",
-    statifier_blocks: "0.35.1",
+    statifier_blocks: "0.36.1",
     statifier_persistence: "0.19.0",
     statifier_oban: "0.15.0",
     statifier_router: "0.7.0",
