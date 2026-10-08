@@ -202,6 +202,7 @@ defmodule UpgradeHost.LoanTest do
     # sabotage: set up the bridges with record_datamodel_values: true ->
     # survived: at these versions no span or span event on this host's
     # durable path carries a datamodel-value key, so this pins that absence.
+    # Re-run at opentelemetry_statifier 0.8.0 and 0.9.1: survived at both.
     test "keep datamodel values out of every span and span event" do
       {:ok, _execution, _} = Loans.open("loan-8", "branch-eastside", @loan)
       assert %{success: 1} = drain(:loan_timers)
