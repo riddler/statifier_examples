@@ -43,8 +43,8 @@ defmodule UpgradeHost.MixProject do
       {:opentelemetry_statifier, "== 0.7.0"},
       {:statifier_ui, "== 0.10.1"},
       {:statifier_datamodel, "== 0.4.0"},
-      {:predicator, "== 9.4.2"},
-      {:uxid, "== 2.9.0"},
+      {:predicator, "== 9.4.3"},
+      {:uxid, "== 2.9.2"},
 
       # The infrastructure the family runs on in such a host.
       {:oban, "== 2.19.4"},
