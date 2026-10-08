@@ -3,7 +3,8 @@ defmodule UpgradeHost.MigrationsTest do
   The tables as the host's migrations lay them out, read back from the
   database's own catalog: the router's tables under the host's prefix
   with its branch column and timestamps leading, and `execution_id` in
-  the "C" collation in both packages' tables.
+  the "C" collation in both packages' tables; and the persistence schema
+  at the version the package the host runs expects.
   """
 
   use UpgradeHost.DataCase
@@ -34,6 +35,21 @@ defmodule UpgradeHost.MigrationsTest do
   test "the persistence tables open with the branch column and their timestamps" do
     for table <- ~w(statifier_charts statifier_positions statifier_executions statifier_inputs) do
       assert ["id", "branch_id", "inserted_at", "updated_at" | _rest] = columns(table)
+    end
+  end
+
+  # The persistence migration is capped at V08. A package step that adds a
+  # schema version is red here until the host carries a migration of its
+  # own for it (`from: 9`), and a cap below V08 is red on the column V08
+  # adds.
+  # sabotage: capped the persistence migration at `version: 7` (its
+  # rollback at `from: 7`) on a fresh database -> red, no ended_at column.
+  test "the persistence schema is at the version the package expects, and every migration is up" do
+    assert StatifierPersistence.Ecto.Migrations.expected_version() == 8
+    assert "ended_at" in columns("statifier_executions")
+
+    for {status, version, name} <- Ecto.Migrator.migrations(Repo) do
+      assert status == :up, "migration #{version} #{name} is #{status}"
     end
   end
 
