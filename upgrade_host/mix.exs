@@ -36,7 +36,7 @@ defmodule UpgradeHost.MixProject do
     [
       # The statifier family, at the set the host runs.
       {:statifier, "== 2.12.1"},
-      {:statifier_blocks, "== 0.35.0"},
+      {:statifier_blocks, "== 0.35.1"},
       {:statifier_persistence, "== 0.19.0"},
       {:statifier_oban, "== 0.15.0"},
       {:statifier_router, "== 0.7.0"},
