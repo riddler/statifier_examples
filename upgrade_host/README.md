@@ -8,8 +8,9 @@ few minors behind. Moving all of them at once leaves it unable to tell
 which change broke which call. This project is a host of the same shape,
 on the same versions, making the same calls: it is moved forward one
 package per step, and each step's lock diff and suite say exactly what that
-package changed for a host. The upgrading pages in each package's docs are
-the guide; this project is the evidence behind them.
+package changed for a host. The upgrading pages in the packages' docs,
+where a package has one, are the guide; this project is the evidence
+behind them.
 
 It is a standalone Mix project. statifier_examples does not compile it,
 test it or depend on it, and nothing here depends on statifier_examples.
