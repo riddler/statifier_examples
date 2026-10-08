@@ -38,6 +38,15 @@ defmodule UpgradeHost.MigrationsTest do
     assert definition =~ "(execution_id, binding_id, invoke_id)"
   end
 
+  # The router's location table (V04, from 0.9.0) is opt-in, for a host
+  # that sets :basichttp; this host sets none and runs no migration for it.
+  # sabotage: added StatifierRouter.Migrations.up_locations/1 with the
+  # host's layout to the V03 migration on a fresh database -> red, the
+  # location table present.
+  test "the router's opt-in location table is not created" do
+    refute "routing_locations" in tables(), "routing_locations exists"
+  end
+
   test "execution_id is in the C collation wherever either package declares it" do
     for table <- ~w(routing_addresses routing_routing_ledger routing_subscriptions
                     statifier_executions statifier_inputs) do
@@ -72,6 +81,16 @@ defmodule UpgradeHost.MigrationsTest do
         "SELECT column_name FROM information_schema.columns " <>
           "WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position",
         [table]
+      )
+
+    List.flatten(rows)
+  end
+
+  # Every table in the public schema, by name.
+  defp tables do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
       )
 
     List.flatten(rows)
