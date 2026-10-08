@@ -44,6 +44,11 @@ config :statifier_examples, StatifierExamples.Repo,
 # one route makes, and `router_maintenance` the reapers. The recipe
 # checks that both reapers are on this crontab.
 #
+# `card_application_intake` carries the job that takes a stored card
+# application into the library's workflow
+# (`StatifierExamples.FormPost.IntakeJob`); its arguments are the stored
+# row's id and nothing else.
+#
 # `desk_posts` carries the hold desk's BasicHTTP POSTs, each made after the
 # delivery that planned it has committed (`StatifierExamples.HoldDesk.DeskPost`).
 #
@@ -65,7 +70,8 @@ config :statifier_examples, Oban,
     statifier_invocations: 5,
     parcel_notices: 1,
     router_maintenance: 1,
-    desk_posts: 1
+    desk_posts: 1,
+    card_application_intake: 1
   ],
   plugins: [
     {Oban.Plugins.Cron,

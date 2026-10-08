@@ -32,6 +32,16 @@ defmodule StatifierExamplesWeb.Router do
     match :*, "/:token", BasicHTTPController, :event, log: false
   end
 
+  # The card application form's front: a public form a visitor's browser
+  # posts, urlencoded or JSON, on the JSON pipeline. No session and no
+  # CSRF token: there is no signed-in visitor to protect, and the controller's
+  # moduledoc says how a host guards the endpoint instead.
+  scope "/form-post", StatifierExamplesWeb do
+    pipe_through :api
+
+    post "/card-applications", CardApplicationController, :create
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", StatifierExamplesWeb do
   #   pipe_through :api
