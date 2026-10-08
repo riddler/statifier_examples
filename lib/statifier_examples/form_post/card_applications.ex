@@ -22,6 +22,21 @@ defmodule StatifierExamples.FormPost.CardApplications do
   alias StatifierExamples.FormPost.{CardApplication, IntakeJob}
   alias StatifierExamples.Repo
 
+  # The columns a repeat reads back: every column but the four personal
+  # fields (the name, the email address, the phone number and the street
+  # address).
+  @host_columns [
+    :id,
+    :scope,
+    :wants_card,
+    :wants_newsletter,
+    :idempotency_key,
+    :status,
+    :external_reference,
+    :inserted_at,
+    :updated_at
+  ]
+
   @doc """
   Stores one posted application for the library system `scope`.
 
@@ -29,6 +44,11 @@ defmodule StatifierExamples.FormPost.CardApplications do
   `{:ok, first, :repeat}` when the client key was already stored in that
   library system, and `{:error, changeset}` for a form that cannot be
   stored.
+
+  A repeat's `first` carries every stored column but the personal fields
+  (the name, the email address, the phone number and the street address):
+  `StatifierExamples.FormPost.CardApplications.Reader` is the one module
+  that reads those back.
   """
   @spec receive_application(String.t(), map()) ::
           {:ok, CardApplication.t(), :created | :repeat} | {:error, Ecto.Changeset.t()}
@@ -50,13 +70,17 @@ defmodule StatifierExamples.FormPost.CardApplications do
 
   # An insert the unique index turned away comes back with no id: the
   # application is the first row stored under that key, and nothing is
-  # enqueued for it again.
+  # enqueued for it again. The read leaves out the personal fields, which
+  # are the reader's to read.
   @spec enqueue(Ecto.Repo.t(), CardApplication.t()) ::
           {:ok, {:ok, CardApplication.t(), :created | :repeat}}
   defp enqueue(repo, %CardApplication{id: nil, scope: scope, idempotency_key: key}) do
     first =
       repo.one!(
-        from(a in CardApplication, where: a.scope == ^scope and a.idempotency_key == ^key)
+        from(a in CardApplication,
+          where: a.scope == ^scope and a.idempotency_key == ^key,
+          select: struct(a, @host_columns)
+        )
       )
 
     {:ok, {:ok, first, :repeat}}
