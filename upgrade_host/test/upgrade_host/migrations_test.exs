@@ -25,6 +25,19 @@ defmodule UpgradeHost.MigrationsTest do
     end
   end
 
+  # The router's V03 renames the subscription table's unique index. Under
+  # this host's "routing_" prefix V02's name was 61 bytes, inside the 63
+  # Postgres keeps, so the index V03 renames from was never truncated; the
+  # name it leaves is 38 bytes.
+  # sabotage: deleted the V03 migration on a fresh database -> red, the
+  # index still under V02's name.
+  test "the subscription table's unique index carries the name the router's V03 gives it" do
+    assert [{"routing_subscriptions_invocation_index", definition}] =
+             unique_indexes("routing_subscriptions")
+
+    assert definition =~ "(execution_id, binding_id, invoke_id)"
+  end
+
   test "execution_id is in the C collation wherever either package declares it" do
     for table <- ~w(routing_addresses routing_routing_ledger routing_subscriptions
                     statifier_executions statifier_inputs) do
@@ -62,6 +75,23 @@ defmodule UpgradeHost.MigrationsTest do
       )
 
     List.flatten(rows)
+  end
+
+  # The table's unique indexes other than its primary key, as
+  # {name, definition}.
+  defp unique_indexes(table) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT i.relname, pg_get_indexdef(x.indexrelid) FROM pg_index x " <>
+          "JOIN pg_class i ON i.oid = x.indexrelid " <>
+          "JOIN pg_class t ON t.oid = x.indrelid " <>
+          "JOIN pg_namespace n ON n.oid = t.relnamespace " <>
+          "WHERE n.nspname = 'public' AND t.relname = $1 " <>
+          "AND x.indisunique AND NOT x.indisprimary ORDER BY i.relname",
+        [table]
+      )
+
+    Enum.map(rows, &List.to_tuple/1)
   end
 
   defp collation(table, column) do
