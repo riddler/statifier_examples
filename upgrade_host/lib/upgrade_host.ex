@@ -6,11 +6,12 @@ defmodule UpgradeHost do
   The host this mirrors runs on Postgres and Oban: durable executions in
   `statifier_persistence`, delayed sends and invocations as Oban jobs
   through `statifier_oban`, spans through `opentelemetry_statifier`, and
-  `statifier_router`'s tables migrated though nothing calls the router yet.
-  Its charts are `statifier_blocks` documents over a palette of its own,
-  compiled at runtime. This project makes the same calls in the same
-  shapes, over one chart from the library loan (`UpgradeHost.Loans`), so a
-  release that breaks one of them breaks here first.
+  a registration form's posts routed through `statifier_router`'s webhook
+  front. Its charts are `statifier_blocks` documents over a palette of its
+  own, compiled at runtime. This project makes the same calls in the same
+  shapes, over one chart from the library loan (`UpgradeHost.Loans`) and
+  patron registration (`UpgradeHost.Registrations`), so a release that
+  breaks one of them breaks here first.
 
   The pieces:
 
@@ -31,5 +32,15 @@ defmodule UpgradeHost do
     * `UpgradeHost.Loans.AssessFine` and `UpgradeHost.Loans.NotifyPatron` -
       the two invoke handlers.
     * `UpgradeHost.Telemetry` - the three OpenTelemetry bridges.
+    * `UpgradeHost.Registrations` - patron registration: the form post the
+      host accepts, the router binding it is routed by, and the sweep that
+      reaps an ended registration's address.
+    * `UpgradeHost.Registrations.Seams` - the router's seams: the tenancy
+      context around every delivery, the create and step stand-ins, the
+      chart resolvers and the executor.
+    * `UpgradeHost.Registrations.FormPost` - the job that routes one
+      accepted post through the webhook front.
+    * `UpgradeHost.Tenancy` - the host's tenancy context, the branch held
+      in the process.
   """
 end
