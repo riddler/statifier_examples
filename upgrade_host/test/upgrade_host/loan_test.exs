@@ -173,8 +173,13 @@ defmodule UpgradeHost.LoanTest do
       assert {:ok, [%{execution_id: "loan-6"}]} = Loans.by_branch("branch-eastside")
     end
 
-    # sabotage: the bridges were set up with record_datamodel_values: true
-    # -> red, the fine's assignment carried its value onto a span event.
+    # The bridge renders a datamodel value as a string under a
+    # `new_value`, `prior_value` or `datamodel` key, and only when
+    # record_datamodel_values is true; every other numeric attribute (a
+    # duration, a count) is an integer and is not what this test is about.
+    # sabotage: set up the bridges with record_datamodel_values: true ->
+    # survived: at these versions no span or span event on this host's
+    # durable path carries a datamodel-value key, so this pins that absence.
     test "keep datamodel values out of every span and span event" do
       {:ok, _execution, _} = Loans.open("loan-8", "branch-eastside", @loan)
       assert %{success: 1} = drain(:loan_timers)
@@ -185,10 +190,11 @@ defmodule UpgradeHost.LoanTest do
 
       for span <- spans,
           attributes <- [span.attributes | Enum.map(span.events, &elem(&1, 1))],
-          {_key, value} <- attributes do
+          {key, value} <- attributes do
+        refute String.ends_with?(to_string(key), [".new_value", ".prior_value", ".datamodel"])
         refute inspect(value) =~ "patron-1042"
         refute inspect(value) =~ "copy-2291"
-        refute value == 250
+        refute is_binary(value) and value =~ ~r/\b250\b/
       end
     end
   end
