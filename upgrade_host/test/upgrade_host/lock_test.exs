@@ -18,7 +18,7 @@ defmodule UpgradeHost.LockTest do
     statifier_router: "0.7.0",
     opentelemetry_statifier: "0.7.0",
     statifier_ui: "0.10.1",
-    statifier_datamodel: "0.4.0",
+    statifier_datamodel: "0.5.1",
     predicator: "9.4.3",
     uxid: "2.9.2",
     oban: "2.19.4",
