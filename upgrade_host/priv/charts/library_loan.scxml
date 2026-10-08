@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A library loan. The copy goes out on loan and comes due on a delayed
+  send; a renewal cancels that send and arms a fresh one. A loan that
+  comes due is overdue: the branch assesses a fine through an invoke,
+  notifies the patron through a second one, and waits for the copy to
+  come back. A fine that cannot be assessed ends the loan as failed.
+-->
+<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" name="library_loan" initial="on_loan">
+  <state id="on_loan">
+    <onentry>
+      <send id="due" event="loan.due" delay="1209600s"/>
+    </onentry>
+    <onexit>
+      <cancel sendid="due"/>
+    </onexit>
+    <transition event="loan.renew" target="on_loan"/>
+    <transition event="loan.returned" target="returned"/>
+    <transition event="loan.due" target="overdue"/>
+  </state>
+
+  <state id="overdue">
+    <invoke id="fine" type="myapp:assess_fine">
+      <param name="copy" expr="copy"/>
+    </invoke>
+    <transition event="done.invoke.fine" target="fined">
+      <assign location="fine" expr="_event.data.amount"/>
+    </transition>
+    <transition event="error.communication.invoke.fine" target="unresolved"/>
+    <transition event="loan.returned" target="returned"/>
+  </state>
+
+  <state id="fined">
+    <invoke id="notice" type="myapp:notify_patron">
+      <param name="patron" expr="patron"/>
+      <param name="fine" expr="fine"/>
+    </invoke>
+    <transition event="done.invoke.notice" target="awaiting_return"/>
+  </state>
+
+  <state id="awaiting_return">
+    <transition event="loan.returned" target="returned"/>
+  </state>
+
+  <final id="returned"/>
+
+  <final id="unresolved">
+    <donedata>
+      <param name="statifier_persistence:execution_status" expr="'failed'"/>
+    </donedata>
+  </final>
+</scxml>

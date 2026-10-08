@@ -1,0 +1,8 @@
+# This project sits inside statifier_examples, whose own .gitignore anchors
+# its build directories at that repository's root. These are this
+# project's.
+/_build/
+/deps/
+/cover/
+/doc/
+erl_crash.dump
