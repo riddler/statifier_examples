@@ -37,7 +37,7 @@ defmodule StatifierExamples.Charts do
 
   alias StatifierBlocks.Palette
   alias StatifierBlocks.Runtime
-  alias StatifierExamples.{CardAuth, Library, Signup}
+  alias StatifierExamples.{CardAuth, Library, Signup, TypedSendStep}
   alias StatifierExamples.Charts.{FanOut, Fixture, Icons, Messaging, Subchart, SyncAdapter}
 
   @themes [:light, :dark, :brand]
@@ -278,9 +278,17 @@ defmodule StatifierExamples.Charts do
     end
   end
 
+  # The domain types, the shared messaging type, and this app's typed send
+  # step, which writes the one `<send>` with a `type` the core vocabulary
+  # has no step for (see `StatifierExamples.TypedSendStep`).
   @spec registrations() :: [Palette.registration()]
   defp registrations do
-    [CardAuth.block_types(), Signup.block_types(), Messaging.block_types()]
+    [
+      CardAuth.block_types(),
+      Signup.block_types(),
+      Messaging.block_types(),
+      %{TypedSendStep.type_name() => TypedSendStep}
+    ]
     |> Enum.flat_map(&Enum.to_list/1)
     |> Enum.sort()
   end

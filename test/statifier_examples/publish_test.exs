@@ -22,7 +22,7 @@ defmodule StatifierExamples.PublishTest do
   use ExUnit.Case, async: true
 
   alias StatifierBlocks.{Compiled, Compiler, Decode, Document, Edit}
-  alias StatifierExamples.{Charts, Publish, TypedSendStep}
+  alias StatifierExamples.{Charts, Publish}
   alias StatifierExamples.Charts.Subchart
 
   # A route adapter, so the router configuration registers one route name.
@@ -270,7 +270,7 @@ defmodule StatifierExamples.PublishTest do
 
     %{
       host
-      | palette: TypedSendStep.palette(),
+      | palette: Charts.palette(),
         send_types: Map.merge(host.send_types, extra_types)
     }
   end
