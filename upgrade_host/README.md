@@ -61,6 +61,13 @@ test it or depend on it, and nothing here depends on statifier_examples.
 - **Telemetry.** The three OpenTelemetry bridges, with datamodel values
   kept out of every span; the suite exports spans to itself and checks
   them.
+- **A loan moved onto a revised loan document.** Two revisions of the
+  loan document, one lengthening the loan period and one withdrawing
+  renewals, each compiled and saved; a live loan is moved onto each
+  through `StatifierPersistence.Executions.migrate/4` with a plan, and
+  the migrated point's `statifier_persistence.dropped` attribute is
+  checked on the exported span: absent when the plan drops nothing, a
+  sorted array of the dropped state ids when it drops some.
 - **The packages' own conformance suites**, run over this host: the
   storage conformance suite over the repo, and the invoke handler case
   over each handler.
