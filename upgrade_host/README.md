@@ -27,13 +27,25 @@ test it or depend on it, and nothing here depends on statifier_examples.
   `branch_id` column, leading timestamps, the `"C"` collation on
   `execution_id`); a persistence module with a key generator of its own;
   an Oban instance with a timers queue and an invocations queue.
-- **One durable chart from the library loan.** A copy goes out on loan and
-  comes due on a delayed send; a renewal cancels the send and arms a fresh
-  one; an overdue loan has its fine assessed and the patron notified
-  through two invoke handlers, and waits for the copy to come back.
+- **One durable chart from the library loan, authored as a block
+  document.** A copy goes out on loan and comes due on a delayed send; a
+  renewal cancels the send and arms a fresh one; an overdue loan has its
+  fine assessed and the patron notified through two invoke handlers, and
+  waits for the copy to come back, which can come at any point. The chart
+  is not written by hand: `UpgradeHost.Loans.LoanDocument` authors it as a
+  `statifier_blocks` document, one edit at a time through the edit gate,
+  and compiles it; the durable loan runs the compiled chart.
   `UpgradeHost.Loans` drives it with no process holding the execution:
   every timer and invocation is an Oban job, and every answer goes back in
   through a delivery module.
+- **A palette of the host's own.** `UpgradeHost.Loans.Blocks` merges three
+  block types over the core vocabulary: two invoke steps declared through
+  `StatifierBlocks.InvokeStep`, one per handler, and one block type written
+  against `StatifierBlocks.BlockType` directly. The document is checked
+  against it the way a publish step checks one (expressible through the
+  palette, the publish findings, the child graph) and read back through the
+  view model as an outline. No editor, no LiveView and no Map: a host that
+  mounts none of them still makes every one of these calls.
 - **Telemetry.** The three OpenTelemetry bridges, with datamodel values
   kept out of every span; the suite exports spans to itself and checks
   them.

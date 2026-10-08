@@ -5,6 +5,11 @@ defmodule UpgradeHost.Loans do
   loan is driven through - `open/3` for a new loan and `deliver/2` for
   every event after it.
 
+  The chart is compiled from the loan's block document
+  (`UpgradeHost.Loans.LoanDocument`) over the host's palette
+  (`UpgradeHost.Loans.Blocks`); `compiled/0` is that compile, and
+  `source/0` and `machine/0` are its SCXML and the runtime chart.
+
   Each loan is one execution, keyed by the host's own loan id, which is
   also the scope its timer and invoke jobs are stored under and the
   session id its position carries. A loan is created with the host's
@@ -14,16 +19,23 @@ defmodule UpgradeHost.Loans do
   Nothing here holds an execution in memory between events. A fired timer
   or an answered invocation arrives in an Oban job, possibly on another
   node, and goes back in through `deliver/2` with the chart compiled from
-  the source this module carries.
+  the document this host carries.
   """
 
   alias Statifier.{Event, Machine}
   alias Statifier.Invoke.Types
+  alias StatifierBlocks.{Compiled, Document, Palette, Provenance}
   alias StatifierPersistence.{Execution, Executions, Storage}
-  alias UpgradeHost.Loans.{AssessFine, Executor, InvokeDelivery, NotifyPatron, TimerDelivery}
 
-  @external_resource Path.join([__DIR__, "..", "..", "priv", "charts", "library_loan.scxml"])
-  @source File.read!(Path.join([__DIR__, "..", "..", "priv", "charts", "library_loan.scxml"]))
+  alias UpgradeHost.Loans.{
+    AssessFine,
+    Blocks,
+    Executor,
+    InvokeDelivery,
+    LoanDocument,
+    NotifyPatron,
+    TimerDelivery
+  }
 
   # The handler serving each `<invoke type>` the chart writes.
   @invoke_handlers %{
@@ -37,30 +49,87 @@ defmodule UpgradeHost.Loans do
   # How long one attempt of an invoke job may run before Oban fails it.
   @invoke_timeout 30_000
 
+  @doc """
+  The loan document compiled through `statifier_blocks`: the SCXML, the
+  provenance map from its states back to the document's blocks, and the
+  compilation record. Compiled once per node and kept, because every
+  delivery needs it and the document never changes under a running node.
+  """
+  @spec compiled() :: Compiled.t()
+  def compiled do
+    cached(:compiled, fn ->
+      {:ok, compiled} = LoanDocument.compile()
+      compiled
+    end)
+  end
+
   @doc "The chart's SCXML source, exactly as it is registered."
   @spec source() :: binary()
-  def source, do: @source
+  def source, do: compiled().scxml
 
   @doc """
-  The compiled chart. Compiled once per node and kept, because every
-  delivery needs it and the source never changes under a running node.
+  The runtime chart, compiled from `source/0` once per node and kept, and
+  named after the document the way the compile names it, so its identity
+  is the compilation record's `chart_identity`.
   """
   @spec machine() :: Machine.t()
   def machine do
-    case :persistent_term.get({__MODULE__, :machine}, nil) do
-      nil ->
-        {:ok, machine} = Statifier.compile(@source)
-        :persistent_term.put({__MODULE__, :machine}, machine)
-        machine
-
-      machine ->
-        machine
-    end
+    cached(:machine, fn ->
+      %Compiled{scxml: scxml, record: record} = compiled()
+      {:ok, machine} = Statifier.compile(scxml, chart_name: record.document_id)
+      machine
+    end)
   end
 
   @doc "The `<invoke type>` to handler map the executor dispatches on."
   @spec invoke_handlers() :: %{String.t() => module()}
   def invoke_handlers, do: @invoke_handlers
+
+  @doc """
+  The handler serving the invocation `invoke_id`, for a cancel that names
+  the invocation and not its type.
+
+  The document's steps write no invoke id, so each is generated as
+  `<state id>.<suffix>` under the state its `<invoke>` sits in. That state
+  maps back to its block through the compile's provenance, the block's
+  type to its module through the palette, and the module's invoke type to
+  the handler. Anything else is `:error`.
+  """
+  @spec handler_for_invocation(String.t()) :: {:ok, module()} | :error
+  def handler_for_invocation(invoke_id) when is_binary(invoke_id) do
+    [state_id | _suffix] = String.split(invoke_id, ".", parts: 2)
+    %Compiled{provenance: provenance} = compiled()
+
+    with {:ok, %{block_id: block_id}} <- Provenance.owner_of_state(provenance, state_id),
+         {:ok, type} <- block_type(block_id),
+         {:ok, module} when is_atom(module) <- Palette.fetch(Blocks.palette(), type),
+         true <- function_exported?(module, :invoke_type, 0) do
+      Map.fetch(@invoke_handlers, module.invoke_type())
+    else
+      _not_a_step -> :error
+    end
+  end
+
+  @spec block_type(String.t()) :: {:ok, String.t()} | :error
+  defp block_type(block_id) do
+    case Enum.find(Document.blocks(LoanDocument.document()), &(&1.id == block_id)) do
+      nil -> :error
+      block -> {:ok, block.type}
+    end
+  end
+
+  @spec cached(atom(), (-> value)) :: value when value: term()
+  defp cached(key, build) do
+    case :persistent_term.get({__MODULE__, key}, nil) do
+      nil ->
+        value = build.()
+        :persistent_term.put({__MODULE__, key}, value)
+        value
+
+      value ->
+        value
+    end
+  end
 
   @doc """
   The registered invoke types, derived from the handler map so the two
@@ -105,7 +174,7 @@ defmodule UpgradeHost.Loans do
   compiled it can read it back.
   """
   @spec register() :: :ok | {:error, term()}
-  def register, do: Storage.save_chart(store(), machine(), @source)
+  def register, do: Storage.save_chart(store(), machine(), source())
 
   @doc """
   Opens a loan: creates its execution with the loan's copy and patron in
