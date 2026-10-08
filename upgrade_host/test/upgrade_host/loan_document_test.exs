@@ -178,7 +178,7 @@ defmodule UpgradeHost.LoanDocumentTest do
                document_id: document_id,
                revision: 1,
                document_hash: @document_hash,
-               compiler_version: "0.36.1",
+               compiler_version: "0.37.0",
                accepts: ["loan.renew", "loan.returned"]
              } = record
 
