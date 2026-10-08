@@ -33,9 +33,9 @@ opened. The next run starts from an empty chart.
 ## The pins
 
 The migration surface is `statifier_persistence`'s. `mix.exs` asks for
-`~> 0.20`, the release that adds `Executions.migrate_batch/3`, and
-`mix.lock` resolves 0.24.0. The first line the command prints names the
-version it loaded.
+`~> 0.24`, the line the first-workflow guides' pin tables name, and
+`mix.lock` resolves 0.24.1; `Executions.migrate_batch/3` is 0.20.0's.
+The first line the command prints names the version it loaded.
 
 The migration surface is the verb and its report. A dry run is the
 preview, an apply is the batch, and each execution gets its own result.

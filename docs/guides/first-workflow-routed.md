@@ -23,20 +23,19 @@ The recipe is written and checked against these releases, which are what
 
 | Package | Version | What the recipe uses it for |
 |---|---|---|
-| `statifier_router` | 0.11.0 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
-| `statifier_persistence` | 0.24.0 | the chart registry, the execution, the input log, `ended_at` |
-| `statifier_blocks` | 0.41.0 | the document and the compile |
-| `statifier` | 2.10.0 | compiling the chart and running it |
+| `statifier_router` | 0.11.3 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
+| `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_blocks` | 0.42.1 | the document and the compile |
+| `statifier` | 2.12.1 | compiling the chart and running it |
 
-`statifier_router` 0.11.0 requires `statifier ~> 2.10` and
-`statifier_persistence ~> 0.18`, as 0.9.2 and 0.10.0 did, which is what
-moved those two with it.
-`mix.exs` asks for `statifier_persistence ~> 0.20` all the same: 0.20.0
+`statifier_router` 0.11.3 requires `statifier ~> 2.10` and
+`statifier_persistence ~> 0.18`, as 0.9.2 and 0.10.0 did.
+`mix.exs` asks for `statifier ~> 2.12` and `statifier_persistence ~> 0.24`
+all the same, the lines this table names: 0.20.0 is the release that
 adds `Executions.migrate_batch/3`, which
 `docs/guides/migrating-waiting-executions.md` walks, and `mix.lock`
-resolves 0.24.0, the release this table names. The jobs run on this
-app's own Oban. The first line the command prints names the versions it
-actually loaded.
+resolves 0.24.1. The jobs run on this app's own Oban. The first line the
+command prints names the versions it actually loaded.
 
 ## The workflow
 
@@ -336,14 +335,22 @@ Each of these is in `statifier_router`'s README and not needed here:
   that names its executions gives an `:execution_id` callback.
 - **Route sends from the chart.** This chart sends nothing: its one route is
   reached through `:on_complete`, because a block document at
-  statifier_blocks 0.41.0 cannot author a routed `<send>` - `core.send`
+  statifier_blocks 0.42.1 cannot author a routed `<send>` - `core.send`
   declares no `type` or `target`. A `<send>` of the router's type to a
   registered route reaches the same adapter, and a delayed one needs a
   `:timer_queue`.
 
 ## Moving the first-workflow host to these pins
 
-The latest move, from statifier_router 0.10.0 to 0.11.0, needed nothing in
+The latest move, to statifier_router 0.11.3, statifier_persistence
+0.24.1, statifier_blocks 0.42.1 and statifier 2.12.1, needed nothing in
+this recipe: the router and persistence releases change documentation
+only, statifier_blocks 0.42.0 changes the Map and the editor's note
+field, which the recipe does not mount, and statifier 2.11.0 and 2.12.0
+change what a Basic HTTP send and the validator answer at edges this
+chart does not reach.
+
+The move before it, from statifier_router 0.10.0 to 0.11.0, needed nothing in
 this recipe: 0.11.0 adds no migration version; its two new options,
 `:wrap_target` beside `:around_delivery` and `run_in_scope:` in a
 delivery's envelope, change nothing unless a configuration or a call sets
@@ -351,7 +358,7 @@ them, and this one sets neither; its V03 change is for a repo whose
 adapter module wraps the SQLite adapter, and this one uses the stock
 adapter, on which V03 already did nothing.
 
-The move before it, from statifier_router 0.9.2 to 0.10.0, needed nothing in
+The move before that, from statifier_router 0.9.2 to 0.10.0, needed nothing in
 this recipe: 0.10.0 adds no migration version; its one new option,
 `:around_delivery`, wraps nothing unless a configuration sets it, and this
 one sets none; its reap change is to the statement Postgres runs, so the

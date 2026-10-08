@@ -59,11 +59,11 @@ the old one answers 404.
 
 | Package | Version | What this guide uses it for |
 |---|---|---|
-| `statifier_router` | 0.11.0 | the `:basichttp` key, the location, `StatifierRouter.BasicHTTP.Front`, the location table, `deliver_event/4` for a failed send |
-| `statifier` | 2.10.0 | the Basic HTTP Event I/O Processor and its decoder |
-| `statifier_persistence` | 0.24.0 | the chart registry, the execution, the input log |
+| `statifier_router` | 0.11.3 | the `:basichttp` key, the location, `StatifierRouter.BasicHTTP.Front`, the location table, `deliver_event/4` for a failed send |
+| `statifier` | 2.12.1 | the Basic HTTP Event I/O Processor and its decoder |
+| `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log |
 
-0.11.0 is the floor because it is the published release `mix.exs`
+0.11.3 is the floor because it is the published release `mix.exs`
 requires. 0.9.2 was the first `statifier_router` release whose
 migrations and address reaper both run on this app's SQLite database,
 and nothing this guide uses needs more.

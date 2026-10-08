@@ -19,13 +19,13 @@ The recipe is written and checked against these releases, which are what
 
 | Package | Version | What the recipe uses it for |
 |---|---|---|
-| `statifier` | 2.10.0 | compiling the chart and running it |
-| `statifier_blocks` | 0.41.0 | the document, `Plan.expressible/3`, the compile |
-| `statifier_persistence` | 0.24.0 | the chart registry, the execution, the input log, `ended_at` |
-| `statifier_oban` | 0.13.0 | the invoke job and its `:invoke_timeout`, the timer job |
-| `statifier_router` | 0.11.0 | two of the publish-time checks |
+| `statifier` | 2.12.1 | compiling the chart and running it |
+| `statifier_blocks` | 0.42.1 | the document, `Plan.expressible/3`, the compile |
+| `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_oban` | 0.17.2 | the invoke job and its `:invoke_timeout`, the timer job |
+| `statifier_router` | 0.11.3 | two of the publish-time checks |
 
-`statifier_datamodel` 0.5.0 arrives through `statifier_blocks`. The first
+`statifier_datamodel` 0.5.2 arrives through `statifier_blocks`. The first
 line the command prints names the versions it actually loaded.
 
 The same workflow shape with every event arriving through
@@ -281,3 +281,16 @@ says what each asks of a host; this recipe calls `Decode.decode/1`,
   no editor.
 - **0.41.0** changes the edge lines `Describe.render/2` answers and what
   the Map draws. The recipe calls neither.
+
+The move to statifier 2.12.1, statifier_blocks 0.42.1,
+statifier_persistence 0.24.1, statifier_oban 0.17.2 and statifier_router
+0.11.3 needed nothing in this recipe either. statifier 2.11.0 and 2.12.0
+change what a Basic HTTP send and the validator answer at edges this
+document does not reach, and move the `predicator` floor to `~> 9.4`;
+statifier_blocks 0.42.0 changes the Map and the editor's note field, and
+the recipe mounts neither; statifier_oban 0.14.0 to 0.17.0 add an
+invoke handler's `:deferred` answer, its event, a handler's
+`max_attempts:` and a timer delivery's `{:snooze, seconds}`, and
+`myapp:set_aside` answers at once, declares no cap, and the timer
+delivery never snoozes. Every other release in the move changes
+documentation only.

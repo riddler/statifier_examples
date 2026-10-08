@@ -1200,11 +1200,18 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
     # The hook on the map is the package's, and what it is handed is this
     # page's: the list's own event names, whether the page edits, the
-    # description region's id, its store and its hover layer, and the
-    # picker to scroll into view after an insert armed from the map.
+    # description region's store and its hover layer, and the picker to
+    # scroll into view after an insert armed from the map.
     #
     # Sabotage: passed `select_event="select"` to the page's map region;
     # this went red. Reverted from a copy.
+    #
+    # 2026-10-08: `statifier_blocks` 0.42.0 stops stamping
+    # `data-info-region` on the map's element, which the hook has not read
+    # since 0.40.0; it finds the hover layer and the store by their own
+    # attributes, so the attribute is held absent here. Sabotage: pointed
+    # the absence assertion back at `["plan-description"]`; it went red
+    # reporting `[]`. Reverted from a copy.
     test "the map's hook is handed the list's events and the description region",
          %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
@@ -1214,12 +1221,13 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert LazyHTML.attribute(map, "data-select-event") == ["select-row"]
       assert LazyHTML.attribute(map, "data-insert-event") == ["insert-open"]
       assert LazyHTML.attribute(map, "data-editable") == ["true"]
-      assert LazyHTML.attribute(map, "data-info-region") == ["plan-description"]
+      assert LazyHTML.attribute(map, "data-info-region") == []
       assert LazyHTML.attribute(map, "data-info-store") == ["plan-description-store"]
       assert LazyHTML.attribute(map, "data-info-hover") == ["plan-description-hover"]
       assert LazyHTML.attribute(map, "data-insert-reveal") == ["[data-plan-picker=open]"]
 
-      # The three ids it names are on the page, once each.
+      # The description region and the two ids the map names are on the
+      # page, once each.
       page = LazyHTML.from_document(html)
       assert page |> LazyHTML.query("#plan-description") |> Enum.count() == 1
       assert page |> LazyHTML.query("#plan-description-store[hidden]") |> Enum.count() == 1
