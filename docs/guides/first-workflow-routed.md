@@ -327,6 +327,8 @@ Each of these is in `statifier_router`'s README and not needed here:
 - **A front.** The recipe calls `StatifierRouter.route/3` itself. A host
   starts `StatifierRouter.Broadway` with the producer it already runs, or
   calls `StatifierRouter.Webhook` from a controller.
+  `docs/guides/first-workflow-form-post.md` stores a form post and calls
+  `StatifierRouter.Webhook` from a job, with the stored row's id alone.
 - **Bindings per scope.** One `:bindings` list serves every scope here; a
   host whose scopes route differently gives a `:bindings_resolver` instead.
   The publish-time checks read `:bindings` alone, so such a host checks each
@@ -338,7 +340,9 @@ Each of these is in `statifier_router`'s README and not needed here:
   statifier_blocks 0.42.1 cannot author a routed `<send>` - `core.send`
   declares no `type` or `target`. A `<send>` of the router's type to a
   registered route reaches the same adapter, and a delayed one needs a
-  `:timer_queue`.
+  `:timer_queue`. `docs/guides/first-workflow-form-post.md` sends to two
+  registered routes from its chart, through this app's own typed-send
+  block type, `StatifierExamples.TypedSendStep`.
 
 ## Moving the first-workflow host to these pins
 
