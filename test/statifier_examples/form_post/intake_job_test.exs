@@ -5,12 +5,12 @@ defmodule StatifierExamples.FormPost.IntakeJobTest do
   configuration, inside the library system the application was stored
   under, and nothing the visitor typed reaches the router.
 
-  The card application document is another change's; these tests route to
-  a stand-in of the same id, `test/fixtures/form_post/card_application_stand_in.json`,
-  named through `StatifierExamples.FormPost.PublishedCharts`' test knob.
+  The application routes to the card application document itself,
+  `priv/form_post/card_application.json`: the execution it creates waits
+  on the screen's job, which these tests never run.
 
-  Not async: writes to the repo, steps through the application's named
-  serialization strategy and sets the application environment.
+  Not async: writes to the repo and steps through the application's named
+  serialization strategy.
   """
   use ExUnit.Case, async: false
   # The engine and notifier are named because `Oban.Testing` builds its
@@ -39,24 +39,10 @@ defmodule StatifierExamples.FormPost.IntakeJobTest do
   alias StatifierRouter.Config
   alias StatifierRouter.Schema.{Address, Dedupe, Ledger}
 
-  @stand_in Path.expand("../../fixtures/form_post/card_application_stand_in.json", __DIR__)
-
   @values ["Linnea Brook", "linnea.brook@example.com", "555-0177", "41 Weir Street"]
 
   setup do
     :ok = Sandbox.checkout(Repo)
-
-    previous = Application.get_env(:statifier_examples, PublishedCharts)
-    Application.put_env(:statifier_examples, PublishedCharts, document: @stand_in)
-
-    on_exit(fn ->
-      case previous do
-        nil -> Application.delete_env(:statifier_examples, PublishedCharts)
-        env -> Application.put_env(:statifier_examples, PublishedCharts, env)
-      end
-    end)
-
-    :ok
   end
 
   defp register! do

@@ -2,7 +2,9 @@ defmodule StatifierExamples.FormPost.Stepper do
   @moduledoc """
   The card application router's `:on_create` and `:on_step`: this app's
   execution door, which every create and every step the router makes for
-  a card application goes through.
+  a card application goes through, and so does every step
+  `StatifierExamples.FormPost.Delivery` makes for a step's answer or a
+  fired deadline.
 
   A host whose own engine wraps statifier_persistence's two doors hands
   the router a stand-in for each, and the router calls it where it would
@@ -13,8 +15,9 @@ defmodule StatifierExamples.FormPost.Stepper do
       system is held (`StatifierExamples.FormPost.Scope.fetch/0`), the
       way a host's own door refuses to run outside a tenant. Every door
       the router drives itself runs inside
-      `StatifierExamples.FormPost.Scope.around_delivery/3`, so the
-      refusal is only ever met by a call made outside the router's doors;
+      `StatifierExamples.FormPost.Scope.around_delivery/3`, and so does
+      every step `StatifierExamples.FormPost.Delivery` makes, so the
+      refusal is only ever met by a call made outside both;
     * it adds this app's serialization strategy, through
       `StatifierExamples.RoutedWorkflow.Stepper`: SQLite has no
       per-execution lock for the router's default calls to take, and that
@@ -43,7 +46,7 @@ defmodule StatifierExamples.FormPost.Stepper do
           StatifierPersistence.Storage.t(),
           String.t(),
           Statifier.Machine.t(),
-          Statifier.Event.t(),
+          Statifier.Event.t() | StatifierPersistence.Executions.event_builder(),
           keyword()
         ) ::
           {:ok, StatifierPersistence.Execution.t(), Statifier.MachineState.t()}
