@@ -51,6 +51,10 @@ is the routed version, and `mix statifier_examples.first_workflow_routed` runs
 it: where the first guide opens its execution by hand, this one lets
 `statifier_router` open it, routing each event from a source to the one
 execution its key names and handing the finished execution's answer to a sink.
+[`docs/guides/first-workflow-form-post.md`](docs/guides/first-workflow-form-post.md)
+starts from a form post, and `mix statifier_examples.first_workflow_form_post`
+runs it: the host stores the post and answers, a job routes the stored row's
+id alone, and the chart's steps read the posted values back by that id.
 [`docs/guides/migrating-waiting-executions.md`](docs/guides/migrating-waiting-executions.md)
 moves waiting library loans onto a new revision of their document and back,
 and `mix statifier_examples.migrate_waiting` runs it.
