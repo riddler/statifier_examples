@@ -23,13 +23,13 @@ The recipe is written and checked against these releases, which are what
 
 | Package | Version | What the recipe uses it for |
 |---|---|---|
-| `statifier_router` | 0.11.3 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
+| `statifier_router` | 0.12.0 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
 | `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_blocks` | 0.42.1 | the document and the compile |
 | `statifier` | 2.12.1 | compiling the chart and running it |
 
-`statifier_router` 0.11.3 requires `statifier ~> 2.10` and
-`statifier_persistence ~> 0.18`, as 0.9.2 and 0.10.0 did.
+`statifier_router` 0.12.0 requires `statifier ~> 2.10` and
+`statifier_persistence ~> 0.18`, as 0.9.2, 0.10.0 and 0.11.3 did.
 `mix.exs` asks for `statifier ~> 2.12` and `statifier_persistence ~> 0.24`
 all the same, the lines this table names: 0.20.0 is the release that
 adds `Executions.migrate_batch/3`, which
@@ -342,7 +342,14 @@ Each of these is in `statifier_router`'s README and not needed here:
 
 ## Moving the first-workflow host to these pins
 
-The latest move, to statifier_router 0.11.3, statifier_persistence
+The latest move, from statifier_router 0.11.3 to 0.12.0, needed nothing
+in this recipe: 0.12.0 adds no option, event or migration version, and
+answers every webhook request that carries a raw body exactly as 0.11
+did. What it adds is a request with no raw body beside a provider id of
+the front's own, and this recipe routes with `StatifierRouter.route/3`,
+not the webhook front.
+
+The move before it, to statifier_router 0.11.3, statifier_persistence
 0.24.1, statifier_blocks 0.42.1 and statifier 2.12.1, needed nothing in
 this recipe: the router and persistence releases change documentation
 only, statifier_blocks 0.42.0 changes the Map and the editor's note
@@ -350,7 +357,7 @@ field, which the recipe does not mount, and statifier 2.11.0 and 2.12.0
 change what a Basic HTTP send and the validator answer at edges this
 chart does not reach.
 
-The move before it, from statifier_router 0.10.0 to 0.11.0, needed nothing in
+The move before that, from statifier_router 0.10.0 to 0.11.0, needed nothing in
 this recipe: 0.11.0 adds no migration version; its two new options,
 `:wrap_target` beside `:around_delivery` and `run_in_scope:` in a
 delivery's envelope, change nothing unless a configuration or a call sets

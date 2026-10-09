@@ -23,7 +23,7 @@ The recipe is written and checked against these releases, which are what
 | `statifier_blocks` | 0.42.1 | the document, `Plan.expressible/3`, the compile |
 | `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.17.2 | the invoke job and its `:invoke_timeout`, the timer job |
-| `statifier_router` | 0.11.3 | two of the publish-time checks |
+| `statifier_router` | 0.12.0 | two of the publish-time checks |
 
 `statifier_datamodel` 0.5.2 arrives through `statifier_blocks`. The first
 line the command prints names the versions it actually loaded.
@@ -294,3 +294,7 @@ invoke handler's `:deferred` answer, its event, a handler's
 `myapp:set_aside` answers at once, declares no cap, and the timer
 delivery never snoozes. Every other release in the move changes
 documentation only.
+
+The move to statifier_router 0.12.0 needed nothing here either: it
+lets a webhook request leave out its raw body beside a provider id of
+its own, and this recipe sends no webhook request.

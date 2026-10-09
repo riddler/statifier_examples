@@ -36,7 +36,7 @@ defmodule StatifierExamples.RoutedWorkflowTest do
     assert {:ok, lines} = RoutedWorkflow.run(parcel_id: "parcel-test")
 
     assert [
-             "first workflow routed on statifier_router 0.11." <> _pins,
+             "first workflow routed on statifier_router 0.12." <> _pins,
              "migrated     4 router tables, depot_id at position 2 on each",
              "published    bdoc_parcel_route accepts parcel.scanned; " <>
                "every publish-time check passed, 0 warning(s)",

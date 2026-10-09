@@ -166,6 +166,10 @@ defmodule StatifierExamples.FormPost.IntakeJobTest do
     # Sabotage: made `IntakeJob.request/2` put the posted email address in
     # the event's data beside the id (read back through the reader); this
     # went red on the request's data. Reverted from a copy.
+    # 2026-10-09: the request leaves out `:raw_body` on statifier_router
+    # 0.12.0. Sabotage: put `raw_body: message_id` back in
+    # `IntakeJob.request/2`; this went red on the request's keys.
+    # Reverted from a copy.
     test "the job's arguments, the request and every router row carry the id and no value" do
       register!()
       id = store!()
@@ -179,13 +183,12 @@ defmodule StatifierExamples.FormPost.IntakeJobTest do
                scope: "riverbend",
                source: "card_application_form",
                provider_id: provider_id,
-               raw_body: provider_id,
                data: %{"application_id" => ^id} = data
              } = request = IntakeJob.request("riverbend", id)
 
       assert provider_id == Integer.to_string(id)
       assert map_size(data) == 1
-      assert map_size(request) == 5
+      assert [:data, :provider_id, :scope, :source] == request |> Map.keys() |> Enum.sort()
 
       assert :ok = perform_job(IntakeJob, %{"application_id" => id})
 

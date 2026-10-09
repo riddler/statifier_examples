@@ -13,16 +13,16 @@ defmodule StatifierExamples.FormPost.IntakeJob do
   the row's `scope` column and nothing else, and hands the application to
   `statifier_router`'s webhook front, `StatifierRouter.Webhook.handle/3`,
   under `StatifierExamples.FormPost.Router.config/0`. The request carries
-  the id three times and no posted value:
+  the id twice and no posted value:
 
     * `:provider_id` is the id as a string, so it is the message id the
       router dedupes on. A second run of this job for the same application
       is that same message, and the router answers it as a duplicate
       without reaching the execution. The row's id is unique across every
-      library system, so one binding serves them all;
-    * `:raw_body` is the id as a string too. This app's `statifier_router`
-      requires a raw body even when the provider id wins, and the id is
-      the only body this host has: it never hands the router the posted
+      library system, so one binding serves them all. No `:raw_body`
+      goes with it: `statifier_router` 0.12.0 takes a request without one
+      when its provider id is a non-empty string, and this host has no
+      body to hand over, since it never gives the router the posted
       values;
     * `:data` is `%{"application_id" => id}`, the event the binding keys by
       and projects into the execution.
@@ -85,12 +85,6 @@ defmodule StatifierExamples.FormPost.IntakeJob do
       scope: scope,
       source: Router.source(),
       provider_id: message_id,
-      # The raw body is required on this app's statifier_router, even when
-      # the provider id wins, so the id stands in for the body this host
-      # never hands the router. statifier_router 0.12.0 makes it optional
-      # beside a non-empty provider id; the line goes when this app moves
-      # to that release.
-      raw_body: message_id,
       data: %{"application_id" => id}
     }
   end
