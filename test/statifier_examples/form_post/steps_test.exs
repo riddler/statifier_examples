@@ -1,6 +1,6 @@
 defmodule StatifierExamples.FormPost.StepsTest do
   @moduledoc """
-  The card application's two steps: each is handed the application's id,
+  The card application's three steps: each is handed the application's id,
   reads the stored row back through the one reader under the library
   system, and answers one word. No field value the visitor typed reaches
   the answer, the job's arguments, the job's errors or the telemetry the
@@ -24,6 +24,7 @@ defmodule StatifierExamples.FormPost.StepsTest do
     CardApplications,
     CheckServiceArea,
     ScreenApplication,
+    SortApplication,
     Steps
   }
 
@@ -55,22 +56,28 @@ defmodule StatifierExamples.FormPost.StepsTest do
     on_exit(fn ->
       Application.delete_env(:statifier_examples, ScreenApplication)
       Application.delete_env(:statifier_examples, CheckServiceArea)
+      Application.delete_env(:statifier_examples, SortApplication)
     end)
 
     :ok
   end
 
-  defp store!(street_address, scope \\ "riverbend") do
-    {:ok, %CardApplication{id: id}, :created} =
-      CardApplications.receive_application(scope, %{
-        "name" => "Juniper Ashby",
-        "email" => "juniper.ashby@example.com",
-        "phone" => "555-0163",
-        "street_address" => street_address,
-        "wants_card" => "true",
-        "wants_newsletter" => "true",
-        "idempotency_key" => "form-#{System.unique_integer([:positive])}"
-      })
+  defp store!(street_address, scope \\ "riverbend", wants \\ %{}) do
+    form =
+      Map.merge(
+        %{
+          "name" => "Juniper Ashby",
+          "email" => "juniper.ashby@example.com",
+          "phone" => "555-0163",
+          "street_address" => street_address,
+          "wants_card" => "true",
+          "wants_newsletter" => "true",
+          "idempotency_key" => "form-#{System.unique_integer([:positive])}"
+        },
+        wants
+      )
+
+    {:ok, %CardApplication{id: id}, :created} = CardApplications.receive_application(scope, form)
 
     id
   end
@@ -90,6 +97,7 @@ defmodule StatifierExamples.FormPost.StepsTest do
 
   defp screen(id), do: ScreenApplication.run(invoke("myapp:screen_application", app(id)))
   defp area(id), do: CheckServiceArea.run(invoke("myapp:check_service_area", app(id)))
+  defp sort(id), do: SortApplication.run(invoke("myapp:sort_application", app(id)))
   defp app(id), do: %{"application_id" => id}
 
   # Every field value the fixture posts, the street address included,
@@ -160,13 +168,56 @@ defmodule StatifierExamples.FormPost.StepsTest do
     end
   end
 
+  describe "myapp:sort_application" do
+    # Sabotage: made the sort answer "card" for a row that wants both;
+    # this went red on "both". Reverted from a copy.
+    test "answers both for an application that asked for a card and the newsletter" do
+      assert {:ok, "both"} = sort(store!("12 Millrace Lane"))
+    end
+
+    # Sabotage: made the sort read `wants_newsletter` for the card; this
+    # went red on "card". Reverted from a copy.
+    test "answers card for an application that asked for a card only" do
+      id = store!("12 Millrace Lane", "riverbend", %{"wants_newsletter" => "false"})
+      assert {:ok, "card"} = sort(id)
+    end
+
+    # Sabotage: dropped the newsletter clause from the sort, so a
+    # newsletter-only row fell through to "neither"; this went red on
+    # "newsletter". Reverted from a copy.
+    test "answers newsletter for an application that asked for the newsletter only" do
+      id = store!("12 Millrace Lane", "riverbend", %{"wants_card" => "false"})
+      assert {:ok, "newsletter"} = sort(id)
+    end
+
+    # The form refuses an application that asks for neither, so the row is
+    # stored past it: the sort answers for what is stored.
+    #
+    # Sabotage: made the sort's last clause answer "newsletter"; this went
+    # red on "neither". Reverted from a copy.
+    test "answers neither for a stored row that asked for neither" do
+      %CardApplication{id: id} =
+        Repo.insert!(%CardApplication{
+          scope: "riverbend",
+          name: "Juniper Ashby",
+          email: "juniper.ashby@example.com",
+          street_address: "12 Millrace Lane",
+          wants_card: false,
+          wants_newsletter: false,
+          idempotency_key: "form-#{System.unique_integer([:positive])}"
+        })
+
+      assert {:ok, "neither"} = sort(id)
+    end
+  end
+
   describe "what a step is handed" do
     # Sabotage: made `Steps.application_id/1` take the id out of params of
     # any size; this went red on the extra param's refusal. Reverted.
     test "params beyond the id are refused, and the refusal names keys only" do
       id = store!("12 Millrace Lane")
 
-      for handler <- [ScreenApplication, CheckServiceArea] do
+      for handler <- [ScreenApplication, SortApplication, CheckServiceArea] do
         params = %{"application_id" => id, "name" => "Juniper Ashby"}
 
         assert {:error, {:params_not_an_application_id, ["application_id", "name"]} = reason} =
@@ -186,6 +237,7 @@ defmodule StatifierExamples.FormPost.StepsTest do
 
       assert {:error, {:application_not_found, ^other}} = screen(other)
       assert {:error, {:application_not_found, ^other}} = area(other)
+      assert {:error, {:application_not_found, ^other}} = sort(other)
       assert {:error, {:application_not_found, 0}} = screen(0)
     end
   end
@@ -262,7 +314,8 @@ defmodule StatifierExamples.FormPost.StepsTest do
             {ScreenApplication, "12 Millrace Lane", "ok"},
             {ScreenApplication, "PO Box 14", "screened_out"},
             {CheckServiceArea, "12 Millrace Lane", "inside"},
-            {CheckServiceArea, "8 Quarry Road", "outside"}
+            {CheckServiceArea, "8 Quarry Road", "outside"},
+            {SortApplication, "12 Millrace Lane", "both"}
           ] do
         id = store!(street_address)
         {invoke, job} = enqueue!(handler, id)
