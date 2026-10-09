@@ -1,7 +1,8 @@
 defmodule StatifierExamples.FormPost.CardApplications.Writer do
   @moduledoc """
   The one module that updates a stored card application after the post is
-  stored: it writes the outside system's reference back to the row.
+  stored: it writes the outside system's reference back to the row, and it
+  clears the personal fields once the host's retention says so.
 
   One writer, as `StatifierExamples.FormPost.CardApplications.Reader` is
   one reader: a reviewer reads this module's callers to see every later
@@ -42,5 +43,41 @@ defmodule StatifierExamples.FormPost.CardApplications.Writer do
       {0, _} -> {:error, :not_found}
       {_count, _} -> :ok
     end
+  end
+
+  @doc """
+  Clears the personal fields of every application the library system
+  `scope` stored whose `status` is `status` and whose `updated_at` is
+  strictly before `cutoff`, and answers how many it cleared.
+
+  The personal fields are the name, the email address, the phone number
+  and the street address. The name, the email address and the street
+  address are `NOT NULL` columns, so they are written as empty strings;
+  the phone number is written as `nil`. Everything else stays: the id,
+  the library system, the client's idempotency key, the two interests,
+  the status, the two outside references and both stamps. A repeat post
+  of the same key is still matched by the `(scope, idempotency_key)`
+  unique index and answers the first application, and `updated_at` stays
+  the stamp of the outcome the age was measured from.
+
+  An application already cleared is not selected again, so a second call
+  with the same cutoff answers `{:ok, 0}`.
+
+  `status` is `"screened_out"` or `"sent"`, the two outcomes the host's
+  retention keys on (`StatifierExamples.FormPost.PurgeJob`).
+  """
+  @spec purge_personal_fields(String.t(), String.t(), DateTime.t()) :: {:ok, non_neg_integer()}
+  def purge_personal_fields(scope, status, %DateTime{} = cutoff)
+      when is_binary(scope) and status in ["screened_out", "sent"] do
+    query =
+      from(a in CardApplication,
+        where: a.scope == ^scope and a.status == ^status,
+        where: a.updated_at < ^cutoff and a.email != ""
+      )
+
+    {count, _} =
+      Repo.update_all(query, set: [name: "", email: "", phone: nil, street_address: ""])
+
+    {:ok, count}
   end
 end

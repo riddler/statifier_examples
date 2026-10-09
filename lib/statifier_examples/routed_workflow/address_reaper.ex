@@ -9,25 +9,37 @@ defmodule StatifierExamples.RoutedWorkflow.AddressReaper do
   One call examines a bounded number of rows and answers a cursor, so the
   job calls again from that cursor until it reaches the end of the table.
   The horizon of a row is read from the bindings handed to the reap, and
-  those are the bindings the recipe routes with.
+  those are `bindings/0`: the routed recipe's and the card application
+  recipe's, the two recipes whose rows share this table. A row whose
+  document no handed binding names has a horizon of zero, so leaving one
+  recipe's bindings out would delete its rows as soon as their execution
+  finished.
   """
 
   use Oban.Worker, queue: :router_maintenance
 
+  alias StatifierExamples.FormPost
   alias StatifierExamples.RoutedWorkflow
   alias StatifierRouter.Addresses
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    config = RoutedWorkflow.config()
-    sweep(config, [])
+    sweep(RoutedWorkflow.config(), bindings(), [])
   end
 
-  @spec sweep(StatifierRouter.Config.t(), keyword()) :: :ok | {:error, term()}
-  defp sweep(config, opts) do
-    case Addresses.reap(config, config.bindings, opts) do
+  @doc """
+  The bindings whose horizons the reap reads: every binding of each
+  recipe that routes on this app's router tables.
+  """
+  @spec bindings() :: [StatifierRouter.Binding.t()]
+  def bindings, do: RoutedWorkflow.config().bindings ++ FormPost.Router.config().bindings
+
+  @spec sweep(StatifierRouter.Config.t(), [StatifierRouter.Binding.t()], keyword()) ::
+          :ok | {:error, term()}
+  defp sweep(config, bindings, opts) do
+    case Addresses.reap(config, bindings, opts) do
       {:ok, %{next: nil}} -> :ok
-      {:ok, %{next: next}} -> sweep(config, after: next)
+      {:ok, %{next: next}} -> sweep(config, bindings, after: next)
       {:error, reason} -> {:error, reason}
     end
   end

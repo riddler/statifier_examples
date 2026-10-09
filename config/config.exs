@@ -49,6 +49,16 @@ config :statifier_examples, StatifierExamples.Repo,
 # (`StatifierExamples.FormPost.IntakeJob`); its arguments are the stored
 # row's id and nothing else.
 #
+# `retention` carries the card application recipe's two retention jobs,
+# which this crontab schedules daily: `StatifierExamples.FormPost.PurgeJob`
+# clears the personal fields of the host's stored applications once their
+# outcome is old enough, and `StatifierExamples.FormPost.PruneJob` clears
+# what a finished execution leaves in the engine's store. The router's two
+# reapers above already sweep the router's tables the card application's
+# deliveries write to; the address reaper reads the card application's
+# binding as well as the parcel route's, so each row keeps its own
+# horizon. The two retention jobs' ages are below, after this block.
+#
 # `desk_posts` carries the hold desk's BasicHTTP POSTs, each made after the
 # delivery that planned it has committed (`StatifierExamples.HoldDesk.DeskPost`).
 #
@@ -71,16 +81,36 @@ config :statifier_examples, Oban,
     parcel_notices: 1,
     router_maintenance: 1,
     desk_posts: 1,
-    card_application_intake: 1
+    card_application_intake: 1,
+    retention: 1
   ],
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [
        {"@hourly", StatifierExamples.RoutedWorkflow.DedupeReaper},
-       {"@hourly", StatifierExamples.RoutedWorkflow.AddressReaper}
+       {"@hourly", StatifierExamples.RoutedWorkflow.AddressReaper},
+       {"@daily", StatifierExamples.FormPost.PurgeJob},
+       {"@daily", StatifierExamples.FormPost.PruneJob}
      ]}
   ],
   pruner: [max_age: {7, :days}]
+
+# How long the card application recipe keeps what it stores, in days.
+# Retention is the host's: these are this example's own numbers, not a
+# recommendation, and a host sets its own.
+#
+# `StatifierExamples.FormPost.PurgeJob` clears a stored application's
+# personal fields this long after it was screened out, or after it was
+# sent; the row, its id and its idempotency key stay, so a repeat post
+# is still matched.
+config :statifier_examples, StatifierExamples.FormPost.PurgeJob,
+  screened_out_after_days: 10,
+  sent_after_days: 45
+
+# `StatifierExamples.FormPost.PruneJob` clears the position blob and the
+# input log of every execution that ended this long ago, through
+# `StatifierPersistence.Retention.prune/3`.
+config :statifier_examples, StatifierExamples.FormPost.PruneJob, ended_after_days: 90
 
 # How long an unverified signup waits before the wizard nudges it.
 #
