@@ -30,7 +30,8 @@ defmodule StatifierExamples.FormPost do
        ledger holds one row per attempt.
     7. `:ids_only` - none of the four posted personal values is in the
        execution's datamodel, its input log, or any of the application's
-       jobs' arguments.
+       jobs' arguments, with every `statifier_oban` opaque field in them
+       decoded first.
     8. `:screened_out` - an application whose street address is a post
        office box ends at the screen: the execution completes with the
        sort never asked, nothing is sent, and the stored application's
@@ -59,6 +60,7 @@ defmodule StatifierExamples.FormPost do
     Router
   }
 
+  alias StatifierOban.OpaqueTerm
   alias StatifierPersistence.{Execution, Executions, Storage}
   alias StatifierRouter.Config
   alias StatifierRouter.Schema.{Address, Ledger}
@@ -248,11 +250,12 @@ defmodule StatifierExamples.FormPost do
   @spec ids_only(integer(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
   defp ids_only(id, execution_id) do
     with {:ok, datamodel} <- datamodel(execution_id),
-         {:ok, inputs} <- Executions.inputs(FirstWorkflow.store(), execution_id) do
+         {:ok, inputs} <- Executions.inputs(FirstWorkflow.store(), execution_id),
+         {:ok, job_args} <- job_args(id, execution_id) do
       no_posted_value([
         {"datamodel", datamodel},
         {"input log", Enum.map(inputs, &(&1.event && &1.event.data))},
-        {"job arguments", job_args(id, execution_id)}
+        {"job arguments", job_args}
       ])
     end
   end
@@ -376,12 +379,52 @@ defmodule StatifierExamples.FormPost do
 
   # Every job stored for the application: the intake job, by the id in its
   # arguments, and the steps' jobs and timers, by the execution they run
-  # under.
-  @spec job_args(integer(), String.t()) :: [map()]
+  # under. `statifier_oban` stores a job's host-opaque fields (an invoke's
+  # params, content and caller context, a timer's data and caller context)
+  # as Base64 term payloads, which a search of the stored text would read
+  # past, so each one is decoded first, all the way down.
+  @spec job_args(integer(), String.t()) :: {:ok, [term()]} | {:error, term()}
   defp job_args(id, execution_id) do
-    intake_args(id) ++
+    jobs =
       Repo.all(from(j in Oban.Job, where: j.args["scope"] == ^execution_id, select: j.args))
+
+    opened(intake_args(id) ++ jobs)
   end
+
+  # A term with every `statifier_oban` opaque payload in it decoded, or the
+  # first payload that cannot be decoded.
+  @spec opened(term()) :: {:ok, term()} | {:error, term()}
+  defp opened(%{"t2b64" => _encoded} = payload) do
+    case OpaqueTerm.decode_field(%{"payload" => payload}, "payload") do
+      {:ok, term} -> opened(term)
+      {:error, reason} -> {:error, {:undecodable_job_argument, reason}}
+    end
+  end
+
+  defp opened(%_{} = struct), do: opened(Map.from_struct(struct))
+
+  defp opened(map) when is_map(map) do
+    with {:ok, pairs} <- opened(Map.to_list(map)), do: {:ok, Map.new(pairs)}
+  end
+
+  defp opened(tuple) when is_tuple(tuple) do
+    with {:ok, items} <- opened(Tuple.to_list(tuple)), do: {:ok, List.to_tuple(items)}
+  end
+
+  defp opened(list) when is_list(list) do
+    Enum.reduce_while(list, {:ok, []}, fn item, {:ok, acc} ->
+      case opened(item) do
+        {:ok, term} -> {:cont, {:ok, [term | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, items} -> {:ok, Enum.reverse(items)}
+      error -> error
+    end
+  end
+
+  defp opened(other), do: {:ok, other}
 
   @spec stored_under(String.t()) :: Ecto.Query.t()
   defp stored_under(key) do

@@ -206,7 +206,11 @@ The routing ledger holds one row per attempt:
 
 The recipe reads back the execution's datamodel, its input log and every
 job stored for the application, and checks that none of the four personal
-values the visitor typed is in any of them.
+values the visitor typed is in any of them. `statifier_oban` stores a
+job's host-opaque fields (an invoke's params, content and caller context,
+a timer's data and caller context) as Base64 term payloads, so the recipe
+decodes each one with `StatifierOban.OpaqueTerm.decode_field/2` before it
+searches; a payload it cannot decode stops the step.
 
 ## 8. A screened-out application
 

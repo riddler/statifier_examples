@@ -25,7 +25,9 @@ defmodule StatifierExamples.FormPostTest do
   # Sabotage: made the recipe's wait skip `Drain.run/1`; the jobs never
   # ran and this went red with the recipe naming `routed`. Putting the
   # posted values among the job arguments `ids_only` reads went red at
-  # `ids_only`; dropping the area from the words line went red on the
+  # `ids_only`, and so did hiding one in a `statifier_oban` opaque field
+  # among them (the same hidden value with the decode skipped stayed
+  # green); dropping the area from the words line went red on the
   # `routed` line. Each reverted from a copy.
   test "runs the whole recipe, and the engine holds ids and words only" do
     assert {:ok, lines} = FormPost.run(idempotency_key: "form-test")
