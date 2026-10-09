@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_card_application",
+  "revision": 1,
+  "metadata": {
+    "name": "Card application",
+    "description": "One application posted on the Riverbend Public Library's card application form: the library screens it, sorts it into a borrowing card, the events newsletter or both, checks a card applicant's address is inside the service area, and hands it to the patron system and the newsletter list. The chart holds the application's id and the steps' words, never what the visitor typed.",
+    "domain": "library"
+  },
+  "datamodel": [
+    {
+      "id": "application_id",
+      "description": "The stored application's id, from the event that opened this execution. Every step reads the application by it."
+    },
+    {
+      "id": "screen",
+      "description": "The screen's word: ok or screened_out, or unscreened when the screen did not answer in time.",
+      "expr": "\"unscreened\""
+    },
+    {
+      "id": "sort",
+      "description": "The sort's word: card, newsletter, both or neither, or unsorted when the sort did not answer.",
+      "expr": "\"unsorted\""
+    },
+    {
+      "id": "area",
+      "description": "The service-area check's word: inside or outside, or check_at_desk when the check did not answer in time.",
+      "expr": "\"check_at_desk\""
+    }
+  ],
+  "accepts": ["application.received"],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_ca_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "core.group",
+          "id": "blk_ca_receive",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "core.wait",
+                "id": "blk_ca_arrival",
+                "type_version": 2,
+                "config": {
+                  "duration": "1h"
+                }
+              }
+            ],
+            "interrupts": [
+              {
+                "type": "core.on_event",
+                "id": "blk_ca_received",
+                "type_version": 1,
+                "config": {
+                  "event": "application.received",
+                  "outcome": "abandon",
+                  "payload": [
+                    {"name": "application_id", "type": "integer"}
+                  ],
+                  "capture": {
+                    "application_id": "application_id"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "core.group",
+          "id": "blk_ca_screen",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "core.send",
+                "id": "blk_ca_screen_timer",
+                "type_version": 2,
+                "config": {
+                  "event": "deadline.screen",
+                  "delay": "5s"
+                }
+              },
+              {
+                "type": "core.invoke",
+                "id": "blk_ca_screen_call",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:screen_application",
+                  "assign_to": "screen",
+                  "params": "application_id=application_id"
+                }
+              }
+            ],
+            "interrupts": [
+              {
+                "type": "core.on_event",
+                "id": "blk_ca_screen_bound",
+                "type_version": 1,
+                "config": {
+                  "event": "deadline.screen",
+                  "outcome": "abandon"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "core.group",
+          "id": "blk_ca_application",
+          "type_version": 1,
+          "slots": {
+            "body": [
+              {
+                "type": "core.branch",
+                "id": "blk_ca_if_screened_out",
+                "type_version": 1,
+                "config": {
+                  "arms": [
+                    {"slot": "arm_screened_out", "cond": "screen == \"screened_out\""}
+                  ]
+                },
+                "slots": {
+                  "arm_screened_out": [
+                    {
+                      "type": "core.raise",
+                      "id": "blk_ca_withdraw",
+                      "type_version": 1,
+                      "config": {
+                        "event": "application.screened_out"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "core.invoke",
+                "id": "blk_ca_sort_call",
+                "type_version": 1,
+                "config": {
+                  "invoke_type": "myapp:sort_application",
+                  "assign_to": "sort",
+                  "params": "application_id=application_id"
+                }
+              },
+              {
+                "type": "core.parallel",
+                "id": "blk_ca_lanes",
+                "type_version": 1,
+                "config": {
+                  "lanes": ["card", "newsletter"],
+                  "complete": "all"
+                },
+                "slots": {
+                  "lane_card": [
+                    {
+                      "type": "core.branch",
+                      "id": "blk_ca_if_card",
+                      "type_version": 1,
+                      "config": {
+                        "arms": [
+                          {"slot": "arm_asked", "cond": "sort in [\"card\", \"both\"]"}
+                        ]
+                      },
+                      "slots": {
+                        "arm_asked": [
+                          {
+                            "type": "core.group",
+                            "id": "blk_ca_area",
+                            "type_version": 1,
+                            "slots": {
+                              "body": [
+                                {
+                                  "type": "core.send",
+                                  "id": "blk_ca_area_timer",
+                                  "type_version": 2,
+                                  "config": {
+                                    "event": "deadline.area",
+                                    "delay": "5s"
+                                  }
+                                },
+                                {
+                                  "type": "core.invoke",
+                                  "id": "blk_ca_area_call",
+                                  "type_version": 1,
+                                  "config": {
+                                    "invoke_type": "myapp:check_service_area",
+                                    "assign_to": "area",
+                                    "params": "application_id=application_id"
+                                  }
+                                }
+                              ],
+                              "interrupts": [
+                                {
+                                  "type": "core.on_event",
+                                  "id": "blk_ca_area_bound",
+                                  "type_version": 1,
+                                  "config": {
+                                    "event": "deadline.area",
+                                    "outcome": "abandon"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "type": "myapp.typed_send",
+                            "id": "blk_ca_send_card",
+                            "type_version": 1,
+                            "config": {
+                              "label": "Hand to the patron system",
+                              "type": "myapp:route",
+                              "target": "patron_system",
+                              "event": "card_application.sorted",
+                              "payload": ["application_id", "screen", "sort", "area"]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "lane_newsletter": [
+                    {
+                      "type": "core.branch",
+                      "id": "blk_ca_if_newsletter",
+                      "type_version": 1,
+                      "config": {
+                        "arms": [
+                          {"slot": "arm_asked", "cond": "sort in [\"newsletter\", \"both\"]"}
+                        ]
+                      },
+                      "slots": {
+                        "arm_asked": [
+                          {
+                            "type": "myapp.typed_send",
+                            "id": "blk_ca_send_newsletter",
+                            "type_version": 1,
+                            "config": {
+                              "label": "Hand to the newsletter list",
+                              "type": "myapp:route",
+                              "target": "newsletter",
+                              "event": "card_application.sorted",
+                              "payload": ["application_id", "screen", "sort"]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "interrupts": [
+              {
+                "type": "core.on_event",
+                "id": "blk_ca_screened_out",
+                "type_version": 1,
+                "config": {
+                  "event": "application.screened_out",
+                  "outcome": "abandon",
+                  "finish_as": "abandoned"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,11 +1,13 @@
 defmodule StatifierExamples.FormPost.Steps do
   @moduledoc """
-  What the card application's two steps share: the `statifier_oban`
+  What the card application's three steps share: the `statifier_oban`
   configuration their jobs run under, the library system they read under,
   and the hook a test uses to make a step slow or fail.
 
   The steps are `StatifierExamples.FormPost.ScreenApplication`
-  (`myapp:screen_application`) and
+  (`myapp:screen_application`),
+  `StatifierExamples.FormPost.SortApplication`
+  (`myapp:sort_application`) and
   `StatifierExamples.FormPost.CheckServiceArea`
   (`myapp:check_service_area`). Each is handed the application's id and
   nothing else, reads the stored row through
@@ -14,7 +16,7 @@ defmodule StatifierExamples.FormPost.Steps do
 
   ## The delay and failure hook
 
-  Each step is bounded in the chart: a screen or an area check that has
+  The screen and the area check are bounded in the chart: one that has
   not answered in time is passed over, and the flow goes on without it.
   To show that path a step has to outlast its bound, so each one reads an
   application-env setting under its own module name when it runs:
@@ -52,7 +54,7 @@ defmodule StatifierExamples.FormPost.Steps do
   def library_system, do: @library_system
 
   @doc """
-  The `statifier_oban` configuration both steps' jobs run under: this
+  The `statifier_oban` configuration every step's job runs under: this
   app's Oban instance and its invocations queue, which
   `config/config.exs` already defines.
 

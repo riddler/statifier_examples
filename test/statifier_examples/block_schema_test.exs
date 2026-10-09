@@ -6,10 +6,10 @@ defmodule StatifierExamples.BlockSchemaTest do
   the schema's moduledoc says a host uses it.
 
   The shipped block documents are found by glob rather than listed, so a
-  document added under `priv/fixtures/` or `priv/first_workflow/` is
-  checked without anyone remembering to add it here. The two files under
-  `priv/fixtures/` that are not block documents are named below, and the
-  test proves that each is not one.
+  document added under `priv/fixtures/`, `priv/first_workflow/` or
+  `priv/form_post/` is checked without anyone remembering to add it here.
+  The two files under `priv/fixtures/` that are not block documents are
+  named below, and the test proves that each is not one.
 
   From `statifier_blocks` 0.38.0 a block type's declared field types bind,
   so the same documents are also checked against the stricter,
@@ -30,7 +30,7 @@ defmodule StatifierExamples.BlockSchemaTest do
   alias StatifierBlocks.Schema
   alias StatifierExamples.Charts
 
-  @globs ["priv/fixtures/*.json", "priv/first_workflow/*.json"]
+  @globs ["priv/fixtures/*.json", "priv/first_workflow/*.json", "priv/form_post/*.json"]
 
   # Not block documents, so the block document's schema is not about them:
   # a datamodel document (`statifier_datamodel`'s shape, versioned by
@@ -67,6 +67,7 @@ defmodule StatifierExamples.BlockSchemaTest do
 
     assert "priv/first_workflow/hold_pickup.json" in documents
     assert "priv/fixtures/library_loan.json" in documents
+    assert "priv/form_post/card_application.json" in documents
 
     for path <- documents do
       bytes = File.read!(path)
@@ -89,6 +90,7 @@ defmodule StatifierExamples.BlockSchemaTest do
 
     assert "priv/first_workflow/hold_pickup.json" in documents
     assert "priv/fixtures/library_loan.json" in documents
+    assert "priv/form_post/card_application.json" in documents
 
     for path <- documents do
       assert :ok ==
