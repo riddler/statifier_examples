@@ -17,16 +17,7 @@ defmodule StatifierExamples.FormPost.PublishedCharts do
   ## The document
 
   The document is `priv/form_post/card_application.json`, whose id is
-  `StatifierExamples.FormPost.Router.document_id/0`. A test that routes
-  card applications without that document names another file of the same
-  id in the application environment:
-
-      config :statifier_examples, StatifierExamples.FormPost.PublishedCharts,
-        document: "/path/to/a/document.json"
-
-  No config file sets it: absent, the document is the one under `priv/`.
-  Like `StatifierExamples.FormPost.Steps`' hook, it is a test's knob, not
-  something a host ships.
+  `StatifierExamples.FormPost.Router.document_id/0`.
   """
 
   @behaviour StatifierRouter.Resolver
@@ -89,11 +80,5 @@ defmodule StatifierExamples.FormPost.PublishedCharts do
   end
 
   @spec path() :: Path.t()
-  defp path do
-    :statifier_examples
-    |> Application.get_env(__MODULE__, [])
-    |> Keyword.get_lazy(:document, fn ->
-      :statifier_examples |> :code.priv_dir() |> Path.join(@document)
-    end)
-  end
+  defp path, do: :statifier_examples |> :code.priv_dir() |> Path.join(@document)
 end

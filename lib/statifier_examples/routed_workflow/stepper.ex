@@ -38,7 +38,7 @@ defmodule StatifierExamples.RoutedWorkflow.Stepper do
           StatifierPersistence.Storage.t(),
           String.t(),
           Statifier.Machine.t(),
-          Statifier.Event.t(),
+          Statifier.Event.t() | StatifierPersistence.Executions.event_builder(),
           keyword()
         ) ::
           {:ok, StatifierPersistence.Execution.t(), Statifier.MachineState.t()}

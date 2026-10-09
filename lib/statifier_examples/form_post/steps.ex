@@ -1,8 +1,9 @@
 defmodule StatifierExamples.FormPost.Steps do
   @moduledoc """
   What the card application's three steps share: the `statifier_oban`
-  configuration their jobs run under, the library system they read under,
-  and the hook a test uses to make a step slow or fail.
+  configuration their jobs and the chart's deadline timers run under, the
+  executor half that stores those jobs, the library system they read
+  under, and the hook a test uses to make a step slow or fail.
 
   The steps are `StatifierExamples.FormPost.ScreenApplication`
   (`myapp:screen_application`),
@@ -32,7 +33,18 @@ defmodule StatifierExamples.FormPost.Steps do
   demo's, not something a host ships.
   """
 
-  alias StatifierOban.Config
+  alias Statifier.Effect.{Cancel, CancelInvoke, Invoke, SendDelayed}
+  alias Statifier.Invoke.Types
+
+  alias StatifierExamples.FormPost.{
+    CheckServiceArea,
+    Delivery,
+    ScreenApplication,
+    SortApplication
+  }
+
+  alias StatifierOban.{Config, Timer}
+  alias StatifierOban.Invoke.Handler
 
   # The library system this example's form belongs to, which the form's
   # controller also fixes.
@@ -40,6 +52,13 @@ defmodule StatifierExamples.FormPost.Steps do
 
   @invoke_queue :statifier_invocations
   @timers_queue :statifier_timers
+
+  # Each invoke type the document calls, and the step that serves it.
+  @handlers %{
+    "myapp:screen_application" => ScreenApplication,
+    "myapp:sort_application" => SortApplication,
+    "myapp:check_service_area" => CheckServiceArea
+  }
 
   @doc """
   The library system the steps read applications under.
@@ -54,21 +73,74 @@ defmodule StatifierExamples.FormPost.Steps do
   def library_system, do: @library_system
 
   @doc """
-  The `statifier_oban` configuration every step's job runs under: this
-  app's Oban instance and its invocations queue, which
-  `config/config.exs` already defines.
+  The `statifier_oban` configuration every step's job and every deadline
+  timer runs under: this app's Oban instance, its timers queue and its
+  invocations queue, which `config/config.exs` already defines.
 
-  No delivery module is named yet, so a finished step's answer goes to
-  the package's default. The recipe's own delivery, which steps the
-  stored execution, is named here when the chart runs on the app's Oban.
+  A finished step's answer and a fired timer both go to
+  `StatifierExamples.FormPost.Delivery`, which steps the stored execution.
   """
   @spec config() :: Config.t()
   def config do
-    case Config.new(oban: Oban, timers_queue: @timers_queue, invoke_queue: @invoke_queue) do
+    case Config.new(
+           oban: Oban,
+           timers_queue: @timers_queue,
+           delivery: Delivery,
+           invoke_queue: @invoke_queue,
+           invoke_delivery: Delivery
+         ) do
       {:ok, config} -> config
       {:error, reason} -> raise "statifier_oban is misconfigured: #{inspect(reason)}"
     end
   end
+
+  @doc """
+  The invoke types the card application document calls, the ones the
+  router's configuration registers for every create and step.
+  """
+  @spec invoke_types() :: [String.t()]
+  def invoke_types, do: Map.keys(@handlers)
+
+  @doc """
+  Hands one effect of a card application's step to `statifier_oban`: an
+  `<invoke>` of one of the three steps becomes that step's job, a cancelled
+  invocation cancels its job, a delayed `<send>` with no target becomes a
+  timer job, and a `<cancel>` cancels that timer. Every other effect is
+  answered `:ok` and left to the router's handler.
+
+  Each job is stored under the execution's id, with the invocation's
+  params or the timer's event as the chart wrote them: the application's
+  id, or nothing. A job that cannot be stored raises, as
+  `StatifierExamples.FirstWorkflow` does: answering `{:error, _}` here
+  would steer the chart with an infrastructure fact.
+  """
+  @spec execute(Statifier.Effect.t(), map()) :: :ok
+  def execute({:invoke, %Invoke{type: type} = invoke}, %{execution_id: scope})
+      when is_map_key(@handlers, type) do
+    :ok = Handler.perform_start(Map.fetch!(@handlers, type), invoke, handler_ctx(scope))
+  end
+
+  # An invocation's id is all a cancel carries. Every step's jobs run
+  # under the same configuration, so any one of the steps cancels it.
+  def execute({:cancel_invoke, %CancelInvoke{invoke_id: invoke_id}}, %{execution_id: scope}) do
+    :ok = Handler.perform_cancel(ScreenApplication, invoke_id, handler_ctx(scope))
+  end
+
+  def execute({:send_delayed, %SendDelayed{target: nil} = effect}, %{execution_id: scope}) do
+    {:ok, %Oban.Job{}} = Timer.schedule(config(), scope, effect)
+    :ok
+  end
+
+  def execute({:cancel, %Cancel{} = effect}, %{execution_id: scope}) do
+    {:ok, _count} = Timer.cancel(config(), scope, effect)
+    :ok
+  end
+
+  def execute(_effect, _context), do: :ok
+
+  @spec handler_ctx(String.t()) :: Statifier.Invoke.Handler.ctx()
+  defp handler_ctx(scope),
+    do: %{session_id: scope, invoke_types: Types.new(types: []), invoke_handlers: %{}}
 
   @doc """
   Runs the delay and failure hook configured for `step`, then `work`.

@@ -29,6 +29,22 @@ defmodule StatifierExamples.FormPost.Router do
       their own names: `StatifierExamples.FormPost.PatronSystemRoute` and
       `StatifierExamples.FormPost.NewsletterRoute`, under the send type
       `myapp:route`.
+    * **The three steps' invoke types** go with every create and step as
+      the `:invoke_types` persistence option
+      (`StatifierExamples.FormPost.Steps.invoke_types/0`), so the
+      document's `<invoke>`s reach the executor rather than being refused
+      as unsupported.
+    * **The executor** hands each effect to
+      `StatifierExamples.FormPost.Steps.execute/2` first, which stores
+      the steps' jobs and the deadline timers on this app's Oban through
+      `statifier_oban`, and then to the router's own handler, which
+      answers the typed sends. The deadline timers are `statifier_oban`'s:
+      the configuration has no `:timer_queue`, because the document sends
+      no delayed typed send, so the router holds no timer of its own.
+
+  A step's answer and a fired deadline come back through
+  `StatifierExamples.FormPost.Delivery`, outside any door of the router's;
+  that module's moduledoc says how they are stepped.
 
   The router's tables are the ones the routed recipe migrated
   (`priv/repo/migrations/20260925120001_add_statifier_router.exs`), with
@@ -51,9 +67,11 @@ defmodule StatifierExamples.FormPost.Router do
     PatronSystemRoute,
     PublishedCharts,
     Scope,
-    Stepper
+    Stepper,
+    Steps
   }
 
+  alias Statifier.Invoke.Types
   alias StatifierRouter.{Config, SendHandler}
 
   # The document id, which is also the name the binding, the resolver and
@@ -98,6 +116,7 @@ defmodule StatifierExamples.FormPost.Router do
            on_create: Stepper,
            on_step: Stepper,
            around_delivery: Scope,
+           persistence_options: [invoke_types: Types.new(types: Steps.invoke_types())],
            bindings: [application_binding()],
            send_type: @send_type,
            route_adapters: %{
@@ -129,12 +148,17 @@ defmodule StatifierExamples.FormPost.Router do
   end
 
   @doc """
-  The executor every create and step hands its effects to: the router's
-  own handler, which answers a `<send>` of `#{@send_type}` and passes every
+  The executor every create and step hands its effects to: first
+  `StatifierExamples.FormPost.Steps.execute/2`, which stores the steps'
+  jobs and the deadline timers on this app's Oban, then the router's own
+  handler, which answers a `<send>` of `#{@send_type}` and passes every
   other effect.
   """
   @spec execute(Statifier.Effect.t(), map()) :: :ok | {:error, term()}
-  def execute(effect, context), do: SendHandler.handle_effect(config(), effect, context)
+  def execute(effect, context) do
+    :ok = Steps.execute(effect, context)
+    SendHandler.handle_effect(config(), effect, context)
+  end
 
   @doc "The card application document's id."
   @spec document_id() :: String.t()
