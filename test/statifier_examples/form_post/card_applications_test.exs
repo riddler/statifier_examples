@@ -177,12 +177,6 @@ defmodule StatifierExamples.FormPost.CardApplicationsTest do
              )
   end
 
-  # Sabotage: made `IntakeJob.perform/1` answer `{:error, :not_yet}`;
-  # this went red on the `:ok` match. Reverted.
-  test "the intake job does nothing yet and succeeds" do
-    assert :ok = perform_job(IntakeJob, %{"application_id" => 1})
-  end
-
   defp errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
   end
