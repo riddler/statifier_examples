@@ -30,6 +30,17 @@ defmodule StatifierExamples.FormPost.Delivery do
   deadline fired is that case. A fired timer's event is the one
   `StatifierOban.Timer.Delivery.fired_event/2` builds.
 
+  A step that finishes the execution with the screen's word
+  `"screened_out"` in its datamodel also marks the stored application
+  screened out, through
+  `StatifierExamples.FormPost.CardApplications.Writer.record_screened_out/2`
+  under the same library system: the screen's answer reaches the chart,
+  and this is where the host's row learns the outcome, so the host's
+  retention can age it. The application's id is the one the datamodel
+  holds; the write reads no posted value. The write follows the step's
+  commit and is not part of it. A screen answer that arrives
+  after its bound is discarded before any step, so it never marks the row.
+
   Every answer is `:delivered` or `{:discarded, reason}`. A discard is the
   ordinary answer for an execution that is no longer live, or an answer
   nobody is waiting for, and it tells the job not to retry. A timer that
@@ -47,6 +58,7 @@ defmodule StatifierExamples.FormPost.Delivery do
   alias Statifier.Invoke.Answer
   alias Statifier.MachineState
   alias StatifierExamples.{FirstWorkflow, Repo}
+  alias StatifierExamples.FormPost.CardApplications.Writer
   alias StatifierExamples.FormPost.{PublishedCharts, Router, Scope, Stepper}
   alias StatifierOban.Timer.Delivery, as: TimerDelivery
   alias StatifierPersistence.{Execution, Executions, Storage}
@@ -109,12 +121,33 @@ defmodule StatifierExamples.FormPost.Delivery do
       Scope.around_delivery(scope, :job, fn ->
         store
         |> Stepper.step(execution_id, machine, event, options())
+        |> record_outcome(scope)
         |> stepped()
       end)
     else
       {:error, reason} -> {:discarded, reason}
     end
   end
+
+  # A step that finished the execution screened out marks the stored
+  # application so. The write follows the step's own commit rather than
+  # sharing it, so a crash between the two leaves the row "received"; the
+  # job's retry is then discarded, the invocation no longer being live. The
+  # row is never deleted (the host's purge clears its fields and keeps it),
+  # so a missing one is a broken invariant and raises.
+  @spec record_outcome(term(), String.t()) :: term()
+  defp record_outcome(
+         {:ok, %Execution{status: :completed},
+          %MachineState{datamodel: %{"screen" => "screened_out", "application_id" => id}}} =
+           stepped,
+         scope
+       )
+       when is_integer(id) do
+    :ok = Writer.record_screened_out(scope, id)
+    stepped
+  end
+
+  defp record_outcome(stepped, _scope), do: stepped
 
   @spec stepped(term()) :: :delivered | {:discarded, term()}
   defp stepped({:ok, %Execution{}, %MachineState{}}), do: :delivered

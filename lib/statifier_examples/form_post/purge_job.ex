@@ -25,9 +25,10 @@ defmodule StatifierExamples.FormPost.PurgeJob do
   The write is `StatifierExamples.FormPost.CardApplications.Writer`'s, the
   one module that updates a stored application.
 
-  No step writes `"screened_out"` to a stored application yet: the screen's
-  answer reaches the chart, not the row. Until one does, the screened-out
-  age clears nothing.
+  An application is marked `"screened_out"` by
+  `StatifierExamples.FormPost.Delivery` when the screen's answer ends its
+  execution screened out, and `"sent"` by the routes; each stamps
+  `updated_at` as it does, so the age is measured from the outcome.
 
   The ages are application config, in days, under this module's name in
   `config/config.exs`; the values there are this example's, not a
