@@ -1029,10 +1029,17 @@ defmodule StatifierExamples.MixDepsTest do
   # reads the 0.11 line. Sabotage: pointed the requirement expectation
   # back at `"~> 0.11.0"` and left `mix.exs` alone; the membership
   # assertion went red. Reverted from a copy.
+  #
+  # 2026-10-09: the requirement moves to `~> 0.12.0`, and 0.12.0 is
+  # REQUIRED: the card application intake job hands the webhook front a
+  # request with a provider id and no raw body, which 0.11 refused.
+  # Sabotage: pointed the LOCK assertion back at `"0.11.` and left
+  # `mix.lock` alone; it went red reporting the resolved 0.12.0 entry.
+  # Reverted from a copy.
   test "the statifier_router dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_router, "~> 0.11.3"} in deps
+    assert {:statifier_router, "~> 0.12.0"} in deps
 
     lock_line =
       "mix.lock"
@@ -1041,7 +1048,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_router": )))
 
     assert lock_line, "statifier_router has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_router, "0.11.)
+    assert lock_line =~ ~s({:hex, :statifier_router, "0.12.)
     refute lock_line =~ ":git,"
   end
 

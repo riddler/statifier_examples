@@ -659,7 +659,18 @@ defmodule StatifierExamples.MixProject do
       # for the router moves to 0.11.3. 0.11.1, 0.11.2 and 0.11.3 change the
       # package's documentation only; its code and its `statifier ~> 2.10`
       # requirement are 0.11.0's.
-      {:statifier_router, "~> 0.11.3"},
+      #
+      # 2026-10-09: the requirement moves to `~> 0.12.0`, and 0.12.0 is
+      # REQUIRED: `StatifierExamples.FormPost.IntakeJob` hands the webhook
+      # front the stored application's id as `:provider_id` and no
+      # `:raw_body`, a request 0.12.0 is the first release to route; 0.11
+      # refused it as invalid, so the job passed the id a second time as
+      # the body. 0.12.0 states the same `statifier ~> 2.10` and
+      # `statifier_persistence ~> 0.18` as 0.11.3, adds no option, event or
+      # migration version, and changes `StatifierRouter.Webhook` alone, which
+      # answers every request that carries `:raw_body` as 0.11 did; the hold
+      # desk's BasicHTTP front and the routed recipe do not call it.
+      {:statifier_router, "~> 0.12.0"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of
