@@ -1,8 +1,9 @@
 defmodule StatifierExamples.FormPost.CardApplications.Writer do
   @moduledoc """
   The one module that updates a stored card application after the post is
-  stored: it writes the outside system's reference back to the row, and it
-  clears the personal fields once the host's retention says so.
+  stored: it writes the outside system's reference back to the row, it
+  marks an application the screen turned away, and it clears the personal
+  fields once the host's retention says so.
 
   One writer, as `StatifierExamples.FormPost.CardApplications.Reader` is
   one reader: a reviewer reads this module's callers to see every later
@@ -40,6 +41,25 @@ defmodule StatifierExamples.FormPost.CardApplications.Writer do
       end
 
     case Repo.update_all(query, set: set) do
+      {0, _} -> {:error, :not_found}
+      {_count, _} -> :ok
+    end
+  end
+
+  @doc """
+  Marks application `id` stored by the library system `scope` as
+  `screened_out`, the outcome of an application the screen turned away,
+  and stamps `updated_at` with the moment it was screened out: the stamp
+  the host's retention measures the screened-out age from.
+
+  Answers `:ok`, or `{:error, :not_found}` when no application with that
+  id is stored under that library system.
+  """
+  @spec record_screened_out(String.t(), integer()) :: :ok | {:error, :not_found}
+  def record_screened_out(scope, id) when is_binary(scope) and is_integer(id) do
+    query = from(a in CardApplication, where: a.scope == ^scope and a.id == ^id)
+
+    case Repo.update_all(query, set: [status: "screened_out", updated_at: DateTime.utc_now()]) do
       {0, _} -> {:error, :not_found}
       {_count, _} -> :ok
     end
