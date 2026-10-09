@@ -292,6 +292,31 @@ defmodule StatifierExamples.Persistence do
   defdelegate write_tree_migration(opts, writes), to: EctoAdapter
 
   @doc """
+  Declares execution pruning (the optional
+  `c:StatifierPersistence.Storage.Adapter.supports_execution_pruning?/1`)
+  and the batch behind it, so `StatifierPersistence.Retention.prune/3`
+  can clear what a finished execution leaves behind in this app's store.
+
+  Without the pair, `prune/3` answers
+  `{:error, :execution_pruning_unsupported}` before it reads anything.
+  Delegated: one batch is a select on `ended_at`, a delete of input log
+  rows and an update that nulls position blobs, all keyed on
+  `execution_id` inside one transaction, which SQLite answers unchanged.
+  The batch's `FOR UPDATE SKIP LOCKED` is Postgres' only; here SQLite's
+  own write lock serialises the transaction.
+
+  This store's tables carry no leading column (the `use` above names no
+  `:leading_columns`), so the only scope a batch here can take is `[]`,
+  the whole store. `StatifierExamples.FormPost.PruneJob` says why the
+  app's prune passes no `scope:`.
+  """
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate supports_execution_pruning?(opts), to: EctoAdapter
+
+  @impl StatifierPersistence.Storage.Adapter
+  defdelegate prune_executions(opts, cutoff, limit, scope), to: EctoAdapter
+
+  @doc """
   Declares metadata support (the optional
   `c:StatifierPersistence.Storage.Adapter.supports_metadata?/1`), which
   this adapter answers for itself rather than delegating.
