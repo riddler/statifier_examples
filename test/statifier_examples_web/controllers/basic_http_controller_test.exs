@@ -348,6 +348,54 @@ defmodule StatifierExamplesWeb.BasicHTTPControllerTest do
     refute_received {:desk_post, _url, _headers, _body}
   end
 
+  # A desk named as nil is no desk either: the binding's `event.desk != ""`
+  # answers `:undefined` for a nil desk, not true, so the router refuses
+  # the request before any execution starts. The clause's literal is the
+  # empty-string test's to pin.
+  # sabotage: the desk clause dropped from the binding's match -> the hold
+  # was created and delivered, red; restored, green.
+  test "a hold request with a nil desk starts no hold and posts nothing" do
+    assert HoldDesk.request(@scope, %{
+             "hold_id" => "hold-0426",
+             "copy_id" => "copy-2231",
+             "desk" => nil
+           }) == {:ok, [{:no_match, "hold_requests"}]}
+
+    assert Repo.all(
+             from(address in Config.queryable(HoldDesk.config(), Address),
+               where: address.key == "hold-0426"
+             )
+           ) == []
+
+    assert desk_post_args() == []
+    assert %{success: 0} = drain_desk_posts()
+    refute_received {:desk_post, _url, _headers, _body}
+  end
+
+  # A desk named as the empty string is the case the binding's
+  # `event.desk != ""` clause names: the router refuses it as no match.
+  # sabotage: the desk clause dropped from the binding's match -> the hold
+  # was created and delivered, red; restored, green.
+  # sabotage: the clause compared against "desk-none" instead of "" -> the
+  # hold was created and delivered, red; restored, green.
+  test "a hold request with an empty-string desk starts no hold and posts nothing" do
+    assert HoldDesk.request(@scope, %{
+             "hold_id" => "hold-0427",
+             "copy_id" => "copy-2231",
+             "desk" => ""
+           }) == {:ok, [{:no_match, "hold_requests"}]}
+
+    assert Repo.all(
+             from(address in Config.queryable(HoldDesk.config(), Address),
+               where: address.key == "hold-0427"
+             )
+           ) == []
+
+    assert desk_post_args() == []
+    assert %{success: 0} = drain_desk_posts()
+    refute_received {:desk_post, _url, _headers, _body}
+  end
+
   # Statifier plans a send with no target as an error.communication raise
   # and no request; the executor fails the send instead of performing it,
   # and plans no job.
