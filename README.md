@@ -146,21 +146,26 @@ from the widths the server estimates for leaves.
 ### The start
 
 Where the document starts is drawn the way a state chart draws it: one
-filled dot, with no text, and one edge from it into the first step. The
-edge is captioned "Starts when told to" on every document, because an
-execution starts when its host starts one; the events a document accepts
-are what it listens for while it runs, and the description region names
-them. The dot is not a block: a click on it selects nothing.
+filled dot, marked Start, and one edge from it into the first step. The
+dot comes first, at the top of the map, above the root box's title and
+every box label. The edge is captioned "Starts when the system is told
+to" on every document, because an execution starts when its host starts
+one; the events a document accepts are what it listens for while it
+runs, and the description region names them. The dot is not a block: a
+click on it selects nothing.
 
 ### The ends
 
 Where the document finishes is drawn the way a state chart draws it too:
-a dot inside a ring after the document's last step, one per way it
-finishes, with the outcome named on the edge into it. A solid ring is
-`done`, where the last step finishes; a dashed ring is `abandon`, where
-the last step is a group with an `abandon` interrupt rule, and the edge
-from the group into it is dashed as well. They are the ends
-`StatifierBlocks.Describe` answers for the same document. Only the
+a dot inside a ring after the document's last step, marked End, one per
+way it finishes, with the outcome named on the edge into it. A solid ring
+is `done`, where the last step finishes; a dashed ring is `abandon`,
+where the last step is a group with an `abandon` interrupt rule, and the
+edge from the group into it is dashed as well. They are the ends
+`StatifierBlocks.Describe` answers for the same document. The map also
+draws the dashed ring for such a group deeper in the tail, the last step
+of an arm of the document's last step or of the body of a group that is,
+with a dashed edge from each such group into the one ring. Only the
 document's own flow ends: a step that is last inside an arm or a group's
 body, such as a Send at the foot of an arm, hands back to the block
 around it, which goes on, so no mark is drawn after it. A document with
@@ -196,7 +201,8 @@ A branch is drawn as one decision. Its header names every arm with its
 condition as authored, numbered in the order the branch tries them, under
 the package's "one of"; the branch type's own sentence, which the list
 draws, is unchanged. The arms sit under one band spanning all of them, with
-a small fork mark at its left and a one-line caption after it. The edge out
+a small fork mark at its left and a caption after it, the whole first
+sentence of the branch type's own explanation. The edge out
 of the branch is its rejoin,
 drawn with a join dot where it leaves the branch's bottom edge, into the
 next step - or, where the branch is the document's last step, into the
@@ -209,11 +215,27 @@ branch.
 A group's body is what it is for, so it is drawn first and larger: its
 steps sit in a pane of their own, the group's first box, held wider than
 the interrupt rules and at least as tall. The rules stand beside the pane
-in one column, top to bottom in the order the group lists them, under a
-one-line caption below the column's label. The pane and the caption add no
-gesture. Both captions, the column's and the branch band's, are the first
-sentence of the type's own explanation, `StatifierBlocks.BlockType.explain/1`,
-cut to one line; the description region shows the whole paragraph.
+in one column, top to bottom in the order the group lists them, under the
+caption "Rules: watch the steps while they run" below the column's label,
+with the first sentence of the group type's own explanation,
+`StatifierBlocks.BlockType.explain/1`, wrapped under it. The pane and the
+caption add no gesture. The description region shows the whole paragraph
+of either type.
+
+### The legend and the drafts drawer
+
+Beside the drawing, at its top right, the map draws a legend of its
+marks: each mark the drawing uses, with the drawing's own glyph and one
+line saying what it means. The map is hidden from assistive technology,
+so the description region carries the same lines as text, as the
+document's last fact, "Legend".
+
+A drafts shelf, the steps a document keeps to one side, is drawn in a
+drawer under the drawing rather than in the path's column, and the path
+is laid out as though the shelf were not there. The drawer's row reads
+"Drafts: 1 step not wired in" on `library_loan`; it is closed on a
+read-only page and opens in place on a click on its row, and it is drawn
+open on a page that can edit.
 
 ### Editing from the map
 
@@ -248,9 +270,9 @@ The top of the panel is always a description, in words, of what is
 selected: a block's title and sentence, what its type is for, its settings
 as a labelled list of values, where it sits, each outcome and where it goes,
 the interrupt rules that can leave it, and any findings. With nothing
-selected it describes the document: its name and description, what starts
-it and the events it listens for, how to read the map, and how many steps
-and open slots it has.
+selected it describes the document: its name and description, how to read
+the map, what starts it, how it finishes and the events it listens for,
+how many steps and open slots it has, and the legend's lines.
 
 The region is the package's `StatifierBlocks.Editor.MapRegions.description_region/1`,
 and `StatifierBlocks.Map.Info` builds one such description for every

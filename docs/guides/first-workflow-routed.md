@@ -25,8 +25,8 @@ The recipe is written and checked against these releases, which are what
 |---|---|---|
 | `statifier_router` | 0.12.0 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
 | `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log, `ended_at` |
-| `statifier_blocks` | 0.42.1 | the document and the compile |
-| `statifier` | 2.12.1 | compiling the chart and running it |
+| `statifier_blocks` | 0.43.0 | the document and the compile |
+| `statifier` | 2.13.0 | compiling the chart and running it |
 
 `statifier_router` 0.12.0 requires `statifier ~> 2.10` and
 `statifier_persistence ~> 0.18`, as 0.9.2, 0.10.0 and 0.11.3 did.
@@ -337,7 +337,7 @@ Each of these is in `statifier_router`'s README and not needed here:
   that names its executions gives an `:execution_id` callback.
 - **Route sends from the chart.** This chart sends nothing: its one route is
   reached through `:on_complete`, because a block document at
-  statifier_blocks 0.42.1 cannot author a routed `<send>` - `core.send`
+  statifier_blocks 0.43.0 cannot author a routed `<send>` - `core.send`
   declares no `type` or `target`. A `<send>` of the router's type to a
   registered route reaches the same adapter, and a delayed one needs a
   `:timer_queue`. `docs/guides/first-workflow-form-post.md` sends to two
@@ -346,7 +346,14 @@ Each of these is in `statifier_router`'s README and not needed here:
 
 ## Moving the first-workflow host to these pins
 
-The latest move, from statifier_router 0.11.3 to 0.12.0, needed nothing
+The latest move, to statifier 2.13.0 and statifier_blocks 0.43.0, needed
+nothing in this recipe: statifier 2.13.0 adds
+`Statifier.Session.replace_send_type/3`, which the recipe does not call,
+and refuses two documents with a `<state>` that has no `id`, which this
+chart does not carry; statifier_blocks 0.43.0 changes what the Map draws
+and says, which the recipe does not mount.
+
+The move before it, from statifier_router 0.11.3 to 0.12.0, needed nothing
 in this recipe: 0.12.0 adds no option, event or migration version, and
 answers every webhook request that carries a raw body exactly as 0.11
 did. What it adds is a request with no raw body beside a provider id of
