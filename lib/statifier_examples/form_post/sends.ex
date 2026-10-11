@@ -1,7 +1,10 @@
 defmodule StatifierExamples.FormPost.Sends do
   @moduledoc """
   What the card application's two routes share: reading the application id
-  off the event, spelling the router's key, and recording one hand-off.
+  off the event and recording one hand-off. The router's key reaches
+  `record/5` already spelled as one string by
+  `StatifierExamples.RouterKey.join/1`, the spelling the routed recipe's
+  route stores too.
 
   The event a route is handed carries the application's id and the chart's
   words, nothing else. `application_id/1` refuses any other shape with the
@@ -36,18 +39,6 @@ defmodule StatifierExamples.FormPost.Sends do
     do: {:error, {:no_application_id, data |> Map.keys() |> Enum.sort()}}
 
   def application_id(%Statifier.Event{}), do: {:error, {:no_application_id, []}}
-
-  @doc """
-  The router's key as one string: the scope half, where in the step the
-  hand-off sat, and the ordinal, which the completion hook never carries.
-  """
-  @spec key(StatifierRouter.Route.idempotency_key()) :: String.t()
-  def key({scope, position, ordinal}) do
-    Enum.join(
-      [scope, position.macrostep, position.microstep, position.round, ordinal || "-"],
-      ":"
-    )
-  end
 
   @doc """
   Records that application `id` of the library system `scope` was handed

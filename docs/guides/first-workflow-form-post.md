@@ -186,9 +186,23 @@ delivery's transaction, so it may only hand off durably. Here each one
 reads the application through the reader, writes one row of the
 `card_application_sends` outbox, and writes a fictional reference back to
 the application through `StatifierExamples.FormPost.CardApplications.Writer`,
-which marks it `sent`. The outbox row is unique on `(route, key)` with the
-router's key, so a redriven delivery writes nothing new. The recipe checks
-both outbox rows, both references and the status.
+which marks it `sent`. The status records that the application was handed
+on, from the first hand-off; which routes it reached is read from its two
+reference columns. The outbox row is unique on `(route, key)` with the
+router's key, spelled as one string by `StatifierExamples.RouterKey.join/1`,
+so a redriven delivery writes nothing new: no second row and no second
+write-back. The recipe checks both outbox rows, both references and the
+status.
+
+Both routes read the application under this example's one library system,
+`StatifierExamples.FormPost.Steps.library_system/0`, the one the steps read
+under, and not under a value in their route configuration. A route's
+configuration is the map registered beside it in the router's
+`:route_adapters`, built once with the router configuration and handed to
+the route for every execution routed through it, while the library system
+belongs to each application. A multi-tenant host carries the library
+system with the execution and reads it from there, as
+`StatifierExamples.FormPost.Steps.library_system/0` says of the steps.
 
 ## 6. The same job again
 

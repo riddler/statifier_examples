@@ -10,6 +10,8 @@ defmodule StatifierExamples.FormPost.RoutesTest do
   # Not async: writes to the repo.
   use StatifierExamplesWeb.ConnCase, async: false
 
+  import Ecto.Query, only: [from: 2]
+
   alias Statifier.Event
 
   alias StatifierExamples.FormPost.{
@@ -150,6 +152,45 @@ defmodule StatifierExamples.FormPost.RoutesTest do
     assert :ok = PatronSystemRoute.deliver(%{}, event_for(id), key())
 
     assert [%CardApplicationSend{application_id: ^id, route: "patron_system"}] = sends()
+  end
+
+  # Sabotage: made `Sends.record/5` write the reference back on a redrive
+  # too (the nil-id branch called the writer); the planted reference and
+  # stamp were overwritten and this went red at the stored row's match.
+  # Reverted from a copy.
+  test "a redriven delivery writes nothing back to the application" do
+    id = store!()
+
+    for route <- [PatronSystemRoute, NewsletterRoute] do
+      assert :ok = route.deliver(%{}, event_for(id), key())
+    end
+
+    # Plant values no route writes, so any write-back on the redrive shows.
+    stamp = ~U[2026-01-02 03:04:05.000000Z]
+
+    {1, _} =
+      Repo.update_all(
+        from(a in CardApplication, where: a.id == ^id),
+        set: [
+          status: "received",
+          external_reference: "planted-patron",
+          newsletter_reference: "planted-newsletter",
+          updated_at: stamp
+        ]
+      )
+
+    for route <- [PatronSystemRoute, NewsletterRoute] do
+      assert :ok = route.deliver(%{}, event_for(id), key())
+    end
+
+    assert %CardApplication{
+             status: "received",
+             external_reference: "planted-patron",
+             newsletter_reference: "planted-newsletter",
+             updated_at: ^stamp
+           } = stored(id)
+
+    assert [_patron, _newsletter] = sends()
   end
 
   # Sabotage: made `Sends.record/5` write every outbox row under
