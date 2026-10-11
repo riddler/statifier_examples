@@ -70,6 +70,46 @@ defmodule StatifierExamples.FormPost.CardApplicationsTest do
     assert args == %{"application_id" => id}
   end
 
+  # The trigger refuses every intake job, so the job's insert raises. Inside
+  # the transaction that takes the application with it; after the
+  # transaction, the application would stay stored with no job. The
+  # trigger is DDL inside the test's sandbox transaction, which SQLite
+  # rolls back with everything else.
+  # Sabotage: moved `Oban.insert!/1` out of the transaction, after
+  # `Repo.transaction/1` answered; this went red on the count of stored
+  # applications. Reverted.
+  test "an intake job that cannot be stored takes its application with it" do
+    Repo.query!("DROP TRIGGER IF EXISTS refuse_intake_jobs")
+
+    Repo.query!("""
+    CREATE TRIGGER refuse_intake_jobs BEFORE INSERT ON oban_jobs
+    WHEN NEW.queue = 'card_application_intake'
+    BEGIN SELECT RAISE(ABORT, 'intake job refused'); END
+    """)
+
+    assert_raise Exqlite.Error, ~r/intake job refused/, fn ->
+      CardApplications.receive_application("riverbend", form())
+    end
+
+    assert Repo.aggregate(CardApplication, :count) == 0
+    assert [] = all_enqueued(worker: IntakeJob)
+  end
+
+  # Sabotage: made `receive_application/2` check the stored key before the
+  # form, answering a repeat whatever the second body; this went red on
+  # the `{:error, changeset}` match. Reverted.
+  test "a repeated key with a form that cannot be stored is refused, not answered as a repeat" do
+    assert {:ok, %CardApplication{id: id}, :created} =
+             CardApplications.receive_application("riverbend", form())
+
+    assert {:error, %Ecto.Changeset{} = changeset} =
+             CardApplications.receive_application("riverbend", form(%{"email" => ""}))
+
+    assert %{email: ["can't be blank"]} = errors(changeset)
+    assert [%CardApplication{id: ^id}] = Repo.all(CardApplication)
+    assert [%Oban.Job{}] = all_enqueued(worker: IntakeJob)
+  end
+
   # Sabotage: dropped `on_conflict: :nothing` from the insert, so a
   # repeat answered the unique constraint's changeset error; this went red
   # on the second call's match. Reverted.

@@ -14,6 +14,17 @@ defmodule StatifierExamples.FormPost.CardApplications do
   application and inserts nothing, row or job. The repeat is found by the
   `(scope, idempotency_key)` unique index, not by a read before the write,
   so two posts of the same form racing each other still store one row.
+
+  The form is checked before the key: a repeat of a stored client key
+  whose form cannot be stored answers `{:error, changeset}`, which the
+  form's front answers 422, and not the first application. Only a form
+  that would be stored on its own is matched against the key.
+
+  Neither the insert nor the repeat's read is logged. Ecto's query log
+  prints a statement's bound parameters at `:debug`, and theirs are posted
+  values: the personal fields and the client key. The queries' telemetry
+  events still carry those parameters in their metadata; nothing in this
+  app attaches a handler that records them.
   """
 
   import Ecto.Query
@@ -59,7 +70,8 @@ defmodule StatifierExamples.FormPost.CardApplications do
     Multi.new()
     |> Multi.insert(:application, changeset,
       on_conflict: :nothing,
-      conflict_target: [:scope, :idempotency_key]
+      conflict_target: [:scope, :idempotency_key],
+      log: false
     )
     |> Multi.run(:outcome, fn repo, %{application: application} -> enqueue(repo, application) end)
     |> Repo.transaction()
@@ -81,7 +93,8 @@ defmodule StatifierExamples.FormPost.CardApplications do
         from(a in CardApplication,
           where: a.scope == ^scope and a.idempotency_key == ^key,
           select: struct(a, @host_columns)
-        )
+        ),
+        log: false
       )
 
     {:ok, {:ok, first, :repeat}}
