@@ -25,6 +25,7 @@ defmodule UpgradeHost.LockTest do
     ecto_sql: "3.14.0",
     postgrex: "0.22.4",
     opentelemetry_api: "1.5.0",
+    jason: "1.4.5",
     opentelemetry: "1.7.0"
   }
 
