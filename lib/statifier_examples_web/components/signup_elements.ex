@@ -16,7 +16,7 @@ defmodule StatifierExamplesWeb.SignupElements do
 
   Buttons post `phx-click="outcome"` with the outcome name the document
   declares. Naming the outcome here rather than a screen-specific event is
-  what lets `se-19h` wire the same markup to the Composite's outcome slots
+  what lets the screen Composite wire the same markup to its outcome slots
   without the renderer learning anything about the chart.
   """
 

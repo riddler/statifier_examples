@@ -7,8 +7,8 @@ defmodule StatifierExamplesWeb.SignupScreensLive do
   The page exists because function components that nothing renders are
   components nobody has checked. There is no chart behind it yet: responses are
   held in the socket, and an outcome is displayed rather than sent anywhere.
-  `se-19h` puts the screen Composite underneath, and the outcome a button
-  names here is the outcome slot it fills there - which is why this page
+  The screen Composite puts a chart under the same screens, and the outcome
+  a button names here is the outcome slot it fills there - which is why this page
   stores the outcome instead of acting on it.
 
   `?screen=<key>` picks the screen; the first one is the default.
@@ -76,7 +76,7 @@ defmodule StatifierExamplesWeb.SignupScreensLive do
   # string to an integer, so a value that is entirely digits is read as one.
   # Coercing at the edge rather than in the resolver keeps the resolver's
   # contract simple: it evaluates against whatever datamodel it is handed,
-  # and a chart-backed page (se-19h) will hand it typed values already.
+  # and a chart-backed page will hand it typed values already.
   @spec coerce(%{optional(String.t()) => String.t()}) :: map()
   defp coerce(responses) do
     Map.new(responses, fn

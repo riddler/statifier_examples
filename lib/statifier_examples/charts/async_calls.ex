@@ -22,7 +22,7 @@ defmodule StatifierExamples.Charts.AsyncCalls do
   the wizard's onboarding group, whose body arms `signup.abandoned` two
   hours out and whose interrupt rail listens for it - so an execution resting on
   this call is an execution with a live invocation and an armed clock, which is
-  the whole shape se-d74 was filed for.
+  the whole shape this example exists to show.
 
   It is chosen per *block*, not per type: the same `myapp:signup` handler
   answers four other steps synchronously, and which step a call is for

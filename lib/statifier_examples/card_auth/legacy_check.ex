@@ -20,7 +20,7 @@ defmodule StatifierExamples.CardAuth.LegacyCheck do
   unresolvable type at depth 7 masked every later stage of the shipped
   document - the type refusals the card-processing domain is authored to
   demonstrate could be asserted in the suite but never seen in the editor
-  the app exists to show off (se-bv9, ruled 2026-09-06).
+  the app exists to show off (ruled 2026-09-06).
 
   So the reference embedder registers what its own document names, and the
   document compiles clean. The unavailable-block case belongs to

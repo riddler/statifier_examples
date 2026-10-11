@@ -7,7 +7,7 @@ defmodule StatifierExamples.Charts.Fixture do
 
   | Key | What it is | Who reads it |
   |---|---|---|
-  | `key` | a URL-safe name, unique across the app | `se-06z`'s DOCUMENT switcher, as `?doc=` |
+  | `key` | a URL-safe name, unique across the app | the editor page's DOCUMENT switcher, as `?doc=` |
   | `name` | the document's own `metadata["name"]` | the switcher's label |
   | `path` | where the JSON is on disk | a reader who wants the bytes |
   | `document` | the decoded `StatifierBlocks.Document` | the editor and the compiler |

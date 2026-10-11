@@ -6,7 +6,8 @@ defmodule StatifierExamples.Charts.SyncAdapter do
 
   ## Why the `use` moved out of `StatifierExamples.Charts`
 
-  It lived there from se-4dt.2 until se-4dt.4, and moving it is not a
+  It lived there from the app's uptake of the engine-written adapter until
+  the package's subchart handler was registered, and moving it is not a
   retreat from that uptake: the engine still writes the adapter and this
   app still names its handlers once. What changed is that the app now
   registers a **second** kind of handler - the canonical

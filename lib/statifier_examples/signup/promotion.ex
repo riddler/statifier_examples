@@ -1,7 +1,7 @@
 defmodule StatifierExamples.Signup.Promotion do
   @moduledoc """
   The other half of the boundary rule: the one row in a batch whose
-  processing has to wait on a person, and the execution it is given (se-j87).
+  processing has to wait on a person, and the execution it is given.
 
   A `core.map` fan-out is the chart orchestrating batches. Every invitee a
   chunk stands for is processed as data, in bulk, by one call - and one of

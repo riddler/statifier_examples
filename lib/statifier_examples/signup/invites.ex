@@ -2,7 +2,7 @@ defmodule StatifierExamples.Signup.Invites do
   @moduledoc """
   The data plane of the bulk-invite example: the rows one chunk
   descriptor stands for, and the write that records what happened to each
-  of them (se-j87).
+  of them.
 
   ## The descriptor is the row set
 

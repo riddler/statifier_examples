@@ -30,7 +30,7 @@ defmodule StatifierExamples.Charts.Durable do
   which is what this module calls. Every turn of it leaves a row in
   `statifier_executions` that survives the process.
 
-  This app wrote that loop itself until se-4dt.3, and getting it out of
+  This app once wrote that loop itself, and getting it out of
   here was worth more than the lines it saved: the app's hand-built answer
   events were **not** the ones `Statifier.Session` builds. They carried no
   `origin`/`origintype` pair, and a refused call reported `inspect(reason)`
@@ -185,7 +185,7 @@ defmodule StatifierExamples.Charts.Durable do
   # It is carried rather than discarded because the caller that resumed an
   # execution to paint it wants the datamodel too, and reading it off the
   # driver is one storage walk where asking `machine_state/1` for it again
-  # is a second one (se-w4i).
+  # is a second one.
   #
   # It is not enforced: a driver exists from the moment its store and
   # machine do, which is before anything has been read out of storage, and
@@ -395,8 +395,8 @@ defmodule StatifierExamples.Charts.Durable do
   driver's own automatic path persists the execution `:failed` and answers the
   parent on that step. This module used to read the child's status back
   and call `Driver.answer_parent/3` with a host-invented reason when it
-  was still `:active`; `se-cqr` deleted that translation, which is
-  `statifier_persistence` ADR-0008's amendment (decision 6).
+  was still `:active`; that translation was deleted, as
+  `statifier_persistence` ADR-0008's amendment (decision 6) decides.
   """
   @spec start_child_at(
           String.t(),
@@ -454,7 +454,7 @@ defmodule StatifierExamples.Charts.Durable do
   It is for the caller that holds an execution id and nothing else. A caller
   that has just resumed one is already holding the answer: `resume/3` carries
   the position it loaded on the driver's own `machine_state`, and asking here
-  for it again is the same walk a second time (se-w4i).
+  for it again is the same walk a second time.
 
   It is public because a fan-out needs it and nothing else can supply it.
   `core.map` carries its `items` into the invocation as a **path**
@@ -1194,8 +1194,7 @@ defmodule StatifierExamples.Charts.Durable do
   # whose effect it is: an effect of another execution - a child running on
   # this driver, or a parent its finishing child answered - is buffered with
   # that execution's id and content hash, because an invoke's `state_index`
-  # is an index into THAT execution's chart, and `fold/3` reads it there
-  # (se-29d).
+  # is an index into THAT execution's chart, and `fold/3` reads it there.
   @spec executor(String.t()) :: StatifierPersistence.Executor.t()
   defp executor(execution_id) do
     reader = self()
@@ -1289,8 +1288,8 @@ defmodule StatifierExamples.Charts.Durable do
   # `:pending` (sp ADR-0008 decision 3).
   #
   # It reads `src` off `dispatch_context.invoke`, which is why this app's
-  # `statifier_persistence` floor is what it is: sp-2yx widened the
-  # dispatch context to carry the whole effect for 0.5.0, and on 0.4.0 the
+  # `statifier_persistence` floor is what it is: the persistence package
+  # widened the dispatch context to carry the whole effect for 0.5.0, and on 0.4.0 the
   # handler raises rather than guess. The interim git pin that requirement
   # was reached through is long retired; `mix.exs` says the same beside
   # the arm.
@@ -1398,13 +1397,14 @@ defmodule StatifierExamples.Charts.Durable do
   # a session run of the same chart. The adapter keeps its copy private, so
   # this is the one place the app repeats it, and a durable execution and a
   # session run answering the same refusal differently is exactly what
-  # se-4dt.3 was closing.
+  # handing the loop to the package was closing.
   #
   # One clause per way `Charts.dispatch/3` refuses, and no fall-through:
   # dialyzer reports a binary arm or an `inspect/1` default as unreachable
   # against that spec, which is what makes this the place a widened refusal
   # surfaces rather than somewhere the new shape is quietly `inspect/1`-ed.
-  # se-4dt.4 widened it - `statifier_blocks:subchart` is registered and is
+  # Registering the package's subchart handler widened it -
+  # `statifier_blocks:subchart` is registered and is
   # not a sync call - and this is where that showed up, exactly as the
   # paragraph above predicted.
   @spec reason(
@@ -1470,16 +1470,16 @@ defmodule StatifierExamples.Charts.Durable do
   # this app now produces one - `abandon/1` cascades into a live subchart
   # child. A clause for it is not optional: a cancelled execution opened by URL
   # reached this function with no matching clause and the page raised, which
-  # is what a browser capture of the cascade found (se-6ag).
+  # is what a browser capture of the cascade found.
   #
-  # `:failed` used to arrive at `:cancelled`'s word, because until se-j87
+  # `:failed` used to arrive at `:cancelled`'s word, because until the fan-out
   # nothing in this app produced a failed execution and the two were both "ended
   # from outside the chart". A fan-out is what made them different: under
   # `first_error` the child that failed and the siblings cancelled because
   # of it sit at different indices of the same answer, and a page that
   # called both "cancelled" would hide exactly the distinction the example
   # is about. A browser capture of the strict document found it, the way
-  # se-6ag's capture found the missing clause.
+  # the cascade's capture found the missing clause.
   @spec finish(Execution.t(), atom()) :: Execution.t()
   defp finish(run, :completed), do: Execution.absorb(run, {:halted, :done})
   defp finish(run, :failed), do: Execution.absorb(run, {:halted, :failed})

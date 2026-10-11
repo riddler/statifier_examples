@@ -6,7 +6,7 @@ defmodule StatifierExamples.Charts.Subchart do
   palette a child is compiled against.
 
   `core.subchart` names a chart and never runs one (ADR-0002 decision 2's
-  two-registry seam), so until se-4dt.4 this app registered no handler for
+  two-registry seam), so at first this app registered no handler for
   the type at all and `signup_invitations` compiled with a standing
   `no handler registered for invoke type "statifier_blocks:subchart"`
   warning. The package writes that handler now, so what is left here is
@@ -48,7 +48,8 @@ defmodule StatifierExamples.Charts.Subchart do
   the parent's `:invoke_handlers` is the root session's call: the engine
   defaults `:inherit_invoke_handlers` to `false`, and a root that opts in
   hands every child its handler map along with the flag itself, so the
-  opt-in is transitive down the invoke tree (statifier-ex **st-pvpz**).
+  opt-in is transitive down the invoke tree (statifier-ex does the handing
+  down).
 
   Off, a child chart's own `<invoke>`s reach a session with no handler
   registered for them at all, whether they are `myapp:*` calls or a nested
@@ -75,7 +76,7 @@ defmodule StatifierExamples.Charts.Subchart do
 
   `{:start_child, _, _}` used to be executed by `Statifier.Session` and by
   nothing else, so a durable execution reaching a subchart was refused. It is
-  not any more (se-6ag): `StatifierPersistence.Driver` executes the same
+  not any more: `StatifierPersistence.Driver` executes the same
   instruction by creating the child as its **own persisted execution**, linked
   to the parent by execution metadata and pinned to the child's content hash
   (sp ADR-0008).

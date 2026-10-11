@@ -9,7 +9,7 @@ defmodule StatifierExamples.Charts.Execution do
   that driver, because an effect is an effect - `{tag, payload}` in
   `Statifier.Effect`'s vocabulary - whether it arrived in a return value
   or in a mailbox. An in-memory driver that folded a subscriber's mailbox
-  ran beside the durable one through the demo era; se-b2f deleted it once
+  ran beside the durable one through the demo era, and was deleted once
   the durable driver covered the editor page on its own, and the fold
   below did not have to move for either its arrival or its going.
 
@@ -82,7 +82,7 @@ defmodule StatifierExamples.Charts.Execution do
   parent - a child execution has a feed of its own, at its own execution id - but the
   rows that narrate a child are about work happening somewhere else, and
   a feed that drew them the same as the parent's own is a feed saying
-  that a fan-out's five children were five things this execution did (se-0ay).
+  that a fan-out's five children were five things this execution did.
   It carries the child's execution id, or the child chart's document id where
   the child never got an execution id because it was refused.
   """
@@ -220,7 +220,7 @@ defmodule StatifierExamples.Charts.Execution do
   # OTHER execution's, so it is read against that execution's own reading
   # (`nil` when the driver could not resolve its chart), the row carries
   # that execution's id as its `source`, and this reading's invoke mark is
-  # left alone: the call is not one this execution's canvas made (se-29d).
+  # left alone: the call is not one this execution's canvas made.
   def absorb(
         %__MODULE__{} = run,
         {:effect_of, execution_id, other, {:invoke, %Invoke{} = invoke}}

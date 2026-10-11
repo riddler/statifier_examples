@@ -6,7 +6,7 @@ defmodule StatifierExamples.Documents do
 
   ## Why it exists at all
 
-  `se-1cl` puts a second view - `StatifierExamplesWeb.PlanLive` - over the
+  This app puts a second view - `StatifierExamplesWeb.PlanLive` - over the
   same documents `StatifierExamplesWeb.EditorLive` shows, which is the
   reference pattern the operator ruled on 2026-09-06: a host-native view over
   the package's public APIs rather than a second layout mode inside the

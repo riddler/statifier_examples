@@ -14,9 +14,9 @@ defmodule StatifierExamples.Charts.Step do
   custom property the example stylesheet declares for the block accent.
   Upstream deliberately leaves `accent_token` out of its palette defaults,
   because which accent a host paints its own blocks with is not a fact the
-  editor package can know. `se-06z` declares the property; this is where
-  its name is written down once, so twelve palette entries do not spell it
-  twelve times.
+  editor package can know. The editor host page declares the property;
+  this is where its name is written down once, so twelve palette entries
+  do not spell it twelve times.
 
   The two-registry seam is unchanged and is still the thing easiest to
   lose: a block type **names** an invoke type, it never runs one. What
