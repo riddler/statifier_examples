@@ -31,7 +31,10 @@ test it or depend on it, and nothing here depends on statifier_examples.
   document.** A copy goes out on loan and comes due on a delayed send; a
   renewal cancels the send and arms a fresh one; an overdue loan has its
   fine assessed and the patron notified through two invoke handlers, and
-  waits for the copy to come back, which can come at any point. The chart
+  waits for the copy to come back, which can come at any point: a return
+  while the fine is assessed or the patron notified finishes the loan,
+  cancels that step's job and discards its late answer, and a fine or a
+  notice that fails for good ends the loan failed. The chart
   is not written by hand: `UpgradeHost.Loans.LoanDocument` authors it as a
   `statifier_blocks` document, one edit at a time through the edit gate,
   and compiles it; the durable loan runs the compiled chart.
