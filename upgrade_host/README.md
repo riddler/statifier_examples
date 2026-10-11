@@ -72,6 +72,14 @@ test it or depend on it, and nothing here depends on statifier_examples.
   the migrated point's `statifier_persistence.dropped` attribute is
   checked on the exported span: absent when the plan drops nothing, a
   sorted array of the dropped state ids when it drops some.
+- **A loan with a child execution.** The loan document opens no
+  subchart, so a second loan document, in the test support, holds a
+  `core.subchart` naming an overdue-notice document. Driven through
+  `StatifierPersistence.Driver` with
+  `StatifierBlocks.Runtime.DurableSubchart` answering the subchart, the
+  notice starts as its own execution linked to the loan; the suite reads
+  that linkage back, fails the loan from outside, and checks that
+  `StatifierPersistence.Executions.cascade_cancel/3` cancels the notice.
 - **The packages' own conformance suites**, run over this host: the
   storage conformance suite over the repo, and the invoke handler case
   over each handler.
