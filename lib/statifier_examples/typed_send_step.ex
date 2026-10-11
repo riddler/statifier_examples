@@ -42,10 +42,17 @@ defmodule StatifierExamples.TypedSendStep do
 
   `payload` is a list of datamodel paths: dotted identifiers such as
   `loan.id`, each named once. `validate_config/1` refuses an entry that is
-  not one, and a duplicate. It names paths and never literal values: what
-  reaches the receiver is whatever the chart's datamodel holds at those
-  paths, so a chart that holds only ids sends only ids, and the receiver
-  reads the rest by them.
+  not one, and a duplicate. It also refuses an entry that names a keyword
+  of the expression language a `<param>`'s `expr` is read in: `true`,
+  `false`, `null` or `undefined` would hand the receiver a literal rather
+  than the value at a path, and an operator or a statement word is no
+  expression at all. A keyword is refused as a path's first segment and
+  as a later one, except the five duration words (`ago`, `from`, `now`,
+  `next`, `last`), which the language reads as a property name after a
+  dot, so `patron.last` stays a path. It names paths and never literal
+  values: what reaches the receiver is whatever the chart's datamodel
+  holds at those paths, so a chart that holds only ids sends only ids, and
+  the receiver reads the rest by them.
 
   Whether a path is *declared* in the document's datamodel is not
   something this type can refuse: `validate_config/1` is handed the
@@ -71,6 +78,16 @@ defmodule StatifierExamples.TypedSendStep do
   @payload "payload"
 
   @path ~r/\A[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*\z/
+
+  # The words the expression language (predicator) reads as something other
+  # than a name: its literals, its operators in both cases, its statement
+  # words and its duration words. No path segment may be one of them, except
+  # that a segment after a dot may be a duration word, which the language
+  # reads as a property name there.
+  @keywords ~w(true false null undefined and or not in contains AND OR NOT IN CONTAINS) ++
+              ~w(if else while ago from now next last)
+
+  @property_words ~w(ago from now next last)
 
   @doc "The name this app registers the type under."
   @spec type_name() :: String.t()
@@ -177,6 +194,9 @@ defmodule StatifierExamples.TypedSendStep do
       not Enum.all?(payload, &path?/1) ->
         [{@payload, "every entry must be a datamodel path, like loan.id"}]
 
+      Enum.any?(payload, &keyword?/1) ->
+        [{@payload, "must not name a keyword of the expression language, like true"}]
+
       length(Enum.uniq(payload)) != length(payload) ->
         [{@payload, "names a path more than once"}]
 
@@ -188,6 +208,12 @@ defmodule StatifierExamples.TypedSendStep do
   defp payload_findings(_other), do: [{@payload, "must be a list of datamodel paths"}]
 
   defp path?(value), do: is_binary(value) and Regex.match?(@path, value)
+
+  @spec keyword?(String.t()) :: boolean()
+  defp keyword?(path) do
+    [first | rest] = String.split(path, ".")
+    first in @keywords or Enum.any?(rest, &(&1 in @keywords and &1 not in @property_words))
+  end
 
   defp filled?(value), do: is_binary(value) and value != ""
 end
