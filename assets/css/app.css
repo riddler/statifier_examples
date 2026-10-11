@@ -563,8 +563,12 @@
  * below dresses them through that palette without a block of its own.
  * What is left here is this page's layout.
  */
-/* The map and the panel side by side. The panel follows the map in the
-   document, ahead of the list, which is also where a keyboard reaches it. */
+/* The panel and the map side by side, the panel on the left: it comes
+   first in the document, where reading begins, and ahead of the list,
+   which is also where a keyboard reaches it. Under the breakpoint the two
+   stack in that same order, the panel above the map, and the list stays
+   below both. Nothing here reorders them visually, so what is seen first
+   is what is read first. */
 .myapp-plan__top {
   display: flex;
   align-items: flex-start;
@@ -586,6 +590,23 @@
   border: 1px solid var(--sb-border);
   border-radius: var(--sb-radius-sm, 3px);
   background: var(--sb-bg);
+}
+
+/* The stacked layout, for a screen too narrow to hold the panel and a
+   readable map side by side. It comes after the rules it overrides. */
+@media (max-width: 64rem) {
+  .myapp-plan__top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .myapp-plan__map {
+    flex: none;
+  }
+
+  .myapp-plan__panel {
+    width: auto;
+  }
 }
 
 .myapp-plan__panel-title {

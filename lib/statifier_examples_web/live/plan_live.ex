@@ -161,9 +161,11 @@ defmodule StatifierExamplesWeb.PlanLive do
   package's sentence) - any held draft, its `ConfigForm`, its move and
   delete controls and one "Add a step to" control per empty slot it has,
   which arms that slot's head as the map's marker does; or, for an insert
-  armed at an empty slot, the picker. It sits after the map and before the
-  list, outside the `aria-hidden` region, and takes focus: the selected
-  row's "Its fields" link moves a keyboard into it. A picker for the gap
+  armed at an empty slot, the picker. It comes first, where reading begins:
+  left of the map on a wide screen and above it where the two stack, both
+  ahead of the list. It sits outside the `aria-hidden` region, and takes
+  focus: the selected row's "Its fields" link moves a keyboard into it.
+  A picker for the gap
   after a block opens under that block's row, whichever view armed it; the
   map scrolls it into view when the map armed it, because this page names
   it as the map region's `insert_reveal`.
@@ -528,6 +530,17 @@ defmodule StatifierExamplesWeb.PlanLive do
 
         <div class="myapp-plan__body">
           <div class="myapp-plan__top">
+            <.panel
+              session={@session}
+              view_model={@view_model}
+              selected_id={@selected_id}
+              node={@panel}
+              slot_insert={@slot_insert}
+              insertable={@insertable}
+              readonly?={@readonly?}
+              drafted?={@panel != nil and Map.has_key?(@session.drafts, @panel.block_id)}
+            />
+
             <MapRegions.map_region
               id="plan-map"
               class="myapp-plan__map"
@@ -539,17 +552,6 @@ defmodule StatifierExamplesWeb.PlanLive do
               phrase={&EventPhrasing.phrase/1}
               description="plan-description"
               insert_reveal="[data-plan-picker=open]"
-            />
-
-            <.panel
-              session={@session}
-              view_model={@view_model}
-              selected_id={@selected_id}
-              node={@panel}
-              slot_insert={@slot_insert}
-              insertable={@insertable}
-              readonly?={@readonly?}
-              drafted?={@panel != nil and Map.has_key?(@session.drafts, @panel.block_id)}
             />
           </div>
 
@@ -612,13 +614,14 @@ defmodule StatifierExamplesWeb.PlanLive do
   attr(:readonly?, :boolean, default: false)
   attr(:drafted?, :boolean, default: false)
 
-  # The panel beside the map, always drawn: the package's description region
-  # at its top, then the page's one form surface. The selected
-  # block's name, its held draft if there is one, its `ConfigForm` and the
-  # block's move and delete controls - its row hides its own while it is
-  # selected, so a screen reader meets one set; or, when an insert was armed
-  # at the head of an empty slot on the map, the picker for it, and then no
-  # block is selected.
+  # The panel beside the map, on its left and ahead of it in the document,
+  # so reading begins with it (ruled by the operator, 2026-10-10), always
+  # drawn: the package's description region at its top, then the page's one
+  # form surface. The selected block's name, its held draft if there is
+  # one, its `ConfigForm` and the block's move and delete controls - its
+  # row hides its own while it is selected, so a screen reader meets one
+  # set; or, when an insert was armed at the head of an empty slot on the
+  # map, the picker for it, and then no block is selected.
   #
   # It sits outside the map's `aria-hidden` region and ahead of the list, and
   # it takes focus (`tabindex="-1"`), so the selected row's "Its fields" link
