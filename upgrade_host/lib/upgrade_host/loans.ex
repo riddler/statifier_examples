@@ -91,31 +91,42 @@ defmodule UpgradeHost.Loans do
 
   The document's steps write no invoke id, so each is generated as
   `<state id>.<suffix>` under the state its `<invoke>` sits in. That state
-  maps back to its block through the compile's provenance, the block's
-  type to its module through the palette, and the module's invoke type to
-  the handler. Anything else is `:error`.
+  maps back to its block through the compile's provenance, and the block
+  to its handler through the step handler map. Anything else is `:error`.
+
+  The step handler map is built once per node from the document and the
+  palette and kept beside the compile, so a cancel does not author the
+  document again.
   """
   @spec handler_for_invocation(String.t()) :: {:ok, module()} | :error
   def handler_for_invocation(invoke_id) when is_binary(invoke_id) do
     [state_id | _suffix] = String.split(invoke_id, ".", parts: 2)
     %Compiled{provenance: provenance} = compiled()
 
-    with {:ok, %{block_id: block_id}} <- Provenance.owner_of_state(provenance, state_id),
-         {:ok, type} <- block_type(block_id),
-         {:ok, module} when is_atom(module) <- Palette.fetch(Blocks.palette(), type),
-         true <- function_exported?(module, :invoke_type, 0) do
-      Map.fetch(@invoke_handlers, module.invoke_type())
-    else
-      _not_a_step -> :error
+    with {:ok, %{block_id: block_id}} <- Provenance.owner_of_state(provenance, state_id) do
+      Map.fetch(step_handlers(), block_id)
     end
   end
 
-  @spec block_type(String.t()) :: {:ok, String.t()} | :error
-  defp block_type(block_id) do
-    case Enum.find(Document.blocks(LoanDocument.document()), &(&1.id == block_id)) do
-      nil -> :error
-      block -> {:ok, block.type}
-    end
+  # The handler serving each invoke step of the loan document, by the
+  # step's block id: the block's type to its module through the palette,
+  # and the module's invoke type to the handler. A block that is not an
+  # invoke step, or whose invoke type no handler serves, is absent. Each
+  # module is loaded before it is asked, because the map is kept and a
+  # miss would be kept with it.
+  @spec step_handlers() :: %{String.t() => module()}
+  defp step_handlers do
+    cached(:step_handlers, fn ->
+      palette = Blocks.palette()
+
+      for block <- Document.blocks(LoanDocument.document()),
+          {:ok, module} when is_atom(module) <- [Palette.fetch(palette, block.type)],
+          Code.ensure_loaded?(module),
+          function_exported?(module, :invoke_type, 0),
+          {:ok, handler} <- [Map.fetch(@invoke_handlers, module.invoke_type())],
+          into: %{},
+          do: {block.id, handler}
+    end)
   end
 
   @spec cached(atom(), (-> value)) :: value when value: term()
