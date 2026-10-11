@@ -33,7 +33,9 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
   desk does not take is retried; once the third POST has failed too, the
   job delivers `error.communication`, carrying the send's id, back into
   the hold through `StatifierRouter.Delivery.deliver_event/4`, over the
-  hold's address row, with `create: :never`. That is the only way back in
+  hold's address row, with `create: :never` and `run_in_scope: true`, as
+  step 5 of the router's guide "How to give an execution an HTTP
+  location" does. `deliver_event/4` is the only way back in
   `statifier_router` sanctions for a send performed after the commit (its
   ADR-0002, the Amendment on the outbound BasicHTTP send). A delivery
   that does not settle is retried on the attempts left, without posting
@@ -95,7 +97,7 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
   # deliver it again, without posting again.
   def perform(%Oban.Job{args: args}), do: failed(args, :desk_post_attempts_spent)
 
-  # Read back without :safe, as the router README's recipe reads its own:
+  # Read back without :safe, as the router guide's recipe reads its own:
   # :safe refuses an atom this node has not created yet, and a job queued
   # before a restart can name one (a send's owner kind, a struct field)
   # that no module has loaded since. The jobs table is written only
@@ -113,6 +115,11 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
         {:cancel, {:desk_unreached_without_execution, reason}}
 
       row ->
+        # `run_in_scope: true` runs the step this delivery causes under the
+        # address row's scope, as a binding's delivery does, so a send the
+        # chart's error.communication handler makes resolves its routes in
+        # that scope. The guide's recipe sets it too; this app overrides no
+        # route by scope, so nothing it does changes today.
         event =
           Statifier.Event.external("error.communication",
             sendid: args["send_id"],
@@ -124,6 +131,7 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
           event: event,
           message_id: args["key"],
           scope: row.scope,
+          run_in_scope: true,
           now: DateTime.utc_now()
         })
         |> settled(reason)
