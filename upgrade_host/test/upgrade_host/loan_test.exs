@@ -11,10 +11,10 @@ defmodule UpgradeHost.LoanTest do
   use UpgradeHost.DataCase
 
   alias Statifier.{Chart, Event, Position}
-  alias StatifierPersistence.{Execution, Executions, Storage}
+  alias StatifierPersistence.{Driver, Execution, Executions, Storage}
   alias StatifierPersistence.Execution.Linkage
   alias StatifierBlocks.{Compiled, Provenance}
-  alias UpgradeHost.Loans
+  alias UpgradeHost.{LoanWithNotice, Loans}
   alias UpgradeHost.Loans.{AssessFine, InvokeDelivery, LoanDocument, NotifyPatron}
   alias UpgradeHost.Spans
 
@@ -234,7 +234,7 @@ defmodule UpgradeHost.LoanTest do
                Executions.fail(store, "loan-4", "copy_lost")
 
       # A loan opens no subchart, so it has no children to cancel and no
-      # parent to answer.
+      # parent to answer; the next test runs the cascade over a child.
       assert {:ok, 0} = Executions.cascade_cancel(store, Linkage.parent_match("loan-4"))
       assert {:ok, record} = Storage.fetch_execution(store, "loan-4")
       assert :no_linkage = Linkage.from_metadata(record.metadata)
@@ -244,6 +244,49 @@ defmodule UpgradeHost.LoanTest do
       # loan ended: the job is cancelled rather than stepping a failed loan.
       assert %{cancelled: 1, success: 0} = drain(:loan_timers)
       assert {:ok, %{status: :failed}} = Storage.fetch_execution(store, "loan-4")
+    end
+
+    # sabotage: the cascade counted each child without cancelling it -> red,
+    # the notice was still active after the cascade.
+    # sabotage: Linkage.from_metadata/1 read a key the package never writes
+    # -> red, the notice's linkage read :no_linkage.
+    # sabotage: the driver's dispatch answered :pending without starting a
+    # child -> red, the loan had no child.
+    test "fail a loan whose notice runs as a child, and cascade the cancel over the child" do
+      store = Loans.store()
+
+      assert {:ok, %Execution{status: :active}, _} =
+               Driver.create(LoanWithNotice.driver(), "loan-11",
+                 metadata: %{"branch_id" => "branch-westside", "loan_id" => "loan-11"}
+               )
+
+      # The notice started as its own execution, linked to the loan.
+      assert {:ok, [%{execution_id: notice_id}]} =
+               Storage.list_executions_by_metadata(store, Linkage.parent_match("loan-11"))
+
+      assert {:ok, record} = Storage.fetch_execution(store, notice_id)
+
+      assert {:ok, %Linkage{parent_execution_id: "loan-11", child_index: 0} = linkage} =
+               Linkage.from_metadata(record.metadata)
+
+      assert linkage.invoke_id == LoanWithNotice.subchart_block_id()
+      assert linkage.content_hash == record.content_hash
+      assert notice_id == Linkage.child_execution_id("loan-11", linkage.invoke_id, 0)
+      assert {:ok, ^linkage} = Driver.parent_link(store, notice_id)
+      assert :no_parent = Driver.parent_link(store, "loan-11")
+
+      # Failing the loan from outside steps no chart, so the notice is
+      # still running; the cascade is what cancels it.
+      assert {:ok, %Execution{status: :failed}} = Executions.fail(store, "loan-11", "copy_lost")
+      assert {:ok, %{status: :active}} = Storage.fetch_execution(store, notice_id)
+
+      assert {:ok, 1} = Executions.cascade_cancel(store, Linkage.parent_match("loan-11"))
+      assert {:ok, %{status: :cancelled}} = Storage.fetch_execution(store, notice_id)
+      assert {:ok, %{status: :failed}} = Storage.fetch_execution(store, "loan-11")
+
+      # Run again, the cascade finds the notice already ended and writes
+      # nothing.
+      assert {:ok, 0} = Executions.cascade_cancel(store, Linkage.parent_match("loan-11"))
     end
 
     test "read a stored position back, through the guarded load and from the blob" do
