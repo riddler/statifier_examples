@@ -24,7 +24,7 @@ defmodule UpgradeHost.RegistrationTest do
   # configuration -> red, the job's create raised with no branch set.
   # sabotage: the engine's create stamped a branch other than the scope ->
   # red, the execution's metadata named another branch.
-  # sabotage: Registrations.reap/1 passed `now: DateTime.utc_now()` to the
+  # sabotage: Registrations.reap/2 passed `now: DateTime.utc_now()` to the
   # address reap -> red, the ended registration's row was never deleted.
   # sabotage: FormPost kept the execution id only on `:delivered` -> red,
   # the patron row named no execution.
@@ -82,6 +82,51 @@ defmodule UpgradeHost.RegistrationTest do
     assert %Patron{registration_execution_id: ^second} = Repo.get!(Patron, patron_id)
     assert {:ok, %{status: :active}} = Storage.fetch_execution(Registrations.store(), second)
     assert {"created_and_delivered", patron_id, second} == List.last(ledger())
+  end
+
+  # sabotage: Registrations.reap/2 swept one page and ignored `next` ->
+  # red, the sweep stamped fewer than four rows.
+  # sabotage: the sweep kept only the last page's counts -> red, it
+  # answered fewer than four stamped rows.
+  # sabotage: the sweep dropped `:limit` from each page's options -> red,
+  # it read one page, not three.
+  @tag timeout: 10_000
+  test "the sweep pages through the address table, so every ended registration's address is reaped" do
+    # Five patrons register; four confirm, and one registration still runs.
+    patrons =
+      for n <- 1..5 do
+        form = %{"name" => "Patron #{n}", "email" => "patron.#{n}@example.com"}
+        assert {:ok, patron_id} = Registrations.submit(@branch, form)
+        patron_id
+      end
+
+    assert %{success: 5} = drain()
+    assert length(addresses()) == 5
+
+    {running, ended} = List.pop_at(patrons, 2)
+
+    for patron_id <- ended do
+      assert {:ok, %Execution{status: :completed}, _state} =
+               Registrations.confirm(@branch, patron_id)
+    end
+
+    # Two rows a page: the sweep reads three pages, and the first sweep to
+    # see the four registrations ended stamps all four rows.
+    now = DateTime.utc_now()
+
+    assert {:ok, %{addresses: %{stamped: 4, deleted: 0, pages: 3}}} =
+             Registrations.reap(now, limit: 2)
+
+    assert Enum.count(addresses(), &match?(%Address{terminal_seen_at: %DateTime{}}, &1)) == 4
+
+    # A horizon later the next sweep deletes all four, and keeps the row of
+    # the registration that still runs.
+    later = DateTime.add(now, @horizon_ms + 1, :millisecond)
+
+    assert {:ok, %{addresses: %{stamped: 0, deleted: 4, pages: 3}}} =
+             Registrations.reap(later, limit: 2)
+
+    assert [%Address{key: ^running, terminal_seen_at: nil}] = addresses()
   end
 
   # sabotage: routed the patron's email in the post's data and added it to
