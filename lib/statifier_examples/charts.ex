@@ -7,7 +7,8 @@ defmodule StatifierExamples.Charts do
   This module is the seam the two example domains meet in. It is
   deliberately thin: `statifier_blocks` owns the document model, the
   block-type registry and the compiler, and this app owns only the choices
-  a host makes. Bead `se-06z` builds the editor host page on top of it.
+  a host makes. The editor host page, `StatifierExamplesWeb.EditorLive`, is
+  built on top of it.
 
   ## It is also this app's invoke registration
 
@@ -22,10 +23,10 @@ defmodule StatifierExamples.Charts do
   `handle/3`, no lifecycle of their own - and the engine wraps them in the
   `Statifier.Invoke.Handler` every host would otherwise write by hand,
   which this app holds as `StatifierExamples.Charts.SyncAdapter`
-  (se-4dt.2; that module says why the `use` lives there and not here).
+  (that module says why the `use` lives there and not here).
   `statifier_blocks:subchart` is the other kind: a full handler with a
   lifecycle, written once in `statifier_blocks` and given this app's two
-  callbacks by `StatifierExamples.Charts.Subchart` (se-4dt.4).
+  callbacks by `StatifierExamples.Charts.Subchart`.
 
   `invoke_types/0` and `invoke_handlers/0` below are the union of the two,
   built one from the other so the set a document is linted against and the
@@ -108,8 +109,8 @@ defmodule StatifierExamples.Charts do
   @doc """
   Resolves a block type or control name to an icon name this app can render.
 
-  The seam `se-06z` filled in. Block types carry their own `icon` in
-  `palette_entry/0` - heroicon outline names, per ADR-0005 decision 10k - and
+  The seam the editor host page filled in. Block types carry their own
+  `icon` in `palette_entry/0` - heroicon outline names, per ADR-0005 decision 10k - and
   this app carries the `heroicons` dependency the Phoenix generator installs,
   so the answer for a name the set has is the name itself.
 
@@ -226,8 +227,8 @@ defmodule StatifierExamples.Charts do
   to say about a call is an execution id (see `t:call_context/0`). Handing it a
   context of that shape is a contract violation dialyzer reports, so the
   app routes over the same list rather than through the same function. The
-  list is still the one place a handler module is named, which is what the
-  uptake was for (se-4dt.2).
+  list is still the one place a handler module is named, which is what taking
+  up the engine's adapter was for.
 
   `context` is what the *driver* knows and the chart does not; see
   `t:call_context/0`. It defaults to the empty map so a caller with nothing
@@ -250,7 +251,7 @@ defmodule StatifierExamples.Charts do
   `StatifierExamples.Charts.Durable` routes the type to
   `StatifierBlocks.Runtime.DurableSubchart` in its own dispatch fun,
   *before* this function is reached, and the driver starts the child as
-  its own persisted execution (se-6ag). This clause is what is left over: the
+  its own persisted execution. This clause is what is left over: the
   honest answer for anyone who asks the sync routing table to perform a
   subchart, which no caller in this app does.
   """

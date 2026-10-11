@@ -7,7 +7,7 @@ defmodule StatifierExamples.CardAuth do
   `card_processing_sketch` parks the tail the author already knows in a
   `core.drafts` shelf and marks the middle they have not decided with a
   `core.placeholder`, which is the surface `docs/demo-script.md`'s
-  sink-backwards beat is read off (se-ihm).
+  sink-backwards beat is read off.
 
   The vocabulary is one of the family's two canonical example domains. It
   models no real payment processor: every value that appears in a fixture
@@ -46,9 +46,9 @@ defmodule StatifierExamples.CardAuth do
   number - so the twelve numbers below are a list somebody has to write
   down, and this is where it is written. It was an accident until
   2026-09-07: `myapp.intake` claimed 0 alongside `myapp.authorize`, and
-  `se-2ox` moved it to 10 - the next free number - to make the palette
-  legal, which left the domain's first step listed last. `se-0u1` replaced
-  that with a decision.
+  the change that added the two reference composites moved it to 10 - the
+  next free number - to make the palette legal, which left the domain's
+  first step listed last. A follow-up replaced that with a decision.
 
   The execution is four passages, and each is in the order it happens:
 
@@ -78,7 +78,7 @@ defmodule StatifierExamples.CardAuth do
   At first `myapp.legacy_check` was left out on purpose, so
   that ADR-0005 decision 12's case - the block whose type does not
   resolve - was exercised at depth 7 of `card_processing`. It is
-  registered as of 2026-09-06 (se-bv9): the compiler reports findings
+  registered as of 2026-09-06: the compiler reports findings
   from the first failing stage only, so an unresolvable type in the
   shipped document masked every later stage of it in the editor, and the
   domain's type refusals could be asserted in the suite but never seen.

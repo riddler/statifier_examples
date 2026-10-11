@@ -42,7 +42,7 @@ defmodule StatifierExamples.Signup do
   routes on the outcome it finished with. The child really runs - it
   answers its own `myapp:signup` calls and ends with an outcome - because
   a root session started with `inherit_invoke_handlers: true` hands its
-  handler map down (statifier-ex st-pvpz). It is still deliberately one
+  handler map down to its child sessions. It is still deliberately one
   level deep, now as a choice about this example set rather than a limit:
   see `StatifierExamples.Charts.Subchart` on that, and on what a durable
   execution does with a subchart.

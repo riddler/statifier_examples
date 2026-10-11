@@ -197,7 +197,7 @@ defmodule StatifierExamples.Signup.Handlers do
   #
   # There is no form here to fill in, so the answers are canned - but they
   # are canned in the HANDLER, which is where a real deployment's answers
-  # would come from too. That is the whole of se-dyo: the wizard used to
+  # would come from too. That is the whole change: the wizard used to
   # carry a `core.assign` block holding these three values as an object
   # literal, because the handler answered `{:ok, %{}}` and the plan branch
   # downstream had nothing to guard on. A stand-in inside the document

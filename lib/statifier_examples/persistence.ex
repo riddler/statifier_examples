@@ -54,9 +54,9 @@ defmodule StatifierExamples.Persistence do
   refuses to start a child at open with `:child_listing_unsupported` when
   the store cannot enumerate one, because a child that could never be
   found is a child that could never be cancelled. So the callback this
-  app declined for its whole life until se-6ag is exactly the one a
-  durable subchart cannot do without, and it is implemented below rather
-  than delegated.
+  app declined for its whole life until durable subcharts arrived is
+  exactly the one a durable subchart cannot do without, and it is
+  implemented below rather than delegated.
 
   It is implemented the honest way for a file-backed database and not a
   clever way: read the `execution_id`/`metadata` pairs and apply the containment
@@ -324,8 +324,8 @@ defmodule StatifierExamples.Persistence do
   The Ecto adapter's own answer is `false` off Postgres, and that is
   right for it: what ADR-0006 decision 3's capability covers is the
   `metadata` column *and* the match query over it, and the Ecto adapter's
-  query is `jsonb` containment SQL a SQLite backend does not parse
-  (sp-11w). Delegating here would inherit that `false` and, through
+  query is `jsonb` containment SQL a SQLite backend does not parse.
+  Delegating here would inherit that `false` and, through
   `StatifierPersistence.Storage.child_listing_supported?/1`, refuse every
   durable subchart this app starts - which is the refusal-at-open arm
   working exactly as designed, on an adapter that does not have the
@@ -340,7 +340,8 @@ defmodule StatifierExamples.Persistence do
   callback below exists on.
 
   The other two 0.7.0 capabilities are the same question one layer up, and
-  as of se-j87 they are claimed here too: `supports_execution_outcome?/1` and
+  since the bulk-invite fan-out they are claimed here too:
+  `supports_execution_outcome?/1` and
   `list_execution_states_by_metadata/2` are what a Tier A fan-out needs at open,
   and `StatifierPersistence.Driver.start_child_at/6` refuses a fan-out
   outright without both rather than half-starting one. They are answered
@@ -496,7 +497,7 @@ defmodule StatifierExamples.Persistence do
   # `statifier_persistence` 0.14.0: a parked execution, which a migration
   # writes only under `on_failure: :park` and this app never asks for, but
   # one the storage contract can hand back, so it is read like the other
-  # four (se-1tro).
+  # four.
   @spec status(String.t()) :: Adapter.execution_status()
   defp status("active"), do: :active
   defp status("completed"), do: :completed

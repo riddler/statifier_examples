@@ -24,7 +24,7 @@ defmodule StatifierExamples.Application do
        query: Application.get_env(:statifier_examples, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: StatifierExamples.PubSub},
       # The edited documents, shared by every page that shows one. It is a
-      # process rather than a socket's assigns because `se-1cl` put a
+      # process rather than a socket's assigns because the Plan page put a
       # second view over the same documents: two LiveViews are two
       # processes, and a map in one of them is not a document the other
       # can see. See `StatifierExamples.Documents`.

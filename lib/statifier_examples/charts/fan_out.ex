@@ -2,7 +2,7 @@ defmodule StatifierExamples.Charts.FanOut do
   @moduledoc """
   This app's half of a Tier A fan-out: the job that starts one, the seam
   that creates each child, and the door that cancels the ones that never
-  started (se-j87).
+  started.
 
   A `core.map` block is one `<invoke>` that becomes N child executions, one per
   item, whose answers are assembled into one dense list. Three packages
@@ -44,8 +44,8 @@ defmodule StatifierExamples.Charts.FanOut do
   A path naming nothing at all is a refusal rather than an empty fan-out.
   `statifier_oban` refuses the empty list too, and for the harder reason:
   a fan-out of zero children has no child whose settlement could answer
-  the invocation. The record question is `statifier_blocks`' (sb-kha0)
-  and nothing here decides it.
+  the invocation. Whether an empty fan-out is answered or refused is a
+  question for `statifier_blocks`' records, and nothing here decides it.
 
   ## The two cancel doors
 

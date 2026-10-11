@@ -23,7 +23,7 @@ defmodule StatifierExamples.Signup.SignupStep do
   ## "answers" here, "responses" in the Path
 
   Two signup mechanisms ship in this app and they keep two nouns, on
-  purpose (se-1mc, 2026-09-13). This one is the older block-type wizard:
+  purpose (2026-09-13). This one is the older block-type wizard:
   nobody types anything, the HANDLER answers the call with canned values
   (`StatifierExamples.Signup.Handlers`' private `answers/1`), and "answers"
   is the invoke vocabulary for exactly that - what a handler answers a call

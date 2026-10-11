@@ -4,9 +4,9 @@ defmodule StatifierExamples.Signup.Journey do
   does to it.
 
   The three halves of the skeleton meet here.
-  `StatifierExamples.Signup.Screens` (se-e68) says what is on a screen;
+  `StatifierExamples.Signup.Screens` says what is on a screen;
   `StatifierExamples.Signup.Screen` and `priv/fixtures/signup_path.json`
-  (se-19h) say when a screen is reached and what a button's press means to
+  say when a screen is reached and what a button's press means to
   the chart; this module is the loop between them, over
   `StatifierExamples.Charts.Durable`.
 
@@ -104,7 +104,7 @@ defmodule StatifierExamples.Signup.Journey do
   screen's referral question hangs off it - needs the number, and
   predicator will not compare a string to an integer. So a digits-only
   response is read as an integer **here**, before the chart is told anything,
-  and the datamodel a resolve reads back is already typed. se-e68's page
+  and the datamodel a resolve reads back is already typed. The screens page
   coerced in its render for want of a chart; this is the same two lines in
   the one place that now has somewhere to put them.
   """
@@ -179,7 +179,7 @@ defmodule StatifierExamples.Signup.Journey do
   come out of the one `Durable.resume/1`: the position that resume loaded
   is on the driver it hands back, so the datamodel is read off it rather
   than fetched again through `Durable.machine_state/1`. Every page render
-  paid for that second storage walk until se-w4i.
+  once paid for that second storage walk.
 
   `{:error, :execution_not_found}` for an id nobody stored, and the storage
   layer's own refusals otherwise.

@@ -13,7 +13,7 @@ defmodule StatifierExamples.Signup.Screens do
 
   ## The four element types
 
-  This is the walking skeleton's whole vocabulary (`se-e68`), and it is
+  This is the walking skeleton's whole vocabulary, and it is
   small on purpose:
 
   | `type` | Renders | Carries |
@@ -157,8 +157,8 @@ defmodule StatifierExamples.Signup.Screens do
   @doc """
   The outcome names `screen`'s buttons declare, in document order.
 
-  Every button ends the screen by naming an outcome; `se-19h` turns that list
-  into the Composite's outcome slots.
+  Every button ends the screen by naming an outcome; the screen Composite
+  turns that list into its outcome slots.
   """
   @spec outcomes(screen()) :: [String.t()]
   def outcomes(%{nodes: nodes}) do

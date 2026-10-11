@@ -23,8 +23,8 @@ defmodule StatifierExamplesWeb.EditorLive do
       the DOCUMENT switcher, the THEME control and Compile. Undo and redo are
       deliberately **not** here - they are the package's toolbar, and a second
       pair in the header would be two controls over one history;
-    * routing an edit to where the documents live, which since `se-1cl` is
-      `StatifierExamples.Documents` rather than this process' assigns. A
+    * routing an edit to where the documents live, which since the Plan page
+      arrived is `StatifierExamples.Documents` rather than this process' assigns. A
       second view over the same documents - `StatifierExamplesWeb.PlanLive` -
       is a second LiveView, so a map held here is one that page cannot see.
       An edit now survives a document switch AND a reload, and still does not
