@@ -1013,6 +1013,44 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       assert focus_return(html) == "plan-step-blk_pr_age"
     end
 
+    # The refusals above are the page's own: an unknown type or recipe
+    # never reaches the session. A pick the page passes on can still be
+    # refused by `Session.commit/2`, and that arm has to close the picker
+    # and hand the focus on too. The session checks no config on an
+    # insert, and every gap a well-formed document draws is one its write
+    # accepts, so the refusal is constructed: the library loan's stored
+    # document is handed a step in a slot whose name is empty. The page
+    # draws that step's row and its "+", and the write refuses the slot.
+    # The picker offers no type there, so the pick is sent as a payload, as
+    # the page's own refusals above are. `Document.to_json/1` refuses the
+    # shape as well, so the document is built as a struct, not decoded.
+    #
+    # Sabotage: made the session-refusal arm of `commit_pick/2` hand the
+    # focus to the step's row rather than its "+"; the focus named the row
+    # and this went red. Reverted from a copy.
+    test "a pick the session refuses hands the focus to the row's \"+\"", %{conn: conn} do
+      {:ok, %{document: shipped}} = Charts.fixture("library_loan")
+      step = Block.new("core.wait", id: "blk_ll_unslotted", config: %{"duration" => "30s"})
+      root = %{shipped.root | slots: Map.put(shipped.root.slots, "", [step])}
+      stored = %{shipped | root: root}
+      Documents.put("library_loan", stored)
+
+      {:ok, view, _html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
+
+      view
+      |> element(~s(li[data-block-id="blk_ll_unslotted"] button.myapp-plan__add))
+      |> render_click()
+
+      html =
+        render_hook(view, "insert", %{"block-id" => "blk_ll_unslotted", "type" => "core.wait"})
+
+      assert html =~ ~s(data-plan-error="true")
+      refute html =~ ~s(data-plan-picker="open")
+      assert document("library_loan") == stored
+      assert focus_return(html) == "plan-add-blk_ll_unslotted"
+      assert has_element?(view, "#plan-add-blk_ll_unslotted", "+")
+    end
+
     # The command runs when its element is added to the page, so a second
     # close has to add a second element rather than patch the first.
     #
