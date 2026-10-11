@@ -58,6 +58,32 @@ defmodule UpgradeHost.LoanTest do
     end
   end
 
+  describe "the handler lookup" do
+    # sabotage: the lookup built the step handler map from the document on
+    # every call and kept nothing -> red, no map was kept for the node.
+    # sabotage: the lookup dropped the kept map and built it again on every
+    # call -> red, the fine's invocation named AssessFine over the kept map.
+    test "reads each step's handler from a map kept once per node, not from the document" do
+      key = {Loans, :step_handlers}
+      fine = LoanDocument.block_id(:fine)
+      notice = LoanDocument.block_id(:notice)
+      fine_invocation = state_of(:fine) <> ".inv_1"
+      notice_invocation = state_of(:notice) <> ".inv_1"
+
+      assert {:ok, AssessFine} = Loans.handler_for_invocation(fine_invocation)
+      assert :persistent_term.get(key, nil) == %{fine => AssessFine, notice => NotifyPatron}
+
+      # The lookup answers from the kept map: a map that says otherwise is
+      # what it answers, without the document being read again.
+      kept = :persistent_term.get(key)
+      on_exit(fn -> :persistent_term.put(key, kept) end)
+      :persistent_term.put(key, %{fine => NotifyPatron})
+
+      assert {:ok, NotifyPatron} = Loans.handler_for_invocation(fine_invocation)
+      assert :error = Loans.handler_for_invocation(notice_invocation)
+    end
+  end
+
   describe "a loan" do
     # sabotage: the executor's cancel clause returned :ok without cancelling
     # -> red, two scheduled timers after the renewal.
@@ -235,6 +261,19 @@ defmodule UpgradeHost.LoanTest do
     |> Provenance.owners_of_states(Enum.to_list(Statifier.active_leaf_states(machine_state)))
     |> Enum.map(&Map.fetch!(names, &1.block_id))
     |> Enum.sort()
+  end
+
+  # The state the block `name` emitted as its own, read from the compile's
+  # provenance.
+  defp state_of(name) do
+    block_id = LoanDocument.block_id(name)
+
+    [state_id] =
+      for {state_id, %{block_id: ^block_id, role: nil}} <-
+            Loans.compiled().provenance.by_state_id,
+          do: state_id
+
+    state_id
   end
 
   # The one live invocation of a loan, by its generated invoke id.
