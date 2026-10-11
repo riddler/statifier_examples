@@ -18,10 +18,17 @@ defmodule UpgradeHost.Registrations do
   datamodel carry the id alone.
 
   The address `(branch, "patron_registration", patron id)` names one
-  execution at a time. `reap/1` is the host's scheduled sweep: it removes
-  the expired dedupe rows and, once an ended registration's horizon has
-  passed, its address row, so the patron's next registration opens a new
-  execution.
+  execution at a time. `reap/2` is the host's scheduled sweep: it removes
+  the expired dedupe rows and the address rows of ended registrations, so
+  the patron's next registration opens a new execution. Under this host's
+  binding, whose horizon is an hour, an ended registration's address row
+  is freed by a later sweep, not the first one to see it ended: that sweep
+  stamps the row with its own time, and the row is deleted by the first
+  sweep at least a horizon after that stamp. A host that sweeps every
+  interval therefore frees a registration's address at least a horizon,
+  and less than a horizon plus two intervals, after the registration
+  ended. Each sweep reads the whole address table, a page at a time, so no
+  row is left behind the first page.
 
   Every delivery the router drives runs inside the host's tenancy context
   (`UpgradeHost.Tenancy`), set by `UpgradeHost.Registrations.Seams`'s
@@ -41,8 +48,8 @@ defmodule UpgradeHost.Registrations do
   @binding_id "registration_form_to_patron"
 
   # A resubmitted form is the same message for an hour; the address row of
-  # an ended registration is kept as long, so a late resubmission is still
-  # answered as a duplicate rather than opening a second execution.
+  # an ended registration is kept at least as long, so a late resubmission
+  # is still answered as a duplicate rather than opening a second execution.
   @horizon_ms 3_600_000
 
   @scxml """
@@ -240,17 +247,60 @@ defmodule UpgradeHost.Registrations do
 
   @doc """
   The host's scheduled sweep at `now`: removes the dedupe rows expired by
-  then, and the address rows of registrations that ended at least a
-  horizon before it.
+  then, and the address rows of registrations a sweep saw ended at least a
+  horizon before `now`. A registration this sweep is the first to see
+  ended has its row stamped and kept; a later sweep deletes it.
+
+  The address reap examines at most a page of rows a call, so the sweep
+  calls `StatifierRouter.Addresses.reap/3` again with `after: next` until
+  `next` is `nil`, the end of the table. It answers the rows it stamped
+  and deleted across every page, and the number of pages it read.
+
+  `opts`:
+
+    * `:limit` - the most address rows one page examines. Defaults to the
+      router's own default.
+
+  An unknown option raises `ArgumentError`. A refusal from any page ends
+  the sweep and is answered; the pages before it have already been
+  written.
   """
-  @spec reap(DateTime.t()) ::
-          {:ok, %{dedupe: non_neg_integer(), addresses: Addresses.result()}} | {:error, term()}
-  def reap(now) do
+  @spec reap(DateTime.t(), keyword()) ::
+          {:ok,
+           %{
+             dedupe: non_neg_integer(),
+             addresses: %{
+               stamped: non_neg_integer(),
+               deleted: non_neg_integer(),
+               pages: pos_integer()
+             }
+           }}
+          | {:error, term()}
+  def reap(now, opts \\ []) do
+    opts = Keyword.validate!(opts, [:limit])
     config = router_config()
     {:ok, dedupe} = Dedupe.reap(config, now)
+    page = [now: now] ++ opts
 
-    with {:ok, addresses} <- Addresses.reap(config, config.bindings, now: now) do
+    with {:ok, addresses} <-
+           sweep_addresses(config, page, nil, %{stamped: 0, deleted: 0, pages: 0}) do
       {:ok, %{dedupe: dedupe, addresses: addresses}}
+    end
+  end
+
+  defp sweep_addresses(config, page, after_id, total) do
+    case Addresses.reap(config, config.bindings, [after: after_id] ++ page) do
+      {:ok, %{stamped: stamped, deleted: deleted, next: next}} ->
+        total = %{
+          stamped: total.stamped + stamped,
+          deleted: total.deleted + deleted,
+          pages: total.pages + 1
+        }
+
+        if next, do: sweep_addresses(config, page, next, total), else: {:ok, total}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 end

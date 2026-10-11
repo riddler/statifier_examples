@@ -53,10 +53,11 @@ test it or depend on it, and nothing here depends on statifier_examples.
   patron's id, the message's `provider_id` and raw body both that id, its
   data the id alone. The post creates the registration's execution, a
   resubmission is answered from the dedupe store, the patron's
-  confirmation ends it, and the host's sweep reaps its address once the
-  dedupe horizon has passed, so the patron's next registration opens a new
-  execution. `UpgradeHost.Registrations.Seams` runs every delivery inside
-  the host's tenancy context through `:around_delivery`, and stands in for
+  confirmation ends it, and the host's sweep reaps its address a dedupe
+  horizon after the sweep that first sees it ended, so the patron's next
+  registration opens a new execution. `UpgradeHost.Registrations.Seams`
+  runs every delivery inside the host's tenancy context through
+  `:around_delivery`, and stands in for
   the create and the step, which read that context.
 - **Telemetry.** The three OpenTelemetry bridges, with datamodel values
   kept out of every span; the suite exports spans to itself and checks
