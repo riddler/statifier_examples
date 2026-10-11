@@ -25,6 +25,12 @@ defmodule StatifierExamples.FormPost.CardApplications.Writer do
   `external_reference`, or `"newsletter"`, whose reference goes in
   `newsletter_reference`. Answers `:ok`, or `{:error, :not_found}` when no
   application with that id is stored under that library system.
+
+  The status says that the application was handed on, not where: the
+  first route's hand-off marks it `sent`, and a second route's hand-off
+  writes `sent` again and moves `updated_at`. Which hand-offs happened is
+  read from the two reference columns, each written only by its own
+  route.
   """
   @spec record_reference(String.t(), integer(), String.t(), String.t()) ::
           :ok | {:error, :not_found}

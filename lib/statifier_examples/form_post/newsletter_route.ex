@@ -16,7 +16,11 @@ defmodule StatifierExamples.FormPost.NewsletterRoute do
   The application id comes from the event's data, which carries the id and
   the chart's words only. The route reads the application through
   `StatifierExamples.FormPost.CardApplications.Reader` under the library
-  system, and answers `{:error, reason}` before any write when it cannot
+  system `StatifierExamples.FormPost.Steps.library_system/0` names, the
+  same one the steps read under, and not under a value in its route
+  configuration: a route's configuration is one value for every execution
+  routed through it, and the library system belongs to the application.
+  The route answers `{:error, reason}` before any write when it cannot
   hand the application on:
 
     * `{:no_application_id, keys}` - the event's data holds no application id
@@ -36,6 +40,7 @@ defmodule StatifierExamples.FormPost.NewsletterRoute do
   alias StatifierExamples.FormPost.CardApplication
   alias StatifierExamples.FormPost.CardApplications.Reader
   alias StatifierExamples.FormPost.{Sends, Steps}
+  alias StatifierExamples.RouterKey
 
   @route "newsletter"
 
@@ -52,7 +57,7 @@ defmodule StatifierExamples.FormPost.NewsletterRoute do
     with {:ok, id} <- Sends.application_id(event),
          {:ok, application} <- fetch(scope, id),
          :ok <- requested(application) do
-      Sends.record(@route, scope, id, reference(id), Sends.key(key))
+      Sends.record(@route, scope, id, reference(id), RouterKey.join(key))
     end
   end
 
