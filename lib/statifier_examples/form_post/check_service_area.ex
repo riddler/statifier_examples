@@ -8,11 +8,12 @@ defmodule StatifierExamples.FormPost.CheckServiceArea do
   handful of Riverbend streets is inside the library's service area, and
   any other address is outside. A host's real check sits where `area/1`
   does, perhaps calling a geocoder, reads the address through the same
-  reader, and answers a word the chart's conditions can read.
+  reader, and answers a word the chart can carry.
 
   The answer is the word and nothing else. The chart writes it into its
-  datamodel, so whatever this step answers lands in engine state; the
-  street address it looked at never does.
+  datamodel and hands it on with the card lane's send to the patron
+  system's route, so whatever this step answers lands in engine state;
+  the street address it looked at never does.
 
   The work is a read, so a job that runs twice answers twice the same
   way. The delay and failure hook is
