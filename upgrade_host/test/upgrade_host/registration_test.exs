@@ -208,6 +208,100 @@ defmodule UpgradeHost.RegistrationTest do
     end
   end
 
+  # sabotage: Seams.around_delivery/3 called `work` outside
+  # Tenancy.run/2 -> red, the job that opens the registration failed.
+  # sabotage: Seams.around_delivery/3 ran `work` as another branch -> red,
+  # the step read that branch, not the scope.
+  # sabotage: Seams.step/5 did not read the context -> red, no read of
+  # the branch came from the step.
+  test "a post the binding routes to the live registration steps it inside the branch's tenancy context" do
+    assert {:ok, patron_id} = Registrations.submit(@branch, @form)
+    assert %{success: 1} = drain()
+    [%Address{execution_id: execution_id}] = addresses()
+
+    # A later post from the same patron, as a new message: not a
+    # duplicate, so the binding routes it to the registration the address
+    # names, and the router steps that execution through the host's
+    # `on_step`, inside its `around_delivery`. The registration already
+    # waits for confirmation, so the step selects no transition and the
+    # router records the post as unmatched; the step has run all the same.
+    post = %{
+      scope: @branch,
+      source: Registrations.source(),
+      raw_body: patron_id,
+      provider_id: "#{patron_id}-again",
+      data: %{"patron_id" => patron_id}
+    }
+
+    {answer, reads} =
+      tenancy_reads(fn -> StatifierRouter.Webhook.handle(Registrations.router_config(), post) end)
+
+    assert {:ok, [{:dropped, "registration_form_to_patron", :unmatched_event}]} = answer
+    assert {"dropped: unmatched_event", patron_id, execution_id} == List.last(ledger())
+    assert active(execution_id) == ["awaiting_confirmation"]
+
+    # The step read the context, and the context was the post's scope.
+    assert reads == [{{Registrations.Seams, :step, 5}, @branch}]
+
+    # The same post through a configuration with no wrapper reaches the
+    # step with no branch set, and the step refuses it.
+    config = %{Registrations.router_config() | around_delivery: nil}
+
+    {raised, stacktrace} =
+      try do
+        StatifierRouter.Webhook.handle(config, %{post | provider_id: "#{patron_id}-unwrapped"})
+        flunk("the unwrapped step did not raise")
+      rescue
+        error in RuntimeError -> {error, __STACKTRACE__}
+      end
+
+    assert raised.message =~ "no branch is set"
+    assert Enum.any?(stacktrace, &match?({Registrations.Seams, :step, 5, _location}, &1))
+  end
+
+  # Runs `fun` in this process with every call of
+  # `UpgradeHost.Tenancy.current!/0` traced to a collector, and answers what
+  # `fun` answered beside each read: the function that read the context and
+  # the branch the read answered.
+  defp tenancy_reads(fun) do
+    mfa = {UpgradeHost.Tenancy, :current!, 0}
+    collector = spawn_link(fn -> collect([]) end)
+    :erlang.trace_pattern(mfa, [{:_, [], [{:return_trace}, {:message, {:caller}}]}], [:local])
+    :erlang.trace(self(), true, [:call, {:tracer, collector}])
+
+    answer =
+      try do
+        fun.()
+      after
+        :erlang.trace(self(), false, [:call])
+        :erlang.trace_pattern(mfa, false, [:local])
+      end
+
+    # Every trace message has reached the collector before it is asked.
+    ref = :erlang.trace_delivered(self())
+    assert_receive {:trace_delivered, _pid, ^ref}
+    send(collector, {:reads, self()})
+    assert_receive {:reads, messages}
+
+    {answer, pair_reads(messages)}
+  end
+
+  defp collect(messages) do
+    receive do
+      {:reads, from} -> send(from, {:reads, Enum.reverse(messages)})
+      message -> collect([message | messages])
+    end
+  end
+
+  defp pair_reads([
+         {:trace, _caller_pid, :call, {UpgradeHost.Tenancy, :current!, []}, caller},
+         {:trace, _return_pid, :return_from, {UpgradeHost.Tenancy, :current!, 0}, branch}
+         | rest
+       ]),
+       do: [{caller, branch} | pair_reads(rest)]
+
+  defp pair_reads([]), do: []
+
   defp drain, do: Oban.drain_queue(UpgradeHost.Oban, queue: :registrations)
 
   defp jobs, do: Repo.all(from(j in Oban.Job, where: j.queue == "registrations"))
