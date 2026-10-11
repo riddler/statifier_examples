@@ -188,8 +188,13 @@ rest in the jobs table from the step that inserts its job until seven days
 after the job finishes; a job still waiting to retry is not pruned. The
 age is one for the whole table, every queue alike, because Oban's pruner
 keeps no age per queue, and it is written out because Oban's own default
-is sixty seconds. Seven days is longer than the 72 hours a BasicHTTP
-front keeps a send key, and leaves a week to read a dead letter.
+is sixty seconds. The age applies to every job on this app's Oban, not
+only the desk posts: the doorstep notices, the timer and invoke jobs
+`statifier_oban` runs, and the intake, retention and reaper jobs. Each is
+deleted seven days after it finishes, and a cancelled or discarded one
+stays readable for those seven days and no longer. Seven days is longer
+than the 72 hours a BasicHTTP front keeps a send key, and leaves a week to
+read a dead letter.
 
 The age is a trade, because a job row does more than hold a location. A
 cancelled desk post, the dead letter, is deleted at the same age, so its
@@ -198,9 +203,13 @@ dedup key holds only while the job's row is there: once a completed job
 is pruned, a step driven again that re-emits the same send inserts a new
 job, which makes the POST again. From then on, what keeps that POST from
 being taken twice is the desk's dedupe on the `scxml-send-key` header,
-for as long as the desk keeps a send key. A host sets its own age: a
-shorter one leaves a location at rest for less time, a longer one keeps
-the guard and the dead letters for longer.
+for as long as the desk keeps a send key, and no longer. A desk whose
+send-key horizon is shorter than the prune age takes a POST re-emitted
+after the prune twice: a desk that keeps a send key for the 72 hours a
+BasicHTTP front does has forgotten it long before the job is pruned, so
+with this app's seven days such a desk's dedupe does not cover that POST.
+A host sets its own age: a shorter one leaves a location at rest for less
+time, a longer one keeps the guard and the dead letters for longer.
 
 ## The front
 

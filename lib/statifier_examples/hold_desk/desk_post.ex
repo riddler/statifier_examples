@@ -21,7 +21,11 @@ defmodule StatifierExamples.HoldDesk.DeskPost do
   was cancelled as a dead letter, was discarded with its attempts spent,
   or was pruned from the table inserts a new job, which POSTs again. The
   desk deduplicating on the `scxml-send-key` header is what keeps that
-  second POST from being taken twice.
+  second POST from being taken twice, and only for as long as the desk
+  keeps the send key. A job is pruned seven days after it finishes, so a
+  POST re-emitted after the prune is taken twice by a desk whose send-key
+  horizon is shorter than that age: a desk that keeps a send key for the
+  72 hours a BasicHTTP front does has forgotten it by then.
 
   `perform/1` makes the POST with `StatifierRouter.BasicHTTP.perform/2`.
   It runs outside every delivery, so a slow desk holds no transaction, no
