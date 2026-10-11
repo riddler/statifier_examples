@@ -6,6 +6,8 @@ defmodule StatifierExamplesWeb.CardApplicationControllerTest do
   """
 
   use StatifierExamplesWeb.ConnCase
+
+  import ExUnit.CaptureLog
   # The engine and notifier are named because `Oban.Testing` builds its
   # own config, whose defaults are Postgres'; this app's Oban is SQLite's.
   use Oban.Testing,
@@ -91,6 +93,41 @@ defmodule StatifierExamplesWeb.CardApplicationControllerTest do
 
     assert Repo.aggregate(CardApplication, :count) == 0
     assert [] = all_enqueued(worker: IntakeJob)
+  end
+
+  # The Logger is at :warning in the test config and `capture_log`'s own
+  # `:level` does not lower it, so the level is lowered for the duration.
+  # The request line and the transaction's own query lines prove the
+  # capture is live.
+  # Sabotage: removed the route's `log: false`; this went red on the
+  # dispatch's parameters line. Reverted.
+  # Sabotage: removed `log: false` from the application's insert; this
+  # went red on Ecto's query line and its bound parameters. Reverted.
+  # Sabotage: removed `log: false` from the repeat's read; this went red
+  # on the client key among its bound parameters. Reverted.
+  test "a form post and its repeat leave the posted values out of the log", %{conn: conn} do
+    level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: level) end)
+
+    log =
+      capture_log([level: :debug], fn ->
+        conn = post(conn, ~p"/form-post/card-applications", %{"card_application" => @form})
+        assert %{"application_id" => id} = json_response(conn, 202)
+
+        again =
+          post(build_conn(), ~p"/form-post/card-applications", %{"card_application" => @form})
+
+        assert %{"application_id" => ^id} = json_response(again, 202)
+      end)
+
+    assert log =~ "POST /form-post/card-applications"
+    assert log =~ "QUERY OK"
+
+    for {field, value} <-
+          Map.take(@form, ["name", "email", "phone", "street_address", "idempotency_key"]) do
+      refute log =~ value, "the log carries the posted #{field}"
+    end
   end
 
   # Sabotage: made `create/2` take the top-level params as the form when
