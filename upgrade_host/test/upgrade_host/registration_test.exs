@@ -4,7 +4,8 @@ defmodule UpgradeHost.RegistrationTest do
   first binding: a form post the host accepts and routes from a job, the
   execution it creates, a resubmission answered from the dedupe store, the
   confirmation that ends the registration, the sweep that reaps its
-  address, and the patron's next registration opening a new execution.
+  address, the patron's next registration opening a new execution, and a
+  post the router answers with an error, rolled back and retried.
   Every delivery runs inside the host's tenancy context, and nothing the
   form posted reaches the router's rows or the execution.
   """
@@ -12,7 +13,7 @@ defmodule UpgradeHost.RegistrationTest do
   use UpgradeHost.DataCase
 
   alias StatifierPersistence.{Execution, Storage}
-  alias StatifierRouter.Schema.{Address, Ledger}
+  alias StatifierRouter.Schema.{Address, Dedupe, Ledger}
   alias UpgradeHost.Registrations
   alias UpgradeHost.Registrations.Patron
 
@@ -259,6 +260,95 @@ defmodule UpgradeHost.RegistrationTest do
     assert Enum.any?(stacktrace, &match?({Registrations.Seams, :step, 5, _location}, &1))
   end
 
+  # sabotage: FormPost answered the 500 with `{:error, reason}` instead of
+  # `Repo.rollback/1` -> red, the job completed on its first attempt.
+  # sabotage: FormPost's worker set `max_attempts: 1` -> red, the failed
+  # job was discarded, not scheduled again.
+  # sabotage: FormPost routed the post outside its transaction, and the
+  # router's delivery released its savepoint on an error -> red, the
+  # failed attempt's dedupe row stayed written. The router's release alone
+  # stays green: FormPost's rollback undoes the attempt.
+  test "a post the router answers with an error is rolled back, leaves nothing written, and is retried" do
+    assert {:ok, patron_id} = Registrations.submit(@branch, @form)
+    assert %{success: 1} = drain()
+    [%Address{execution_id: execution_id}] = addresses()
+
+    # A sweep a horizon on expires the post's dedupe row, so the patron's
+    # next post of the form is a new message for the live registration.
+    later = DateTime.add(DateTime.utc_now(), @horizon_ms + 1, :millisecond)
+    assert {:ok, %{dedupe: 1, addresses: %{stamped: 0, deleted: 0}}} = Registrations.reap(later)
+
+    # The host has moved to a new revision of the registration chart, and
+    # its chart resolver no longer answers the revision this registration
+    # started on: the router cannot step it, and answers an error.
+    started_on = Registrations.machine()
+    revised = revised_machine()
+    on_exit(fn -> :persistent_term.put({Registrations, :machine}, started_on) end)
+    :persistent_term.put({Registrations, :machine}, revised)
+
+    assert %{dedupe: 0} = before = written(execution_id)
+    assert {:ok, ^patron_id} = Registrations.submit(@branch, @form)
+
+    # The job reads the error as a 500: the attempt did not settle, so
+    # the job fails and Oban schedules it again.
+    assert %{failure: 1, success: 0} = drain()
+    assert [_first, %Oban.Job{state: "retryable", attempt: 1, errors: [error]} = job] = jobs()
+    assert error["error"] =~ "chart_not_resolved"
+
+    # Nothing of the attempt is written: no dedupe row claims the message,
+    # no ledger row records it, the input log holds no event for it, and
+    # the registration still waits where it was.
+    assert written(execution_id) == before
+    :persistent_term.put({Registrations, :machine}, started_on)
+    assert active(execution_id) == ["awaiting_confirmation"]
+
+    # The host answers the revision again, and the retry settles: the
+    # same job, on its second attempt, routes the post to the
+    # registration, which records it as unmatched (it already waits for
+    # confirmation), and the message is now claimed.
+    assert %{success: 1, failure: 0} = drain(with_scheduled: true)
+    assert [_first, %Oban.Job{id: id, state: "completed", attempt: 2}] = jobs()
+    assert id == job.id
+    assert {"dropped: unmatched_event", patron_id, execution_id} == List.last(ledger())
+    assert %{dedupe: 1} = written(execution_id)
+  end
+
+  # The registration chart with one more way out of it: a revision whose
+  # content hash is not the one an execution of the original records.
+  defp revised_machine do
+    scxml =
+      String.replace(
+        Registrations.scxml(),
+        ~s(<transition event="registration.confirmed" target="registered"/>),
+        ~s(<transition event="registration.confirmed" target="registered"/>
+      <transition event="registration.withdrawn" target="withdrawn"/>)
+      )
+      |> String.replace(~s(<final id="registered"/>), ~s(<final id="registered"/>
+    <final id="withdrawn"/>))
+
+    {:ok, machine} = Statifier.compile(scxml, chart_name: Registrations.document())
+
+    refute Statifier.Machine.identity(machine).content_hash ==
+             Statifier.Machine.identity(Registrations.machine()).content_hash
+
+    machine
+  end
+
+  # What the router and the store have written for the registration: the
+  # dedupe rows, the ledger rows and the execution's input log.
+  defp written(execution_id) do
+    config = Registrations.router_config()
+
+    %{
+      dedupe: Repo.aggregate(StatifierRouter.Config.queryable(config, Dedupe), :count),
+      ledger: ledger(),
+      inputs:
+        Repo.one!(
+          from(i in "statifier_inputs", where: i.execution_id == ^execution_id, select: count())
+        )
+    }
+  end
+
   # Runs `fun` in this process with every call of
   # `UpgradeHost.Tenancy.current!/0` traced to a collector, and answers what
   # `fun` answered beside each read: the function that read the context and
@@ -302,9 +392,10 @@ defmodule UpgradeHost.RegistrationTest do
 
   defp pair_reads([]), do: []
 
-  defp drain, do: Oban.drain_queue(UpgradeHost.Oban, queue: :registrations)
+  defp drain(opts \\ []),
+    do: Oban.drain_queue(UpgradeHost.Oban, [queue: :registrations] ++ opts)
 
-  defp jobs, do: Repo.all(from(j in Oban.Job, where: j.queue == "registrations"))
+  defp jobs, do: Repo.all(from(j in Oban.Job, where: j.queue == "registrations", order_by: j.id))
 
   defp addresses do
     config = Registrations.router_config()
