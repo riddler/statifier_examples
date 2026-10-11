@@ -23,14 +23,24 @@ defmodule StatifierExamples.FormPost.Steps do
   application-env setting under its own module name when it runs:
 
       config :statifier_examples, StatifierExamples.FormPost.ScreenApplication,
-        delay_ms: 5_000,
+        delay_ms: 6_000,
         fail: false
 
-  `:delay_ms` sleeps that long before the step does its work, and
-  `fail: true` makes the step answer `{:error, :failure_hook}`, which the
-  job retries like any other failure. Neither is set in any config file:
-  absent, a step neither waits nor fails. The hook is a test's knob and a
-  demo's, not something a host ships.
+  `:delay_ms` sleeps that long before the step does its work (six
+  seconds outlasts the chart's five-second bound), and `fail: true`
+  makes the step answer `{:error, :failure_hook}`, which the job retries
+  like any other failure. Neither is set in any config file: absent, a
+  step neither waits nor fails. The hook is a test's knob and a demo's,
+  not something a host ships.
+
+  `:delay_ms` takes a non-negative integer and `:fail` takes `true` or
+  `false`; any other value, any other key, or a setting that is not a
+  keyword list raises an `ArgumentError` naming the step when the step
+  runs. A mistake in the hook is a mistake in a test's or a demo's
+  configuration, not something that happened to the application, so it
+  surfaces as a crash carrying that message, as a misconfigured
+  `statifier_oban` does in `config/0`, rather than as an answer the step
+  gives about the application.
   """
 
   alias Statifier.Effect.{Cancel, CancelInvoke, Invoke, SendDelayed}
@@ -146,18 +156,57 @@ defmodule StatifierExamples.FormPost.Steps do
   Runs the delay and failure hook configured for `step`, then `work`.
 
   Answers `{:error, :failure_hook}` without running `work` when the hook
-  says to fail; otherwise whatever `work` answers.
+  says to fail; otherwise whatever `work` answers. Raises an
+  `ArgumentError` naming `step` when the hook's setting is not a keyword
+  list, carries a key other than `:delay_ms` and `:fail`, or gives
+  either one a value it does not take.
   """
   @spec hooked(module(), (-> result)) :: result | {:error, :failure_hook} when result: term()
   def hooked(step, work) when is_atom(step) and is_function(work, 0) do
+    [delay_ms: delay_ms, fail: fail] = hook(step)
+
+    if delay_ms > 0, do: Process.sleep(delay_ms)
+
+    if fail, do: {:error, :failure_hook}, else: work.()
+  end
+
+  # The hook's two settings for `step`, checked, in a fixed order.
+  @spec hook(module()) :: [delay_ms: non_neg_integer(), fail: boolean()]
+  defp hook(step) do
     hook = Application.get_env(:statifier_examples, step, [])
 
-    case Keyword.get(hook, :delay_ms, 0) do
-      0 -> :ok
-      delay_ms when is_integer(delay_ms) and delay_ms > 0 -> Process.sleep(delay_ms)
+    unless Keyword.keyword?(hook) do
+      raise ArgumentError,
+            "the delay and failure hook for #{inspect(step)} must be a keyword list, " <>
+              "got: #{inspect(hook)}"
     end
 
-    if Keyword.get(hook, :fail, false), do: {:error, :failure_hook}, else: work.()
+    case Keyword.split(hook, [:delay_ms, :fail]) do
+      {_known, []} ->
+        :ok
+
+      {_known, unknown} ->
+        raise ArgumentError,
+              "the delay and failure hook for #{inspect(step)} takes :delay_ms and :fail, " <>
+                "got: #{inspect(Keyword.keys(unknown))}"
+    end
+
+    delay_ms = Keyword.get(hook, :delay_ms, 0)
+    fail = Keyword.get(hook, :fail, false)
+
+    unless is_integer(delay_ms) and delay_ms >= 0 do
+      raise ArgumentError,
+            "the delay and failure hook for #{inspect(step)} takes a non-negative " <>
+              "integer for :delay_ms, got: #{inspect(delay_ms)}"
+    end
+
+    unless is_boolean(fail) do
+      raise ArgumentError,
+            "the delay and failure hook for #{inspect(step)} takes true or false " <>
+              "for :fail, got: #{inspect(fail)}"
+    end
+
+    [delay_ms: delay_ms, fail: fail]
   end
 
   @doc """
@@ -166,13 +215,17 @@ defmodule StatifierExamples.FormPost.Steps do
 
   A param beyond the id is refused, and the refusal names the params'
   keys and never their values: a value a chart author put there is
-  exactly what must not reach a job's errors.
+  exactly what must not reach a job's errors. Params that are not a map
+  have no keys to name, so they are refused with an empty list, and the
+  value is left out the same way.
   """
-  @spec application_id(map()) :: {:ok, integer()} | {:error, term()}
+  @spec application_id(term()) :: {:ok, integer()} | {:error, term()}
   def application_id(%{"application_id" => id} = params)
       when is_integer(id) and map_size(params) == 1,
       do: {:ok, id}
 
   def application_id(params) when is_map(params),
     do: {:error, {:params_not_an_application_id, params |> Map.keys() |> Enum.sort()}}
+
+  def application_id(_params), do: {:error, {:params_not_an_application_id, []}}
 end

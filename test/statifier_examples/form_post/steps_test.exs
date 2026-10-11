@@ -230,15 +230,51 @@ defmodule StatifierExamples.FormPost.StepsTest do
       end
     end
 
+    # Params that are not a map have no keys, so the refusal names none;
+    # the value, a street address here, is left out with them.
+    #
+    # Sabotage: made `Steps.application_id/1`'s last clause put the params
+    # in the refusal; this went red on the refusal's match. Reverted from a
+    # copy.
+    test "params that are not a map are refused, and the refusal names no value" do
+      id = store!("12 Millrace Lane")
+
+      for handler <- [ScreenApplication, SortApplication, CheckServiceArea],
+          params <- [nil, "12 Millrace Lane", [application_id: id], [{"application_id", id}]] do
+        assert {:error, {:params_not_an_application_id, []} = reason} =
+                 handler.run(invoke(handler.invoke_type(), params))
+
+        refute_values(reason, "12 Millrace Lane")
+      end
+    end
+
     # Sabotage: made the screen read with `Repo.get/2`, by id alone; this
     # went red on the other library system's not-found. Reverted.
-    test "an id another library system stored, or no application, is not found" do
+    test "the screen finds no id another library system stored, nor a missing one" do
       other = store!("12 Millrace Lane", "eastbank")
 
       assert {:error, {:application_not_found, ^other}} = screen(other)
-      assert {:error, {:application_not_found, ^other}} = area(other)
-      assert {:error, {:application_not_found, ^other}} = sort(other)
       assert {:error, {:application_not_found, 0}} = screen(0)
+    end
+
+    # Sabotage: made the area check read with `Repo.get/2`, by id alone;
+    # this went red on the other library system's not-found. Reverted from
+    # a copy.
+    test "the area check finds no id another library system stored, nor a missing one" do
+      other = store!("12 Millrace Lane", "eastbank")
+
+      assert {:error, {:application_not_found, ^other}} = area(other)
+      assert {:error, {:application_not_found, 0}} = area(0)
+    end
+
+    # Sabotage: made the sort read with `Repo.get/2`, by id alone; this
+    # went red on the other library system's not-found. Reverted from a
+    # copy.
+    test "the sort finds no id another library system stored, nor a missing one" do
+      other = store!("12 Millrace Lane", "eastbank")
+
+      assert {:error, {:application_not_found, ^other}} = sort(other)
+      assert {:error, {:application_not_found, 0}} = sort(0)
     end
   end
 
@@ -267,6 +303,64 @@ defmodule StatifierExamples.FormPost.StepsTest do
 
       {elapsed_us, {:ok, "inside"}} = :timer.tc(fn -> area(id) end)
       assert elapsed_us < 120_000
+    end
+
+    # Sabotage: made `Steps.hooked/2` treat any truthy `:fail` as true;
+    # this went red on the missing `ArgumentError`. Reverted from a copy.
+    test "fail takes true or false, and anything else raises naming the step" do
+      id = store!("12 Millrace Lane")
+
+      for fail <- ["yes", 1, nil] do
+        Application.put_env(:statifier_examples, ScreenApplication, fail: fail)
+
+        assert_raise ArgumentError, ~r/ScreenApplication takes true or false for :fail/, fn ->
+          screen(id)
+        end
+      end
+    end
+
+    # Sabotage: made `Steps.hooked/2` skip the sleep for a negative
+    # `:delay_ms` instead of raising; this went red on the missing
+    # `ArgumentError`. Reverted from a copy.
+    test "delay_ms takes a non-negative integer, and anything else raises naming the step" do
+      id = store!("12 Millrace Lane")
+
+      for delay_ms <- [-1, 1.5, "120", nil] do
+        Application.put_env(:statifier_examples, CheckServiceArea, delay_ms: delay_ms)
+
+        assert_raise ArgumentError,
+                     ~r/CheckServiceArea takes a non-negative integer for :delay_ms/,
+                     fn -> area(id) end
+      end
+
+      Application.put_env(:statifier_examples, CheckServiceArea, delay_ms: 0)
+      assert {:ok, "inside"} = area(id)
+    end
+
+    # Sabotage: made `Steps.hooked/2` ignore keys other than its two; this
+    # went red on the misspelled key's missing `ArgumentError`. Reverted
+    # from a copy.
+    test "a key other than delay_ms and fail raises naming the step and the key" do
+      id = store!("12 Millrace Lane")
+      Application.put_env(:statifier_examples, SortApplication, delay: 120, fail: false)
+
+      assert_raise ArgumentError,
+                   ~r/SortApplication takes :delay_ms and :fail, got: \[:delay\]/,
+                   fn ->
+                     sort(id)
+                   end
+    end
+
+    # Sabotage: made `Steps.hooked/2` read a setting that is not a keyword
+    # list as no hook at all; this went red on the missing `ArgumentError`.
+    # Reverted from a copy.
+    test "a setting that is not a keyword list raises naming the step" do
+      id = store!("12 Millrace Lane")
+      Application.put_env(:statifier_examples, ScreenApplication, true)
+
+      assert_raise ArgumentError, ~r/ScreenApplication must be a keyword list/, fn ->
+        screen(id)
+      end
     end
   end
 
