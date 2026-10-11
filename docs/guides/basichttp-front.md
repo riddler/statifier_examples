@@ -158,7 +158,10 @@ back into the execution through `StatifierRouter.Delivery.deliver_event/4`,
 the one way back in the router's record names, with `create: :never` over
 the hold's address row from `StatifierRouter.Addresses.by_execution/2`: an
 external `error.communication` event carrying the send's id, delivered
-in a step of its own under the plan id `desk_post_failure`. The chart
+in a step of its own under the plan id `desk_post_failure`, with
+`run_in_scope: true` so that step resolves its routes in the address
+row's scope, as step 5 of the router's guide "How to give an execution
+an HTTP location" does. The chart
 takes it from `waiting` to its other final state, `desk_unreached`. A
 failure that reaches no execution - the hold has finished, or its address
 row is gone - is cancelled, which keeps the job and its reason in the jobs
