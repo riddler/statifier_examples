@@ -1056,10 +1056,17 @@ defmodule StatifierExamples.MixDepsTest do
   # Sabotage: pointed the LOCK assertion back at `"0.11.` and left
   # `mix.lock` alone; it went red reporting the resolved 0.12.0 entry.
   # Reverted from a copy.
+  #
+  # 2026-10-11: the requirement moves to `~> 0.13.0`, the published
+  # release after 0.12.0; nothing here needs more than 0.12.0, and
+  # 0.13.0's new `rotate_location/3` is called by nothing here.
+  # Sabotage: pointed the LOCK assertion back at `"0.12.` and left
+  # `mix.lock` alone; it went red reporting the resolved 0.13.0 entry.
+  # Reverted from a copy.
   test "the statifier_router dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_router, "~> 0.12.0"} in deps
+    assert {:statifier_router, "~> 0.13.0"} in deps
 
     lock_line =
       "mix.lock"
@@ -1068,7 +1075,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_router": )))
 
     assert lock_line, "statifier_router has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_router, "0.12.)
+    assert lock_line =~ ~s({:hex, :statifier_router, "0.13.)
     refute lock_line =~ ":git,"
   end
 

@@ -21,9 +21,9 @@ The recipe is written and checked against these releases, which are what
 |---|---|---|
 | `statifier` | 2.13.0 | compiling the chart and running it |
 | `statifier_blocks` | 0.43.0 | the document, `Plan.expressible/3`, the compile |
-| `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_persistence` | 0.24.2 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.17.2 | the invoke job and its `:invoke_timeout`, the timer job |
-| `statifier_router` | 0.12.0 | two of the publish-time checks |
+| `statifier_router` | 0.13.0 | two of the publish-time checks |
 
 `statifier_datamodel` 0.5.2 arrives through `statifier_blocks`. The first
 line the command prints names the versions it actually loaded.
@@ -306,3 +306,10 @@ which the recipe does not call, and refuses two documents with a
 statifier_blocks 0.43.0 changes what the Map draws and says, and a list
 of datamodel paths gets the advisory a single path gets; the recipe
 mounts no Map, and its document declares no list of paths.
+
+The move to statifier_router 0.13.0 and statifier_persistence 0.24.2
+needed nothing here either: the router adds
+`StatifierRouter.BasicHTTP.rotate_location/3` and keeps a route's mark
+after a nested delivery, and this recipe uses the router for two
+publish-time checks only; statifier_persistence 0.24.2 changes
+documentation only.

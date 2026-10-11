@@ -33,7 +33,7 @@ defmodule StatifierExamples.FormPostTest do
     assert {:ok, lines} = FormPost.run(idempotency_key: "form-test")
 
     assert [
-             "first workflow from a form post on statifier_router 0.12." <> _pins,
+             "first workflow from a form post on statifier_router 0.13." <> _pins,
              "registered   chart " <> _hash,
              "stored       application " <> stored,
              "repeat       the same client key again: application " <> _repeat,
