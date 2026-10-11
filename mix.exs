@@ -146,6 +146,16 @@ defmodule StatifierExamples.MixProject do
       # refuses two `initial`/`<history>` shapes; every chart the suite
       # compiles compiles as before. 2.12.1 changes documentation only.
       # `docs/upgrading.md` there names each edge.
+      #
+      # 2026-10-10: `mix.lock` resolves 2.13.0 under the same `~> 2.12`
+      # requirement, to keep the reference embedder on what is published.
+      # 2.13.0 adds `Statifier.Session.replace_send_type/3`, which this app
+      # does not call; refuses two `<state>` shapes with no `id` that used
+      # to raise from `Statifier.compile/2`, and reports
+      # `initial_not_descendant` beside a duplicate id, neither of which
+      # any chart here carries; and drops a failed send to a session halted
+      # `:budget_exhausted` without stepping it, which no execution here
+      # reaches. Every chart the suite compiles compiles as before.
       {:statifier, "~> 2.12"},
 
       # A note on every `statifier_persistence` name below, added with
@@ -573,7 +583,24 @@ defmodule StatifierExamples.MixProject do
       # together or neither does - and they do here: 0.6.0 is published
       # against the published 0.12 persistence, so `se-h6v` retires this
       # pin in the same commit as that one.
-      {:opentelemetry_statifier, "~> 0.6"},
+      #
+      # 2026-10-10: the requirement moves to the 0.9 line, and `mix.lock`
+      # resolves 0.9.2, to keep the reference embedder on what is
+      # published; `~> 0.6` does not admit 0.9, so the requirement is the
+      # move. Nothing here needs more than 0.6.0. 0.7.0 bridges four more
+      # `statifier_persistence` events (a step that raised closes its span
+      # with an error status, a re-entry and a migrated or unparked
+      # execution land as span events or points). 0.8.0 bridges
+      # `statifier_oban`'s deferred invoke event, records an `exception`
+      # span event on a step that raises, and makes a migration's
+      # `statifier_persistence.dropped` attribute a sorted string array,
+      # absent when nothing is dropped; this app reads no such attribute.
+      # 0.9.0 nests the spans of a `migrate_batch/3` call under one batch
+      # span; `mix statifier_examples.migrate_waiting` makes that call,
+      # and no test here asserts the shape of its trace. 0.9.1 and 0.9.2
+      # change documentation only. The three setup calls
+      # `StatifierExamples.Charts.Tracing` makes are unchanged.
+      {:opentelemetry_statifier, "~> 0.9"},
 
       # The SDK behind that bridge. `opentelemetry_statifier` depends only
       # on `opentelemetry_api` on purpose - a bridge that dragged an SDK
@@ -775,6 +802,9 @@ defmodule StatifierExamples.MixProject do
       # golden here that carried the old string carries the new one. The
       # trace wire format is untouched at version 1, so the trace half of
       # this app re-pins nothing.
+      #
+      # 2026-10-10: `mix.lock` resolves 0.10.2 under the same `~> 0.10`
+      # arm. 0.10.2 changes documentation and the package's tarball only.
       statifier_ui_dep(),
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
@@ -1386,13 +1416,35 @@ defmodule StatifierExamples.MixProject do
   # note-free block, a composite that cannot expand, the host's `class` on
   # the hover layer) ask nothing of this app. 0.42.1 changes documentation
   # only.
+  #
+  # 2026-10-10: the floor moves to `~> 0.43.0`, published, so the arm stays
+  # a Hex requirement; `~> 0.42.1` does not admit 0.43, so the requirement
+  # is the move. 0.43.0 is a minor that changes what the Map draws and
+  # says: the start dot comes first and carries the word Start, every end
+  # mark carries End, the start caption reads "Starts when the system is
+  # told to", a group deeper in the tail gains its abandon end, a legend
+  # sits beside the drawing, and the drafts shelf moves into a drawer. The
+  # idle description gains a "Finishes with" fact and a last "Legend"
+  # fact, and its paragraph on how to read the map is shorter. The Plan
+  # page mounts `description_region/1` and `map_region/1`, so it takes
+  # every one of those from the package; its tests and the README's
+  # account of the map read the new words. 0.43.0 also gives a
+  # `{:list, {:path, _}}` field's rows what a single path field gets:
+  # the editor offers the datamodel's paths for each row, and an
+  # undeclared row draws the `:info` undeclared-path advisory, never a
+  # refusal. `StatifierExamples.TypedSendStep`'s "Send along" field is
+  # such a field, so its rows now get both; every row the card
+  # application document carries names a declared root, so its
+  # publish-time checks pass as before. The release's other changes (a
+  # blank timer event reads "its event", the hook's first-layout
+  # fallback) ask nothing of this app.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.42.1"}
+        {:statifier_blocks, "~> 0.43.0"}
     end
   end
 

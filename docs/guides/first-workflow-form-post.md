@@ -27,8 +27,8 @@ The recipe is written and checked against these releases, which are what
 | `statifier_router` | 0.12.0 | the webhook front, the binding, the delivery, the address, dedupe and ledger tables, the typed-send routes, `:around_delivery`, `:on_create` and `:on_step` |
 | `statifier_oban` | 0.17.2 | the steps' jobs and the deadline timers, on this app's Oban |
 | `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log, `Retention.prune/3` |
-| `statifier_blocks` | 0.42.1 | the document and the compile |
-| `statifier` | 2.12.1 | compiling the chart and running it |
+| `statifier_blocks` | 0.43.0 | the document and the compile |
+| `statifier` | 2.13.0 | compiling the chart and running it |
 
 `statifier_router` 0.12.0 is the release this recipe needs: it takes a
 webhook request with no raw body when its provider id is a non-empty
@@ -62,7 +62,7 @@ from the post to the library's two systems:
 
 The bounded step is the first pattern in `statifier_blocks`' flow-patterns
 guide, and the two lanes on one word are its second:
-[How to build common flow patterns](https://github.com/riddler/statifier_blocks/blob/v0.42.1/docs/guides/flow-patterns.md).
+[How to build common flow patterns](https://github.com/riddler/statifier_blocks/blob/v0.43.0/docs/guides/flow-patterns.md).
 
 The code is `StatifierExamples.FormPost`. The sections below follow its
 `run/1`, one step at a time.

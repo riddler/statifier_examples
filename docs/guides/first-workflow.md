@@ -19,8 +19,8 @@ The recipe is written and checked against these releases, which are what
 
 | Package | Version | What the recipe uses it for |
 |---|---|---|
-| `statifier` | 2.12.1 | compiling the chart and running it |
-| `statifier_blocks` | 0.42.1 | the document, `Plan.expressible/3`, the compile |
+| `statifier` | 2.13.0 | compiling the chart and running it |
+| `statifier_blocks` | 0.43.0 | the document, `Plan.expressible/3`, the compile |
 | `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.17.2 | the invoke job and its `:invoke_timeout`, the timer job |
 | `statifier_router` | 0.12.0 | two of the publish-time checks |
@@ -298,3 +298,11 @@ documentation only.
 The move to statifier_router 0.12.0 needed nothing here either: it
 lets a webhook request leave out its raw body beside a provider id of
 its own, and this recipe sends no webhook request.
+
+The move to statifier 2.13.0 and statifier_blocks 0.43.0 needed nothing
+here either. statifier 2.13.0 adds `Statifier.Session.replace_send_type/3`,
+which the recipe does not call, and refuses two documents with a
+`<state>` that has no `id`, which this chart does not carry.
+statifier_blocks 0.43.0 changes what the Map draws and says, and a list
+of datamodel paths gets the advisory a single path gets; the recipe
+mounts no Map, and its document declares no list of paths.

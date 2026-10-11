@@ -24,6 +24,13 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
     #
     # Sabotage: drew a line of the panel's own above the page's
     # `description_region`; this went red. Reverted from a copy.
+    #
+    # 2026-10-10: `statifier_blocks` 0.43.0 names who starts the document
+    # in the start caption, and gives the idle description a "Finishes
+    # with" fact and a last "Legend" fact, the key's lines as text since
+    # the map is hidden from assistive technology. Sabotage: passed
+    # `map={false}` to the page's `description_region`, which leaves the
+    # Legend fact out; this went red on "Legend". Reverted from a copy.
     test "is at the top of the panel, aria-live polite, and idle on mount", %{conn: conn} do
       for key <- @library do
         {:ok, _view, html} = live(conn, ~p"/plan?#{[doc: key]}")
@@ -49,8 +56,10 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
 
         text = LazyHTML.text(region)
         assert text =~ fixture(key).document.metadata["name"]
-        assert text =~ "Starts when told to"
+        assert text =~ "Starts when the system is told to"
+        assert text =~ "Finishes with"
         assert text =~ "Open slots"
+        assert text =~ "Legend"
       end
     end
 
@@ -260,6 +269,10 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
     # own id, and the two library fixtures between them draw every kind. The
     # loan's drafts shelf is what draws the tray.
     #
+    # 2026-10-10: as of `statifier_blocks` 0.43.0 the start dot and its edge
+    # sit at the graph's top level, beside the root box, so `drawn_ids/1`
+    # reads the graph's own edges as well as each node's.
+    #
     # Sabotage: gave the page's `description_region` a different id from
     # the one its map region names (`plan-description-x`); the store moved
     # off `#plan-description-store` and this went red. Reverted from a copy.
@@ -345,8 +358,9 @@ defmodule StatifierExamplesWeb.PlanDescriptionLiveTest do
     %{"children" => children} =
       graph = key |> view_model() |> BlockMap.graph(phrase: &EventPhrasing.phrase/1)
 
+    edges = graph |> Map.get("edges", []) |> Enum.map(& &1["id"])
     timers = graph |> Map.get("timers", []) |> Enum.map(& &1["id"])
-    (Enum.flat_map(children, &ids/1) ++ timers) |> Enum.sort()
+    (Enum.flat_map(children, &ids/1) ++ edges ++ timers) |> Enum.sort()
   end
 
   defp ids(node) do
