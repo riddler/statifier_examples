@@ -175,6 +175,52 @@ defmodule UpgradeHost.LoanTest do
       assert {:ok, %{status: :failed, failure: "failed_final"}} =
                Storage.fetch_execution(Loans.store(), "loan-3")
     end
+
+    # sabotage: the return's transition targeted the waiting state -> red,
+    # the loan did not complete.
+    # sabotage: the executor's cancel_invoke clause returned :ok without
+    # cancelling -> red, the notice job stayed available.
+    # sabotage: the invoke delivery answered :delivered for a discarded
+    # answer -> red, the late notice answer was :delivered.
+    test "returned while the patron is notified cancels the job, and a late answer is discarded" do
+      {:ok, _execution, _} = Loans.open("loan-9", "branch-eastside", @loan)
+      assert %{success: 1} = drain(:loan_timers)
+      assert %{success: 1} = drain(:loan_invocations)
+      assert steps(position("loan-9")) == [:notice]
+      assert ["available", "completed"] = :loan_invocations |> jobs() |> states()
+      notice_invocation = invocation("loan-9")
+
+      assert {:ok, %Execution{status: :completed} = returned, _} =
+               Loans.deliver("loan-9", Event.external("loan.returned"))
+
+      assert Executions.ended?(returned)
+      assert ["cancelled", "completed"] = :loan_invocations |> jobs() |> states()
+
+      assert {:discarded, :completed} =
+               InvokeDelivery.deliver("loan-9", notice_invocation, %{"notice" => "n-1"}, [])
+    end
+
+    # sabotage: compiled the document without terminate: true -> red, the
+    # loan did not end failed.
+    # sabotage: the invoke delivery answered a failure as done -> red, the
+    # loan did not end failed.
+    test "whose notice fails for good ends failed, through the chart's own failed final" do
+      {:ok, _execution, _} = Loans.open("loan-10", "branch-eastside", @loan)
+      assert %{success: 1} = drain(:loan_timers)
+      assert %{success: 1} = drain(:loan_invocations)
+      assert steps(position("loan-10")) == [:notice]
+
+      assert :delivered =
+               InvokeDelivery.deliver_failure(
+                 "loan-10",
+                 invocation("loan-10"),
+                 [reason: "run_failed", attempts: 20, detail: "no address on file"],
+                 caller_context: nil
+               )
+
+      assert {:ok, %{status: :failed, failure: "failed_final"}} =
+               Storage.fetch_execution(Loans.store(), "loan-10")
+    end
   end
 
   describe "the host's own calls" do
