@@ -431,6 +431,11 @@ defmodule StatifierExamples.MixProject do
       # pin tables name, as se-rhk5's floor did. 0.24.1 is a documentation
       # release: no migration, no library code, and the `statifier` floor
       # stays `~> 2.9`.
+      #
+      # 2026-10-11: `mix.lock` moves to 0.24.2 beside the router's move to
+      # 0.13.0, and the requirement stays. 0.24.2 is a documentation
+      # release as well: no migration, no library code, and the same
+      # `statifier ~> 2.9`.
       {:statifier_persistence, "~> 0.24"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
@@ -697,7 +702,22 @@ defmodule StatifierExamples.MixProject do
       # migration version, and changes `StatifierRouter.Webhook` alone, which
       # answers every request that carries `:raw_body` as 0.11 did; the hold
       # desk's BasicHTTP front and the routed recipe do not call it.
-      {:statifier_router, "~> 0.12.0"},
+      #
+      # 2026-10-11: the requirement moves to `~> 0.13.0`, the published
+      # release after 0.12.0, to keep the reference embedder on what is
+      # published; nothing here needs more than 0.12.0. `mix.lock` moves the
+      # router to 0.13.0 and `statifier_persistence` to 0.24.2, and no other
+      # line. 0.13.0 states the same `statifier ~> 2.10` and
+      # `statifier_persistence ~> 0.18` as 0.12.0 and adds no option, event
+      # or migration version. This app does not call its new
+      # `StatifierRouter.BasicHTTP.rotate_location/3`. Its fix keeps a
+      # route's mark after a nested
+      # `StatifierRouter.Delivery.deliver_event/4`, and no route here makes
+      # one: the hold desk calls `deliver_event/4` from
+      # `StatifierExamples.HoldDesk.DeskPost`, an Oban job, with
+      # `run_in_scope: true`, a boolean, which 0.13.0's newly named
+      # `ArgumentError` for any other value does not reach.
+      {:statifier_router, "~> 0.13.0"},
 
       # The observing/authoring component library, declared DIRECTLY rather
       # than taken transitively. `statifier_ui` is an OPTIONAL dependency of

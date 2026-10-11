@@ -52,21 +52,31 @@ token and the query log, records the router's half of this and the
 persisted state.
 
 A host serves the base URL over TLS and rotates a location that may have
-leaked with `StatifierRouter.BasicHTTP.rotate_location/2`, after which
-the old one answers 404.
+leaked, after which the old one answers 404. A host that holds the
+execution's live session rotates with
+`StatifierRouter.BasicHTTP.rotate_location/3` and `session:` naming that
+session, which also re-stamps the session so its chart reads the new
+location. This hold desk has no session to name: the hold is a durable
+execution, which has none (see "The outbound send runs in the
+executor"), so a host rotating its location calls
+`rotate_location/2`, which answers as `rotate_location/3` with no
+options, and the `_ioprocessors` entry the execution stored when it
+started keeps the old location until the host refreshes it.
 
 ## The pins
 
 | Package | Version | What this guide uses it for |
 |---|---|---|
-| `statifier_router` | 0.12.0 | the `:basichttp` key, the location, `StatifierRouter.BasicHTTP.Front`, the location table, `deliver_event/4` for a failed send |
+| `statifier_router` | 0.13.0 | the `:basichttp` key, the location, `StatifierRouter.BasicHTTP.Front`, the location table, `deliver_event/4` for a failed send |
 | `statifier` | 2.13.0 | the Basic HTTP Event I/O Processor and its decoder |
-| `statifier_persistence` | 0.24.1 | the chart registry, the execution, the input log |
+| `statifier_persistence` | 0.24.2 | the chart registry, the execution, the input log |
 
-0.12.0 is the floor because it is the published release `mix.exs`
+0.13.0 is the floor because it is the published release `mix.exs`
 requires. 0.9.2 was the first `statifier_router` release whose
 migrations and address reaper both run on this app's SQLite database,
-and nothing this guide uses needs more.
+and nothing this guide uses needs more. `rotate_location/3`, which the
+rotation paragraph above names for a host holding a live session, is
+0.13.0's; this app does not call it.
 
 ## The chart
 
