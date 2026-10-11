@@ -173,6 +173,9 @@ defmodule UpgradeHost.Registrations do
     end)
   end
 
+  # A resubmission from an email the branch already holds answers the
+  # patron's first row as posted: the row is not updated, so a different
+  # name on the resubmission is not kept.
   defp patron!(branch_id, name, email) do
     case Repo.get_by(Patron, branch_id: branch_id, email: email) do
       nil ->
