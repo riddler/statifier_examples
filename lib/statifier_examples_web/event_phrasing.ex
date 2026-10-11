@@ -30,7 +30,8 @@ defmodule StatifierExamplesWeb.EventPhrasing do
 
   Only a name in one of those three places is an event, so only those are
   read as words. A known name anywhere else - a value a step sets, a
-  decision's arm - is left as written.
+  decision's arm, a name after a send or wait word glued to a dotted
+  prefix - is left as written.
   """
 
   alias StatifierBlocks.ViewModel
@@ -53,10 +54,12 @@ defmodule StatifierExamplesWeb.EventPhrasing do
 
   # A name in event position: after "Send" (or a delayed "send"), after
   # "Wait for", or after a rule's "When". An event name is dotted words, so
-  # the name runs until neither a word character nor a dot follows, and a
-  # name that only starts like a known one is a different name. Compiled
-  # once, with the module.
-  @event_position ~r/\b(?:([Ss]end)|([Ww]ait) for|When) ([\w.]+)(?![\w.])/u
+  # the opening word counts only where no word character or dot runs into
+  # it ("loan.Send" opens nothing, as statifier_blocks' Map phrasing reads
+  # it), the name runs until neither a word character nor a dot follows,
+  # and a name that only starts like a known one is a different name.
+  # Compiled once, with the module.
+  @event_position ~r/(?<![\w.])(?:([Ss]end)|([Ww]ait) for|When) ([\w.]+)(?![\w.])/u
 
   @doc """
   The words for `event`, or `nil` for a name the library world does not

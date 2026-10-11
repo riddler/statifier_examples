@@ -96,6 +96,23 @@ defmodule StatifierExamplesWeb.EventPhrasingTest do
       assert EventPhrasing.line("Wait 21d until copy.returned") == "Wait 21d until copy.returned"
     end
 
+    # A send, wait or rule word glued to a dotted prefix opens nothing,
+    # as statifier_blocks' Map phrasing reads it, so the name after it is
+    # left as written.
+    #
+    # Sabotage: put back the earlier opening `\b`, which a dot satisfies;
+    # this went red. Reverted from a copy.
+    test "leaves a name after a word glued to a dotted prefix as written" do
+      assert EventPhrasing.line("loan.Send copy.returned") == "loan.Send copy.returned"
+      assert EventPhrasing.line("loan.send copy.returned") == "loan.send copy.returned"
+
+      assert EventPhrasing.line("loan.Wait for copy.returned") ==
+               "loan.Wait for copy.returned"
+
+      assert EventPhrasing.line("loan.When copy.returned") == "loan.When copy.returned"
+      assert EventPhrasing.line("Send copy.returned") == "Send word that the copy is returned"
+    end
+
     test "leaves a line with no known event name as it is" do
       assert EventPhrasing.line("Send payment.settled") == "Send payment.settled"
       assert EventPhrasing.line("Wait 21d") == "Wait 21d"
