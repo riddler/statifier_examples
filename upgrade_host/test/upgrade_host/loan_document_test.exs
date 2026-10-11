@@ -222,6 +222,36 @@ defmodule UpgradeHost.LoanDocumentTest do
     end
   end
 
+  describe "the palette pre-flight" do
+    # sabotage: AssessFine's assign_to field declared type :integer, its
+    # default still "fine" -> red, preflight/1 listed the default.
+    # sabotage: the root block authored with config %{"event" => 7} -> red,
+    # preflight/2 listed the stored block's event.
+    # sabotage: UntilReturned.current_version/0 answered 0 -> red, the
+    # stored root block did not resolve (too new).
+    test "finds nothing in the palette, nor in the document as the host stores it" do
+      palette = Blocks.palette()
+
+      # The palette first: the authoring edits write the same values as the
+      # defaults, so a field type that refuses its default refuses the edit
+      # too, and then the document could not be built to judge.
+      assert Palette.preflight(palette) == []
+
+      # A host stores the document as its canonical JSON and judges what
+      # it reads back, not the struct it authored.
+      json = Document.to_json(LoanDocument.document())
+      assert {:ok, stored} = Document.from_json(json)
+
+      # The pre-flight passes over a block it cannot resolve, so every
+      # stored block resolving is what makes the empty answer a judgement.
+      for block <- Document.blocks(stored) do
+        assert {:ok, _module, _resolved} = Palette.resolve(palette, block)
+      end
+
+      assert Palette.preflight(palette, [stored]) == []
+    end
+  end
+
   describe "the view model" do
     test "reads as an outline of sentences, without an editor" do
       outline =
