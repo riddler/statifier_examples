@@ -251,10 +251,11 @@ Every gesture on the map is one the list already makes, sent to the same
 | the panel's form | changes the selected block's config | the same form, reached through the row's link |
 
 The panel is the page's one form surface: a block's fields are never drawn
-twice. It sits after the map and before the list, outside the map's region,
-and takes focus. The map's region is hidden from assistive technology and
-out of the tab order, so a keyboard or a screen reader meets every step once,
-in the list and the panel.
+twice. It comes first, where reading begins: left of the map on a wide
+screen and above it where the two stack, both ahead of the list. It sits
+outside the map's region, and takes focus. The map's region is hidden from
+assistive technology and out of the tab order, so a keyboard or a screen
+reader meets every step once, in the list and the panel.
 
 The list has no row for an empty slot, so the panel carries the keyboard's
 way to one: with a block selected, it shows an "Add a step to" button for

@@ -1171,8 +1171,9 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
   end
 
   describe "the map" do
-    # The map is the page's first section, and the graph it carries is the
-    # whole document: every block, every arm, every empty slot's marker.
+    # The map sits above the list, beside the panel that comes before it,
+    # and the graph it carries is the whole document: every block, every
+    # arm, every empty slot's marker.
     # What the browser draws from it is the package's to prove; what this
     # asserts is that the page hands the package's map region this page's
     # view model and its words for event names.
@@ -1450,6 +1451,64 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
       assert page |> LazyHTML.query("#plan-panel [aria-hidden]") |> Enum.map(&element_id/1) ==
                ["plan-description-hover"]
+    end
+
+    # Where reading begins (ruled by the operator, 2026-10-10): the panel
+    # comes first, left of the map on a wide screen and above it where the
+    # two stack, and the list follows both. The page's order is its DOM
+    # order - the stylesheet never reorders the two (the next test) - so
+    # the order of the two boxes in `.myapp-plan__top` is what a reader
+    # sees and what a screen reader meets. Read with nothing selected and
+    # with a block selected, on both library fixtures.
+    #
+    # Sabotage: rendered the map region before `<.panel>` in render/1; this
+    # went red on the order. Reverted from a copy.
+    test "the panel comes before the map, and both before the list", %{conn: conn} do
+      for key <- ["library_loan", "patron_registration"] do
+        {:ok, view, html} = live(conn, ~p"/plan?#{[doc: key]}")
+        [_root, {second, _depth, _kind} | _rest] = outline_of(fixture(key))
+        selected = select(view, second.block_id)
+        assert selected =~ ~s(data-plan-panel="#{second.block_id}")
+
+        for page <- [html, selected] do
+          assert top_order(page) == [:panel, :map]
+
+          [before_list | _rest] = String.split(page, ~s(data-plan-section="plan"))
+          assert before_list =~ ~s(id="plan-panel")
+          assert before_list =~ ~s(id="plan-map")
+        end
+      end
+    end
+
+    # The stacked layout keeps that order: under the breakpoint the row
+    # turns into a column, panel first, and no rule in the stylesheet
+    # reverses the row or the column or gives either box an `order`, which
+    # is what would let the screen disagree with the reading order. A
+    # LiveViewTest cannot see a stylesheet, so the rules are read out of
+    # `assets/css/app.css`, as the editor's viewport bound is.
+    #
+    # Sabotage: set the stacked rule's direction to `column-reverse`; this
+    # went red on the direction. Gave the stacked map `order: -1`; this went
+    # red on the `order` refute. Each reverted from a copy.
+    test "the stylesheet stacks the panel above the map and never reorders them" do
+      css = File.read!("assets/css/app.css")
+
+      stacked =
+        case Regex.run(
+               ~r/@media \(max-width: [^)]+\) \{\s*\.myapp-plan__top \{([^}]*)\}/,
+               css
+             ) do
+          [_, body] -> body
+          _ -> flunk("no stacked `.myapp-plan__top` rule in assets/css/app.css")
+        end
+
+      assert stacked =~ ~r/flex-direction:\s*column;/
+
+      for selector <- [".myapp-plan__top", ".myapp-plan__map", ".myapp-plan__panel"],
+          [_, body] <- Regex.scan(~r/#{Regex.escape(selector)}\s*\{([^}]*)\}/, css) do
+        refute body =~ "-reverse"
+        refute body =~ ~r/(^|[\s;])order:/
+      end
     end
 
     # Insert at a gap after a block: the map's "+" arms the same gap the
@@ -1730,6 +1789,22 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
              |> Enum.to_list()
 
     region
+  end
+
+  # The two boxes side by side at the top of the page, in document order,
+  # each named by what it is: the panel by its id, the map by the package
+  # region's class.
+  defp top_order(html) do
+    html
+    |> LazyHTML.from_document()
+    |> LazyHTML.query(".myapp-plan__top > *")
+    |> Enum.map(fn element ->
+      cond do
+        LazyHTML.attribute(element, "id") == ["plan-panel"] -> :panel
+        element |> LazyHTML.attribute("class") |> Enum.any?(&(&1 =~ "sb-map__region")) -> :map
+        true -> {:other, LazyHTML.to_html(element) |> String.slice(0, 80)}
+      end
+    end)
   end
 
   defp tabindex(element), do: LazyHTML.attribute(element, "tabindex")
