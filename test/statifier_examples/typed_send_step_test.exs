@@ -30,7 +30,7 @@ defmodule StatifierExamples.TypedSendStepTest do
 
   # Sabotage: emitted the payload's params in reverse; this went red on the
   # param order, then reverted.
-  test "with a payload the compiled send carries one param per declared path, in order" do
+  test "with a payload the compiled send carries one param per listed path, in order" do
     config = Map.put(@config, "payload", ["loan.id", "loan.copy_id"])
 
     assert send_element(config) ==
@@ -53,6 +53,46 @@ defmodule StatifierExamples.TypedSendStepTest do
     assert :ok = TypedSendStep.validate_config(Map.put(@config, "payload", ["loan.id", "_x"]))
   end
 
+  # Sabotage: dropped the keyword branch from payload_findings/1; this went
+  # red on "true", then reverted.
+  test "a payload entry that names a keyword of the expression language is refused" do
+    for payload <- [["true"], ["false"], ["null"], ["undefined"], ["true.id"], ["loan.null"]] do
+      assert {:error,
+              [{"payload", "must not name a keyword of the expression language, like true"}]} =
+               TypedSendStep.validate_config(Map.put(@config, "payload", payload))
+    end
+
+    assert :ok =
+             TypedSendStep.validate_config(Map.put(@config, "payload", ["patron.last", "nil"]))
+  end
+
+  # Every word the expression language reserves, written as a path's first
+  # segment, as a middle one and as the last, beside ordinary names. The
+  # step admits an entry exactly when the locked predicator reads it as a
+  # datamodel path: an identifier followed by property names, never a
+  # literal, an operator or a parse error. `loan.last` is a path (a property
+  # may be named by one of the duration words) and `nil` is one too (the
+  # language spells its null `null`).
+  # Sabotage: dropped the later-segment check from keyword?/1; this went red
+  # on "loan.true", then reverted. Dropping the duration-word exemption went
+  # red on "loan.ago", and checking only the last segment went red on
+  # "loan.true.id"; each was reverted.
+  test "a payload entry is admitted exactly when the expression language reads it as a path" do
+    words =
+      ~w(true false null undefined and or not in contains if else while) ++
+        ~w(AND OR NOT IN CONTAINS ago from now next last) ++
+        ~w(loan id nil TRUE Null _x)
+
+    for word <- words,
+        entry <- [word, "loan." <> word, word <> ".id", "loan." <> word <> ".id"] do
+      admitted? = TypedSendStep.validate_config(Map.put(@config, "payload", [entry])) == :ok
+
+      assert admitted? == datamodel_path?(Predicator.parse(entry)),
+             "#{inspect(entry)}: the step answered admitted?=#{admitted?}, " <>
+               "the expression language reads #{inspect(Predicator.parse(entry))}"
+    end
+  end
+
   # Sabotage: dropped "event" from @keys; this went red on the missing
   # finding, then reverted.
   test "type, target and event are each the author's to set" do
@@ -61,6 +101,13 @@ defmodule StatifierExamples.TypedSendStepTest do
                TypedSendStep.validate_config(Map.put(@config, key, ""))
     end
   end
+
+  defp datamodel_path?({:ok, {:identifier, _name, _pos}}), do: true
+
+  defp datamodel_path?({:ok, {:property_access, inner, _name, _pos}}),
+    do: datamodel_path?({:ok, inner})
+
+  defp datamodel_path?(_other), do: false
 
   defp send_element(config) do
     document = %{
