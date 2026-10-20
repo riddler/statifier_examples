@@ -31,6 +31,7 @@ defmodule StatifierExamples.MigrateWaitingTest do
 
     assert [
              "migrate waiting on statifier_persistence 0.24." <> _patch,
+             "cleared      0 leftover execution(s) from earlier runs on these two charts",
              "waiting      2 loan(s) on revision 1, sha256:" <> _old,
              "published    revision 2, sha256:" <> _new,
              "diff         breaking (5 unresolved) with the blocks mapping, " <>
@@ -88,7 +89,50 @@ defmodule StatifierExamples.MigrateWaitingTest do
              store |> FirstWorkflow.driver(machine) |> Driver.create("loan_not_this_run")
 
     assert {:error, :dry_run, {:unexpected, %{would_refuse: 3, would_migrate: 0}}} =
-             MigrateWaiting.walk(loans: ["loan_second_1", "loan_second_2"])
+             MigrateWaiting.walk(loans: ["loan_second_1", "loan_second_2"], clear: false)
+  end
+
+  # Sabotage: replaced the `Executions.cancel` call in `cancel_leftover/3` with a
+  # no-op; the crashed loans stayed active and this went red. Sabotage: listed
+  # the terminal statuses too; the discarded cancel of a finished loan stopped
+  # the walk and this went red. Each reverted from a copy.
+  test "a run that left loans behind is cleared before the next one opens its own" do
+    loans = ["loan_left_1", "loan_left_2"]
+    assert {:ok, lines} = MigrateWaiting.walk(loans: loans)
+    ["waiting      2 loan(s) on revision 1, " <> rest] = Enum.filter(lines, &(&1 =~ ~r/^waiting/))
+    [old_hash | _] = String.split(rest, ",")
+
+    store = FirstWorkflow.store()
+    {:ok, chart} = Storage.fetch_chart(store, old_hash)
+    {:ok, machine} = Statifier.compile(chart.chart_blob)
+
+    # As a crashed run leaves them: two active loans on revision 1.
+    for id <- ["loan_crashed_1", "loan_crashed_2"] do
+      assert {:ok, %{status: :active}, _state} =
+               store |> FirstWorkflow.driver(machine) |> Driver.create(id)
+    end
+
+    # An execution on another chart, which the clearing must not touch.
+    {:ok, other} =
+      Statifier.compile(
+        ~s(<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="a"><state id="a"/></scxml>)
+      )
+
+    :ok = Storage.save_chart(store, other, "other")
+
+    assert {:ok, %{status: :active}, _state} =
+             store |> FirstWorkflow.driver(other) |> Driver.create("bystander")
+
+    assert {:ok, again} = MigrateWaiting.walk(loans: ["loan_next_1", "loan_next_2"])
+
+    assert "cleared      2 leftover execution(s) from earlier runs on these two charts" in again
+    assert "applied      migrated 2, parked 0, refused 0, skipped 0" in again
+
+    for id <- ["loan_crashed_1", "loan_crashed_2"] do
+      assert {:ok, %{status: :cancelled}} = Storage.fetch_execution(store, id)
+    end
+
+    assert {:ok, %{status: :active}} = Storage.fetch_execution(store, "bystander")
   end
 
   # Sabotage: made `expect/3` answer `:ok` whatever the counts; this went

@@ -30,6 +30,13 @@ At the end it cancels the two loans it opened, because the batch below
 takes every waiting execution on a chart, not only the ones one run
 opened. The next run starts from an empty chart.
 
+A run that stopped or crashed before that cancel leaves its loans waiting,
+and the next batch would take them too. So before it opens its own loans
+the task cancels every execution still active or parked
+(`needs_migration`) on the two charts' content hashes, and prints how many
+in its `cleared` line. It touches only those two hashes: an execution on
+any other chart is left alone. The counts below are then this run's alone.
+
 ## The pins
 
 The migration surface is `statifier_persistence`'s. `mix.exs` asks for
@@ -62,6 +69,7 @@ The task opens two loans on revision 1 through
 `awaiting_return`, and the driver's executor stores the due-date timer as
 a scheduled Oban job:
 
+    cleared      0 leftover execution(s) from earlier runs on these two charts
     waiting      2 loan(s) on revision 1, sha256:6bf4dcb6..., each with its due-date timer
 
 ## 1. Publish the new revision
