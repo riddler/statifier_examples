@@ -93,8 +93,10 @@ step that needs a value re-reads it by id through
 `StatifierExamples.FormPost.CardApplications.Reader`, the one module that
 reads the personal fields, so a reviewer checks "ids only" by reading that
 module's callers. `test/statifier_examples/form_post/ids_only_test.exs`
-reads every row the engine and the router own and proves it; step 7 below
-is the same check in small.
+reads every row the engine and the router own, and the metadata and
+measurements of every telemetry event `statifier`, `statifier_persistence`,
+`statifier_oban` and the router emit during the drive, and proves the rule
+for both; step 7 below is the same check in small.
 
 ## 1. Register the chart
 

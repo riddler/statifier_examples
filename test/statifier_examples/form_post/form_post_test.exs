@@ -59,11 +59,13 @@ defmodule StatifierExamples.FormPostTest do
   end
 
   # Sabotage: made a failed step answer `:unexpected` instead of its own
-  # name; this went red. Reverted from a copy.
+  # name; this went red. Reverted from a copy. The clock is taken past the
+  # chart's deadline so the failure does not wait it out in real time.
   test "a step that does not hold is named" do
     Application.put_env(:statifier_examples, ScreenApplication, fail: true)
 
-    assert {:error, :routed, _reason} = FormPost.run()
+    assert {:error, :routed, {:ok, %{"screen" => "unscreened"}}} =
+             FormPost.run(advance_ms: 60_000)
   end
 
   # Sabotage: made the task print none of the lines; this went red.
@@ -87,7 +89,7 @@ defmodule StatifierExamples.FormPostTest do
     Application.put_env(:statifier_examples, ScreenApplication, fail: true)
 
     assert_raise Mix.Error, ~r/first workflow form post: step routed did not hold/, fn ->
-      FirstWorkflowFormPost.run([])
+      FirstWorkflowFormPost.run(["--advance-ms", "60000"])
     end
   end
 end
