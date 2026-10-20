@@ -365,6 +365,27 @@ defmodule StatifierExamples.FormPost.OnObanTest do
 
       assert [%Oban.Job{state: "cancelled"}] = step_jobs(execution_id)
     end
+
+    # Sabotage: made `Delivery`'s refusal raise for a step that exhausted
+    # the execution's macrostep budget; the job failed rather than
+    # cancelling and this went red on `%{cancelled: 1}`. Reverted from a
+    # copy.
+    test "an answer whose step exhausts the execution's budget is discarded" do
+      execution_id = first_step!("12 Millrace Lane")
+      store = FirstWorkflow.store()
+      {:ok, record} = Storage.fetch_execution(store, execution_id)
+      {:ok, machine} = PublishedCharts.chart(record.content_hash)
+      {:ok, state} = Storage.load_execution_position(store, execution_id, machine)
+
+      :ok =
+        Storage.update_execution(store, execution_id, %{state | max_macrostep_rounds: 1}, :active)
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "cancelled"}] = step_jobs(execution_id)
+      assert {:ok, %{status: :failed}} = Storage.fetch_execution(store, execution_id)
+    end
   end
 
   @doc false
