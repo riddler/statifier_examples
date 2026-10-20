@@ -1756,6 +1756,54 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     end
   end
 
+  describe "the screen-node palette" do
+    # The screen editor is this editor mounted with
+    # `StatifierExamples.ScreenEditor`'s palette, profile and field
+    # candidates; `StatifierExamplesWeb.ScreenEditorHost` is a test page
+    # mounting it that way until a route does. One palette drag per type:
+    # the screen into the root's body, every node type into the screen's
+    # nodes, and a text into the variant, which needs a candidate.
+    #
+    # Sabotage: dropped the button from `ScreenEditor.registrations/0`; its
+    # palette drag changed no document and the case went red, then reverted.
+    test "inserts the screen and every node type", %{conn: conn} do
+      {:ok, view, html} =
+        live_isolated(conn, StatifierExamplesWeb.ScreenEditorHost, session: %{"test" => self()})
+
+      # The profile: the screen blocks alone on the palette, no run pane,
+      # and once the drawer is open, Findings and Source and no truth tables.
+      assert html =~ ~s(data-group="Screens")
+      refute html =~ ~s(<li data-type="core.)
+      refute html =~ ~s(class="sb-run")
+
+      html = view |> element(".sb-drawer__strip") |> render_click()
+
+      assert html =~ ~s(id="sb-drawer-tab-source")
+      assert html =~ ~s(id="sb-drawer-tab-findings")
+      refute html =~ ~s(id="sb-drawer-tab-tables")
+      refute html =~ ~s(class="sb-run")
+
+      {screen, _document} = insert_into(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
+
+      node_types =
+        Enum.map(
+          ~w(heading text text_question choice_question boolean_question button variant),
+          &("myapp.screens." <> &1)
+        )
+
+      placed =
+        for {type, index} <- Enum.with_index(node_types) do
+          insert_into(view, type, screen.id, "nodes", index)
+        end
+
+      {variant, _document} = List.last(placed)
+      {_text, document} = insert_into(view, "myapp.screens.text", variant.id, "nodes", 0)
+
+      assert Enum.map(slot_blocks(document, screen.id, "nodes"), & &1.type) == node_types
+      assert [%{type: "myapp.screens.text"}] = slot_blocks(document, variant.id, "nodes")
+    end
+  end
+
   # The document as this app has it NOW - the page writes every edit through
   # `Documents`, so this is what a reload, the plan view or a persist would
   # see, rather than a value read back out of the socket.
@@ -1786,6 +1834,32 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   # that pushes them lives.
   @spec canvas(Phoenix.LiveViewTest.View.t()) :: Phoenix.LiveViewTest.Element.t()
   defp canvas(view), do: element(view, "#sb-canvas")
+
+  # One palette drag onto a gap in any block's slot, answering the block it
+  # placed and the document the host page received with it.
+  @spec insert_into(Phoenix.LiveViewTest.View.t(), String.t(), String.t(), String.t(), integer()) ::
+          {StatifierBlocks.Block.t(), Document.t()}
+  defp insert_into(view, type, parent_id, slot, index) do
+    canvas(view) |> render_hook("insert-dragstart", %{"type" => type})
+
+    canvas(view)
+    |> render_hook("insert-drop", %{
+      "type" => type,
+      "parent-id" => parent_id,
+      "slot" => slot,
+      "index" => to_string(index)
+    })
+
+    assert_receive {:document_changed, %Document{} = document}
+    {document |> slot_blocks(parent_id, slot) |> Enum.at(index), document}
+  end
+
+  # The blocks in one slot of one block, in document order.
+  @spec slot_blocks(Document.t(), String.t(), String.t()) :: [StatifierBlocks.Block.t()]
+  defp slot_blocks(document, block_id, slot) do
+    block = document |> Document.blocks() |> Enum.find(&(&1.id == block_id))
+    Map.get(block.slots, slot, [])
+  end
 
   # Unfolds a container by clicking its own fold control, the way an author
   # does. As of `statifier_blocks` 0.13.0 a NON-EMPTY drafts shelf opens
