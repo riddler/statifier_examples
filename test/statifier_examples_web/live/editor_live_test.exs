@@ -511,7 +511,8 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # type's DECLARED config and this app declares no type whose declared
     # config is refused anywhere. That is a decision and not an oversight:
     # no host type here declares a default config at all, and the reasons
-    # and the row that keeps it honest are written above the palette walk in
+    # and the row that keeps it honest are written with the "no host type
+    # declares a default config" test in
     # `test/statifier_examples/charts_test.exs`.
     #
     # Both halves are read off the same document one edit apart, which is
