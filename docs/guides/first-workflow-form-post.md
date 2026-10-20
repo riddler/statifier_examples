@@ -310,3 +310,13 @@ host that stores first passes the row's id as both. On 0.12.0 it drops
 `:raw_body` and passes the id once, as the provider id; every request that
 still carries a raw body is answered exactly as before. A host on 0.11
 keeps the id-twice shape until it moves.
+
+The `statifier_blocks` move to 0.43.0 asked one thing of this document's
+typed send. Its `payload` field (`StatifierExamples.TypedSendStep` declares
+it as a list of datamodel paths) is read row by row, as a single path field
+is: the editor offers the document's datamodel paths as suggestions for
+each row, and `StatifierBlocks.Datamodel.findings/4` returns the `:info`
+advisory for a row naming a path the datamodel does not declare, anchored
+on the `payload` key. An advisory is information, not a refusal: the
+document in `priv/form_post/card_application.json` names only declared
+paths in its two typed sends, so it draws none.
