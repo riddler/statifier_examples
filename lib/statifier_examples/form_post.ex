@@ -121,20 +121,25 @@ defmodule StatifierExamples.FormPost do
 
   `opts` takes `:idempotency_key` (default a fresh key) for the first
   application, for a caller that wants to name it; the screened-out
-  application's key is that key with `-po-box` added.
+  application's key is that key with `-po-box` added, and `:advance_ms`
+  (default `0`), how far past now each drain takes the clock: a deadline
+  timer or a retry that falls due within it runs at once instead of being
+  waited for, which is how a caller shows a step that does not hold
+  without waiting out the chart's own deadline.
   """
   @spec run(keyword()) :: {:ok, [String.t()]} | {:error, step(), term()}
   def run(opts \\ []) do
     key = Keyword.get_lazy(opts, :idempotency_key, &new_key/0)
+    advance_ms = Keyword.get(opts, :advance_ms, 0)
 
     with {:ok, content_hash} <- step(:registered, register()),
          {:ok, id} <- step(:stored, stored(key)),
          :ok <- step(:repeat, repeat(key, id)),
-         {:ok, execution_id, words} <- step(:routed, routed(id)),
+         {:ok, execution_id, words} <- step(:routed, routed(id, advance_ms)),
          {:ok, references} <- step(:sent, sent(id)),
          {:ok, outcomes} <- step(:duplicate, duplicate(id)),
          {:ok, places} <- step(:ids_only, ids_only(id, execution_id)),
-         {:ok, screened} <- step(:screened_out, screened_out(key <> "-po-box")),
+         {:ok, screened} <- step(:screened_out, screened_out(key <> "-po-box", advance_ms)),
          {:ok, inputs} <- step(:traced, traced(execution_id)) do
       {:ok,
        [
@@ -207,9 +212,9 @@ defmodule StatifierExamples.FormPost do
   end
 
   # The jobs run until the application's execution has completed.
-  @spec routed(integer()) :: {:ok, String.t(), map()} | {:error, term()}
-  defp routed(id) do
-    with :ok <- await(fn -> completed?(id) end),
+  @spec routed(integer(), non_neg_integer()) :: {:ok, String.t(), map()} | {:error, term()}
+  defp routed(id, advance_ms) do
+    with :ok <- await(fn -> completed?(id) end, advance_ms),
          execution_id when is_binary(execution_id) <- execution_id(id),
          {:ok, %{"screen" => "ok", "sort" => "both", "area" => "inside"} = words} <-
            words(execution_id) do
@@ -273,11 +278,11 @@ defmodule StatifierExamples.FormPost do
   # screen, the sort is never asked, no route is reached, and the stored
   # application is marked screened out, which is the status the host's
   # retention measures its age from.
-  @spec screened_out(String.t()) :: {:ok, map()} | {:error, term()}
-  defp screened_out(key) do
+  @spec screened_out(String.t(), non_neg_integer()) :: {:ok, map()} | {:error, term()}
+  defp screened_out(key, advance_ms) do
     with {:ok, %CardApplication{id: id}, :created} <-
            CardApplications.receive_application(@scope, form(@screened_applicant, key)),
-         :ok <- await(fn -> completed?(id) and screened_out?(id) end),
+         :ok <- await(fn -> completed?(id) and screened_out?(id) end, advance_ms),
          execution_id when is_binary(execution_id) <- execution_id(id),
          {:ok, %{"screen" => "screened_out", "sort" => "unsorted"} = words} <-
            words(execution_id),
@@ -482,11 +487,13 @@ defmodule StatifierExamples.FormPost do
   # Drains the recipe's queues until `done?` holds. Under the test
   # configuration nothing runs until something drains; in the dev app the
   # queues also run on their own, and draining runs what is already due.
-  @spec await((-> boolean())) :: :ok | {:error, term()}
-  defp await(done?), do: await(done?, System.monotonic_time(:millisecond) + @deadline_ms)
+  @spec await((-> boolean()), non_neg_integer()) :: :ok | {:error, term()}
+  defp await(done?, advance_ms),
+    do: await(done?, advance_ms, System.monotonic_time(:millisecond) + @deadline_ms)
 
-  defp await(done?, deadline) do
-    {_ok_or_unsettled, _counts} = Drain.run()
+  defp await(done?, advance_ms, deadline) do
+    {_ok_or_unsettled, _counts} =
+      Drain.run(until: DateTime.add(DateTime.utc_now(), advance_ms, :millisecond))
 
     cond do
       done?.() ->
@@ -497,7 +504,7 @@ defmodule StatifierExamples.FormPost do
 
       true ->
         Process.sleep(@poll_ms)
-        await(done?, deadline)
+        await(done?, advance_ms, deadline)
     end
   end
 
