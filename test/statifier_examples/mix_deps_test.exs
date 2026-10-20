@@ -1264,4 +1264,28 @@ defmodule StatifierExamples.MixDepsTest do
     assert {:opentelemetry_api, "~> 1.5"} in deps
     assert {:opentelemetry, "~> 1.5"} in deps
   end
+
+  # The screen-document runtime, a Hex requirement from the start and never
+  # a pin. 0.4.0 is the floor: it is the release that adds
+  # `Riddler.Journey`, which `StatifierExamples.Signup.Journey` answers
+  # through.
+  #
+  # Sabotage (run): pointed the LOCK assertion at `"0.3.` and left
+  # `mix.lock` alone; it went red reporting the resolved 0.4.0 entry.
+  # Reverted from a copy.
+  test "the riddler dep is the Hex requirement" do
+    deps = Mix.Project.config()[:deps]
+
+    assert {:riddler, "~> 0.4.0"} in deps
+
+    lock_line =
+      "mix.lock"
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.find(&String.starts_with?(&1, ~s(  "riddler": )))
+
+    assert lock_line, "riddler has no mix.lock entry"
+    assert lock_line =~ ~s({:hex, :riddler, "0.4.)
+    refute lock_line =~ ":git,"
+  end
 end
