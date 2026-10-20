@@ -178,6 +178,62 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
       refute editor_html =~ @block_label
     end
 
+    # The panel's sentence draws one field with the package's `:inline`
+    # variant, and it is the same control on the same event: an edit made
+    # through it is stored exactly as one made through the block form, and
+    # the field is drawn once, so the block form no longer holds it.
+    #
+    # Sabotage: changed `variant={:inline}` to `variant={:block}` on the
+    # panel's field; the variant assertions went red (no
+    # `data-field-variant="inline"`), then reverted from a copy.
+    test "the panel's sentence draws a field with the inline variant", %{conn: conn} do
+      {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: @doc_key]}")
+
+      select(plan, @block_id)
+
+      sentence_field = "form#plan-sentence-field-#{@block_id}"
+
+      assert has_element?(
+               plan,
+               ~s(#{sentence_field} [data-field="label"][data-field-variant="inline"])
+             )
+
+      # Drawn once: the block form holds the remaining fields, not this one.
+      assert has_element?(plan, "#sb-form-#{@block_id}")
+      refute has_element?(plan, ~s(#sb-form-#{@block_id} [data-field="label"]))
+      assert plan |> render() |> occurrences(~s(data-field="label")) == 1
+
+      # Same event, same decode: the edit is stored.
+      plan
+      |> element("#plan-sentence-field-#{@block_id}")
+      |> render_change(%{"config" => %{"label" => "Greet them inline"}})
+
+      assert config_of(@doc_key, @block_id)["label"] == "Greet them inline"
+
+      # A read-only page draws the package's read-only rows, never the form.
+      {:ok, readonly, _html} = live(conn, ~p"/plan?#{[doc: @doc_key, readonly: "1"]}")
+      read_panel = readonly |> select(@block_id) |> section("panel")
+      assert read_panel =~ ~s(data-read-only="true")
+      refute read_panel =~ "data-field-variant"
+      refute read_panel =~ "plan-sentence-field-"
+    end
+
+    # The other kind that reads inside a sentence: a wait's duration is its
+    # block's first field, so it is drawn inline too.
+    #
+    # Sabotage: dropped `:duration` from `sentence_field/2`'s types; this
+    # went red on the missing inline field, then reverted from a copy.
+    test "a wait's duration is drawn inline in the panel's sentence", %{conn: conn} do
+      {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: "library_loan"]}")
+
+      select(plan, "blk_ll_loan_period")
+
+      assert has_element?(
+               plan,
+               ~s(form#plan-sentence-field-blk_ll_loan_period [data-field="duration"][data-field-variant="inline"])
+             )
+    end
+
     # Insert, move, delete and undo, each asserted against the stored
     # document rather than against the markup: what a command has to do is
     # change the document, and a row that moved on screen without the

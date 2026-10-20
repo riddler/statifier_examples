@@ -158,7 +158,10 @@ defmodule StatifierExamplesWeb.PlanLive do
   name - its sentence under its title only where the two differ, and with
   the library world's event names in words, both as on the map
   (`StatifierExamplesWeb.EventPhrasing.sentence/1`; a list row keeps the
-  package's sentence) - any held draft, its `ConfigForm`, its move and
+  package's sentence) - the block's first plain text or duration field, drawn
+  with the package's `:inline` variant in a small form of its own under the
+  sentence, any held draft, its `ConfigForm` (which then holds the other
+  fields), its move and
   delete controls and one "Add a step to" control per empty slot it has,
   which arms that slot's head as the map's marker does; or, for an insert
   armed at an empty slot, the picker. It comes first, where reading begins:
@@ -260,6 +263,7 @@ defmodule StatifierExamplesWeb.PlanLive do
   alias StatifierBlocks.Edit.Session
   alias StatifierBlocks.Edit.Targets
   alias StatifierBlocks.Editor.ConfigForm
+  alias StatifierBlocks.Editor.Field
   alias StatifierBlocks.Editor.MapRegions
   alias StatifierBlocks.Palette
   alias StatifierBlocks.ViewModel
@@ -650,7 +654,17 @@ defmodule StatifierExamplesWeb.PlanLive do
   # and to the row of the slot's block for this one, and a pick that
   # lands sends it to the new step's row. The page's hidden
   # `plan-focus-return-` element carries the `JS.focus/1` that does it.
+  #
+  # The panel's sentence carries one field of the selected block drawn with
+  # the package's `:inline` variant (`sentence_field/2`): the variant is a
+  # per-field statement about one placement, so the field leaves the
+  # package's block form (`without_field/2`) and is drawn once, here, in a
+  # form of its own that posts the same `config-change` the block form
+  # posts. The look is this app's (`.myapp-plan__sentence-field`); the
+  # label, the control and the events are the package's.
   defp panel(assigns) do
+    assigns = assign(assigns, :sentence_field, sentence_field(assigns.node, assigns.readonly?))
+
     ~H"""
     <aside
       id="plan-panel"
@@ -678,6 +692,23 @@ defmodule StatifierExamplesWeb.PlanLive do
           {EventPhrasing.sentence(@node)}
         </p>
 
+        <form
+          :if={@sentence_field}
+          id={"plan-sentence-field-" <> @node.block_id}
+          class="myapp-plan__sentence-field"
+          data-block-id={@node.block_id}
+          phx-change="config-change"
+          phx-submit="config-change"
+        >
+          <input type="hidden" name="block-id" value={@node.block_id} />
+          <Field.field
+            field={@sentence_field}
+            target={nil}
+            block_id={@node.block_id}
+            variant={:inline}
+          />
+        </form>
+
         <div :if={@node.form} class="myapp-plan__form">
           <p :if={@drafted?} class="myapp-plan__pending">
             Nothing is stored yet{refused_fields(@node)}.
@@ -693,7 +724,7 @@ defmodule StatifierExamplesWeb.PlanLive do
           </p>
 
           <ConfigForm.config_form
-            node={@node}
+            node={without_field(@node, @sentence_field)}
             event="config-change"
             target={nil}
             read_only={@readonly?}
@@ -1320,6 +1351,35 @@ defmodule StatifierExamplesWeb.PlanLive do
   # in one call, which is exactly what the form decoder needs.
   @spec fields_for(Phoenix.LiveView.Socket.t(), Block.id()) :: [ViewModel.Field.t()]
   defp fields_for(socket, id), do: ViewModel.fields_for(socket.assigns.view_model, id)
+
+  # The field the panel's sentence draws inline: the block's first shown
+  # field when it is a plain text or duration control, the two kinds that
+  # read naturally inside a sentence. Taking the FIRST keeps the order the
+  # fields are drawn in the order the declaration gave them. A read-only
+  # page, a block with no form and a block whose first field is some other
+  # kind draw none, and the block form then holds every field as before.
+  @spec sentence_field(ViewModel.Node.t() | nil, boolean()) :: ViewModel.Field.t() | nil
+  defp sentence_field(nil, _readonly?), do: nil
+  defp sentence_field(_node, true), do: nil
+
+  defp sentence_field(%ViewModel.Node{} = node, false) do
+    case ViewModel.shown_fields(node) do
+      [%ViewModel.Field{readonly?: false, type: type} = field | _rest]
+      when type in [:string, :duration] ->
+        field
+
+      _other ->
+        nil
+    end
+  end
+
+  # The node as the block form sees it, minus the field drawn inline.
+  @spec without_field(ViewModel.Node.t(), ViewModel.Field.t() | nil) :: ViewModel.Node.t()
+  defp without_field(node, nil), do: node
+
+  defp without_field(%ViewModel.Node{form: form} = node, %ViewModel.Field{key: key}) do
+    %{node | form: %{form | fields: Enum.reject(form.fields, &(&1.key == key))}}
+  end
 
   # A refused command in one line. The reasons are `Edit.apply/2`'s own
   # union and this app renders them rather than swallowing them: a Delete
