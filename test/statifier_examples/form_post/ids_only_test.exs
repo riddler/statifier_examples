@@ -15,6 +15,14 @@ defmodule StatifierExamples.FormPost.IdsOnlyTest do
   is also decoded to its datamodel through the stored chart, and its input
   log read through the store.
 
+  Telemetry is read the same way. A handler is attached, before the drive,
+  to every event `statifier`, `statifier_persistence` and `statifier_oban`
+  name in their `events/0` and to the router's one event, and each event's metadata and
+  measurements go through the same search as a row column. The drive
+  includes one message the router's binding does not take, so that event
+  fires; a drive that emitted nothing from one of the four packages fails,
+  rather than passes.
+
   The same search finds every value in `card_applications`, the host's own
   table, so a search that could find nothing is a failure, not a pass.
 
@@ -38,6 +46,7 @@ defmodule StatifierExamples.FormPost.IdsOnlyTest do
     CardApplications,
     CardApplicationSend,
     Drain,
+    IntakeJob,
     PublishedCharts,
     Router,
     ScreenApplication
@@ -74,6 +83,10 @@ defmodule StatifierExamples.FormPost.IdsOnlyTest do
     oban_jobs
   )
 
+  # The router names its one event in `StatifierRouter` (a module
+  # attribute, no `events/0`): a route whose binding's match does not hold.
+  @router_events [[:statifier_router, :route, :no_match]]
+
   # The recipe's outbox: the host's, but it holds ids and the outside
   # systems' references, never a posted value.
   @outbox "card_application_sends"
@@ -95,11 +108,35 @@ defmodule StatifierExamples.FormPost.IdsOnlyTest do
     {:ok, machine, scxml} = PublishedCharts.runtime_chart()
     :ok = Storage.save_chart(FirstWorkflow.store(), machine, scxml)
 
-    on_exit(fn -> Application.delete_env(:statifier_examples, ScreenApplication) end)
+    # The handler id is unique to this test, and the module is not async,
+    # so no other test's events reach this mailbox.
+    handler_id = "ids-only-#{inspect(make_ref())}"
+    test_pid = self()
+
+    :telemetry.attach_many(
+      handler_id,
+      telemetry_events(),
+      fn event, measurements, metadata, pid ->
+        send(pid, {:telemetry, event, measurements, metadata})
+      end,
+      test_pid
+    )
+
+    on_exit(fn ->
+      :telemetry.detach(handler_id)
+      Application.delete_env(:statifier_examples, ScreenApplication)
+    end)
 
     :ok
   end
 
+  # Sabotage (telemetry): the posted email address added to the metadata of
+  # `StatifierRouter`'s no-match event, and the posted phone number to the
+  # metadata of `StatifierOban`'s timer-scheduled event, each in a copy of
+  # the dependency; each went red on the telemetry search, naming the
+  # event. The same through the test: events emitted with a posted value
+  # in metadata (nested in a list), in measurements, and Base64-wrapped in
+  # JSON; each red. Reverted from a copy.
   # Sabotage: put the email address into the intake job's request data
   # (`IntakeJob.route/1`) and widened the binding's `data:` in `Router` to
   # carry it; this went red on the input log, raw and decoded. The request
@@ -121,6 +158,9 @@ defmodule StatifierExamples.FormPost.IdsOnlyTest do
       assert @form["email"] in found(hidden), "the search missed #{inspect(hidden)}"
     end
 
+    # ... and a value nested in an event's metadata.
+    assert @form["email"] in found(%{"event" => %{detail: [%{value: @form["email"]}]}})
+
     # The screen fails every time it runs, so its deadline fires and the
     # flow goes on without it; the application asks for both routes.
     Application.put_env(:statifier_examples, ScreenApplication, fail: true)
@@ -139,6 +179,12 @@ defmodule StatifierExamples.FormPost.IdsOnlyTest do
     execution_id = execution_id(id)
     assert %Oban.Job{state: "scheduled", scheduled_at: due} = screen_deadline(execution_id)
     assert {:ok, %{discard: 0}} = Drain.run(until: due)
+
+    # A message the binding's match does not take: the router's one event.
+    assert {:ok, [{:no_match, binding}]} =
+             StatifierRouter.Webhook.handle(Router.config(), IntakeJob.request("riverbend", 0))
+
+    assert binding == Router.binding_id()
 
     store = FirstWorkflow.store()
     {:ok, record} = Storage.fetch_execution(store, execution_id)
@@ -175,11 +221,49 @@ defmodule StatifierExamples.FormPost.IdsOnlyTest do
 
     assert [] == hits(Map.merge(scanned, decoded))
 
+    # Every event the drive emitted: metadata and measurements, searched
+    # with the same decoder. Each package must have emitted something, or
+    # the search proves nothing about it.
+    events = drain_telemetry([])
+
+    for family <- [:statifier, :statifier_persistence, :statifier_oban, :statifier_router] do
+      assert Enum.any?(events, fn {name, _measurements, _metadata} -> hd(name) == family end),
+             "the drive emitted no #{family} event"
+    end
+
+    telemetry = %{
+      "telemetry metadata" =>
+        for({name, _m, metadata} <- events, do: %{inspect(name) => metadata}),
+      "telemetry measurements" =>
+        for({name, measurements, _m} <- events, do: %{inspect(name) => measurements})
+    }
+
+    assert [] == hits(telemetry)
+
     # The same search finds every posted value in the host's own table.
     assert MapSet.new(Map.values(@form)) ==
              MapSet.new(
                for {_where, value} <- hits(%{@host_table => rows(@host_table)}), do: value
              )
+  end
+
+  # Every event name the three packages emit, from the packages' own lists
+  # where they have one.
+  defp telemetry_events do
+    Statifier.Telemetry.events() ++
+      StatifierPersistence.Telemetry.events() ++
+      StatifierOban.Telemetry.events() ++ @router_events
+  end
+
+  # The events the handler sent this process, as `{name, measurements,
+  # metadata}`, in the order they arrived.
+  defp drain_telemetry(acc) do
+    receive do
+      {:telemetry, name, measurements, metadata} ->
+        drain_telemetry([{name, measurements, metadata} | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
   end
 
   # Every table SQLite holds, as migrated.
