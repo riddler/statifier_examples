@@ -534,6 +534,18 @@
   max-width: 32rem;
 }
 
+/* The panel sentence's one inline field: the package draws the control in an
+ * inline box; how wide it sits under the sentence is this app's to say. */
+.myapp-plan__sentence-field {
+  margin: var(--sb-space-half) 0 0;
+  max-width: 32rem;
+}
+
+.myapp-plan__sentence-field .sb-field--inline {
+  display: inline-block;
+  min-width: 16rem;
+}
+
 .myapp-plan__pending {
   font-size: var(--sb-text-sm);
   color: var(--sb-fg-muted);
