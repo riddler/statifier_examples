@@ -682,6 +682,22 @@ defmodule StatifierExamples.Charts.Durable do
   execution would sit active with no timer left to fire, so this raises and
   Oban retries the job instead.
 
+  That retry is bounded, and the bound is accepted here. This app sets no
+  `max_attempts` on the timer or the invoke job and none of its handlers
+  caps its own, so both run under Oban's default of 20 attempts, spaced by
+  Oban's default backoff: the wait after attempt `n` is `15 + 2^n` seconds
+  plus up to 10% jitter, which spreads the 19 retries over about 12.1 days
+  with no jitter and about 13.4 with the most (`statifier_oban` 0.17.2,
+  `Oban` 2.24.1). A park that outlasts it ends the job discarded by Oban,
+  which is not one of the discards above: the timer never fires into the
+  execution, and an execution unparked after that point waits for it unless
+  an operator revives the exhausted job with `Oban.retry_job/2`. Unparking
+  within the bound loses nothing. `statifier_oban` 0.17.2 lets a
+  timer delivery answer `{:snooze, seconds}` for a parked execution, which
+  holds the timer without spending an attempt; this function does not use
+  it. `complete_invocation/3` has the same bound when the invoke job delivers
+  the answer, and no such answer.
+
   A delivered event is broadcast on `topic/1`, so a page that happens to
   be showing this execution redraws instead of waiting for someone to reload
   it. Nothing here depends on anyone listening.
@@ -783,7 +799,11 @@ defmodule StatifierExamples.Charts.Durable do
   execution, `deliver/2`'s: a parked execution among them, so the job is
   retried and the answer lands once the execution is migrated or unparked,
   the handler having run again, idempotent on the invoke id by its
-  contract. The discards are `deliver/2`'s too, and three of them are the
+  contract. That retry has the bound `deliver/2` states: when the invoke job
+  delivers the answer, a park that outlasts the job's 20 attempts loses
+  it with the job Oban discards, and the chart is not told it failed, because
+  `complete_invocation/3` raising is not a handler failing. The discards
+  are `deliver/2`'s too, and three of them are the
   ordinary ones:
 
     * the execution is no longer live - it finished or was abandoned while the
