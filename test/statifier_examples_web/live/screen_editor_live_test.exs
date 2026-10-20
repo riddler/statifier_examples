@@ -37,6 +37,36 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       assert has_element?(view, "#try-refusals li")
       refute has_element?(view, "#try-journey")
     end
+
+    # Sabotage (run): removed the format check from Try.start/1; the Try
+    # started a Journey and the refusal assertion went red. Reverted from a
+    # copy.
+    test "refuses a text question format the Journey cannot check, keeping the page", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/screen-editor")
+
+      details = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
+      configure(view, details, %{"key" => "patron_details", "title" => "Your details"})
+
+      age = insert(view, "myapp.screens.text_question", details, "nodes", 0)
+      configure(view, age, %{"key" => "age", "label" => "Age", "format" => "integer"})
+
+      next = insert(view, "myapp.screens.button", details, "nodes", 1)
+
+      configure(view, next, %{
+        "key" => "details_next",
+        "label" => "Continue",
+        "outcome" => "details_submitted"
+      })
+
+      view |> element("#try") |> render_click()
+
+      assert has_element?(view, "#try-refusals li", "age: this page has no check")
+      refute has_element?(view, "#try-journey")
+      refute has_element?(view, "#details_next")
+      assert render(view) =~ ~s(data-block-id="#{age}")
+    end
   end
 
   describe "a choice question, authored and tried" do
