@@ -34,31 +34,46 @@ defmodule StatifierExamples.Signup.Screens do
   ## Resolving a screen
 
   `resolve/2` takes a screen and a datamodel map and returns only the nodes a
-  reader should see, with their text slots filled. Two things happen:
+  reader should see, with their templates rendered. It does not do either
+  itself: it hands the screen to `Riddler.Screens.resolve_screen/3`, which
+  owns both rules, and answers the nodes riddler resolved, string-keyed as
+  the document writes them. The datamodel is the root riddler reads: its
+  `"responses"` and `"context"` and nothing else.
 
     * **Conditions.** A node may carry `condition`, predicator source
-      evaluated against the datamodel. The node is kept only when the
-      expression evaluates to `true`. Predicator answers `{:ok, :undefined}`
-      for a path the datamodel does not hold, so a question that has not been
-      answered yet hides whatever depends on it rather than raising - which
-      is the behaviour a first screen needs, since on the way in the
-      datamodel is empty. A node with no condition is always kept.
+      evaluated against the root. The node is kept only when the expression
+      evaluates to `true`. A path the root does not hold, an operand of the
+      wrong type and source that does not parse all hide the node rather
+      than raising - which is the behaviour a first screen needs, since on
+      the way in the datamodel is empty. A node with no condition is always
+      kept, and a kept node carries no `condition` any more: riddler
+      resolves it away.
 
-    * **Text slots.** A `heading` or `text` node's text may hold
-      `{{ responses.first_name }}`. `fill_slots/2` is the two-line stand-in
-      for the templating subset: one regex, one lookup. It is **not** a Liquid
-      implementation and this app does not depend on one - the subset is
-      Riddler's to define (ruled by the operator, 2026-09-07), and a library
-      added here would quietly become the definition.
+    * **Templates.** A `heading` or `text` node's text, and a question's
+      `label` and `placeholder`, are templates in riddler's subset, so
+      `{{ responses.first_name }}` reads the response. A variable the root
+      does not hold renders as the empty string.
 
-  A slot whose path the datamodel does not hold renders as the empty string.
-  A half-written sentence is a visible bug; a raised exception on a screen
-  whose questions have not been answered yet is a broken app.
+  `fill_slots/2` is not that renderer. It is the regex this module used to
+  fill slots with before riddler did, kept because it is public and its
+  answers are pinned: for a slot naming a whole subtree it answers the
+  empty string, where riddler's renderer writes the subtree out.
+
+  ## A screens document other than the fixture
+
+  Every function that reads the element document has a form that takes
+  one: `screens/1` and `screen/2` read a decoded screens document a caller
+  supplies, and `admit/1` is the check that one is a document riddler
+  admits with no findings. The zero-argument forms read the fixture.
   """
 
-  alias StatifierExamples.Signup.Screens
+  alias Riddler.Screens.Document
 
   @fixture "signup_screens.json"
+
+  # The envelope a screen is wrapped in when it is resolved on its own. The
+  # id is never read back; it is only what makes the wrapper a document.
+  @single_screen_id "edoc_one_screen"
 
   @typedoc "One element node, as it appears in the document."
   @type node_doc :: %{required(String.t()) => term()}
@@ -78,8 +93,14 @@ defmodule StatifierExamples.Signup.Screens do
   reloaded is worth more to an example app than the microseconds.
   """
   @spec screens() :: [screen()]
-  def screens do
-    document()
+  def screens, do: screens(document())
+
+  @doc """
+  Every screen in `document`, a decoded screens document, in its order.
+  """
+  @spec screens(map()) :: [screen()]
+  def screens(document) when is_map(document) do
+    document
     |> Map.fetch!("screens")
     |> Enum.map(fn screen ->
       %{
@@ -94,14 +115,23 @@ defmodule StatifierExamples.Signup.Screens do
   The screen keyed `key`, or `nil`.
   """
   @spec screen(String.t()) :: screen() | nil
-  def screen(key) when is_binary(key), do: Enum.find(screens(), &(&1.key == key))
+  def screen(key) when is_binary(key), do: screen(document(), key)
 
   @doc """
-  The nodes of `screen` a reader should see, with their text slots filled.
+  The screen of `document` keyed `key`, or `nil`.
+  """
+  @spec screen(map(), String.t()) :: screen() | nil
+  def screen(document, key) when is_map(document) and is_binary(key),
+    do: Enum.find(screens(document), &(&1.key == key))
 
-  `datamodel` is the map conditions are evaluated against and slots are read
-  from - `%{"responses" => %{"first_name" => "Ada"}}` for the documents this
-  app ships.
+  @doc """
+  The nodes of `screen` a reader should see, resolved by
+  `Riddler.Screens.resolve_screen/3`.
+
+  `datamodel` is the root conditions are evaluated against and templates
+  are read from - `%{"responses" => %{"first_name" => "Ada"}}` for the
+  documents this app ships. Raises `ArgumentError` for a screen riddler does
+  not admit as a document's screen.
 
   ## Examples
 
@@ -111,35 +141,51 @@ defmodule StatifierExamples.Signup.Screens do
       false
   """
   @spec resolve(screen(), map()) :: [node_doc()]
-  def resolve(%{nodes: nodes}, datamodel) when is_map(datamodel) do
-    nodes
-    |> Enum.filter(&shown?(&1, datamodel))
-    |> Enum.map(&fill_node(&1, datamodel))
+  def resolve(%{key: key, title: title, nodes: nodes}, datamodel) when is_map(datamodel) do
+    document = admit_screen!(key, title, nodes)
+    {:ok, resolved, _diagnostics} = Riddler.Screens.resolve_screen(document, key, datamodel)
+
+    Enum.map(resolved.nodes, &to_node_doc/1)
   end
 
   @doc """
   Whether `node_doc`'s condition holds against `datamodel`.
 
   A node with no condition is shown. A node whose condition evaluates to
-  anything other than `true` - `false`, `:undefined` for a path the
-  datamodel does not hold, or an error from source that does not parse - is
-  hidden.
+  anything other than `true` - `false`, a path the datamodel does not hold,
+  or source that does not parse - is hidden. The answer is
+  `Riddler.Screens.resolve_screen/3`'s for a screen holding that node alone.
   """
   @spec shown?(node_doc(), map()) :: boolean()
-  def shown?(node_doc, datamodel) when is_map(datamodel) do
-    case Map.get(node_doc, "condition") do
-      nil -> true
-      source -> Predicator.evaluate(source, datamodel) == {:ok, true}
+  def shown?(node_doc, datamodel) when is_map(node_doc) and is_map(datamodel) do
+    probe = %{"type" => "text", "key" => "shown", "text" => ""}
+
+    probe =
+      case Map.fetch(node_doc, "condition") do
+        {:ok, condition} -> Map.put(probe, "condition", condition)
+        :error -> probe
+      end
+
+    case Document.admit(envelope("shown", "shown", [probe])) do
+      nil ->
+        false
+
+      document ->
+        match?(
+          {:ok, %{nodes: [_shown]}, _},
+          Riddler.Screens.resolve_screen(document, "shown", datamodel)
+        )
     end
   end
 
   @doc """
   Substitutes `{{ path }}` slots in `text` from `datamodel`.
 
-  The two-line stand-in for the templating subset. An unresolved path becomes
-  the empty string, and so does one naming something with no sensible string
-  of its own - a map or a list, as `{{ responses }}` would be. Raising inside a
-  paragraph is not a behaviour a screen can recover from.
+  Not what `resolve/2` renders with: riddler's template subset does that.
+  This is the regex the module filled slots with before, kept for the
+  answers it is pinned to. An unresolved path becomes the empty string, and
+  so does one naming something with no sensible string of its own - a map
+  or a list, as `{{ responses }}` would be.
 
   ## Examples
 
@@ -186,15 +232,59 @@ defmodule StatifierExamples.Signup.Screens do
     |> Jason.decode!()
   end
 
-  # Only the two types that carry prose have slots to fill; a label or a
-  # placeholder holding one would be a fifth thing the renderer has to know
-  # about, and no screen here needs it.
-  @spec fill_node(node_doc(), map()) :: node_doc()
-  defp fill_node(%{"type" => type} = node_doc, datamodel) when type in ["heading", "text"] do
-    Map.update!(node_doc, "text", &Screens.fill_slots(&1, datamodel))
+  @doc """
+  `document`, a decoded screens document, admitted by
+  `Riddler.Screens.Document.admit/1` and validated by
+  `Riddler.Screens.Document.validate/1`.
+
+  `{:ok, admitted}` when riddler admits it with no findings;
+  `{:error, :not_a_screens_document}` when `admit/1` answers `nil`, and
+  `{:error, findings}` with riddler's findings otherwise.
+  """
+  @spec admit(term()) ::
+          {:ok, Document.t()}
+          | {:error, :not_a_screens_document}
+          | {:error, [Riddler.Finding.t()]}
+  def admit(document) do
+    case Document.admit(document) do
+      nil -> {:error, :not_a_screens_document}
+      admitted -> Document.validate(admitted)
+    end
   end
 
-  defp fill_node(node_doc, _datamodel), do: node_doc
+  # One screen, wrapped in an envelope riddler admits. `Document.admit/1`
+  # answers `nil` only for a spine that is not a document's; a node that is
+  # wrong rather than absent is admitted, so this raises only for a screen no
+  # document could hold.
+  @spec admit_screen!(String.t(), String.t(), [node_doc()]) :: Document.t()
+  defp admit_screen!(key, title, nodes) do
+    case Document.admit(envelope(key, title, nodes)) do
+      nil -> raise ArgumentError, "screen #{inspect(key)} is not one riddler admits"
+      document -> document
+    end
+  end
+
+  @spec envelope(String.t(), String.t(), [node_doc()]) :: map()
+  defp envelope(key, title, nodes) do
+    %{
+      "schema_version" => 1,
+      "id" => @single_screen_id,
+      "screens" => [%{"key" => key, "title" => title, "nodes" => nodes}]
+    }
+  end
+
+  # Riddler resolves to atom-keyed nodes; a node here is string-keyed, as the
+  # document writes it and as every page and check in this app reads it. The
+  # values are the document's own JSON values, so only the keys move, and a
+  # choice question's options are maps of their own.
+  @spec to_node_doc(map()) :: node_doc()
+  defp to_node_doc(node) when is_map(node) do
+    Map.new(node, fn {field, value} -> {to_string(field), to_node_value(value)} end)
+  end
+
+  defp to_node_value(list) when is_list(list), do: Enum.map(list, &to_node_value/1)
+  defp to_node_value(%{} = map) when not is_struct(map), do: to_node_doc(map)
+  defp to_node_value(value), do: value
 
   # `to_string/1` has no implementation for a map or a list of mixed terms,
   # and a slot naming a whole subtree is a document mistake rather than a

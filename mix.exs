@@ -827,6 +827,16 @@ defmodule StatifierExamples.MixProject do
       # arm. 0.10.2 changes documentation and the package's tarball only.
       statifier_ui_dep(),
 
+      # The screen-document runtime. `StatifierExamples.Signup.Screens` and
+      # `StatifierExamples.Signup.Validation` resolve and check the signup
+      # screens through `Riddler.Screens`, and `StatifierExamples.Signup.Journey`
+      # answers what a page draws through `Riddler.Journey`. Before this arm
+      # the app carried a stand-in for both, a regex for the template slots
+      # and a hand-written required/email check, which was a second
+      # implementation of a contract riddler defines. 0.4.0 is the floor: it
+      # is the release that adds `Riddler.Journey`.
+      {:riddler, "~> 0.4.0"},
+
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.15", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

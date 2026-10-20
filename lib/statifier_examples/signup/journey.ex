@@ -52,6 +52,27 @@ defmodule StatifierExamples.Signup.Journey do
   finished. Both answer `screen: nil`, and the page says so rather than
   guessing.
 
+  ## What a page draws is riddler's answer
+
+  The execution says where it is; `Riddler.Journey.present/3` says what that
+  means to a reader. A view maps the execution onto riddler's status - the
+  screen whose park block is active is `{:screen, key}`, a running
+  execution resting anywhere else is `:waiting`, and any other is `:done` -
+  and reads the nodes and the `state` off riddler's answer, with the
+  datamodel as the root. So a view's `nodes` are riddler's resolved nodes,
+  and its `state` is riddler's `"screen"`, `"waiting"` or `"done"`.
+
+  ## A screens document the caller supplies
+
+  The chart is always the Path fixture. What is on its screens is
+  `priv/fixtures/signup_screens.json` unless a caller passes `screens:` - a
+  decoded screens document - to `start/2`, `current/2` and `submit/4`, and
+  the execution never stores it: like the execution id, it is the caller's
+  to keep and to pass on every call. `start/2` refuses a document riddler
+  does not admit with zero findings, and one that leaves a screen the Path
+  names undeclared. Its buttons have to declare the outcomes the Path's
+  screens declare, because those are the events the chart listens for.
+
   ## The host contract is the form's responses, and nothing checks it
 
   A `capture` map's value whose shape is a **string** is a path inside
@@ -115,12 +136,16 @@ defmodule StatifierExamples.Signup.Journey do
 
   @fixture "signup_path"
 
+  # A screens document as a call reads it: decoded, and admitted by riddler.
+  @typep screens :: {map(), Riddler.Screens.Document.t()}
+
   @typedoc """
   What a page needs to draw one moment of an execution, and nothing else.
 
   `screen` is `nil` when the execution is not sitting on one (see the moduledoc),
-  and `nodes` is then empty. `responses` is what the chart has collected so
-  far, keyed by element key; `findings` is empty except in the
+  and `nodes` is then empty. `state` is `Riddler.Journey.present/3`'s
+  `"screen"`, `"waiting"` or `"done"` for it. `responses` is what the chart
+  has collected so far, keyed by element key; `findings` is empty except in the
   `{:invalid, view}` a refused `submit/3` answers with.
 
   `discarded` is the one key that is not always there, and its absence is
@@ -138,6 +163,7 @@ defmodule StatifierExamples.Signup.Journey do
           :datamodel => map(),
           :responses => %{optional(String.t()) => term()},
           :status => Execution.status(),
+          :state => String.t(),
           :findings => [Validation.finding()],
           optional(:discarded) => term()
         }
@@ -155,8 +181,22 @@ defmodule StatifierExamples.Signup.Journey do
   `start/0` with the execution id supplied, which is what a test wants.
   """
   @spec start(String.t()) :: {:ok, String.t()} | {:error, term()}
-  def start(execution_id) when is_binary(execution_id) do
-    with {:ok, fixture} <- Charts.fixture(@fixture),
+  def start(execution_id) when is_binary(execution_id), do: start(execution_id, [])
+
+  @doc """
+  `start/1` over the screens document `opts[:screens]` supplies, when it
+  supplies one (see the moduledoc).
+
+  `{:error, {:screens_document, reason}}` for a document riddler does not
+  admit with zero findings - `reason` is `StatifierExamples.Signup.Screens.admit/1`'s
+  - and `{:error, {:undeclared_screens, keys}}` for one that does not
+  declare every screen the Path names. Nothing is started for either.
+  """
+  @spec start(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  def start(execution_id, opts) when is_binary(execution_id) and is_list(opts) do
+    with {:ok, screens} <- screens_document(opts),
+         {:ok, fixture} <- Charts.fixture(@fixture),
+         :ok <- declares_path_screens(screens, fixture.document),
          {:ok, compiled} <-
            Durable.compile(fixture.document, fixture.declare, fixture.datamodel),
          {:ok, _driven} <- Durable.start(compiled, fixture.document, execution_id, fixture.key) do
@@ -183,12 +223,16 @@ defmodule StatifierExamples.Signup.Journey do
 
   `{:error, :execution_not_found}` for an id nobody stored, and the storage
   layer's own refusals otherwise.
+
+  `opts[:screens]` is the screens document `start/2` was given, when it was
+  given one.
   """
-  @spec current(String.t()) :: {:ok, view()} | {:error, term()}
-  def current(execution_id) when is_binary(execution_id) do
-    with {:ok, {{%Durable{machine_state: state}, run}, _document}} <-
+  @spec current(String.t(), keyword()) :: {:ok, view()} | {:error, term()}
+  def current(execution_id, opts \\ []) when is_binary(execution_id) and is_list(opts) do
+    with {:ok, screens} <- screens_document(opts),
+         {:ok, {{%Durable{machine_state: state}, run}, _document}} <-
            Durable.resume(execution_id) do
-      {:ok, view(execution_id, run, state.datamodel)}
+      {:ok, view(execution_id, run, state.datamodel, screens)}
     end
   end
 
@@ -246,18 +290,23 @@ defmodule StatifierExamples.Signup.Journey do
   on a response given on this very screen - the plan screen's business hint
   is - and validating against the position's stale datamodel would check
   the screen the reader saw one keystroke ago.
+
+  `opts[:screens]` is the screens document `start/2` was given, when it was
+  given one.
   """
-  @spec submit(String.t(), String.t(), %{optional(String.t()) => term()}) ::
+  @spec submit(String.t(), String.t(), %{optional(String.t()) => term()}, keyword()) ::
           {:ok, view()} | {:invalid, view()} | {:error, term()}
-  def submit(execution_id, outcome, responses)
-      when is_binary(execution_id) and is_binary(outcome) and is_map(responses) do
-    with {:ok, {{%Durable{machine_state: state} = durable, run}, _document}} <-
+  def submit(execution_id, outcome, responses, opts \\ [])
+      when is_binary(execution_id) and is_binary(outcome) and is_map(responses) and
+             is_list(opts) do
+    with {:ok, screens} <- screens_document(opts),
+         {:ok, {{%Durable{machine_state: state} = durable, run}, _document}} <-
            Durable.resume(execution_id),
          {:ok, drafted} <-
-           parked_on(resolve(view(execution_id, run, state.datamodel), responses)),
+           parked_on(resolve(view(execution_id, run, state.datamodel, screens), responses)),
          {:ok, button} <- button(drafted.nodes, outcome) do
       case Validation.validate(drafted.nodes, responses) do
-        [] -> pressed(durable, run, execution_id, button, coerce(responses))
+        [] -> pressed(durable, run, execution_id, button, coerce(responses), screens)
         findings -> {:invalid, %{drafted | findings: findings}}
       end
     end
@@ -294,37 +343,92 @@ defmodule StatifierExamples.Signup.Journey do
   # nor writes one, so the driver `submit/3` resumed is still holding what
   # storage holds - which is what makes the last settled position free to
   # report rather than something to go and read again.
-  @spec pressed(Durable.t(), Execution.t(), String.t(), Screens.node_doc(), map()) ::
+  @spec pressed(Durable.t(), Execution.t(), String.t(), Screens.node_doc(), map(), screens()) ::
           {:ok, view()} | {:error, term()}
-  defp pressed(%Durable{machine_state: settled} = durable, run, execution_id, button, typed) do
+  defp pressed(
+         %Durable{machine_state: settled} = durable,
+         run,
+         execution_id,
+         button,
+         typed,
+         screens
+       ) do
     event = Screen.outcome_event(Map.fetch!(button, "outcome"))
 
     case Durable.send_event(durable, run, event, responses(typed)) do
       {:ok, {%Durable{machine_state: moved_state}, moved}} ->
-        {:ok, view(execution_id, moved, moved_state.datamodel)}
+        {:ok, view(execution_id, moved, moved_state.datamodel, screens)}
 
       {:discarded, reason} ->
-        {:ok, Map.put(view(execution_id, run, settled.datamodel), :discarded, reason)}
+        {:ok, Map.put(view(execution_id, run, settled.datamodel, screens), :discarded, reason)}
 
       {:error, _reason} = error ->
         error
     end
   end
 
-  @spec view(String.t(), Execution.t(), map()) :: view()
-  defp view(execution_id, run, datamodel) do
-    screen = screen_at(run)
-    responses = Map.get(datamodel, "responses") || %{}
+  # The view for one reading. Where the execution is goes to
+  # `Riddler.Journey.present/3` as its status, and what comes back is what
+  # the view draws: the nodes off the answer's screen, and the answer's
+  # state. `screen_at/2` only answers a key the document declares, so the
+  # `{:screen, key}` status never meets `{:error, :no_such_screen}`.
+  @spec view(String.t(), Execution.t(), map(), screens()) :: view()
+  defp view(execution_id, run, datamodel, {document, admitted}) do
+    key = screen_at(run, document)
+    {:ok, answer} = Riddler.Journey.present(admitted, journey_status(key, run.status), datamodel)
 
     %{
       execution_id: execution_id,
-      screen: screen,
-      nodes: if(screen, do: Screens.resolve(screen, datamodel), else: []),
+      screen: key && Screens.screen(document, key),
+      nodes: presented_nodes(answer),
       datamodel: datamodel,
-      responses: responses,
+      responses: Map.get(datamodel, "responses") || %{},
       status: run.status,
+      state: Map.fetch!(answer, "state"),
       findings: []
     }
+  end
+
+  # The execution's position as `Riddler.Journey`'s status: a screen when
+  # one is parked, waiting while the execution runs on elsewhere - the
+  # moduledoc's mid-call - and done once it has stopped running.
+  @spec journey_status(String.t() | nil, Execution.status()) :: Riddler.Journey.status()
+  defp journey_status(key, _status) when is_binary(key), do: {:screen, key}
+  defp journey_status(nil, :running), do: :waiting
+  defp journey_status(nil, _stopped), do: :done
+
+  @spec presented_nodes(Riddler.Journey.answer()) :: [Screens.node_doc()]
+  defp presented_nodes(%{"screen" => %{"nodes" => nodes}}), do: nodes
+  defp presented_nodes(_no_screen), do: []
+
+  # The screens document the call reads, decoded and admitted: the one
+  # `opts[:screens]` supplies, or the fixture.
+  @spec screens_document(keyword()) ::
+          {:ok, screens()} | {:error, {:screens_document, term()}}
+  defp screens_document(opts) do
+    document = Keyword.get_lazy(opts, :screens, &Screens.document/0)
+
+    case Screens.admit(document) do
+      {:ok, admitted} -> {:ok, {document, admitted}}
+      {:error, reason} -> {:error, {:screens_document, reason}}
+    end
+  end
+
+  # Every screen the Path names has to be one the document declares, or the
+  # execution would park on a screen with nothing to draw.
+  @spec declares_path_screens(screens(), StatifierBlocks.Document.t()) ::
+          :ok | {:error, {:undeclared_screens, [String.t()]}}
+  defp declares_path_screens({document, _admitted}, path) do
+    undeclared =
+      for {_id, key} <- StatifierExamples.Signup.Path.screen_refs(path),
+          is_nil(Screens.screen(document, key)),
+          uniq: true,
+          do: key
+
+    case undeclared do
+      [] -> :ok
+      keys -> {:error, {:undeclared_screens, keys}}
+    end
   end
 
   # A view with a screen in it, as an error-shaped answer for `submit/3`:
@@ -336,13 +440,14 @@ defmodule StatifierExamples.Signup.Journey do
 
   # Which screen a position is resting in. The park block of each
   # `myapp.screen` the Path names, looked for in the reading's active
-  # blocks; `nil` when the execution is resting anywhere else.
-  @spec screen_at(Execution.t()) :: Screens.screen() | nil
-  defp screen_at(%Execution{active: active}) do
+  # blocks; `nil` when the execution is resting anywhere else, or on a
+  # screen `screens` does not declare.
+  @spec screen_at(Execution.t(), map()) :: String.t() | nil
+  defp screen_at(%Execution{active: active}, screens) do
     parks = MapSet.new(active)
 
     Enum.find_value(StatifierExamples.Signup.Path.screen_refs(document()), fn {id, key} ->
-      MapSet.member?(parks, Screen.park_block_id(id)) && Screens.screen(key)
+      MapSet.member?(parks, Screen.park_block_id(id)) && Screens.screen(screens, key) && key
     end)
   end
 
