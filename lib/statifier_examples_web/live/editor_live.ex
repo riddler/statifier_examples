@@ -75,6 +75,7 @@ defmodule StatifierExamplesWeb.EditorLive do
      assign(socket,
        page_title: "Editor",
        palette: Charts.palette(),
+       field_candidates: Charts.field_candidates(),
        fixtures: Charts.fixtures(),
        drawer_height: nil,
        run: nil,
@@ -199,6 +200,7 @@ defmodule StatifierExamplesWeb.EditorLive do
         id="editor"
         document={@document}
         palette={@palette}
+        field_candidates={@field_candidates}
         findings={@findings}
         fit={:width}
         icon={&Icons.icon/1}

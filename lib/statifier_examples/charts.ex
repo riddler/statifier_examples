@@ -101,6 +101,25 @@ defmodule StatifierExamples.Charts do
   end
 
   @doc """
+  The values the chart editor offers per field, handed to the editor's
+  `field_candidates` assign.
+
+  One picker today: a `myapp.screen` block's `screen` param is the key of a
+  screen in the signup screens document, so its Config tab offers the
+  screens that document holds - a closed list, a select, because
+  `StatifierExamples.Signup.Screens.screen/1` knows no other key. Each
+  option's label is the screen's title. It draws a control and decides
+  nothing: a key typed into the Source tab is still the block's own to
+  validate.
+  """
+  @spec field_candidates() :: %{optional({String.t(), String.t()}) => term()}
+  def field_candidates do
+    options = Enum.map(Signup.Screens.screens(), &{&1.key, &1.title})
+
+    %{{"myapp.screen", "screen"} => options}
+  end
+
+  @doc """
   The theme tokens the host page offers in its THEME control.
   """
   @spec themes() :: [atom()]
