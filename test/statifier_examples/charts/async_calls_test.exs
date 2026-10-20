@@ -13,12 +13,14 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Ecto.Adapters.SQL
   alias Ecto.Adapters.SQL.Sandbox
+  alias StatifierBlocks.Document
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, Timers}
+  alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, ExecutionLock, Timers}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Accounts, User}
-  alias StatifierPersistence.Storage
+  alias StatifierPersistence.{Executions, Storage}
 
   # The wait event the wizard's verification window answers to. Pressing it
   # is how a test says "the day elapsed" without waiting one, and it is
@@ -48,6 +50,25 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
     {:ok, compiled} = Durable.compile(fixture.document, fixture.declare)
 
     {compiled, fixture.document, fixture.key}
+  end
+
+  # The shipped wizard with one delay lengthened: a document edited since
+  # an execution started, which changes the compiled chart and nothing else.
+  # An execution started on it under the fixture's key is one the cold doors
+  # rebuild on the shipped document, so the store's identity guard refuses
+  # the position.
+  defp edited_wizard do
+    {:ok, fixture} = Charts.fixture("signup_wizard")
+
+    {:ok, edited} =
+      Regex.replace(~r/"delay":"[^"]+"/, Document.to_json(fixture.document), ~s("delay":"7d"),
+        global: false
+      )
+      |> Document.from_json()
+
+    {:ok, compiled} = Durable.compile(edited, fixture.declare)
+
+    {compiled, edited, fixture.key}
   end
 
   # Drives a fresh execution as far as the asynchronous call and leaves it there.
@@ -390,5 +411,184 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   test "an answer for a run that was never stored is discarded", %{execution_id: execution_id} do
     assert Durable.complete_invocation(execution_id, "inv_1", %{}) ==
              {:discarded, :execution_not_found}
+  end
+
+  describe "an answer that cannot step now" do
+    # Sabotage: made `Durable.refused/2` answer `{:discarded, reason}` for a
+    # parked execution; the job was cancelled and this went red on
+    # `%{failure: 1}`. Reverted from a copy.
+    test "an answer to a parked execution raises, is retried, and lands once unparked",
+         %{execution_id: execution_id} do
+      park!(execution_id)
+      store = store!()
+      :ok = Storage.update_execution_status(store, execution_id, :needs_migration)
+
+      assert %{failure: 1, cancelled: 0, success: 0} =
+               Oban.drain_queue(queue: AsyncCalls.queue())
+
+      assert [%{state: "retryable"}] = invoke_jobs(execution_id)
+      assert [error] = invoke_errors(execution_id)
+      assert error =~ "is parked (:needs_migration)"
+      assert record!(execution_id).status == :needs_migration
+      assert accounts(execution_id) == 0
+
+      assert {:ok, %{status: :active}} =
+               Executions.unpark(store, execution_id,
+                 serialization: {ExecutionLock, ExecutionLock}
+               )
+
+      # The retry runs the call again and its answer lands: the execution
+      # finishes, and the step after the call writes the account.
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: AsyncCalls.queue(), with_scheduled: true)
+
+      assert [%{state: "completed"}] = invoke_jobs(execution_id)
+      assert record!(execution_id).status == :completed
+      assert accounts(execution_id) == 1
+    end
+
+    # Sabotage: made `Durable.refused/2` answer `{:discarded, reason}` for
+    # every refusal it does not name; the job was cancelled and this went
+    # red on `%{failure: 1}`. Reverted from a copy.
+    test "an answer the store cannot step raises, is retried, and lands once the store answers",
+         %{execution_id: execution_id} do
+      park!(execution_id)
+      blob = position_blob(execution_id)
+      :ok = put_position_blob(execution_id, nil)
+
+      assert %{failure: 1, cancelled: 0, success: 0} =
+               Oban.drain_queue(queue: AsyncCalls.queue())
+
+      assert [%{state: "retryable"}] = invoke_jobs(execution_id)
+
+      :ok = put_position_blob(execution_id, blob)
+
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: AsyncCalls.queue(), with_scheduled: true)
+
+      assert record!(execution_id).status == :completed
+    end
+
+    # Sabotage: made `unparked/1` answer `:ok` for a parked record; the
+    # resume crashed on the park rather than raising it and this went red
+    # on the raise. Reverted from a copy.
+    test "a permanent failure delivered to a parked execution raises",
+         %{execution_id: execution_id} do
+      park!(execution_id)
+      invoke_id = invoke_id!(execution_id)
+      :ok = Storage.update_execution_status(store!(), execution_id, :needs_migration)
+
+      assert_raise RuntimeError, ~r/is parked \(:needs_migration\)/, fn ->
+        Durable.fail_invocation(execution_id, invoke_id, reason: "run_failed", attempts: 3)
+      end
+
+      assert record!(execution_id).status == :needs_migration
+    end
+  end
+
+  describe "an answer that is still discarded" do
+    # Sabotage: made `Durable.answer/3` raise for an answer the driver
+    # discarded; the job failed rather than cancelling and this went red
+    # on `%{cancelled: 1}`. Reverted from a copy.
+    test "an answer to an abandoned execution", %{execution_id: execution_id} do
+      {durable, _run} = park!(execution_id)
+
+      assert :ok = Durable.abandon(durable)
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: AsyncCalls.queue())
+
+      assert record!(execution_id).status == :failed
+    end
+
+    # Sabotage: dropped the `{:identity_mismatch, _, _}` clause from
+    # `Durable.refused/2`; the job failed rather than cancelling and this
+    # went red on `%{cancelled: 1}`. Reverted from a copy.
+    test "an answer for an execution of an edited document", %{execution_id: execution_id} do
+      {compiled, document, key} = edited_wizard()
+      {:ok, {durable, run}} = Durable.start(compiled, document, execution_id, key)
+      {:ok, _driven} = Durable.send_event(durable, run, @wait)
+      invoke_id = invoke_id!(execution_id)
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: AsyncCalls.queue())
+
+      assert [%{state: "cancelled"}] = invoke_jobs(execution_id)
+
+      assert {:discarded, {:identity_mismatch, _stored, _supplied}} =
+               Durable.complete_invocation(execution_id, invoke_id, %{})
+    end
+
+    # Sabotage: dropped `:execution_not_found` from the reasons
+    # `Durable.refused/2` discards; the job failed rather than cancelling
+    # and this went red on `%{cancelled: 1}`. Reverted from a copy.
+    test "an answer to an execution the store no longer holds", %{execution_id: execution_id} do
+      park!(execution_id)
+
+      %{num_rows: 1} =
+        SQL.query!(Repo, "DELETE FROM statifier_executions WHERE execution_id = ?1", [
+          execution_id
+        ])
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: AsyncCalls.queue())
+
+      assert [%{state: "cancelled"}] = invoke_jobs(execution_id)
+    end
+
+    # Sabotage: made `Durable.refused/2` answer a step that exhausted the
+    # execution's macrostep budget with the store's own
+    # `{:budget_exhausted, _}`, as it did before; this went red on the
+    # equality. Reverted from a copy.
+    test "an answer whose step exhausts the execution's budget", %{execution_id: execution_id} do
+      park!(execution_id)
+      invoke_id = invoke_id!(execution_id)
+      state = position!(execution_id)
+
+      :ok =
+        Storage.update_execution(
+          store!(),
+          execution_id,
+          %{state | max_macrostep_rounds: 1},
+          :active
+        )
+
+      assert Durable.complete_invocation(execution_id, invoke_id, %{}) == {:discarded, :failed}
+      assert record!(execution_id).status == :failed
+    end
+  end
+
+  # The error each failed attempt recorded on the invocation's job row.
+  defp invoke_errors(execution_id) do
+    [job] =
+      Repo.all(
+        from(j in Oban.Job,
+          where: j.queue == ^to_string(AsyncCalls.queue()) and j.args["scope"] == ^execution_id
+        )
+      )
+
+    Enum.map(job.errors, & &1["error"])
+  end
+
+  defp position_blob(execution_id) do
+    %{rows: [[blob]]} =
+      SQL.query!(
+        Repo,
+        "SELECT position_blob FROM statifier_executions WHERE execution_id = ?1",
+        [execution_id]
+      )
+
+    blob
+  end
+
+  defp put_position_blob(execution_id, blob) do
+    %{num_rows: 1} =
+      SQL.query!(
+        Repo,
+        "UPDATE statifier_executions SET position_blob = ?1 WHERE execution_id = ?2",
+        [blob, execution_id]
+      )
+
+    :ok
   end
 end

@@ -13,7 +13,9 @@ defmodule StatifierExamples.Charts.TimersTest do
   import ExUnit.CaptureLog
   import Ecto.Query, only: [from: 2]
 
+  alias Ecto.Adapters.SQL
   alias Ecto.Adapters.SQL.Sandbox
+  alias StatifierBlocks.Document
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, ExecutionLock, Timers}
   alias StatifierExamples.Repo
@@ -45,6 +47,25 @@ defmodule StatifierExamples.Charts.TimersTest do
     {:ok, compiled} = Durable.compile(fixture.document, fixture.declare)
 
     {compiled, fixture.document, fixture.key}
+  end
+
+  # The shipped wizard with one delay lengthened: a document edited since
+  # an execution started, which changes the compiled chart and nothing else.
+  # An execution started on it under the fixture's key is one the cold doors
+  # rebuild on the shipped document, so the store's identity guard refuses
+  # the position.
+  defp edited_wizard do
+    {:ok, fixture} = Charts.fixture("signup_wizard")
+
+    {:ok, edited} =
+      Regex.replace(~r/"delay":"[^"]+"/, Document.to_json(fixture.document), ~s("delay":"7d"),
+        global: false
+      )
+      |> Document.from_json()
+
+    {:ok, compiled} = Durable.compile(edited, fixture.declare)
+
+    {compiled, edited, fixture.key}
   end
 
   defp start!(execution_id) do
@@ -100,6 +121,28 @@ defmodule StatifierExamples.Charts.TimersTest do
     after
       Logger.configure(level: level)
     end
+  end
+
+  defp position_blob(execution_id) do
+    %{rows: [[blob]]} =
+      SQL.query!(
+        Repo,
+        "SELECT position_blob FROM statifier_executions WHERE execution_id = ?1",
+        [execution_id]
+      )
+
+    blob
+  end
+
+  defp put_position_blob(execution_id, blob) do
+    %{num_rows: 1} =
+      SQL.query!(
+        Repo,
+        "UPDATE statifier_executions SET position_blob = ?1 WHERE execution_id = ?2",
+        [blob, execution_id]
+      )
+
+    :ok
   end
 
   defp record!(execution_id) do
@@ -322,6 +365,78 @@ defmodule StatifierExamples.Charts.TimersTest do
     assert log =~ "myapp:notify"
     assert [%{state: "completed"}] = reminder_jobs(execution_id)
     assert record!(execution_id).status == :completed
+  end
+
+  # A position the store cannot read is a fact about the store, not the
+  # execution, so a reminder that fires while it cannot is retried rather
+  # than discarded, and lands once the store answers again.
+  #
+  # Sabotage: made `Durable.deliver/2` answer `{:discarded, reason}` for
+  # every refusal `refused/2` does not name; the first drain cancelled both
+  # jobs and this went red on `%{failure: 2}`. Reverted from a copy.
+  test "a reminder the store cannot step is retried and delivered once it answers",
+       %{execution_id: execution_id} do
+    start!(execution_id)
+    blob = position_blob(execution_id)
+    :ok = put_position_blob(execution_id, nil)
+
+    assert %{failure: 2, cancelled: 0, success: 0} =
+             Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
+
+    assert [%{state: "retryable"}] = reminder_jobs(execution_id)
+
+    :ok = put_position_blob(execution_id, blob)
+
+    at_info(fn ->
+      assert %{success: 2, failure: 0} =
+               Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
+
+      assert %{success: 1} = Oban.drain_queue(queue: AsyncCalls.queue())
+    end)
+
+    assert [%{state: "completed"}] = reminder_jobs(execution_id)
+    assert record!(execution_id).status == :completed
+  end
+
+  # A document edited since the execution started is a fact about the
+  # execution, so the reminder is discarded under the storage layer's own
+  # reason (`StatifierExamples.Charts.Timers.Delivery`'s moduledoc).
+  #
+  # Sabotage: dropped the `{:identity_mismatch, _, _}` clause from
+  # `Durable.refused/2`; both jobs failed rather than cancelling and this
+  # went red on `%{cancelled: 2}`. Reverted from a copy.
+  test "a reminder for an execution of an edited document is discarded",
+       %{execution_id: execution_id} do
+    {compiled, document, key} = edited_wizard()
+    {:ok, _driven} = Durable.start(compiled, document, execution_id, key)
+
+    assert %{cancelled: 2, failure: 0, success: 0} =
+             Oban.drain_queue(queue: Timers.queue(), with_scheduled: true)
+
+    assert [%{state: "cancelled"}] = reminder_jobs(execution_id)
+  end
+
+  # A step that exhausts the execution's macrostep budget is answered only
+  # once the execution's `:failed` record is durable, so the execution has
+  # finished and the firing is discarded under the reason its status gives.
+  #
+  # Sabotage: made `Durable.refused/2` answer a step that exhausted the
+  # execution's macrostep budget with the store's own
+  # `{:budget_exhausted, _}`, as it did before; this went red on the
+  # equality. Reverted from a copy.
+  test "a reminder whose step exhausts the execution's budget is discarded",
+       %{execution_id: execution_id} do
+    start!(execution_id)
+    {:ok, store} = Storage.new(StatifierExamples.Persistence, [])
+    {compiled, _document, _key} = wizard()
+    {:ok, machine} = Statifier.compile(compiled.scxml)
+    {:ok, state} = Storage.load_execution_position(store, execution_id, machine)
+
+    :ok =
+      Storage.update_execution(store, execution_id, %{state | max_macrostep_rounds: 1}, :active)
+
+    assert Durable.deliver(execution_id, @wait) == {:discarded, :failed}
+    assert record!(execution_id).status == :failed
   end
 
   # The metadata a fired timer reads is written once, at create, and has to
