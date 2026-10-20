@@ -49,6 +49,9 @@ defmodule StatifierExamples.FormPost.Delivery do
 
     * the execution has finished: the reason is its stored status,
       `:completed`, `:failed` or `:cancelled`;
+    * the step exhausted the execution's macrostep budget, which the store
+      answers only once the execution's `:failed` record is durable: the
+      reason is `:failed`;
     * the stored position no longer holds the invocation the answer is
       for: the reason is the execution's status, `:active`;
     * the router holds no address row for the execution: `:no_address`;
@@ -202,9 +205,14 @@ defmodule StatifierExamples.FormPost.Delivery do
   # A refusal that is a fact about the execution is discarded; any other
   # raises, so the job is retried (the moduledoc's "What is discarded, and
   # what raises").
-  @spec refused(String.t(), term()) :: {:discarded, :no_address | :execution_not_found}
+  @spec refused(String.t(), term()) :: {:discarded, :no_address | :execution_not_found | :failed}
   defp refused(_execution_id, reason) when reason in [:no_address, :execution_not_found],
     do: {:discarded, reason}
+
+  # The store answers a step that exhausted the execution's macrostep
+  # budget only once the execution's `:failed` record is durable, so the
+  # execution has finished.
+  defp refused(_execution_id, {:budget_exhausted, _payload}), do: {:discarded, :failed}
 
   defp refused(execution_id, {:needs_migration, _execution}) do
     raise "execution #{execution_id} is parked (:needs_migration); " <>
