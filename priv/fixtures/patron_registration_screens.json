@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "id": "sdoc_patron_registration_screens",
+  "revision": 1,
+  "metadata": {
+    "name": "Riverbend Public Library patron registration screens",
+    "description": "The two screens a new patron fills in to register for a library card: their details, then the card they want and the lending rules. A block document in the screen editor's palette; StatifierExamples.ScreenEditor.Walk answers the screen document it holds.",
+    "domain": "library"
+  },
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_prs_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.screens.screen",
+          "id": "blk_prs_details",
+          "type_version": 1,
+          "config": {
+            "key": "patron_details",
+            "title": "Your details"
+          },
+          "slots": {
+            "nodes": [
+              {
+                "type": "myapp.screens.heading",
+                "id": "blk_prs_details_heading",
+                "type_version": 1,
+                "config": {
+                  "key": "details_heading",
+                  "level": 1,
+                  "text": "Register for a library card"
+                }
+              },
+              {
+                "type": "myapp.screens.text",
+                "id": "blk_prs_details_intro",
+                "type_version": 1,
+                "config": {
+                  "key": "details_intro",
+                  "text": "A card is free for anyone who lives, works or studies in Riverbend."
+                }
+              },
+              {
+                "type": "myapp.screens.text_question",
+                "id": "blk_prs_first_name",
+                "type_version": 1,
+                "config": {
+                  "key": "first_name",
+                  "label": "First name",
+                  "placeholder": "Rosa",
+                  "required": true
+                }
+              },
+              {
+                "type": "myapp.screens.text_question",
+                "id": "blk_prs_email",
+                "type_version": 1,
+                "config": {
+                  "key": "email",
+                  "label": "Email address",
+                  "placeholder": "rosa@example.com",
+                  "required": true,
+                  "format": "email"
+                }
+              },
+              {
+                "type": "myapp.screens.text_question",
+                "id": "blk_prs_age",
+                "type_version": 1,
+                "config": {
+                  "key": "age",
+                  "label": "Age",
+                  "required": true,
+                  "format": "integer",
+                  "min": "0",
+                  "max": "120"
+                }
+              },
+              {
+                "type": "myapp.screens.button",
+                "id": "blk_prs_details_continue",
+                "type_version": 1,
+                "config": {
+                  "key": "details_continue",
+                  "label": "Continue",
+                  "outcome": "details_submitted",
+                  "writes": ["responses.details_step=1"]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "myapp.screens.screen",
+          "id": "blk_prs_card",
+          "type_version": 1,
+          "config": {
+            "key": "card_choice",
+            "title": "Your card"
+          },
+          "slots": {
+            "nodes": [
+              {
+                "type": "myapp.screens.heading",
+                "id": "blk_prs_card_heading",
+                "type_version": 1,
+                "config": {
+                  "key": "card_heading",
+                  "level": 1,
+                  "text": "Choose your card, {{ responses.first_name }}"
+                }
+              },
+              {
+                "type": "myapp.screens.choice_question",
+                "id": "blk_prs_card_type",
+                "type_version": 1,
+                "config": {
+                  "key": "card_type",
+                  "label": "Which card would you like?",
+                  "select": "one",
+                  "style": "radio",
+                  "required": true,
+                  "answer_options": [
+                    "standard=Standard card",
+                    "family=Family card, for two adults and their children",
+                    "student=Student card"
+                  ]
+                }
+              },
+              {
+                "type": "myapp.screens.choice_question",
+                "id": "blk_prs_interests",
+                "type_version": 1,
+                "config": {
+                  "key": "interests",
+                  "label": "Which collections should we tell you about?",
+                  "select": "many",
+                  "style": "checkboxes",
+                  "required": false,
+                  "min_selections": 0,
+                  "max_selections": 3,
+                  "answer_options": [
+                    "fiction=Fiction",
+                    "local_history=Local history",
+                    "audiobooks=Audiobooks",
+                    "children=Children's books"
+                  ]
+                }
+              },
+              {
+                "type": "myapp.screens.variant",
+                "id": "blk_prs_card_notice",
+                "type_version": 1,
+                "config": {
+                  "key": "card_notice"
+                },
+                "slots": {
+                  "nodes": [
+                    {
+                      "type": "myapp.screens.text",
+                      "id": "blk_prs_family_notice",
+                      "type_version": 1,
+                      "config": {
+                        "key": "family_notice",
+                        "condition": "responses.card_type == 'family'",
+                        "text": "Bring a second adult to any branch to add them to the family card."
+                      }
+                    },
+                    {
+                      "type": "myapp.screens.text",
+                      "id": "blk_prs_default_notice",
+                      "type_version": 1,
+                      "config": {
+                        "key": "default_notice",
+                        "text": "Your card is ready to collect at your home branch."
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "myapp.screens.boolean_question",
+                "id": "blk_prs_lending_rules",
+                "type_version": 1,
+                "config": {
+                  "key": "lending_rules",
+                  "label": "I agree to the library's lending rules",
+                  "required": true
+                }
+              },
+              {
+                "type": "myapp.screens.button",
+                "id": "blk_prs_card_finish",
+                "type_version": 1,
+                "config": {
+                  "key": "card_finish",
+                  "label": "Register",
+                  "outcome": "registration_submitted",
+                  "style": "primary",
+                  "writes": ["responses.card_source=online", "responses.newsletter=true"]
+                }
+              },
+              {
+                "type": "myapp.screens.button",
+                "id": "blk_prs_card_back",
+                "type_version": 1,
+                "config": {
+                  "key": "card_back",
+                  "label": "Back",
+                  "outcome": "went_back",
+                  "validates": false
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
