@@ -41,12 +41,41 @@ defmodule StatifierExamples.FormPost.Delivery do
   commit and is not part of it. A screen answer that arrives
   after its bound is discarded before any step, so it never marks the row.
 
-  Every answer is `:delivered` or `{:discarded, reason}`. A discard is the
-  ordinary answer for an execution that is no longer live, or an answer
-  nobody is waiting for, and it tells the job not to retry. A timer that
-  fires while the execution is parked for a migration raises instead, so
-  `StatifierOban.Timer.Worker` retries it, as
-  `StatifierExamples.FirstWorkflow.Delivery` does.
+  ## What is discarded, and what raises
+
+  Every answer is `:delivered` or `{:discarded, reason}`, and a discard
+  tells the job not to retry. A discard answers a fact about the
+  execution, one no retry changes:
+
+    * the execution has finished: the reason is its stored status,
+      `:completed`, `:failed` or `:cancelled`;
+    * the stored position no longer holds the invocation the answer is
+      for: the reason is the execution's status, `:active`;
+    * the router holds no address row for the execution: `:no_address`;
+    * the store holds no execution under the id: `:execution_not_found`.
+
+  Every other failure is a fact about the environment rather than the
+  execution, and raises, so the job is retried while attempts remain, as
+  `StatifierOban.Invoke.Delivery` and `StatifierOban.Timer.Delivery` ask:
+  an execution parked for a migration (`:needs_migration`), which takes
+  the answer once it is migrated or unparked; an error from the store,
+  such as a position it cannot read; no chart registered under the
+  execution's content hash; and any other refusal of the step. A retried
+  invoke job runs its handler again, idempotent on the invoke id by the
+  handler's contract, and the answer is built again from the position
+  stored then. A job whose attempts run out first is discarded by Oban,
+  and the answer with it.
+
+  ## The caller's context
+
+  `StatifierOban.Invoke.Worker` calls the widest door a delivery module
+  exports, so it calls `deliver/4` and `deliver_failure/4` here, with
+  the `caller_context` stored on the job row. Each passes it into the
+  answer it builds (`Statifier.Invoke.Answer.done/4`'s and `failed/4`'s
+  `caller_context:` option), so the step the answer drives carries it on
+  its macrostep telemetry and onto the effects it plans, the next job
+  among them. The three-argument doors are the behaviour's required
+  ones and deliver with no context.
   """
 
   @behaviour StatifierOban.Invoke.Delivery
@@ -60,44 +89,60 @@ defmodule StatifierExamples.FormPost.Delivery do
   alias StatifierExamples.{FirstWorkflow, Repo}
   alias StatifierExamples.FormPost.CardApplications.Writer
   alias StatifierExamples.FormPost.{PublishedCharts, Router, Scope, Stepper}
+  alias StatifierOban.Invoke.Delivery, as: InvokeDelivery
   alias StatifierOban.Timer.Delivery, as: TimerDelivery
   alias StatifierPersistence.{Execution, Executions, Storage}
   alias StatifierRouter.Config
   alias StatifierRouter.Schema.Address
 
-  @doc "Feeds a step's answer back as `done.invoke.<invoke_id>`."
+  @doc "`deliver/4` with no caller context."
   @impl StatifierOban.Invoke.Delivery
   @spec deliver(String.t(), String.t(), term()) :: :delivered | {:discarded, term()}
-  def deliver(execution_id, invoke_id, donedata) when is_binary(invoke_id) do
-    step(execution_id, answer(invoke_id, &Answer.done(&1, invoke_id, donedata)))
+  def deliver(execution_id, invoke_id, donedata),
+    do: deliver(execution_id, invoke_id, donedata, [])
+
+  @doc """
+  Feeds a step's answer back as `done.invoke.<invoke_id>`, carrying the
+  `:caller_context` in `opts`. Raises for a failure that is not a fact
+  about the execution (the moduledoc lists the discards).
+  """
+  @impl StatifierOban.Invoke.Delivery
+  @spec deliver(String.t(), String.t(), term(), InvokeDelivery.answer_opts()) ::
+          :delivered | {:discarded, term()}
+  def deliver(execution_id, invoke_id, donedata, opts) when is_binary(invoke_id) do
+    context = [caller_context: Keyword.get(opts, :caller_context)]
+    step(execution_id, answer(invoke_id, &Answer.done(&1, invoke_id, donedata, context)))
   end
+
+  @doc "`deliver_failure/4` with no caller context."
+  @impl StatifierOban.Invoke.Delivery
+  @spec deliver_failure(String.t(), String.t(), keyword()) :: :delivered | {:discarded, term()}
+  def deliver_failure(execution_id, invoke_id, failure),
+    do: deliver_failure(execution_id, invoke_id, failure, [])
 
   @doc """
   Feeds a step that failed on its last attempt back as
   `error.communication.invoke.<invoke_id>`, with the failure's `:reason`,
-  `:attempts` and `:detail`.
+  `:attempts` and `:detail`, carrying the `:caller_context` in `opts`.
+  Raises as `deliver/4` does.
   """
   @impl StatifierOban.Invoke.Delivery
-  @spec deliver_failure(String.t(), String.t(), keyword()) :: :delivered | {:discarded, term()}
-  def deliver_failure(execution_id, invoke_id, failure) do
-    step(execution_id, answer(invoke_id, &Answer.failed(&1, invoke_id, failure)))
+  @spec deliver_failure(String.t(), String.t(), keyword(), InvokeDelivery.answer_opts()) ::
+          :delivered | {:discarded, term()}
+  def deliver_failure(execution_id, invoke_id, failure, opts) do
+    context = [caller_context: Keyword.get(opts, :caller_context)]
+    step(execution_id, answer(invoke_id, &Answer.failed(&1, invoke_id, failure, context)))
   end
 
   @doc """
-  Feeds a fired deadline back as an external event, and raises for a
-  parked execution so the job is retried rather than discarded.
+  Feeds a fired deadline back as an external event. Raises as `deliver/4`
+  does, a parked execution included, so the job is retried rather than
+  discarded.
   """
   @impl StatifierOban.Timer.Delivery
   @spec deliver(String.t(), SendDelayed.t()) :: :delivered | {:discarded, term()}
   def deliver(execution_id, %SendDelayed{} = effect) do
-    case step(execution_id, TimerDelivery.fired_event(execution_id, effect)) do
-      {:discarded, {:needs_migration, _execution}} ->
-        raise "execution #{execution_id} is parked (:needs_migration); " <>
-                "the timer is retried until it is migrated or unparked"
-
-      answer ->
-        answer
-    end
+    step(execution_id, TimerDelivery.fired_event(execution_id, effect))
   end
 
   # The answer to invocation `invoke_id`, built from the loaded position
@@ -122,10 +167,10 @@ defmodule StatifierExamples.FormPost.Delivery do
         store
         |> Stepper.step(execution_id, machine, event, options())
         |> record_outcome(scope)
-        |> stepped()
+        |> stepped(execution_id)
       end)
     else
-      {:error, reason} -> {:discarded, reason}
+      {:error, reason} -> refused(execution_id, reason)
     end
   end
 
@@ -149,10 +194,27 @@ defmodule StatifierExamples.FormPost.Delivery do
 
   defp record_outcome(stepped, _scope), do: stepped
 
-  @spec stepped(term()) :: :delivered | {:discarded, term()}
-  defp stepped({:ok, %Execution{}, %MachineState{}}), do: :delivered
-  defp stepped({:discarded, %Execution{status: status}}), do: {:discarded, status}
-  defp stepped({:error, reason}), do: {:discarded, reason}
+  @spec stepped(term(), String.t()) :: :delivered | {:discarded, term()}
+  defp stepped({:ok, %Execution{}, %MachineState{}}, _execution_id), do: :delivered
+  defp stepped({:discarded, %Execution{status: status}}, _execution_id), do: {:discarded, status}
+  defp stepped({:error, reason}, execution_id), do: refused(execution_id, reason)
+
+  # A refusal that is a fact about the execution is discarded; any other
+  # raises, so the job is retried (the moduledoc's "What is discarded, and
+  # what raises").
+  @spec refused(String.t(), term()) :: {:discarded, :no_address | :execution_not_found}
+  defp refused(_execution_id, reason) when reason in [:no_address, :execution_not_found],
+    do: {:discarded, reason}
+
+  defp refused(execution_id, {:needs_migration, _execution}) do
+    raise "execution #{execution_id} is parked (:needs_migration); " <>
+            "the delivery is retried until it is migrated or unparked"
+  end
+
+  defp refused(execution_id, reason) do
+    raise "execution #{execution_id} could not be stepped (#{inspect(reason)}); " <>
+            "the delivery is retried"
+  end
 
   # The router's executor beside its persistence options: the invoke types
   # and the send types every step the router takes carries.
