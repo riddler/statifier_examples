@@ -13,11 +13,13 @@ defmodule StatifierExamples.FormPost.Stepper do
 
     * it refuses with `{:error, :no_library_system}` when no library
       system is held (`StatifierExamples.FormPost.Scope.fetch/0`), the
-      way a host's own door refuses to run outside a tenant. Every door
-      the router drives itself runs inside
-      `StatifierExamples.FormPost.Scope.around_delivery/3`, and so does
-      every step `StatifierExamples.FormPost.Delivery` makes, so the
-      refusal is only ever met by a call made outside both;
+      way a host's own door refuses to run outside a tenant. The doors the
+      router drives itself run inside
+      `StatifierExamples.FormPost.Scope.around_delivery/3`, except the
+      `:target` door, which only a configuration that sets `:wrap_target`
+      wraps and this one does not set; every step
+      `StatifierExamples.FormPost.Delivery` makes runs inside it too. The
+      refusal is met by a call made outside all of these;
     * it adds this app's serialization strategy, through
       `StatifierExamples.RoutedWorkflow.Stepper`: SQLite has no
       per-execution lock for the router's default calls to take, and that

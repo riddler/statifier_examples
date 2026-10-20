@@ -17,9 +17,13 @@ defmodule StatifierExamples.FormPost.IntakeJob do
 
     * `:provider_id` is the id as a string, so it is the message id the
       router dedupes on. A second run of this job for the same application
-      is that same message, and the router answers it as a duplicate
-      without reaching the execution. The row's id is unique across every
-      library system, so one binding serves them all. No `:raw_body`
+      is that same message, and inside the binding's dedupe horizon (the
+      router's default, 72 hours) the router answers it as a duplicate
+      without reaching the execution. Past the horizon the message is new
+      again, and a second run can deliver a second `application.received`
+      to an execution still active (see
+      `StatifierExamples.FormPost.Router`). The row's id is unique across
+      every library system, so one binding serves them all. No `:raw_body`
       goes with it: `statifier_router` 0.12.0 takes a request without one
       when its provider id is a non-empty string, and this host has no
       body to hand over, since it never gives the router the posted

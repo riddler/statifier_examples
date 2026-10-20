@@ -14,13 +14,25 @@ defmodule StatifierExamples.FormPost.Router do
       hands the execution `application.received`, with the id as the
       event's only data. It creates under the router's default,
       `create: :if_absent`, written out because a host copying it should
-      see it: one execution per application, and a repeat of the same
-      message is answered by the router's dedupe, which never reaches the
-      execution.
-    * **Every door is wrapped** in the library system the application was
-      stored under. `:around_delivery` is
-      `StatifierExamples.FormPost.Scope`, this app's stand-in for a host's
-      tenancy context.
+      see it: one execution per application. The binding sets no
+      `:dedupe`, so it has the router's default, a horizon of 72 hours
+      (259_200_000 ms): a repeat of the same message inside the horizon is
+      answered by the router's dedupe, which never reaches the execution.
+      Past the horizon the router counts the dedupe row as absent, reaped
+      or not, and the message is new again: `:if_absent` reads the
+      application's address row, which the router keeps while the
+      execution is active and until a reap that first sees it finished
+      has been followed by a horizon. An execution still active is
+      stepped with the event, a second `application.received`; a
+      finished one is not stepped, and the router answers the message as
+      dropped.
+    * **The doors the router drives itself are wrapped** in the library
+      system the application was stored under: `:route`, which
+      `StatifierRouter.Webhook.handle/3` goes through, and the router's
+      other doors. `:around_delivery` is `StatifierExamples.FormPost.Scope`,
+      this app's stand-in for a host's tenancy context. The `:target` door,
+      a send's delivery to an execution target, is wrapped only on a
+      configuration that sets `:wrap_target`, and this one does not.
     * **Every create and step** goes through this app's execution door,
       `StatifierExamples.FormPost.Stepper` (`:on_create` and `:on_step`),
       which runs only inside a library system and adds the serialization
