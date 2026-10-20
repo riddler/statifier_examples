@@ -22,7 +22,7 @@ project is" section says so outright:
 and the sentence just above it gives the app the role it has instead:
 
 > `statifier_examples`: a flat Phoenix application that hosts the statifier
-> family's two canonical example domains - credit-card processing and a
+> family's fixture-only example domains - credit-card processing and a
 > signup wizard with A/B testing - as the **reference embedder** for the
 > `statifier_blocks` editor.
 
