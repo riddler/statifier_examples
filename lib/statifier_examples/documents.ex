@@ -37,6 +37,13 @@ defmodule StatifierExamples.Documents do
     * an edit does not survive a restart, because the map is process state
       and nothing writes it to disk. What this app *stores* is executions.
 
+  An execution started on an edit is read back through here too: its record
+  names the fixture key, and `StatifierExamples.Charts.Durable` rebuilds its
+  chart from the edit this store holds under that key when that edit is the
+  chart the execution was created from. So the second consequence reaches
+  executions as well: after a restart an execution of an edit finds only the
+  shipped fixture, and the storage layer refuses it on identity.
+
   `reset/0` is the test seam, and it is here rather than in the test tree
   because the state it clears is this module's.
   """

@@ -538,9 +538,9 @@ defmodule StatifierExamplesWeb.EditorLive do
   # show beside it, so a storage refusal on a read nobody asked for leaves
   # the reading the page had rather than blanking it. `adopt/2`'s
   # `{:error, _}` clause forgets the execution, which is right when a reader
-  # asked for one and wrong here. A run of an edited document meets it: the
-  # re-read by id rebuilds the shipped fixture, and the identity guard
-  # refuses that for a run of the edited one.
+  # asked for one and wrong here. An execution of a chart this app no longer
+  # ships meets it, and so does one whose document was edited again after
+  # it started.
   @spec readopt(Phoenix.LiveView.Socket.t(), String.t() | nil) :: Phoenix.LiveView.Socket.t()
   defp readopt(socket, execution_id) when is_binary(execution_id) do
     case resumed(execution_id) do

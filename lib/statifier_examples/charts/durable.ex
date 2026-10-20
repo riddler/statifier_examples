@@ -146,6 +146,7 @@ defmodule StatifierExamples.Charts.Durable do
   alias StatifierBlocks.Runtime
   alias StatifierBlocks.Runtime.DurableSubchart
   alias StatifierExamples.Charts
+  alias StatifierExamples.Documents
 
   alias StatifierExamples.Charts.{
     AsyncCalls,
@@ -942,9 +943,9 @@ defmodule StatifierExamples.Charts.Durable do
   # filled it.
   #
   # `settle/3` itself stays where the return cannot widen: `start/4` answers
-  # a freshly created execution, which has nothing to discard, and widening
-  # there would put a third arm on every caller of it for a case only a
-  # second writer inside the create's own drive can produce. `settle/3`'s
+  # a freshly created execution, and widening there would put a third arm on
+  # every caller of it for a case only a second writer inside the create's
+  # own drive can produce. `settle/3`'s
   # `{:discarded, record}` clause says what that case is and folds it
   # instead.
   @spec settle_answer(t(), Execution.t(), Driver.result()) ::
@@ -981,7 +982,17 @@ defmodule StatifierExamples.Charts.Durable do
   #
   # An execution this app started records its fixture key, and is compiled with
   # `compile/3` - declarations and `terminate: true`. That is the arm every
-  # fired timer and every asynchronous answer has always taken.
+  # fired timer and every asynchronous answer has always taken. The key names
+  # the fixture, not the document: the Run press starts an execution of the
+  # document on the canvas, which is the edit `StatifierExamples.Documents`
+  # holds under that key whenever the author has changed anything. So the
+  # held document is tried first and taken only when its compile is the one
+  # the record's `content_hash` was keyed on; otherwise the shipped fixture
+  # is the answer, as it always was. A held document that has moved on since
+  # the execution started matches neither, and the shipped fixture is handed
+  # back so the storage layer's identity guard refuses it in its own words.
+  # The store is process state, so after a restart an execution of an edit
+  # finds only the shipped fixture and meets that same refusal.
   #
   # A durable subchart child records **no** fixture key: it is created by
   # `StatifierPersistence.Driver` rather than by this module, and the
@@ -1006,19 +1017,46 @@ defmodule StatifierExamples.Charts.Durable do
   @spec chart_for(map()) :: {:ok, {Compiled.t(), Document.t()}} | :error
   defp chart_for(record) do
     case Map.get(record.metadata, @fixture_key) do
-      key when is_binary(key) -> root_chart(key)
+      key when is_binary(key) -> root_chart(key, record.content_hash)
       _absent -> child_chart(record.content_hash)
     end
   end
 
-  @spec root_chart(String.t()) :: {:ok, {Compiled.t(), Document.t()}} | :error
-  defp root_chart(key) do
-    with {:ok, fixture} <- Charts.fixture(key),
-         {:ok, %Compiled{} = compiled} <-
-           compile(fixture.document, fixture.declare, fixture.datamodel) do
-      {:ok, {compiled, fixture.document}}
-    else
-      _unresolvable -> :error
+  @spec root_chart(String.t(), String.t()) :: {:ok, {Compiled.t(), Document.t()}} | :error
+  defp root_chart(key, content_hash) do
+    case Charts.fixture(key) do
+      {:ok, fixture} -> held_chart(fixture, content_hash) || shipped_chart(fixture)
+      _unknown -> :error
+    end
+  end
+
+  # The edit `StatifierExamples.Documents` holds under the fixture's key, when
+  # there is one and it is the chart the execution was created from.
+  @spec held_chart(Fixture.t(), String.t()) :: {:ok, {Compiled.t(), Document.t()}} | false
+  defp held_chart(fixture, content_hash) do
+    case Documents.get(fixture.key, fixture.document) do
+      unedited when unedited == fixture.document -> false
+      document -> matching_chart(fixture, document, content_hash)
+    end
+  end
+
+  @spec matching_chart(Fixture.t(), Document.t(), String.t()) ::
+          {:ok, {Compiled.t(), Document.t()}} | false
+  defp matching_chart(fixture, document, content_hash) do
+    case compile(document, fixture.declare, fixture.datamodel) do
+      {:ok, %Compiled{scxml: scxml} = compiled} ->
+        Identity.of_source(scxml).content_hash == content_hash and {:ok, {compiled, document}}
+
+      {:error, _findings} ->
+        false
+    end
+  end
+
+  @spec shipped_chart(Fixture.t()) :: {:ok, {Compiled.t(), Document.t()}} | :error
+  defp shipped_chart(fixture) do
+    case compile(fixture.document, fixture.declare, fixture.datamodel) do
+      {:ok, %Compiled{} = compiled} -> {:ok, {compiled, fixture.document}}
+      {:error, _findings} -> :error
     end
   end
 
