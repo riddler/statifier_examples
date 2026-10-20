@@ -48,6 +48,8 @@ defmodule StatifierExamplesWeb.SignupElements do
   def element(%{node: %{"type" => "heading"}} = assigns), do: heading(assigns)
   def element(%{node: %{"type" => "text"}} = assigns), do: text(assigns)
   def element(%{node: %{"type" => "text_question"}} = assigns), do: text_question(assigns)
+  def element(%{node: %{"type" => "choice_question"}} = assigns), do: choice_question(assigns)
+  def element(%{node: %{"type" => "boolean_question"}} = assigns), do: boolean_question(assigns)
   def element(%{node: %{"type" => "button"}} = assigns), do: button(assigns)
 
   def element(%{node: node}) do
@@ -103,6 +105,67 @@ defmodule StatifierExamplesWeb.SignupElements do
     """
   end
 
+  @doc """
+  A labelled set of options, writing to `responses.<key>`: radio buttons
+  for a `select` of one, posting the chosen value, and checkboxes for a
+  `select` of many, posting the chosen values as a list.
+
+  The `style` hint is not read: radio buttons and checkboxes are what this
+  renderer draws for every option count. A select of many posts a blank
+  value ahead of its checkboxes, so clearing every box still posts the key;
+  the page drops the blank.
+  """
+  attr :node, :map, required: true
+  attr :responses, :map, default: %{}
+
+  def choice_question(assigns) do
+    assigns = assign(assigns, many?: assigns.node["select"] == "many")
+
+    ~H"""
+    <fieldset id={@node["key"]} class="flex flex-col gap-1">
+      <legend class="text-sm font-medium">
+        {@node["label"]}<span :if={@node["required"]} class="text-error" aria-hidden="true">*</span>
+      </legend>
+      <input :if={@many?} type="hidden" name={"responses[#{@node["key"]}][]"} value="" />
+      <label :for={option <- @node["answer_options"]} class="flex items-center gap-2">
+        <input
+          type={if @many?, do: "checkbox", else: "radio"}
+          name={if @many?, do: "responses[#{@node["key"]}][]", else: "responses[#{@node["key"]}]"}
+          value={option["value"]}
+          checked={chosen?(@responses, @node["key"], option["value"])}
+          class={if @many?, do: "checkbox", else: "radio"}
+        />
+        <span>{option["label"]}</span>
+      </label>
+    </fieldset>
+    """
+  end
+
+  @doc """
+  A lone checkbox, writing `true` or `false` to `responses.<key>`. A blank
+  `false` is posted ahead of it, so an unticked box still posts the key.
+  """
+  attr :node, :map, required: true
+  attr :responses, :map, default: %{}
+
+  def boolean_question(assigns) do
+    ~H"""
+    <label id={@node["key"]} class="flex items-center gap-2">
+      <input type="hidden" name={"responses[#{@node["key"]}]"} value="false" />
+      <input
+        type="checkbox"
+        name={"responses[#{@node["key"]}]"}
+        value="true"
+        checked={Map.get(@responses, @node["key"]) in [true, "true"]}
+        class="checkbox"
+      />
+      <span class="text-sm font-medium">
+        {@node["label"]}<span :if={@node["required"]} class="text-error" aria-hidden="true">*</span>
+      </span>
+    </label>
+    """
+  end
+
   @doc "A button that ends the screen by naming an outcome."
   attr :node, :map, required: true
   attr :responses, :map, default: %{}
@@ -120,6 +183,16 @@ defmodule StatifierExamplesWeb.SignupElements do
       {@node["label"]}
     </button>
     """
+  end
+
+  # Whether `value` is among what the reader chose for `key`: the one value
+  # of a select of one, or one of the list a select of many holds.
+  @spec chosen?(map(), String.t(), String.t()) :: boolean()
+  defp chosen?(responses, key, value) do
+    case Map.get(responses, key) do
+      values when is_list(values) -> value in values
+      chosen -> chosen == value
+    end
   end
 
   @doc """

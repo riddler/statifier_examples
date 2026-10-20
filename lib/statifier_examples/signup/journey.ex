@@ -74,14 +74,32 @@ defmodule StatifierExamples.Signup.Journey do
 
   ## A screens document the caller supplies
 
-  The chart is always the Path fixture. What is on its screens is
-  `priv/fixtures/signup_screens.json` unless a caller passes `screens:` - a
-  decoded screens document - to `start/2`, `current/2` and `submit/4`, and
-  the execution never stores it: like the execution id, it is the caller's
-  to keep and to pass on every call. `start/2` refuses a document riddler
-  does not admit with zero findings, and one that leaves a screen the Path
-  names undeclared. Its buttons have to declare the outcomes the Path's
-  screens declare, because those are the events the chart listens for.
+  What is on the Path's screens is `priv/fixtures/signup_screens.json`
+  unless a caller passes `screens:` - a decoded screens document - to
+  `start/2`, `current/2` and `submit/4`, and the execution never stores it:
+  like the execution id, it is the caller's to keep and to pass on every
+  call. `start/2` refuses a document riddler does not admit with zero
+  findings, and one that leaves a screen the Path names undeclared. Its
+  buttons have to declare the outcomes the Path's screens declare, because
+  those are the events the chart listens for.
+
+  ## A Path the caller supplies
+
+  The chart is the Path fixture unless a caller passes `path:` - a block
+  document - beside `screens:`, on every call, as it passes the screens.
+  The execution never stores that either: `current/2` and `submit/4`
+  compile the document they are handed and resume the execution on it, and
+  a document that is not the one `start/2` was given is refused by the
+  storage layer's identity guard. `start/2` refuses one that does not
+  compile, as `{:error, {:path_document, findings}}`.
+
+  A screen of a supplied Path is wherever it parks: a `myapp.screen`
+  block's park, as the fixture's are, or a `core.await` listening for a
+  screen's park event (`StatifierExamples.Signup.Screen.parked_screen/1`),
+  which is how a Path built out of `core.*` blocks says the same thing.
+  `StatifierExamples.ScreenEditor.Try` derives one of those from a screens
+  document authored in the screen editor, whose screen keys and outcomes
+  are its own.
 
   ## The host contract is the form's responses, and nothing checks it
 
@@ -140,6 +158,7 @@ defmodule StatifierExamples.Signup.Journey do
   the one place that now has somewhere to put them.
   """
 
+  alias StatifierBlocks.{Block, Compiled, Document}
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{Durable, Execution}
   alias StatifierExamples.Signup.{Screen, Screens, Validation}
@@ -207,11 +226,9 @@ defmodule StatifierExamples.Signup.Journey do
   @spec start(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def start(execution_id, opts) when is_binary(execution_id) and is_list(opts) do
     with {:ok, screens} <- screens_document(opts),
-         {:ok, fixture} <- Charts.fixture(@fixture),
-         :ok <- declares_path_screens(screens, fixture.document),
-         {:ok, compiled} <-
-           Durable.compile(fixture.document, fixture.declare, fixture.datamodel),
-         {:ok, _driven} <- Durable.start(compiled, fixture.document, execution_id, fixture.key) do
+         {:ok, {path, compiled, fixture_key}} <- path_chart(opts),
+         :ok <- declares_path_screens(screens, path),
+         {:ok, _driven} <- Durable.start(compiled, path, execution_id, fixture_key) do
       {:ok, execution_id}
     else
       :error -> {:error, :no_such_fixture}
@@ -236,15 +253,14 @@ defmodule StatifierExamples.Signup.Journey do
   `{:error, :execution_not_found}` for an id nobody stored, and the storage
   layer's own refusals otherwise.
 
-  `opts[:screens]` is the screens document `start/2` was given, when it was
-  given one.
+  `opts[:screens]` and `opts[:path]` are the screens document and the Path
+  `start/2` was given, when it was given them.
   """
   @spec current(String.t(), keyword()) :: {:ok, view()} | {:error, term()}
   def current(execution_id, opts \\ []) when is_binary(execution_id) and is_list(opts) do
     with {:ok, screens} <- screens_document(opts),
-         {:ok, {{%Durable{machine_state: state}, run}, _document}} <-
-           Durable.resume(execution_id) do
-      {:ok, view(execution_id, run, state.datamodel, screens)}
+         {:ok, {{%Durable{machine_state: state}, run}, path}} <- resume(execution_id, opts) do
+      {:ok, view(execution_id, run, state.datamodel, screens, path)}
     end
   end
 
@@ -303,8 +319,8 @@ defmodule StatifierExamples.Signup.Journey do
   is - and validating against the position's stale datamodel would check
   the screen the reader saw one keystroke ago.
 
-  `opts[:screens]` is the screens document `start/2` was given, when it was
-  given one.
+  `opts[:screens]` and `opts[:path]` are the screens document and the Path
+  `start/2` was given, when it was given them.
   """
   @spec submit(String.t(), String.t(), %{optional(String.t()) => term()}, keyword()) ::
           {:ok, view()} | {:invalid, view()} | {:error, term()}
@@ -312,13 +328,13 @@ defmodule StatifierExamples.Signup.Journey do
       when is_binary(execution_id) and is_binary(outcome) and is_map(responses) and
              is_list(opts) do
     with {:ok, screens} <- screens_document(opts),
-         {:ok, {{%Durable{machine_state: state} = durable, run}, _document}} <-
-           Durable.resume(execution_id),
+         {:ok, {{%Durable{machine_state: state} = durable, run}, path}} <-
+           resume(execution_id, opts),
          {:ok, drafted} <-
-           parked_on(resolve(view(execution_id, run, state.datamodel, screens), responses)),
+           parked_on(resolve(view(execution_id, run, state.datamodel, screens, path), responses)),
          {:ok, button} <- button(drafted.nodes, outcome) do
       case Validation.validate(drafted.nodes, responses) do
-        [] -> pressed(durable, run, execution_id, button, coerce(responses), screens)
+        [] -> pressed(durable, run, execution_id, button, coerce(responses), {screens, path})
         findings -> {:invalid, %{drafted | findings: findings}}
       end
     end
@@ -355,7 +371,14 @@ defmodule StatifierExamples.Signup.Journey do
   # nor writes one, so the driver `submit/3` resumed is still holding what
   # storage holds - which is what makes the last settled position free to
   # report rather than something to go and read again.
-  @spec pressed(Durable.t(), Execution.t(), String.t(), Screens.node_doc(), map(), screens()) ::
+  @spec pressed(
+          Durable.t(),
+          Execution.t(),
+          String.t(),
+          Screens.node_doc(),
+          map(),
+          {screens(), Document.t()}
+        ) ::
           {:ok, view()} | {:error, term()}
   defp pressed(
          %Durable{machine_state: settled} = durable,
@@ -363,16 +386,17 @@ defmodule StatifierExamples.Signup.Journey do
          execution_id,
          button,
          typed,
-         screens
+         {screens, path}
        ) do
     event = Screen.outcome_event(Map.fetch!(button, "outcome"))
 
     case Durable.send_event(durable, run, event, responses(typed)) do
       {:ok, {%Durable{machine_state: moved_state}, moved}} ->
-        {:ok, view(execution_id, moved, moved_state.datamodel, screens)}
+        {:ok, view(execution_id, moved, moved_state.datamodel, screens, path)}
 
       {:discarded, reason} ->
-        {:ok, Map.put(view(execution_id, run, settled.datamodel, screens), :discarded, reason)}
+        {:ok,
+         Map.put(view(execution_id, run, settled.datamodel, screens, path), :discarded, reason)}
 
       {:error, _reason} = error ->
         error
@@ -384,9 +408,9 @@ defmodule StatifierExamples.Signup.Journey do
   # the view draws: the nodes off the answer's screen, and the answer's
   # state. `screen_at/2` only answers a key the document declares, so the
   # `{:screen, key}` status never meets `{:error, :no_such_screen}`.
-  @spec view(String.t(), Execution.t(), map(), screens()) :: view()
-  defp view(execution_id, run, datamodel, {document, admitted}) do
-    key = screen_at(run, document)
+  @spec view(String.t(), Execution.t(), map(), screens(), Document.t()) :: view()
+  defp view(execution_id, run, datamodel, {document, admitted}, path) do
+    key = screen_at(run, document, path)
     {:ok, answer} = Riddler.Journey.present(admitted, journey_status(key, run.status), datamodel)
 
     %{
@@ -427,13 +451,63 @@ defmodule StatifierExamples.Signup.Journey do
     end
   end
 
+  # The Path a call runs - the one `opts[:path]` supplies, or the fixture -
+  # compiled, with the fixture key the execution records for it: none for a
+  # supplied Path, which the caller passes on every call instead.
+  @spec path_chart(keyword()) ::
+          {:ok, {Document.t(), Compiled.t(), String.t() | nil}}
+          | {:error, {:path_document, term()}}
+          | :error
+  defp path_chart(opts) do
+    case Keyword.fetch(opts, :path) do
+      {:ok, path} ->
+        with {:ok, compiled} <- compile_path(path), do: {:ok, {path, compiled, nil}}
+
+      :error ->
+        with {:ok, fixture} <- Charts.fixture(@fixture),
+             {:ok, compiled} <-
+               Durable.compile(fixture.document, fixture.declare, fixture.datamodel) do
+          {:ok, {fixture.document, compiled, fixture.key}}
+        end
+    end
+  end
+
+  @spec compile_path(Document.t()) ::
+          {:ok, Compiled.t()} | {:error, {:path_document, term()}}
+  defp compile_path(%Document{} = path) do
+    case Durable.compile(path, []) do
+      {:ok, compiled} -> {:ok, compiled}
+      {:error, findings} -> {:error, {:path_document, findings}}
+    end
+  end
+
+  # The execution and the Path it runs. A supplied Path is compiled and the
+  # execution resumed on it; otherwise the chart comes out of the record, and
+  # the Path read for its screens is the shipped one.
+  @spec resume(String.t(), keyword()) ::
+          {:ok, {{Durable.t(), Execution.t()}, Document.t()}} | {:error, term()}
+  defp resume(execution_id, opts) do
+    case Keyword.fetch(opts, :path) do
+      {:ok, path} ->
+        with {:ok, compiled} <- compile_path(path),
+             {:ok, driven} <- Durable.resume(compiled, path, execution_id) do
+          {:ok, {driven, path}}
+        end
+
+      :error ->
+        with {:ok, {driven, _document}} <- Durable.resume(execution_id) do
+          {:ok, {driven, document()}}
+        end
+    end
+  end
+
   # Every screen the Path names has to be one the document declares, or the
   # execution would park on a screen with nothing to draw.
-  @spec declares_path_screens(screens(), StatifierBlocks.Document.t()) ::
+  @spec declares_path_screens(screens(), Document.t()) ::
           :ok | {:error, {:undeclared_screens, [String.t()]}}
   defp declares_path_screens({document, _admitted}, path) do
     undeclared =
-      for {_id, key} <- StatifierExamples.Signup.Path.screen_refs(path),
+      for {_park, key} <- parks(path),
           is_nil(Screens.screen(document, key)),
           uniq: true,
           do: key
@@ -451,18 +525,41 @@ defmodule StatifierExamples.Signup.Journey do
   defp parked_on(%{screen: nil}), do: {:error, :not_on_a_screen}
   defp parked_on(view), do: {:ok, view}
 
-  # Which screen a position is resting in. The park block of each
-  # `myapp.screen` the Path names, looked for in the reading's active
-  # blocks; `nil` when the execution is resting anywhere else, or on a
-  # screen `screens` does not declare.
-  @spec screen_at(Execution.t(), map()) :: String.t() | nil
-  defp screen_at(%Execution{active: active}, screens) do
-    parks = MapSet.new(active)
+  # Which screen a position is resting in. The park of each screen the Path
+  # names, looked for in the reading's active blocks; `nil` when the
+  # execution is resting anywhere else, or on a screen `screens` does not
+  # declare.
+  @spec screen_at(Execution.t(), map(), Document.t()) :: String.t() | nil
+  defp screen_at(%Execution{active: active}, screens, path) do
+    active = MapSet.new(active)
 
-    Enum.find_value(StatifierExamples.Signup.Path.screen_refs(document()), fn {id, key} ->
-      MapSet.member?(parks, Screen.park_block_id(id)) && Screens.screen(screens, key) && key
+    Enum.find_value(parks(path), fn {park, key} ->
+      MapSet.member?(active, park) && Screens.screen(screens, key) && key
     end)
   end
+
+  # Every park in a Path, in document order, with the screen key it is the
+  # park of: a `myapp.screen` block's (`Screen.park_block_id/1` of its id),
+  # and a `core.await` listening for a screen's park event (the moduledoc's
+  # "A Path the caller supplies").
+  @spec parks(Document.t()) :: [{String.t(), String.t()}]
+  defp parks(%Document{} = path) do
+    Enum.flat_map(Document.blocks(path), &park/1)
+  end
+
+  @spec park(Block.t()) :: [{String.t(), String.t()}]
+  defp park(%Block{type: "myapp.screen", id: id, config: config}),
+    do: [{Screen.park_block_id(id), Map.get(config, "screen", "")}]
+
+  defp park(%Block{type: "core.await", id: id, config: %{"event" => event}})
+       when is_binary(event) do
+    case Screen.parked_screen(event) do
+      nil -> []
+      key -> [{id, key}]
+    end
+  end
+
+  defp park(_block), do: []
 
   # The button among the nodes the reader can actually see. A button a
   # condition is hiding is not a button anyone pressed, so an outcome
@@ -484,7 +581,7 @@ defmodule StatifierExamples.Signup.Journey do
     Map.put(datamodel, "responses", Map.merge(Map.get(datamodel, "responses") || %{}, typed))
   end
 
-  @spec document() :: StatifierBlocks.Document.t()
+  @spec document() :: Document.t()
   defp document, do: StatifierExamples.Signup.Path.document()
 
   # See the moduledoc: a digits-only response becomes the integer a condition

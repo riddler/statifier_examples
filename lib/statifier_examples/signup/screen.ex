@@ -214,6 +214,31 @@ defmodule StatifierExamples.Signup.Screen do
     do: "signup.screen." <> screen_key <> ".resumed"
 
   @doc """
+  The screen key a park event names, or `nil` for an event that is not
+  one: `park_event/1` read backwards.
+
+  A Path built out of `core.*` blocks rather than `myapp.screen` ones -
+  the one `StatifierExamples.ScreenEditor.Try` derives - parks on a
+  `core.await` listening for this event, so the event is how a reader of
+  that Path tells which screen an await is the park of.
+
+      iex> StatifierExamples.Signup.Screen.parked_screen("signup.screen.card_choice.resumed")
+      "card_choice"
+
+      iex> StatifierExamples.Signup.Screen.parked_screen("signup.card_chosen")
+      nil
+  """
+  @spec parked_screen(String.t()) :: String.t() | nil
+  def parked_screen("signup.screen." <> rest) do
+    case String.split(rest, ".resumed") do
+      [key, ""] when key != "" -> key
+      _not_a_park -> nil
+    end
+  end
+
+  def parked_screen(event) when is_binary(event), do: nil
+
+  @doc """
   The event that asks the host to present `screen_key`.
   """
   @spec present_event(String.t()) :: String.t()

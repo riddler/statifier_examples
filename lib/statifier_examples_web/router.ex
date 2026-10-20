@@ -22,6 +22,7 @@ defmodule StatifierExamplesWeb.Router do
     live "/plan", PlanLive
     live "/signup-screens", SignupScreensLive
     live "/signup-journey", SignupJourneyLive
+    live "/screen-editor", ScreenEditorLive
   end
 
   # The BasicHTTP front: a location of a durable execution. No pipeline:
