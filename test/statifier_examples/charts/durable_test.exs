@@ -8,9 +8,10 @@ defmodule StatifierExamples.Charts.DurableTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Statifier.Machine.Identity
-  alias StatifierBlocks.{Compiled, Compiler, Decode}
+  alias StatifierBlocks.{Compiled, Compiler, Decode, Document}
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, Subchart}
+  alias StatifierExamples.Documents
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Accounts, User}
   alias StatifierPersistence.Execution.Linkage
@@ -78,6 +79,18 @@ defmodule StatifierExamples.Charts.DurableTest do
   # "the wizard shipped in `priv/fixtures` provisions" below is what says
   # so; this stand-in stays because it is the smaller fixture for the three
   # driver tests, not because the wizard cannot.
+  # `document` with its first delay set to `delay`: a different compiled
+  # chart, and nothing else about the document changed.
+  defp delayed(document, delay) do
+    {:ok, edited} =
+      Regex.replace(~r/"delay":"[^"]+"/, Document.to_json(document), ~s("delay":"#{delay}"),
+        global: false
+      )
+      |> Document.from_json()
+
+    edited
+  end
+
   defp provisioning do
     {:ok, document} =
       Decode.decode("""
@@ -389,6 +402,49 @@ defmodule StatifierExamples.Charts.DurableTest do
 
     assert {:error, {:identity_mismatch, _stored, _supplied}} =
              Durable.resume(other_compiled, other_document, execution_id)
+  end
+
+  # The Run press starts an execution of the document on the canvas, which is
+  # the edit `StatifierExamples.Documents` holds under the fixture key, and
+  # the record names only the key. So a read by execution id rebuilds the held
+  # edit when it is the chart the execution was created from, the shipped
+  # fixture when that is, and neither once the held edit has moved on: then
+  # the storage layer's own guard refuses it, as it refuses `resume/3` onto
+  # a different document above.
+  #
+  # Three sabotages, each reverted from a copy. Made `held_chart/2` answer
+  # `false` for every document: red on the first `resume/1`, an
+  # `:identity_mismatch`. Dropped the content-hash comparison from
+  # `matching_chart/3`, so any held edit is taken: red on the shipped
+  # execution's `resume/1`, an `:identity_mismatch`. Made `root_chart/2`
+  # answer `:error` when nothing matches: red on the last match, a
+  # `:chart_unknown`.
+  test "an execution reads back by id on the document it was started on", %{
+    execution_id: execution_id
+  } do
+    on_exit(fn -> Documents.reset() end)
+
+    {:ok, fixture} = Charts.fixture("signup_wizard")
+    first = delayed(fixture.document, "7d")
+    second = delayed(fixture.document, "9d")
+    shipped_id = execution_id <> "-shipped"
+
+    {:ok, shipped_compile} = Durable.compile(fixture.document, fixture.declare, fixture.datamodel)
+    {:ok, _driven} = Durable.start(shipped_compile, fixture.document, shipped_id, fixture.key)
+
+    :ok = Documents.put(fixture.key, first)
+    {:ok, first_compile} = Durable.compile(first, fixture.declare, fixture.datamodel)
+    {:ok, _driven} = Durable.start(first_compile, first, execution_id, fixture.key)
+
+    assert {:ok, {{_durable, %Execution{}}, ^first}} = Durable.resume(execution_id)
+    assert {:ok, %Statifier.MachineState{}} = Durable.machine_state(execution_id)
+
+    shipped = fixture.document
+    assert {:ok, {{_durable, %Execution{}}, ^shipped}} = Durable.resume(shipped_id)
+
+    :ok = Documents.put(fixture.key, second)
+
+    assert {:error, {:identity_mismatch, _stored, _supplied}} = Durable.resume(execution_id)
   end
 
   # se-5ep, and the only test here that runs the SHIPPED wizard as far as it

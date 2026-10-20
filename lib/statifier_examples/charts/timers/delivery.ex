@@ -28,9 +28,11 @@ defmodule StatifierExamples.Charts.Timers.Delivery do
   A chart this app can no longer rebuild is a discard too, with the
   reason saying which half is missing: an execution whose record carries no
   fixture key (one started from a document that is not a shipped
-  fixture), a key nothing registers any more, or a document edited since
-  the execution started - the last arriving as the storage layer's own
-  `{:identity_mismatch, _, _}`. None of them is fixable by retrying, and
+  fixture), a key nothing registers any more, or a document that is no
+  longer the one the execution started on - edited again since, or an edit
+  `StatifierExamples.Documents` no longer holds - the last arriving as the
+  storage layer's own `{:identity_mismatch, _, _}`. None of them is
+  fixable by retrying, and
   all of them are facts about the execution rather than about the node, which
   is the line `StatifierOban.Timer.Worker` draws between a cancel and a
   retry.

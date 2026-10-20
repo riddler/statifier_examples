@@ -6,6 +6,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Ecto.Adapters.SQL
   alias StatifierBlocks.Compiler
   alias StatifierBlocks.Document
   alias StatifierBlocks.Editor
@@ -16,6 +17,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   alias StatifierExamples.Charts.{AsyncCalls, Durable}
   alias StatifierExamples.DivergentDocument
   alias StatifierExamples.Documents
+  alias StatifierExamples.Repo
   alias StatifierExamples.TwoStageDocument
 
   @themes ["light", "dark", "brand"]
@@ -1180,22 +1182,49 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       refute_receive {:discarded, ^discards}
     end
 
-    # The same late press, on a run whose re-read is refused. The canvas holds
-    # an edited copy of the wizard, and the run records the fixture key the
-    # page was opened on. Re-reading by id rebuilds the SHIPPED fixture from
-    # that key, and the storage layer's identity guard refuses it, because
-    # the run is of the edited document. So `readopt/2` meets a refusal on a
-    # read nobody asked for, and keeps the run the page already had rather
-    # than forgetting it.
+    # An execution of the document on the canvas rather than of the fixture
+    # the page was opened on. The edit is held in `StatifierExamples.Documents`
+    # and the execution records the fixture key, and both reads this page
+    # makes by execution id rebuild the chart from that key: the replay the
+    # Run pane is painted from, on the press, and the resume a reload does.
+    # Both used to rebuild the SHIPPED fixture, which the storage layer's
+    # identity guard refuses for an execution of the edit, so the pane came
+    # up empty under an identity refusal from the first press.
+    #
+    # Sabotage: made `Durable.held_chart/2` answer `false` for every
+    # document, so the rebuild took the shipped fixture again. Red on the
+    # `render_until/2` flunk inside `run/1`: the Run pane never showed the
+    # execution. Reverted from a copy.
+    test "a run of an edited document replays and reloads", %{conn: conn} do
+      {fixture, edited} = edited_wizard()
+      :ok = Documents.put(fixture.key, edited)
+
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
+
+      html = run(view)
+      path = assert_patch(view)
+
+      refute html =~ "identity_mismatch"
+      assert render_until(view, "Macrostep 1 - initialize")
+
+      {:ok, reloaded, html} = live(conn, path)
+
+      assert html =~ ~s(data-run-status="running")
+      refute html =~ "identity_mismatch"
+      assert render_until(reloaded, ~s(data-run-active="true"))
+      assert render_until(reloaded, "Macrostep 1 - initialize")
+    end
+
+    # The same late press, on a run whose re-read is refused. The run is
+    # stopped elsewhere, and then its record is made to name a fixture key
+    # this app does not ship - an execution of a chart the app has since
+    # stopped publishing - so reading it back by id answers `:chart_unknown`.
+    # `readopt/2` meets that refusal on a read nobody asked for, and keeps
+    # the run the page already had rather than forgetting it.
     #
     # What the header says after the press is not pinned here. The page's
     # own replay of the run (`push_run/1`) reads by id too, is refused the
-    # same way, and writes that refusal over the discard message. That is the
-    # same refusal a Run press on an edited document meets before any
-    # discard, which is a gap of its own rather than this arm's. If re-reading
-    # an edited document's run by id is ever made to work, the
-    # `identity_mismatch` assertion below goes red and this case needs
-    # another way to refuse the re-read.
+    # same way, and writes that refusal over the discard message.
     #
     # Sabotage: deleted `readopt/2`'s `{:error, _reason}` arm. Red with a
     # `CaseClauseError` that took the page down with the press. Made the arm
@@ -1203,29 +1232,23 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # copy.
     test "a press against a stopped run whose re-read is refused keeps the reading",
          %{conn: conn} do
-      {:ok, fixture} = Charts.fixture("signup_wizard")
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "signup_wizard"]}")
 
-      # One delay lengthened, which changes the compiled chart and nothing a
-      # button on the page names.
-      {:ok, edited} =
-        Regex.replace(~r/"delay":"[^"]+"/, Document.to_json(fixture.document), ~s("delay":"7d"),
-          global: false
-        )
-        |> Document.from_json()
-
-      refute edited == fixture.document
-      :ok = Documents.put(fixture.key, edited)
-
-      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: fixture.key]}")
-
-      view |> element(~s(button[phx-click="run-start"])) |> render_click()
+      run(view)
       execution_id = URI.decode_query(URI.parse(assert_patch(view)).query)["execution"]
 
-      assert {:error, {:identity_mismatch, _stored, _supplied}} = Durable.resume(execution_id)
-
-      {:ok, compiled} = Durable.compile(edited, fixture.declare, fixture.datamodel)
-      {:ok, {durable, _run}} = Durable.resume(compiled, edited, execution_id)
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
       assert :ok = Durable.abandon(durable)
+
+      %{num_rows: 1} =
+        SQL.query!(
+          Repo,
+          "UPDATE statifier_executions SET metadata = json_set(metadata, '$.fixture', ?1) " <>
+            "WHERE execution_id = ?2",
+          ["a_retired_chart", execution_id]
+        )
+
+      assert {:error, :chart_unknown} = Durable.resume(execution_id)
 
       discards = discard_events(execution_id)
 
@@ -1842,6 +1865,23 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   # what a subscriber-driven page makes available - there is no callback to
   # await and no state to peek at from out here - and the deadline is what
   # turns a stalled execution into a failure rather than a hang.
+  # The wizard with one delay lengthened, which changes the compiled chart
+  # and nothing a button on the page names.
+  @spec edited_wizard() :: {Charts.Fixture.t(), Document.t()}
+  defp edited_wizard do
+    {:ok, fixture} = Charts.fixture("signup_wizard")
+
+    {:ok, edited} =
+      Regex.replace(~r/"delay":"[^"]+"/, Document.to_json(fixture.document), ~s("delay":"7d"),
+        global: false
+      )
+      |> Document.from_json()
+
+    refute edited == fixture.document
+
+    {fixture, edited}
+  end
+
   @spec run(Phoenix.LiveViewTest.View.t()) :: String.t()
   defp run(view) do
     view |> element(~s(button[phx-click="run-start"])) |> render_click()

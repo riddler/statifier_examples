@@ -18,6 +18,7 @@ defmodule StatifierExamples.Charts.TimersTest do
   alias StatifierBlocks.Document
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, ExecutionLock, Timers}
+  alias StatifierExamples.Documents
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup
   alias StatifierPersistence.{Executions, Storage}
@@ -407,6 +408,9 @@ defmodule StatifierExamples.Charts.TimersTest do
   # went red on `%{cancelled: 2}`. Reverted from a copy.
   test "a reminder for an execution of an edited document is discarded",
        %{execution_id: execution_id} do
+    # An edit `StatifierExamples.Documents` does not hold, as after a
+    # restart: the rebuild finds only the shipped fixture.
+    :ok = Documents.reset()
     {compiled, document, key} = edited_wizard()
     {:ok, _driven} = Durable.start(compiled, document, execution_id, key)
 

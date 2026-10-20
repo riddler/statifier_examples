@@ -18,6 +18,7 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
   alias StatifierBlocks.Document
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{AsyncCalls, Durable, Execution, ExecutionLock, Timers}
+  alias StatifierExamples.Documents
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Accounts, User}
   alias StatifierPersistence.{Executions, Storage}
@@ -505,6 +506,9 @@ defmodule StatifierExamples.Charts.AsyncCallsTest do
     # `Durable.refused/2`; the job failed rather than cancelling and this
     # went red on `%{cancelled: 1}`. Reverted from a copy.
     test "an answer for an execution of an edited document", %{execution_id: execution_id} do
+      # An edit `StatifierExamples.Documents` does not hold, as after a
+      # restart: the rebuild finds only the shipped fixture.
+      :ok = Documents.reset()
       {compiled, document, key} = edited_wizard()
       {:ok, {durable, run}} = Durable.start(compiled, document, execution_id, key)
       {:ok, _driven} = Durable.send_event(durable, run, @wait)
