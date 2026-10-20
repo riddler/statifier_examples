@@ -71,7 +71,9 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
   @doc """
   Walks the path once and answers the lines `run/1` prints, or the first
   step that did not hold. `opts` takes `:loans`, the two execution ids to
-  open (default two fresh ones).
+  open (default two fresh ones) and `:clear` (default `true`; `false` leaves
+  earlier executions on the two charts where they are, which a test uses to
+  show the counts check stopping the walk).
   """
   @spec walk(keyword()) :: {:ok, [String.t()]} | {:error, atom(), term()}
   def walk(opts \\ []) do
@@ -80,6 +82,7 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
     n = length(loans)
 
     with {:ok, old} <- step(:registered, register(document(1))),
+         {:ok, cleared} <- step(:cleared, clear(store, old, Keyword.get(opts, :clear, true))),
          :ok <- step(:waiting, open(store, old, loans)),
          {:ok, new, warnings} <- step(:published, publish(document(2))),
          :ok <- expect(:published, %{warnings: length(warnings)}, %{warnings: 0}),
@@ -124,6 +127,7 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
       {:ok,
        [
          "migrate waiting on statifier_persistence #{Application.spec(:statifier_persistence, :vsn)}",
+         "cleared      #{cleared} leftover execution(s) from earlier runs on these two charts",
          "waiting      #{length(loans)} loan(s) on revision 1, #{old.hash}, each with its due-date timer",
          "published    revision 2, #{new.hash}, #{length(warnings)} warning(s)",
          "diff         #{diff_line(diff_blocks)} with the blocks mapping, " <>
@@ -348,6 +352,39 @@ defmodule Mix.Tasks.StatifierExamples.MigrateWaiting do
       )
     )
     |> Enum.count(&(&1["scope"] in loans))
+  end
+
+  # Cancels what an earlier run left on the two charts this task uses: every
+  # `:active` or `:needs_migration` execution on revision 1's hash and on
+  # revision 2's, and nothing on any other hash. Revision 2 is registered
+  # here only to learn its content hash; `publish/1` registers it again.
+  defp clear(_store, _old, false), do: {:ok, 0}
+
+  defp clear(store, old, true) do
+    with {:ok, new} <- register(document(2)) do
+      Enum.reduce_while(Enum.uniq([old.hash, new.hash]), {:ok, 0}, &clear_next(store, &1, &2))
+    end
+  end
+
+  defp clear_next(store, hash, {:ok, total}) do
+    case clear_hash(store, hash) do
+      {:ok, n} -> {:cont, {:ok, total + n}}
+      error -> {:halt, error}
+    end
+  end
+
+  defp clear_hash(store, hash) do
+    with {:ok, ids} <-
+           Storage.list_execution_ids_by_content_hash(store, hash, [:active, :needs_migration]) do
+      Enum.reduce_while(ids, {:ok, 0}, &cancel_leftover(store, &1, &2))
+    end
+  end
+
+  defp cancel_leftover(store, id, {:ok, n}) do
+    case Executions.cancel(store, id, serialization: @serialization) do
+      {:ok, _execution} -> {:cont, {:ok, n + 1}}
+      other -> {:halt, {:error, {id, other}}}
+    end
   end
 
   defp tidy(store, loans) do
