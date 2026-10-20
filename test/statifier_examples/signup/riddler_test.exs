@@ -16,7 +16,7 @@ defmodule StatifierExamples.Signup.RiddlerTest do
   use ExUnit.Case, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias StatifierExamples.Charts.AsyncCalls
+  alias StatifierExamples.Charts.{AsyncCalls, Durable}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Journey, Screens, Validation}
 
@@ -256,6 +256,33 @@ defmodule StatifierExamples.Signup.RiddlerTest do
 
       {:ok, done} = Journey.submit(execution_id, "signup_confirmed", %{}, opts)
       assert done.state == "done"
+    end
+
+    # Sabotage (run): put the parked-screen clause of `journey_status/2`
+    # back ahead of the status check, so a parked key wins whatever the
+    # execution's status. This case went red on an assertion: the abandoned
+    # execution's `state` read "screen". Reverted from a copy.
+    test "a card request abandoned on a screen is done, with nothing to fill in", %{
+      execution_id: execution_id
+    } do
+      opts = [screens: @library_card]
+      {:ok, ^execution_id} = Journey.start(execution_id, opts)
+      {:ok, plan} = Journey.submit(execution_id, "account_submitted", @patron, opts)
+      assert plan.state == "screen"
+
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      {:ok, stopped} = Journey.current(execution_id, opts)
+      assert key(stopped) == "plan"
+      assert stopped.status == :failed
+      assert stopped.state == "done"
+      assert stopped.nodes == []
+
+      {:ok, refused} = Journey.submit(execution_id, "personal_chosen", %{}, opts)
+      assert refused.discarded == :failed
+      assert refused.state == "done"
+      assert refused.nodes == []
     end
 
     test "a document riddler does not admit starts nothing", %{execution_id: execution_id} do

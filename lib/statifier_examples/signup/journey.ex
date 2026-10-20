@@ -55,12 +55,22 @@ defmodule StatifierExamples.Signup.Journey do
   ## What a page draws is riddler's answer
 
   The execution says where it is; `Riddler.Journey.present/3` says what that
-  means to a reader. A view maps the execution onto riddler's status - the
-  screen whose park block is active is `{:screen, key}`, a running
-  execution resting anywhere else is `:waiting`, and any other is `:done` -
-  and reads the nodes and the `state` off riddler's answer, with the
-  datamodel as the root. So a view's `nodes` are riddler's resolved nodes,
-  and its `state` is riddler's `"screen"`, `"waiting"` or `"done"`.
+  means to a reader. A view maps the execution onto riddler's status, and
+  the execution's own status comes first: an execution that is no longer
+  running is `:done` wherever it rests, a running one whose park block is
+  active is `{:screen, key}`, and a running one resting anywhere else is
+  `:waiting`. The view reads the nodes and the `state` off riddler's answer,
+  with the datamodel as the root. So a view's `nodes` are riddler's resolved
+  nodes, and its `state` is riddler's `"screen"`, `"waiting"` or `"done"`.
+
+  A finished execution still parked on a screen - abandoned there, or
+  failed - therefore answers `state: "done"` and **no nodes**, because
+  riddler's done answer carries no screen: a reader is not handed inputs
+  for a press the chart will discard. `screen` still names the screen it
+  rests on, so a page can say where it stopped. `resolve/2` re-resolves
+  that screen against a draft whatever the state, which is how `submit/3`
+  still finds the pressed button and answers the refused press as
+  `discarded`.
 
   ## A screens document the caller supplies
 
@@ -144,7 +154,9 @@ defmodule StatifierExamples.Signup.Journey do
 
   `screen` is `nil` when the execution is not sitting on one (see the moduledoc),
   and `nodes` is then empty. `state` is `Riddler.Journey.present/3`'s
-  `"screen"`, `"waiting"` or `"done"` for it. `responses` is what the chart
+  `"screen"`, `"waiting"` or `"done"` for it; a view whose state is `"done"`
+  has empty `nodes` even where `screen` names the screen the execution
+  stopped on. `responses` is what the chart
   has collected so far, keyed by element key; `findings` is empty except in the
   `{:invalid, view}` a refused `submit/3` answers with.
 
@@ -389,13 +401,14 @@ defmodule StatifierExamples.Signup.Journey do
     }
   end
 
-  # The execution's position as `Riddler.Journey`'s status: a screen when
-  # one is parked, waiting while the execution runs on elsewhere - the
-  # moduledoc's mid-call - and done once it has stopped running.
+  # The execution's position as `Riddler.Journey`'s status. Its own status
+  # comes first: done once it has stopped running, wherever it rests. A
+  # running execution is on a screen when one is parked, and waiting while
+  # it runs on elsewhere - the moduledoc's mid-call.
   @spec journey_status(String.t() | nil, Execution.status()) :: Riddler.Journey.status()
-  defp journey_status(key, _status) when is_binary(key), do: {:screen, key}
+  defp journey_status(_key, status) when status != :running, do: :done
+  defp journey_status(key, :running) when is_binary(key), do: {:screen, key}
   defp journey_status(nil, :running), do: :waiting
-  defp journey_status(nil, _stopped), do: :done
 
   @spec presented_nodes(Riddler.Journey.answer()) :: [Screens.node_doc()]
   defp presented_nodes(%{"screen" => %{"nodes" => nodes}}), do: nodes
