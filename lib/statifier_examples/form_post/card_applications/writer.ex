@@ -58,15 +58,20 @@ defmodule StatifierExamples.FormPost.CardApplications.Writer do
   and stamps `updated_at` with the moment it was screened out: the stamp
   the host's retention measures the screened-out age from.
 
+  An application already marked screened out is left as it is, its stamp
+  included, so a delivery that writes the mark again (a retried job's)
+  does not move the age the host's retention measures.
+
   Answers `:ok`, or `{:error, :not_found}` when no application with that
   id is stored under that library system.
   """
   @spec record_screened_out(String.t(), integer()) :: :ok | {:error, :not_found}
   def record_screened_out(scope, id) when is_binary(scope) and is_integer(id) do
     query = from(a in CardApplication, where: a.scope == ^scope and a.id == ^id)
+    unmarked = from(a in query, where: a.status != "screened_out")
 
-    case Repo.update_all(query, set: [status: "screened_out", updated_at: DateTime.utc_now()]) do
-      {0, _} -> {:error, :not_found}
+    case Repo.update_all(unmarked, set: [status: "screened_out", updated_at: DateTime.utc_now()]) do
+      {0, _} -> if Repo.exists?(query), do: :ok, else: {:error, :not_found}
       {_count, _} -> :ok
     end
   end

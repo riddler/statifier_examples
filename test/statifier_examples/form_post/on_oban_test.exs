@@ -180,6 +180,66 @@ defmodule StatifierExamples.FormPost.OnObanTest do
 
       assert [] == sends(id)
     end
+
+    # Sabotage: dropped the `{:discarded, %Execution{status: :completed}}`
+    # clause of `Delivery`'s `record_outcome/4`; the retry was discarded
+    # without the mark and this went red on "screened_out". Making
+    # `Writer.record_screened_out/2` write a row already screened out went
+    # red on the stamp. Each reverted from a copy.
+    test "a mark the step's delivery failed to write is written by the retry, once" do
+      Application.put_env(:statifier_examples, ScreenApplication, fail: true)
+      id = store!("PO Box 77")
+      assert {:ok, %{failure: 1}} = Drain.run()
+      execution_id = execution_id(id)
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = step_jobs(execution_id)
+
+      # The write fails after the step has stored the finished execution:
+      # the row is moved out of the library system the write is scoped to.
+      moved = from(a in CardApplication, where: a.id == ^id)
+      {1, _} = Repo.update_all(moved, set: [scope: "elsewhere"])
+
+      assert_raise MatchError, fn ->
+        Delivery.deliver(execution_id, invoke_id, "screened_out")
+      end
+
+      assert {%Execution{status: :completed}, %{"screen" => "screened_out"}} =
+               execution(execution_id)
+
+      {1, _} = Repo.update_all(moved, set: [scope: "riverbend"])
+      assert %CardApplication{status: "received"} = Repo.get!(CardApplication, id)
+
+      # The retry is discarded, the execution having finished, and writes
+      # the mark the first attempt missed.
+      assert {:discarded, :completed} = Delivery.deliver(execution_id, invoke_id, "screened_out")
+
+      assert %CardApplication{status: "screened_out", updated_at: marked} =
+               Repo.get!(CardApplication, id)
+
+      # A later retry answers the same discard and keeps the first stamp.
+      # (The stamp is microseconds, so a second write would move it.)
+      assert {:discarded, :completed} = Delivery.deliver(execution_id, invoke_id, "screened_out")
+
+      assert %CardApplication{status: "screened_out", updated_at: ^marked} =
+               Repo.get!(CardApplication, id)
+    end
+
+    # Sabotage: made `Delivery`'s read of the finished execution's
+    # position answer `:ok` on an error; the retry was discarded with the
+    # mark unwritten and this went red on the raise. Reverted from a copy.
+    test "a retry that cannot read the finished execution's position raises" do
+      Application.put_env(:statifier_examples, ScreenApplication, fail: true)
+      id = store!("PO Box 77")
+      assert {:ok, %{failure: 1}} = Drain.run()
+      execution_id = execution_id(id)
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = step_jobs(execution_id)
+
+      assert :delivered = Delivery.deliver(execution_id, invoke_id, "screened_out")
+      :ok = put_position_blob(execution_id, nil)
+
+      assert_raise RuntimeError, ~r/could not be read \(:execution_position_missing\)/, fn ->
+        Delivery.deliver(execution_id, invoke_id, "screened_out")
+      end
+    end
   end
 
   describe "a screen past its bound" do

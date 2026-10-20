@@ -37,9 +37,26 @@ defmodule StatifierExamples.FormPost.Delivery do
   under the same library system: the screen's answer reaches the chart,
   and this is where the host's row learns the outcome, so the host's
   retention can age it. The application's id is the one the datamodel
-  holds; the write reads no posted value. The write follows the step's
-  commit and is not part of it. A screen answer that arrives
+  holds; the write reads no posted value. A screen answer that arrives
   after its bound is discarded before any step, so it never marks the row.
+
+  The write follows the step's commit and is not part of it, so a write
+  that fails, or a process that dies, after the step has stored the
+  finished execution leaves the row unmarked. The row still reaches
+  screened out: the delivery raises (or its job is rescued), the job is
+  retried, and the retry finds the execution finished. The step answers
+  that as a discard, and before the discard is answered the delivery
+  reads the finished execution's stored position and, when it holds the
+  screen's word, writes the mark it missed. The answer is the discard it
+  always was, `{:discarded, :completed}`; a store error on that read
+  raises, so the job is retried again. The mark is written once: a row
+  already screened out keeps the stamp of its first mark.
+
+  The write does not join the step's transaction. On this app's SQLite
+  the step is serialized by `StatifierExamples.Charts.ExecutionLock`,
+  which is released when the step returns; inside an outer transaction
+  that is before the commit, and a delivery for the same execution taken
+  in between would read the position the commit has not yet replaced.
 
   ## What is discarded, and what raises
 
@@ -169,7 +186,7 @@ defmodule StatifierExamples.FormPost.Delivery do
       Scope.around_delivery(scope, :job, fn ->
         store
         |> Stepper.step(execution_id, machine, event, options())
-        |> record_outcome(scope)
+        |> record_outcome(scope, store, machine)
         |> stepped(execution_id)
       end)
     else
@@ -179,23 +196,55 @@ defmodule StatifierExamples.FormPost.Delivery do
 
   # A step that finished the execution screened out marks the stored
   # application so. The write follows the step's own commit rather than
-  # sharing it, so a crash between the two leaves the row "received"; the
-  # job's retry is then discarded, the invocation no longer being live. The
-  # row is never deleted (the host's purge clears its fields and keeps it),
-  # so a missing one is a broken invariant and raises.
-  @spec record_outcome(term(), String.t()) :: term()
+  # sharing it (the moduledoc says why), so a crash between the two leaves
+  # the row "received" and the job is retried. The retry's step is
+  # discarded, the execution having finished, and the finished execution's
+  # stored position is read for the screen's word, so the retry writes the
+  # mark the first attempt missed. The row is never deleted (the host's
+  # purge clears its fields and keeps it), so a missing one is a broken
+  # invariant and raises, and so does a store error on the read.
+  @spec record_outcome(term(), String.t(), Storage.t(), Statifier.Machine.t()) :: term()
   defp record_outcome(
-         {:ok, %Execution{status: :completed},
-          %MachineState{datamodel: %{"screen" => "screened_out", "application_id" => id}}} =
-           stepped,
-         scope
-       )
-       when is_integer(id) do
-    :ok = Writer.record_screened_out(scope, id)
+         {:ok, %Execution{status: :completed}, %MachineState{} = state} = stepped,
+         scope,
+         _store,
+         _machine
+       ) do
+    mark_screened_out(state, scope)
     stepped
   end
 
-  defp record_outcome(stepped, _scope), do: stepped
+  defp record_outcome(
+         {:discarded, %Execution{status: :completed, execution_id: execution_id}} = stepped,
+         scope,
+         store,
+         machine
+       ) do
+    case Storage.load_execution_position(store, execution_id, machine) do
+      {:ok, %MachineState{} = state} -> mark_screened_out(state, scope)
+      {:error, reason} -> unread(execution_id, reason)
+    end
+
+    stepped
+  end
+
+  defp record_outcome(stepped, _scope, _store, _machine), do: stepped
+
+  @spec mark_screened_out(MachineState.t(), String.t()) :: :ok
+  defp mark_screened_out(
+         %MachineState{datamodel: %{"screen" => "screened_out", "application_id" => id}},
+         scope
+       )
+       when is_integer(id),
+       do: :ok = Writer.record_screened_out(scope, id)
+
+  defp mark_screened_out(%MachineState{}, _scope), do: :ok
+
+  @spec unread(String.t(), term()) :: no_return()
+  defp unread(execution_id, reason) do
+    raise "the finished execution #{execution_id}'s position could not be read " <>
+            "(#{inspect(reason)}); the delivery is retried"
+  end
 
   @spec stepped(term(), String.t()) :: :delivered | {:discarded, term()}
   defp stepped({:ok, %Execution{}, %MachineState{}}, _execution_id), do: :delivered
