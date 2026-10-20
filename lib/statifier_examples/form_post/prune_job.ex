@@ -13,7 +13,10 @@ defmodule StatifierExamples.FormPost.PruneJob do
   `StatifierExamples.FormPost.PurgeJob`'s. It covers every execution in
   the app's store, the card application's and the other examples' alike,
   so an execution older than the age can no longer be replayed from its
-  input log.
+  input log, and its last configuration can no longer be loaded either:
+  `StatifierPersistence.Storage.load_execution_position/3` answers
+  `{:error, :execution_position_missing}` for it, and a caller that reads
+  a finished execution's position handles that answer.
 
   ## Why no `scope:`
 

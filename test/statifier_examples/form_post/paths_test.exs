@@ -366,7 +366,8 @@ defmodule StatifierExamples.FormPost.PathsTest do
       assert {%Execution{status: :active}, %{"screen" => "unscreened", "sort" => "both"}} =
                execution(execution_id)
 
-      assert "sent" == status(id)
+      # Only the newsletter has answered; the card route is still to come.
+      assert "received" == status(id)
 
       # The area's bound fires and the card lane finishes as before.
       assert %Oban.Job{scheduled_at: area_due} = deadline(execution_id, "deadline.area")

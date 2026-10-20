@@ -92,7 +92,7 @@ defmodule StatifierExamples.FormPost.RoutesTest do
            ] = sends()
 
     assert %CardApplication{
-             status: "sent",
+             status: "received",
              external_reference: ^reference,
              newsletter_reference: nil
            } = stored(id)
@@ -115,7 +115,7 @@ defmodule StatifierExamples.FormPost.RoutesTest do
            ] = sends()
 
     assert %CardApplication{
-             status: "sent",
+             status: "received",
              external_reference: nil,
              newsletter_reference: ^reference
            } = stored(id)
@@ -140,6 +140,40 @@ defmodule StatifierExamples.FormPost.RoutesTest do
              sends()
              |> Enum.map(&{&1.application_id, &1.route})
              |> Enum.sort_by(&elem(&1, 1), :desc)
+  end
+
+  # Sabotage: made the writer mark `sent` on the first route's reference
+  # again; this went red at the "received" match after one route, as did
+  # the single-route tests above. Dropped the newsletter write's
+  # `updated_at` -> red at the stamp comparison. Reverted from a copy.
+  test "an application that asked for both routes is sent only when both have answered" do
+    id = store!()
+
+    assert :ok = PatronSystemRoute.deliver(%{}, event_for(id), key(1))
+    assert %CardApplication{status: "received"} = stored(id)
+
+    # Backdate the stamp: the completing hand-off must move it.
+    old = ~U[2026-01-01 00:00:00.000000Z]
+
+    {1, _} =
+      Repo.update_all(from(a in CardApplication, where: a.id == ^id), set: [updated_at: old])
+
+    assert :ok = NewsletterRoute.deliver(%{}, event_for(id), key(2))
+    assert %CardApplication{status: "sent", updated_at: stamp} = stored(id)
+    assert DateTime.compare(stamp, old) == :gt
+  end
+
+  # Sabotage: required both references whatever the application asked for;
+  # this went red at the "sent" match. Reverted from a copy.
+  test "an application that asked for one route is sent when that route has answered" do
+    card_only = store!(%{"wants_newsletter" => "false"})
+    news_only = store!(%{"wants_card" => "false"})
+
+    assert :ok = PatronSystemRoute.deliver(%{}, event_for(card_only), key(1))
+    assert %CardApplication{status: "sent"} = stored(card_only)
+
+    assert :ok = NewsletterRoute.deliver(%{}, event_for(news_only), key(2))
+    assert %CardApplication{status: "sent"} = stored(news_only)
   end
 
   # Sabotage: made the outbox key always unique in `Sends.record/5`; the
