@@ -35,8 +35,34 @@ defmodule StatifierExamples.FirstWorkflow.Delivery do
   holds no source for, and any other refusal of the step. A retried
   invoke job runs the set-aside call again, idempotent on the invoke id
   by the handler's contract, and its answer is fed back to the position
-  stored then. A job whose attempts run out first is discarded by Oban,
-  and the answer with it.
+  stored then.
+
+  ## The bound on a parked execution's retry
+
+  The retry is bounded, and the bound is accepted here. This app sets no
+  `max_attempts` on the timer or the invoke job and no handler caps its
+  own, so both run under Oban's default of 20 attempts, spaced by Oban's
+  default backoff: the wait after attempt `n` is `15 + 2^n` seconds plus
+  up to 10% jitter, which spreads the 19 retries over about 12.1 days
+  with no jitter and about 13.4 with the most (`statifier_oban` 0.17.2,
+  `Oban` 2.24.1). The bound is the same for a pickup timer that fires
+  into a parked execution and for an invoke answer that arrives at one.
+
+  A park that outlasts it loses the delivery. Oban discards the exhausted
+  job, which is not one of the discards above: the timer's event is never
+  fed back, and an answer's is not either. The invoke worker does not
+  report it to the chart as a failed call, because that door is for a
+  handler that failed and a raise out of this module is not that. An
+  execution unparked after that point therefore waits for a firing or an
+  answer that is not coming, unless the exhausted job is revived (below).
+  Unparking within the bound loses nothing.
+
+  `statifier_oban` 0.17.2 lets a timer delivery answer `{:snooze, seconds}`
+  for a parked execution, which holds the timer without spending an
+  attempt. This module does not use it, and the invoke door has no such
+  answer, so an invoke answer has no snooze form at that version. A
+  host whose parks can outlast the bound uses the snooze for timers and
+  revives an exhausted job with `Oban.retry_job/2` after the unpark.
   """
 
   @behaviour StatifierOban.Invoke.Delivery
