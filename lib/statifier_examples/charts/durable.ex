@@ -660,17 +660,21 @@ defmodule StatifierExamples.Charts.Durable do
   no `%__MODULE__{}`: the process that armed the timer is gone.
 
   `:delivered` when the event was fed back, `{:discarded, reason}` when
-  it was not. Discarding is the ordinary answer for an execution that is no
-  longer live (spec 6.2, st-ADR-0054 decision 4) and for a chart this app
-  can no longer rebuild;
-  `StatifierExamples.Charts.Timers.Delivery`'s moduledoc walks the
-  reasons. Anything else - a database that is not there - raises out of
-  the layer below and is retried by Oban, which is the right answer to a
-  fact about the node rather than about the execution.
+  it was not. A discard answers a fact about the execution, one no retry
+  changes: an execution that is no longer live (spec 6.2, st-ADR-0054
+  decision 4), the reason its stored status; an execution the store does
+  not hold, `:execution_not_found`; a step that exhausted the execution's
+  macrostep budget, which the store answers only once the execution's
+  `:failed` record is durable, `:failed`; and a chart this app can no
+  longer rebuild, which `StatifierExamples.Charts.Timers.Delivery`'s
+  moduledoc walks. Every other failure is a fact about the environment
+  rather than the execution - a database that is not there, a position the
+  store cannot read, any other refusal of the step - and raises, so Oban
+  retries the job while attempts remain.
 
-  A parked execution raises as well, though that is a fact about the
-  execution. `:needs_migration` is not terminal: a migration left the
-  execution there to be migrated or unparked, and either way it goes on.
+  A parked execution raises too. `:needs_migration` is not terminal: a
+  migration left the execution there to be migrated or unparked, and
+  either way it goes on, so it is not a fact a discard may answer.
   The driver refuses the event whole and consumes nothing, and leaves
   retrying it once the execution leaves the arm to the host
   (`StatifierPersistence.Driver`'s `result` type). A discard would cancel
@@ -711,9 +715,9 @@ defmodule StatifierExamples.Charts.Durable do
       :error -> {:discarded, :chart_unknown}
       # Parked, read by the pre-check or, when the park landed between the
       # two reads, by the driver: `live/1` answers the driver's own shape so
-      # one clause takes both. It retries, for the doc's reason.
-      {:error, {:needs_migration, _execution}} -> parked!(execution_id)
-      {:error, reason} -> {:discarded, reason}
+      # `refused/2` takes both. It retries, for the doc's reason, as does
+      # every refusal that is not a fact about the execution.
+      {:error, reason} -> refused(execution_id, reason)
       status when is_atom(status) -> {:discarded, status}
     end
   end
@@ -727,13 +731,34 @@ defmodule StatifierExamples.Charts.Durable do
   defp live(%{status: :needs_migration} = record), do: {:error, {:needs_migration, record}}
   defp live(%{status: status}), do: status
 
-  # The retry `deliver/2` asks for: `StatifierOban.Timer.Worker` retries a
-  # raise out of its delivery module while attempts remain, where a
-  # returned discard would cancel the job.
-  @spec parked!(String.t()) :: no_return()
-  defp parked!(execution_id) do
+  # A refusal of either cold door that is a fact about the execution is
+  # discarded; any other raises, which is the retry both doors ask for:
+  # `StatifierOban.Timer.Worker` and `StatifierOban.Invoke.Worker` retry a
+  # raise out of their delivery module while attempts remain, where a
+  # returned discard would cancel the job. A document edited since the
+  # execution started is the storage layer's own `{:identity_mismatch, _, _}`
+  # and a discard, `StatifierExamples.Charts.Timers.Delivery`'s moduledoc
+  # says why.
+  @spec refused(String.t(), term()) ::
+          {:discarded, :execution_not_found | :failed | {:identity_mismatch, term(), term()}}
+  defp refused(_execution_id, :execution_not_found), do: {:discarded, :execution_not_found}
+
+  defp refused(_execution_id, {:identity_mismatch, _stored, _supplied} = reason),
+    do: {:discarded, reason}
+
+  # The store answers a step that exhausted the execution's macrostep
+  # budget only once the execution's `:failed` record is durable, so the
+  # execution has finished.
+  defp refused(_execution_id, {:budget_exhausted, _payload}), do: {:discarded, :failed}
+
+  defp refused(execution_id, {:needs_migration, _execution}) do
     raise "execution #{execution_id} is parked (:needs_migration); " <>
-            "the timer is retried until it is migrated or unparked"
+            "the delivery is retried until it is migrated or unparked"
+  end
+
+  defp refused(execution_id, reason) do
+    raise "execution #{execution_id} could not be stepped (#{inspect(reason)}); " <>
+            "the delivery is retried"
   end
 
   @doc """
@@ -754,7 +779,12 @@ defmodule StatifierExamples.Charts.Durable do
   `%__MODULE__{}` - the process that started the call is gone.
 
   `:delivered` when the answer was fed back, `{:discarded, reason}` when
-  it was not. Three reasons, and all three are ordinary:
+  it was not, and a raise for every refusal that is not a fact about the
+  execution, `deliver/2`'s: a parked execution among them, so the job is
+  retried and the answer lands once the execution is migrated or unparked,
+  the handler having run again, idempotent on the invoke id by its
+  contract. The discards are `deliver/2`'s too, and three of them are the
+  ordinary ones:
 
     * the execution is no longer live - it finished or was abandoned while the
       job ran;
@@ -833,11 +863,19 @@ defmodule StatifierExamples.Charts.Durable do
   # cannot land between the read and the step. A pre-check here would
   # answer the same question earlier and worse, and would hide the one that
   # counts.
+  #
+  # A park is the one status it does read first, for `live/1`'s reason: a
+  # parked record is refused in the driver's own words before `chart_for/1`
+  # and `resume/3` read it, so a chart that moved on cannot answer an
+  # identity mismatch, which is a discard, and `resume/3` is never asked to
+  # read a position under a status it does not narrate. The park then
+  # raises through `refused/2`, and the job is retried.
   @spec answer(String.t(), String.t(), {:done, term()} | {:failed, keyword()}) ::
           :delivered | {:discarded, term()}
   defp answer(execution_id, invoke_id, outcome) do
     with {:ok, store} <- store(),
          {:ok, record} <- Storage.fetch_execution(store, execution_id),
+         :ok <- unparked(record),
          {:ok, {compiled, document}} <- chart_for(record),
          {:ok, driven} <- resume(compiled, document, execution_id),
          {:ok, {durable, run}} <- reenter(driven, invoke_id, outcome) do
@@ -847,9 +885,15 @@ defmodule StatifierExamples.Charts.Durable do
     else
       {:discarded, reason} -> {:discarded, reason}
       :error -> {:discarded, :chart_unknown}
-      {:error, reason} -> {:discarded, reason}
+      {:error, reason} -> refused(execution_id, reason)
     end
   end
+
+  # `answer/3`'s pre-check: a parked record in the driver's own shape, and
+  # every other status left to the driver.
+  @spec unparked(map()) :: :ok | {:error, {:needs_migration, map()}}
+  defp unparked(%{status: :needs_migration} = record), do: {:error, {:needs_migration, record}}
+  defp unparked(_record), do: :ok
 
   @spec reenter(driven(), String.t(), {:done, term()} | {:failed, keyword()}) ::
           {:ok, driven()} | {:discarded, term()} | {:error, term()}

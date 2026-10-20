@@ -11,6 +11,9 @@ defmodule StatifierExamples.FirstWorkflowTest do
   """
   use ExUnit.Case, async: false
 
+  import Ecto.Query, only: [from: 2]
+
+  alias Ecto.Adapters.SQL
   alias Ecto.Adapters.SQL.Sandbox
   alias Statifier.Effect.Invoke
   alias StatifierExamples.Charts.ExecutionLock
@@ -133,6 +136,224 @@ defmodule StatifierExamples.FirstWorkflowTest do
              Oban.drain_queue(queue: :statifier_timers, with_scheduled: true)
 
     assert {:ok, %{status: :completed}} = Storage.fetch_execution(store, execution_id)
+  end
+
+  describe "an answer that cannot step now" do
+    # Sabotage: made `Delivery`'s refusal answer `{:discarded, reason}` for
+    # a parked execution; the set-aside job was cancelled and this went red
+    # on `%{failure: 1}`. Reverted from a copy.
+    test "an answer to a parked execution raises, is retried, and lands once unparked" do
+      {store, execution_id} = opened!("first_workflow_parked_answer")
+      :ok = Storage.update_execution_status(store, execution_id, :needs_migration)
+
+      assert %{failure: 1, cancelled: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "retryable", attempt: 1, errors: [%{"error" => error}]}] =
+               set_aside_jobs(execution_id)
+
+      assert error =~ "is parked (:needs_migration)"
+      assert {:ok, %{status: :needs_migration}} = Storage.fetch_execution(store, execution_id)
+
+      assert {:ok, %Execution{status: :active}} =
+               Executions.unpark(store, execution_id,
+                 serialization: {ExecutionLock, ExecutionLock}
+               )
+
+      # The retry runs the set-aside call again and its answer lands: the
+      # wait it enters arms the pickup window, whose firing ends the hold.
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: :statifier_invocations, with_scheduled: true)
+
+      assert [%Oban.Job{state: "completed", attempt: 2}] = set_aside_jobs(execution_id)
+      assert %{"shelved" => %{"copy" => "c-3107"}} = datamodel(store, execution_id)
+
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: :statifier_timers, with_scheduled: true)
+
+      assert {:ok, %{status: :completed}} = Storage.fetch_execution(store, execution_id)
+    end
+
+    # Sabotage: made `Delivery`'s refusal answer `{:discarded, reason}` for
+    # every reason it does not name; the set-aside job was cancelled and
+    # this went red on `%{failure: 1}`. Reverted from a copy.
+    test "an answer the store cannot step raises, is retried, and lands once the store answers" do
+      {store, execution_id} = opened!("first_workflow_unreadable_answer")
+      blob = position_blob(execution_id)
+      :ok = put_position_blob(execution_id, nil)
+
+      assert %{failure: 1, cancelled: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "retryable", attempt: 1}] = set_aside_jobs(execution_id)
+
+      :ok = put_position_blob(execution_id, blob)
+
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: :statifier_invocations, with_scheduled: true)
+
+      assert %{"shelved" => %{"copy" => "c-3107"}} = datamodel(store, execution_id)
+    end
+
+    # Sabotage: made `Delivery`'s refusal answer `{:discarded, reason}` for
+    # a parked execution; this went red on the raise. Reverted from a copy.
+    test "a failure delivered to a parked execution raises" do
+      {store, execution_id} = opened!("first_workflow_parked_failure")
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = set_aside_jobs(execution_id)
+      :ok = Storage.update_execution_status(store, execution_id, :needs_migration)
+
+      assert_raise RuntimeError, ~r/is parked \(:needs_migration\)/, fn ->
+        Delivery.deliver_failure(execution_id, invoke_id, reason: "run_failed", attempts: 3)
+      end
+
+      assert {:ok, %{status: :needs_migration}} = Storage.fetch_execution(store, execution_id)
+    end
+
+    # Sabotage: made `Delivery`'s refusal answer `{:discarded, reason}` for
+    # every reason it does not name, as the timer door did before; the
+    # timer job was cancelled and this went red on `%{failure: 1}`.
+    # Reverted from a copy.
+    test "a pickup window the store cannot step raises, is retried, and ends the hold once it answers" do
+      {store, execution_id} = opened!("first_workflow_unreadable_timer")
+      assert %{success: 1} = Oban.drain_queue(queue: :statifier_invocations)
+      blob = position_blob(execution_id)
+      :ok = put_position_blob(execution_id, nil)
+
+      assert %{failure: 1, cancelled: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_timers, with_scheduled: true)
+
+      :ok = put_position_blob(execution_id, blob)
+
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: :statifier_timers, with_scheduled: true)
+
+      assert {:ok, %{status: :completed}} = Storage.fetch_execution(store, execution_id)
+    end
+  end
+
+  describe "an answer that is still discarded" do
+    # Sabotage: made `drive/2` raise for an event the driver discarded;
+    # the job failed rather than cancelling and this went red on
+    # `%{cancelled: 1}`. Reverted from a copy.
+    test "an answer to a finished execution" do
+      {store, execution_id} = opened!("first_workflow_failed_answer")
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = set_aside_jobs(execution_id)
+
+      # The host fails the execution from outside its chart, which leaves
+      # the set-aside job stored, so the job answers a finished execution.
+      assert {:ok, %Execution{status: :failed}} =
+               Executions.fail(store, execution_id, "host:gave_up",
+                 serialization: {ExecutionLock, ExecutionLock}
+               )
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "cancelled"}] = set_aside_jobs(execution_id)
+      assert {:discarded, :failed} = Delivery.deliver_failure(execution_id, invoke_id, [])
+    end
+
+    # Sabotage: dropped `:execution_not_found` from the reasons `Delivery`
+    # discards; the job failed rather than cancelling and this went red on
+    # `%{cancelled: 1}`. Reverted from a copy.
+    test "an answer to an execution the store no longer holds" do
+      {_store, execution_id} = opened!("first_workflow_deleted_answer")
+
+      %{num_rows: 1} =
+        SQL.query!(Repo, "DELETE FROM statifier_executions WHERE execution_id = ?1", [
+          execution_id
+        ])
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "cancelled"}] = set_aside_jobs(execution_id)
+    end
+
+    # Sabotage: made `drive/2` answer `:delivered` for an event the driver
+    # discarded; this went red on the second answer. Reverted from a copy.
+    test "an answer the position no longer waits for" do
+      {_store, execution_id} = opened!("first_workflow_answered_twice")
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = set_aside_jobs(execution_id)
+
+      assert %{success: 1} = Oban.drain_queue(queue: :statifier_invocations)
+
+      assert {:discarded, :active} = Delivery.deliver(execution_id, invoke_id, %{})
+    end
+
+    # Sabotage: made `Delivery`'s refusal raise for a step that exhausted
+    # the execution's macrostep budget; the job failed rather than
+    # cancelling and this went red on `%{cancelled: 1}`. Reverted from a
+    # copy.
+    test "an answer whose step exhausts the execution's budget" do
+      {store, execution_id} = opened!("first_workflow_budget_answer")
+      {:ok, machine} = FirstWorkflow.machine_for(store, execution_id)
+      {:ok, state} = Storage.load_execution_position(store, execution_id, machine)
+
+      :ok =
+        Storage.update_execution(store, execution_id, %{state | max_macrostep_rounds: 1}, :active)
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "cancelled"}] = set_aside_jobs(execution_id)
+      assert {:ok, %{status: :failed}} = Storage.fetch_execution(store, execution_id)
+    end
+  end
+
+  # A second execution opened on the recipe's chart, resting on its
+  # set-aside call, as the parked-timer test above opens one.
+  defp opened!(execution_id) do
+    assert {:ok, _lines} = FirstWorkflow.run(execution_id: execution_id <> "_registers")
+
+    store = FirstWorkflow.store()
+    {:ok, machine} = FirstWorkflow.machine_for(store, execution_id <> "_registers")
+    hold = %{"patron" => "p-1043", "copy" => "c-3107", "branch" => "Northside branch"}
+
+    assert {:ok, %Execution{status: :active}, _machine_state} =
+             store
+             |> FirstWorkflow.driver(machine)
+             |> Driver.create(execution_id, initialize: [datamodel: %{"hold" => hold}])
+
+    assert [%Oban.Job{state: "available"}] = set_aside_jobs(execution_id)
+    {store, execution_id}
+  end
+
+  defp set_aside_jobs(execution_id) do
+    Repo.all(
+      from(j in Oban.Job,
+        where: j.queue == "statifier_invocations" and j.args["scope"] == ^execution_id,
+        order_by: j.id
+      )
+    )
+  end
+
+  defp datamodel(store, execution_id) do
+    {:ok, machine} = FirstWorkflow.machine_for(store, execution_id)
+    {:ok, state} = Storage.load_execution_position(store, execution_id, machine)
+    state.datamodel
+  end
+
+  defp position_blob(execution_id) do
+    %{rows: [[blob]]} =
+      SQL.query!(
+        Repo,
+        "SELECT position_blob FROM statifier_executions WHERE execution_id = ?1",
+        [execution_id]
+      )
+
+    blob
+  end
+
+  defp put_position_blob(execution_id, blob) do
+    %{num_rows: 1} =
+      SQL.query!(
+        Repo,
+        "UPDATE statifier_executions SET position_blob = ?1 WHERE execution_id = ?2",
+        [blob, execution_id]
+      )
+
+    :ok
   end
 
   # Sabotage: made the task print none of the lines; this went red.
