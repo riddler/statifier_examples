@@ -14,8 +14,13 @@ defmodule StatifierExamples.ScreenEditor.Button do
   `{"responses.card": ["const", "family"]}`, and the editor's field types
   have no map. So the field is a list of rows, each written
   `responses.<path>=value` - `responses.card=family` - and split at its
-  first `=`. The value is a string constant; a path that holds an `=`
-  cannot be written this way.
+  first `=`, so a path that holds an `=` cannot be written this way. The
+  value is read as JSON when it is JSON - `responses.guests=2` writes a
+  number, `responses.branch_code="12"` the string `"12"` - and as the text
+  itself when it is not, so `responses.card=family` writes the string
+  `"family"` (`StatifierExamples.ScreenEditor.Walk.split_write/1`). Each
+  path is written once: two rows writing one path are a finding here, and
+  the walk refuses them rather than keeping only the last.
   """
 
   use StatifierBlocks.BlockType
@@ -68,9 +73,16 @@ defmodule StatifierExamples.ScreenEditor.Button do
   end
 
   defp writes_findings(rows) when is_list(rows) do
-    if Enum.all?(rows, &write_row?/1),
-      do: [],
-      else: [{"writes", "each write is written responses.<path>=value"}]
+    cond do
+      not Enum.all?(rows, &write_row?/1) ->
+        [{"writes", "each write is written responses.<path>=value"}]
+
+      duplicate_path?(rows) ->
+        [{"writes", "each response path is written once"}]
+
+      true ->
+        []
+    end
   end
 
   defp writes_findings(nil), do: []
@@ -78,10 +90,28 @@ defmodule StatifierExamples.ScreenEditor.Button do
 
   defp write_row?(row) when is_binary(row) do
     case String.split(row, "=", parts: 2) do
-      [path, _value] -> Regex.match?(@response_path, path)
+      [path, _value] -> response_path?(path)
       _no_value -> false
     end
   end
 
   defp write_row?(_row), do: false
+
+  defp duplicate_path?(rows) do
+    paths = Enum.map(rows, &(&1 |> String.split("=", parts: 2) |> hd()))
+    Enum.uniq(paths) != paths
+  end
+
+  @doc """
+  Whether `path` addresses a response, `responses.<path>`: what the left
+  side of a write row is held to.
+
+      iex> StatifierExamples.ScreenEditor.Button.response_path?("responses.card")
+      true
+
+      iex> StatifierExamples.ScreenEditor.Button.response_path?("card")
+      false
+  """
+  @spec response_path?(term()) :: boolean()
+  def response_path?(path), do: is_binary(path) and Regex.match?(@response_path, path)
 end

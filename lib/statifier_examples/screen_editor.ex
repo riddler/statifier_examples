@@ -31,6 +31,15 @@ defmodule StatifierExamples.ScreenEditor do
   (`run?: false`), the drawer's truth tables, declarations, fixtures and
   datamodel tabs, and the inspector's condition and fixtures tabs. The
   drawer keeps Findings and Source, and the inspector Config and Findings.
+
+  ## The walk
+
+  What the editor holds is a block document; what riddler reads is a
+  screen document. `StatifierExamples.ScreenEditor.Walk.screen_document/1`
+  walks the one into the other, screens and nodes in the order they were
+  placed. `priv/fixtures/patron_registration_screens.json` is a block
+  document this palette authors, and its walk is a screen document riddler
+  admits with no finding.
   """
 
   alias StatifierBlocks.Editor

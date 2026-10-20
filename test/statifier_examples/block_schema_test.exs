@@ -21,6 +21,12 @@ defmodule StatifierExamples.BlockSchemaTest do
   document and which the editor, the Plan view and every compile use, and
   `StatifierBlocks.Palette.core/0`, which the Plan map reads type
   explanations from.
+
+  One shipped block document is the screen editor's rather than the chart
+  editor's: `priv/fixtures/patron_registration_screens.json`. It is checked
+  here like every other, and against `StatifierExamples.ScreenEditor`'s
+  own palette - its schema, its pre-flight and a compile - in
+  `StatifierExamples.ScreenEditor.WalkTest`.
   """
 
   use ExUnit.Case, async: true
