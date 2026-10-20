@@ -19,38 +19,52 @@ defmodule StatifierExamples.FormPost.CardApplications.Writer do
 
   @doc """
   Records `reference` on application `id` stored by the library system
-  `scope`, and marks the application `sent`.
+  `scope`, and marks the application `sent` once every route it asked for
+  has its reference.
 
   `route` is `"patron_system"`, whose reference goes in
   `external_reference`, or `"newsletter"`, whose reference goes in
   `newsletter_reference`. Answers `:ok`, or `{:error, :not_found}` when no
   application with that id is stored under that library system.
 
-  The status says that the application was handed on, not where: the
-  first route's hand-off marks it `sent`, and a second route's hand-off
-  writes `sent` again and moves `updated_at`. Which hand-offs happened is
-  read from the two reference columns, each written only by its own
-  route.
+  The status says that the application was handed on to every route it
+  asked for: `wants_card` asks for the patron system and
+  `wants_newsletter` for the newsletter list. An application that asked
+  for both stays as it is while one route has answered, and the hand-off
+  that completes it writes `sent`. Every hand-off moves `updated_at`, so
+  the stamp the host's sent age is measured from is the last route's, and
+  a second route still retrying never finds the first route's age already
+  running and its fields cleared. Which hand-offs happened is read from
+  the two reference columns, each written only by its own route.
   """
   @spec record_reference(String.t(), integer(), String.t(), String.t()) ::
           :ok | {:error, :not_found}
   def record_reference(scope, id, route, reference)
       when is_binary(scope) and is_integer(id) and route in ["patron_system", "newsletter"] and
              is_binary(reference) do
-    now = DateTime.utc_now()
     query = from(a in CardApplication, where: a.scope == ^scope and a.id == ^id)
 
-    set =
-      case route do
-        "patron_system" -> [external_reference: reference, status: "sent", updated_at: now]
-        "newsletter" -> [newsletter_reference: reference, status: "sent", updated_at: now]
-      end
+    case Repo.update_all(query, set: reference_set(route, reference)) do
+      {0, _} ->
+        {:error, :not_found}
 
-    case Repo.update_all(query, set: set) do
-      {0, _} -> {:error, :not_found}
-      {_count, _} -> :ok
+      {_count, _} ->
+        complete =
+          from(a in query,
+            where: not a.wants_card or not is_nil(a.external_reference),
+            where: not a.wants_newsletter or not is_nil(a.newsletter_reference)
+          )
+
+        Repo.update_all(complete, set: [status: "sent"])
+        :ok
     end
   end
+
+  defp reference_set("patron_system", reference),
+    do: [external_reference: reference, updated_at: DateTime.utc_now()]
+
+  defp reference_set("newsletter", reference),
+    do: [newsletter_reference: reference, updated_at: DateTime.utc_now()]
 
   @doc """
   Marks application `id` stored by the library system `scope` as

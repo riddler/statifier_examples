@@ -14,6 +14,10 @@ defmodule StatifierExamples.RoutedWorkflow.AddressReaper do
   document no handed binding names has a horizon of zero, so leaving one
   recipe's bindings out would delete its rows as soon as their execution
   finished.
+
+  `perform/1` reads the clock and hands it to `reap/1`, which a test calls
+  with a clock of its own; the reap measures every row's horizon against
+  that one time.
   """
 
   use Oban.Worker, queue: :router_maintenance
@@ -23,9 +27,14 @@ defmodule StatifierExamples.RoutedWorkflow.AddressReaper do
   alias StatifierRouter.Addresses
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}) do
-    sweep(RoutedWorkflow.config(), bindings(), [])
-  end
+  def perform(%Oban.Job{}), do: reap(DateTime.utc_now())
+
+  @doc """
+  Sweeps the whole address table as of `now`, a UTC `DateTime`, and answers
+  `:ok` or the first `{:error, reason}` the reap answers.
+  """
+  @spec reap(DateTime.t()) :: :ok | {:error, term()}
+  def reap(%DateTime{} = now), do: sweep(RoutedWorkflow.config(), bindings(), now: now)
 
   @doc """
   The bindings whose horizons the reap reads: every binding of each
@@ -39,7 +48,7 @@ defmodule StatifierExamples.RoutedWorkflow.AddressReaper do
   defp sweep(config, bindings, opts) do
     case Addresses.reap(config, bindings, opts) do
       {:ok, %{next: nil}} -> :ok
-      {:ok, %{next: next}} -> sweep(config, bindings, after: next)
+      {:ok, %{next: next}} -> sweep(config, bindings, Keyword.put(opts, :after, next))
       {:error, reason} -> {:error, reason}
     end
   end

@@ -210,9 +210,10 @@ defmodule StatifierExamples.FormPost.RetentionTest do
   describe "the router's reapers" do
     # Sabotage: made `AddressReaper.bindings/0` answer the routed recipe's
     # bindings alone -> red, the card application's address is deleted an
-    # hour after its execution finished.
+    # hour after its execution finished. Dropped `now: now` from the reaper's
+    # sweep -> red, the wall clock deleted the row kept at the frozen clock.
     test "the address reaper keeps a card application's address for its binding's horizon" do
-      now = DateTime.utc_now()
+      now = @now
       kept = ended_execution("retention-kept", days_before(1 / 24, now))
       due = ended_execution("retention-due", days_before(4, now))
 
@@ -221,7 +222,7 @@ defmodule StatifierExamples.FormPost.RetentionTest do
         address_row("2", due, days_before(4, now))
       ])
 
-      assert :ok = AddressReaper.perform(%Oban.Job{})
+      assert :ok = AddressReaper.reap(now)
 
       assert [^kept] =
                Repo.all(
