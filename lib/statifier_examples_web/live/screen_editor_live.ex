@@ -28,8 +28,11 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
   The editor's own findings pane compiles the document with the screen
   palette, and a screen block means nothing to a chart, so it is not where
   a screen document's mistakes are reported. When Try cannot start, the
-  page lists why under the header: each block the walk refused, or each
-  finding riddler answers for the walked document.
+  page lists why under the header: each block the walk refused, each
+  finding riddler answers for the walked document, or each text question
+  naming a format the Journey's check has no message for. That last one is
+  refused before a Journey starts, because the check raises on it at the
+  first press and the authored document lives only in this page.
 
   ## What a typed response becomes
 
@@ -192,6 +195,9 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
 
   defp refusals({:screens_document, :not_a_screens_document}),
     do: ["The walked document is not a screen document."]
+
+  defp refusals({:unsupported_format, keys}),
+    do: Enum.map(keys, &"#{&1}: this page has no check for the format this question names")
 
   defp refusals(reason), do: [inspect(reason)]
 

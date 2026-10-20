@@ -38,7 +38,7 @@ defmodule StatifierExamples.ScreenEditor.Try do
   alias StatifierBlocks.Document.DatamodelEntry
   alias StatifierExamples.Charts.Durable
   alias StatifierExamples.ScreenEditor.Walk
-  alias StatifierExamples.Signup.{Journey, Screen}
+  alias StatifierExamples.Signup.{Journey, Screen, Validation}
 
   @questions ["text_question", "choice_question", "boolean_question"]
 
@@ -63,10 +63,17 @@ defmodule StatifierExamples.ScreenEditor.Try do
   as `{:error, {:screens_document, findings}}` for a screen document
   riddler does not admit with zero findings. Nothing is started for
   either.
+
+  `{:error, {:unsupported_format, keys}}`, with nothing started, for a
+  document whose text questions name a `format` the Journey's check has
+  no message for (`StatifierExamples.Signup.Validation.formats/0`): the
+  check raises on such a question at the first press, so the Try is
+  refused before it starts rather than failing part way through.
   """
   @spec start(Document.t()) :: {:ok, t()} | {:error, term()}
   def start(%Document{} = document) do
     with {:ok, screens} <- walk(document),
+         :ok <- explained_formats(screens),
          opts = [screens: screens, path: path(screens)],
          {:ok, execution_id} <- Journey.start(Durable.new_execution_id(), opts) do
       {:ok, %{execution_id: execution_id, opts: opts}}
@@ -145,6 +152,23 @@ defmodule StatifierExamples.ScreenEditor.Try do
         "capture" => Map.merge(capture, Map.get(button, "writes", %{}))
       }
     )
+  end
+
+  # Every text question naming a format the Journey's check cannot
+  # explain, by key, in document order.
+  @spec explained_formats(map()) :: :ok | {:error, {:unsupported_format, [String.t()]}}
+  defp explained_formats(%{"screens" => screens}) do
+    keys =
+      for screen <- screens,
+          %{"type" => "text_question", "format" => format} = node <-
+            flatten(Map.get(screen, "nodes", [])),
+          format not in Validation.formats(),
+          do: Map.get(node, "key")
+
+    case keys do
+      [] -> :ok
+      keys -> {:error, {:unsupported_format, keys}}
+    end
   end
 
   # A screen's nodes with every variant's candidates in among them, since

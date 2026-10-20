@@ -94,6 +94,17 @@ defmodule StatifierExamples.Signup.Validation do
     end
   end
 
+  @doc """
+  The `text_question` formats this module has a reader-facing message
+  for. A question naming any other format raises in `validate/2` (see the
+  moduledoc).
+
+      iex> StatifierExamples.Signup.Validation.formats()
+      ["email"]
+  """
+  @spec formats() :: [String.t()]
+  def formats, do: @formats
+
   @spec known_format!(Screens.node_doc()) :: :ok
   defp known_format!(%{"type" => "text_question"} = question) do
     case Map.get(question, "format") do

@@ -17,6 +17,7 @@ defmodule StatifierExamples.ScreenEditor.TryTest do
   alias StatifierExamples.Signup.Journey
 
   doctest StatifierExamples.Signup.Screen, only: [parked_screen: 1]
+  doctest StatifierExamples.Signup.Validation, only: [formats: 0]
 
   setup do
     :ok = Sandbox.checkout(Repo)
