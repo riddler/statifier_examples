@@ -888,6 +888,43 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
       assert html =~ ~s(data-run-active="true")
     end
 
+    # Scrubbing back from the live tip of a run that has halted. The run pane's
+    # scrubber resolves the macrostep the run halted in to a `:final` reading,
+    # and Prev from the live tip lands on it; the package once had no note for
+    # that reading, so the page raised a `FunctionClauseError` and remounted.
+    # The assertion is on the note the pane draws and on the view being the
+    # same process afterwards, because a remount would read as a fresh page
+    # with no run at all.
+    #
+    # `card_processing` is the fixture because it runs to `done` on one press,
+    # so the configuration the run exited in is the one the Prev press selects.
+    #
+    # Sabotage: made `push_run/1` push `run: nil` whatever it replayed; the
+    # pane never seated the run and this went red on the live-tip note, then
+    # reverted from a copy. Also, in the dependency: dropped the `:final`
+    # clause of the package's `resolution_note/2`, which crashed the press
+    # with the `FunctionClauseError` above, and reworded its text, which went
+    # red on the final assertion; both reverted from a copy.
+    test "scrubbing back from the live tip of a halted run names the exit configuration",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/editor?#{[doc: "card_processing"]}")
+
+      view |> element(~s(button[phx-click="run-start"])) |> render_click()
+      html = render_until(view, ~s(data-run-status="done"))
+
+      assert html =~ "Showing the live tip."
+
+      html =
+        view
+        |> element(~s(.statifier-ui-scrub-button[data-move="prev"]))
+        |> render_click()
+
+      assert html =~ ~s(data-resolution="final")
+      assert html =~ "at the final configuration the run halted in."
+      refute html =~ "Showing the live tip."
+      assert Process.alive?(view.pid)
+    end
+
     # Sabotage: dropped the `declare` assign from `render/1`'s component call,
     # leaving the editor to recompile the execution's provenance with `declare: []`
     # while the execution itself ran on the fixture's declarations. The two compiles
