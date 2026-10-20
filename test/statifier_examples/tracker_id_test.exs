@@ -119,15 +119,12 @@ defmodule StatifierExamples.TrackerIdTest do
     for text <- negatives, do: assert(tracker_ids(text) == [], text)
   end
 
-  # sabotage: plant an invented tracker id in charts/fixture.ex's moduledoc
-  # -> red, naming the file and the id; add a second copy of an id
-  # documents.ex already carries -> red ("2 now, 1 before"); delete the id
-  # from charts/fan_out.ex's moduledoc -> red on the second assertion
-  # (all three run 2026-09-30).
-  test "no lib/ file gains a tracker id" do
-    baseline = read_baseline()
-    current = tracker_id_counts(lib_files())
-
+  # The comparison the baseline test makes, held apart from the file scan so
+  # a small in-memory baseline and file set can drive both arms. Both maps
+  # are keyed `{file, id}` and hold how many times the file carries the id.
+  # Returns `{added, gone}`: the report lines for a count above the
+  # baseline, and the baseline lines whose count the files fell below.
+  defp compare_to_baseline(current, baseline) do
     added =
       for {{file, id} = key, count} <- current,
           count > Map.get(baseline, key, 0),
@@ -138,13 +135,70 @@ defmodule StatifierExamples.TrackerIdTest do
           Map.get(current, key, 0) < before,
           do: "#{file}\t#{id}\t#{before}"
 
+    {Enum.sort(added), Enum.sort(gone)}
+  end
+
+  # sabotage: plant an invented tracker id in a lib/ file's moduledoc (for
+  # example charts/fixture.ex) -> red on the first assertion, naming the
+  # file and the id (run 2026-10-19). The baseline holds no line today, so
+  # the second assertion cannot be driven from real data; the synthetic
+  # test below drives both arms; make lib_files/0 return [] -> red on the
+  # non-empty assertion (run 2026-10-19).
+  test "no lib/ file gains a tracker id" do
+    files = lib_files()
+    # With an empty baseline and no ids, both lists below are empty either
+    # way; a scan that found no files must not read as a pass.
+    assert files != [], "no files found under lib/"
+
+    {added, gone} = compare_to_baseline(tracker_id_counts(files), read_baseline())
+
     assert added == [],
            "new tracker ids in lib/ - write the substance instead:\n" <>
-             Enum.join(Enum.sort(added), "\n")
+             Enum.join(added, "\n")
 
     assert gone == [],
            "ids removed since #{@baseline} was written - lower or delete " <>
              "these lines there so the id cannot come back unseen:\n" <>
-             Enum.join(Enum.sort(gone), "\n")
+             Enum.join(gone, "\n")
+  end
+
+  # sabotage: in compare_to_baseline/2, make `count > ...` a `count < ...`
+  # (or drop the `added` comprehension's filter to never match) -> red on
+  # the new-id and extra-copy assertions; make `Map.get(current, key, 0) <
+  # before` never true -> red on the vanished-id and lowered-count
+  # assertions (each run 2026-10-19).
+  test "the baseline comparison reports a new id and a vanished id" do
+    kept = invented("se-", "zz9")
+    fresh = invented("sb-", "zz9q")
+    leaving = invented("sp-", "zz8")
+    shrinking = invented("sr-", "zz7")
+
+    baseline = %{
+      {"lib/a.ex", kept} => 1,
+      {"lib/b.ex", leaving} => 1,
+      {"lib/c.ex", shrinking} => 2
+    }
+
+    # No change: both arms stay quiet.
+    assert compare_to_baseline(baseline, baseline) == {[], []}
+
+    # A new id in a file, and an extra copy of an id the baseline knows.
+    current = Map.merge(baseline, %{{"lib/d.ex", fresh} => 1, {"lib/a.ex", kept} => 2})
+
+    assert compare_to_baseline(current, baseline) ==
+             {["lib/a.ex: #{kept} (2 now, 1 before)", "lib/d.ex: #{fresh} (1 now, 0 before)"], []}
+
+    # An id that left its file, and a count that fell below the baseline.
+    current = baseline |> Map.delete({"lib/b.ex", leaving}) |> Map.put({"lib/c.ex", shrinking}, 1)
+
+    assert compare_to_baseline(current, baseline) ==
+             {[], ["lib/b.ex\t#{leaving}\t1", "lib/c.ex\t#{shrinking}\t2"]}
+
+    # Both at once: the arms report independently.
+    current = %{{"lib/a.ex", kept} => 1, {"lib/z.ex", fresh} => 1}
+
+    assert compare_to_baseline(current, baseline) ==
+             {["lib/z.ex: #{fresh} (1 now, 0 before)"],
+              ["lib/b.ex\t#{leaving}\t1", "lib/c.ex\t#{shrinking}\t2"]}
   end
 end
