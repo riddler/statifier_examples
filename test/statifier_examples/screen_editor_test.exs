@@ -126,6 +126,8 @@ defmodule StatifierExamples.ScreenEditorTest do
       end
     end
 
+    # Sabotage: dropped the min-above-the-option-count clause from
+    # bound_findings/3; the min_selections 3 case went red, then reverted.
     test "reads selection bounds on a select of many only" do
       assert {:error, [{"min_selections", _}]} =
                validate("choice_question", choice(%{"min_selections" => 1}))
@@ -141,6 +143,12 @@ defmodule StatifierExamples.ScreenEditorTest do
 
       assert {:error, [{"min_selections", _}]} =
                validate("choice_question", choice(%{many | "min_selections" => -1}))
+
+      assert {:error, [{"min_selections", _}]} =
+               validate(
+                 "choice_question",
+                 choice(%{"select" => "many", "min_selections" => 3, "max_selections" => nil})
+               )
     end
 
     test "holds a button to a key-shaped outcome and writes of responses.<path>=value" do
