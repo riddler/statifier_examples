@@ -121,20 +121,22 @@ defmodule StatifierExamples.ChartsTest do
   # insert probe (which is built from the type's declared defaults plus that
   # key) is never asked a data-flow question by a host type here, and no
   # editor row arms a palette type to see a greyed gap. The package's own
-  # suite exercises that probe with a purpose-built type; see
+  # suite exercises that probe with a purpose-built type
+  # (`StatifierBlocks.Editor.InsertProbeTest`); see
   # `StatifierExamplesWeb.EditorLiveTest`, "the drop a declared read
   # refuses", for why a block drag carries the configured-read half here.
   #
-  # Why no type was added: the probe only greys a gap when a block upstream
+  # Why none was added: the probe only greys a gap when a block upstream
   # WRITES a path whose declared type the dragged block's read does not
   # satisfy, which needs a datamodel document, a writing step and a reading
-  # step on one document the editor page opens. The two library documents
-  # are written from `core.*` blocks alone on purpose, carry no datamodel
-  # document and no host calls, and parcel delivery is not on the editor
-  # page; the card documents have all three but are fixture-only. Building
-  # the missing pieces in a teaching domain would mean a new document, a
-  # new datamodel file and two new types for one probe row, in a world this
-  # app keeps free of host calls on purpose.
+  # step on one document the editor page opens. Only the card documents have
+  # all three, and that domain is fixture-only (CLAUDE.md: no new example is
+  # written in it), so a palette-insert row there would be a new example in a
+  # closed domain. The two library documents are written from `core.*` blocks
+  # alone on purpose, carry no datamodel document and no host calls, and
+  # parcel delivery is not on the editor page, so a teaching-domain row would
+  # mean a new document, a new datamodel file and two new types for one probe
+  # row, in a world this app keeps free of host calls on purpose.
   #
   # This row keeps the decision honest: a host type that declares a default
   # config makes it fail, and the author then writes the palette-insert row
