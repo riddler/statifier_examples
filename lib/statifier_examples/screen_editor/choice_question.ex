@@ -139,20 +139,28 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
     do: [{"min_selections", "min_selections and max_selections bound a select of many only"}]
 
   defp bound_findings(min, max, count) do
-    cond do
-      not bound?(min) or not bound?(max) ->
-        [{"min_selections", "a selection bound is a non-negative integer"}]
+    if bound?(min) and bound?(max),
+      do: order_findings(min, max, count),
+      else: [{"min_selections", "a selection bound is a non-negative integer"}]
+  end
 
-      is_integer(min) and is_integer(max) and min > max ->
+  defp order_findings(min, max, count) do
+    cond do
+      above?(min, max) ->
         [{"min_selections", "min_selections is not above max_selections"}]
 
-      is_integer(max) and max > count ->
+      above?(min, count) ->
+        [{"min_selections", "min_selections is not above the number of options"}]
+
+      above?(max, count) ->
         [{"max_selections", "max_selections is not above the number of options"}]
 
       true ->
         []
     end
   end
+
+  defp above?(bound, limit), do: is_integer(bound) and is_integer(limit) and bound > limit
 
   defp bound?(nil), do: true
   defp bound?(value), do: is_integer(value) and value >= 0
