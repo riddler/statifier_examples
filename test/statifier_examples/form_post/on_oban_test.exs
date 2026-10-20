@@ -18,7 +18,9 @@ defmodule StatifierExamples.FormPost.OnObanTest do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Ecto.Adapters.SQL
   alias Ecto.Adapters.SQL.Sandbox
+  alias StatifierExamples.Charts.ExecutionLock
   alias StatifierExamples.{FirstWorkflow, Repo}
 
   alias StatifierExamples.FormPost.{
@@ -33,7 +35,7 @@ defmodule StatifierExamples.FormPost.OnObanTest do
   }
 
   alias StatifierOban.Timer.Worker, as: TimerWorker
-  alias StatifierPersistence.{Execution, Storage}
+  alias StatifierPersistence.{Execution, Executions, Storage}
   alias StatifierRouter.Config
   alias StatifierRouter.Schema.Address
 
@@ -219,6 +221,217 @@ defmodule StatifierExamples.FormPost.OnObanTest do
                %Oban.Job{args: %{"type" => "myapp:sort_application"}, state: "completed"},
                %Oban.Job{args: %{"type" => "myapp:check_service_area"}, state: "completed"}
              ] = step_jobs(execution_id)
+    end
+  end
+
+  # The execution's first step job, with the intake run and nothing else:
+  # the step's job is stored and has not run.
+  defp first_step!(street_address) do
+    id = store!(street_address)
+    assert %{success: 1} = Oban.drain_queue(queue: :card_application_intake)
+    execution_id = execution_id(id)
+    assert [%Oban.Job{state: "available"}] = step_jobs(execution_id)
+    execution_id
+  end
+
+  defp position_blob(execution_id) do
+    %{rows: [[blob]]} =
+      SQL.query!(
+        Repo,
+        "SELECT position_blob FROM statifier_executions WHERE execution_id = ?1",
+        [execution_id]
+      )
+
+    blob
+  end
+
+  defp put_position_blob(execution_id, blob) do
+    %{num_rows: 1} =
+      SQL.query!(
+        Repo,
+        "UPDATE statifier_executions SET position_blob = ?1 WHERE execution_id = ?2",
+        [blob, execution_id]
+      )
+
+    :ok
+  end
+
+  describe "a delivery that cannot step now" do
+    # Sabotage: made `Delivery`'s refusal answer `{:discarded, reason}` for
+    # a parked execution; the step's job was cancelled and this went red
+    # on `%{failure: 1}`. Reverted from a copy.
+    test "an answer to a parked execution raises, is retried, and lands once unparked" do
+      execution_id = first_step!("12 Millrace Lane")
+      store = FirstWorkflow.store()
+      :ok = Storage.update_execution_status(store, execution_id, :needs_migration)
+
+      assert %{failure: 1, cancelled: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "retryable", attempt: 1}] = step_jobs(execution_id)
+      assert {:ok, %{status: :needs_migration}} = Storage.fetch_execution(store, execution_id)
+
+      assert {:ok, %Execution{status: :active}} =
+               Executions.unpark(store, execution_id,
+                 serialization: {ExecutionLock, ExecutionLock}
+               )
+
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: :statifier_invocations, with_scheduled: true)
+
+      assert {%Execution{status: :active}, %{"screen" => "ok"}} = execution(execution_id)
+    end
+
+    # Sabotage: made `Delivery`'s refusal answer `{:discarded, reason}` for
+    # every reason it does not name; the step's job was cancelled and this
+    # went red on `%{failure: 1}`. Reverted from a copy.
+    test "an answer the store cannot step raises, is retried, and lands once the store answers" do
+      execution_id = first_step!("12 Millrace Lane")
+      blob = position_blob(execution_id)
+      :ok = put_position_blob(execution_id, nil)
+
+      assert %{failure: 1, cancelled: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "retryable", attempt: 1}] = step_jobs(execution_id)
+
+      :ok = put_position_blob(execution_id, blob)
+
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: :statifier_invocations, with_scheduled: true)
+
+      assert {%Execution{status: :active}, %{"screen" => "ok"}} = execution(execution_id)
+    end
+
+    # Sabotage: made the timer `deliver/2` rescue the raise and answer
+    # `{:discarded, :needs_migration}`; the timer job was cancelled and
+    # this went red on `%{failure: 1}`. Reverted from a copy.
+    test "a deadline that fires into a parked execution raises, is retried, and lands once unparked" do
+      execution_id = first_step!("12 Millrace Lane")
+      store = FirstWorkflow.store()
+      :ok = Storage.update_execution_status(store, execution_id, :needs_migration)
+
+      assert %{failure: 1, cancelled: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_timers, with_scheduled: true)
+
+      assert %{"deadline.screen" => %Oban.Job{state: "retryable", attempt: 1}} =
+               timers(execution_id)
+
+      assert {:ok, %Execution{status: :active}} =
+               Executions.unpark(store, execution_id,
+                 serialization: {ExecutionLock, ExecutionLock}
+               )
+
+      assert %{success: 1, failure: 0} =
+               Oban.drain_queue(queue: :statifier_timers, with_scheduled: true)
+
+      assert %{"deadline.screen" => %Oban.Job{state: "completed"}} = timers(execution_id)
+    end
+
+    # Sabotage: made `Delivery` raise for a step the store discarded; the
+    # job's retry failed rather than cancelling and this went red on
+    # `%{cancelled: 1}`. Reverted from a copy.
+    test "an answer to a finished execution is still discarded" do
+      execution_id = first_step!("12 Millrace Lane")
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = step_jobs(execution_id)
+
+      # The host fails the execution from outside its chart, which leaves
+      # the step's job stored, so the job answers a finished execution.
+      assert {:ok, %Execution{status: :failed}} =
+               Executions.fail(FirstWorkflow.store(), execution_id, "host:gave_up",
+                 serialization: {ExecutionLock, ExecutionLock}
+               )
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "cancelled"}] = step_jobs(execution_id)
+      assert {:discarded, :failed} = Delivery.deliver_failure(execution_id, invoke_id, [])
+    end
+
+    # Sabotage: dropped `:execution_not_found` from the reasons
+    # `Delivery` discards; the job failed rather than cancelling and this
+    # went red on `%{cancelled: 1}`. Reverted from a copy.
+    test "an answer to an execution the store no longer holds is still discarded" do
+      execution_id = first_step!("12 Millrace Lane")
+
+      %{num_rows: 1} =
+        SQL.query!(Repo, "DELETE FROM statifier_executions WHERE execution_id = ?1", [
+          execution_id
+        ])
+
+      assert %{cancelled: 1, failure: 0, success: 0} =
+               Oban.drain_queue(queue: :statifier_invocations)
+
+      assert [%Oban.Job{state: "cancelled"}] = step_jobs(execution_id)
+    end
+  end
+
+  @doc false
+  def handle_macrostep(_event, _measurements, metadata, test_pid) do
+    send(test_pid, {:macrostep, metadata.event_name, metadata.caller_context})
+  end
+
+  describe "the caller's context" do
+    setup do
+      handler = {__MODULE__, make_ref()}
+
+      :ok =
+        :telemetry.attach(
+          handler,
+          [:statifier, :session, :macrostep, :start],
+          &__MODULE__.handle_macrostep/4,
+          self()
+        )
+
+      on_exit(fn -> :telemetry.detach(handler) end)
+      :ok
+    end
+
+    # Sabotage: made `deliver/4` build its answer with no
+    # `caller_context:`; the answer's macrostep carried `nil` and this
+    # went red on the first `assert_received`. Reverted from a copy.
+    test "an answer carries the job's caller context onto the step it drives, and onward" do
+      Application.put_env(:statifier_examples, ScreenApplication, fail: true)
+      id = store!("12 Millrace Lane")
+      assert {:ok, %{failure: 1}} = Drain.run()
+      execution_id = execution_id(id)
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = step_jobs(execution_id)
+      context = {:trace, make_ref()}
+
+      assert :delivered =
+               Delivery.deliver(execution_id, invoke_id, "ok", caller_context: context)
+
+      done = "done.invoke." <> invoke_id
+      assert_received {:macrostep, ^done, ^context}
+
+      # The step the answer drove planned the next step's job with the
+      # same context, and that job's answer carries it in turn.
+      assert {:ok, %{failure: 0}} = Drain.run()
+      assert {%Execution{status: :completed}, _words} = execution(execution_id)
+
+      [_first, %Oban.Job{args: %{"invoke_id" => next_id}} | _rest] = step_jobs(execution_id)
+      next = "done.invoke." <> next_id
+      assert_received {:macrostep, ^next, ^context}
+    end
+
+    # Sabotage: made `deliver_failure/4` build its answer with no
+    # `caller_context:`; the failure's macrostep carried `nil` and this
+    # went red. Reverted from a copy.
+    test "a failure carries the job's caller context onto the step it drives" do
+      Application.put_env(:statifier_examples, ScreenApplication, fail: true)
+      id = store!("12 Millrace Lane")
+      assert {:ok, %{failure: 1}} = Drain.run()
+      execution_id = execution_id(id)
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = step_jobs(execution_id)
+      context = {:trace, make_ref()}
+      failure = [reason: "run_failed", attempts: 3, detail: "gave up"]
+
+      assert :delivered =
+               Delivery.deliver_failure(execution_id, invoke_id, failure, caller_context: context)
+
+      error = "error.communication.invoke." <> invoke_id
+      assert_received {:macrostep, ^error, ^context}
     end
   end
 end
