@@ -509,7 +509,10 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
     # own type. It is asserted through a drag of the configured block rather
     # than through a palette insert, because a palette insert probes the
     # type's DECLARED config and this app declares no type whose declared
-    # config is refused anywhere: see the note below.
+    # config is refused anywhere. That is a decision and not an oversight:
+    # no host type here declares a default config at all, and the reasons
+    # and the row that keeps it honest are written above the palette walk in
+    # `test/statifier_examples/charts_test.exs`.
     #
     # Both halves are read off the same document one edit apart, which is
     # what makes the second half evidence. Before the edit the receipt reads
