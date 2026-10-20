@@ -29,6 +29,7 @@ defmodule StatifierExamples.FormPost.OnObanTest do
     CardApplicationSend,
     Delivery,
     Drain,
+    PruneJob,
     PublishedCharts,
     Router,
     ScreenApplication
@@ -223,10 +224,10 @@ defmodule StatifierExamples.FormPost.OnObanTest do
                Repo.get!(CardApplication, id)
     end
 
-    # Sabotage: made `Delivery`'s read of the finished execution's
-    # position answer `:ok` on an error; the retry was discarded with the
-    # mark unwritten and this went red on the raise. Reverted from a copy.
-    test "a retry that cannot read the finished execution's position raises" do
+    # Sabotage: made `Delivery` raise on `:execution_position_missing` as
+    # on any other read error; the pruned retry raised and this went red
+    # on the discard. Reverted from a copy.
+    test "a retry into a finished execution whose position was pruned is discarded" do
       Application.put_env(:statifier_examples, ScreenApplication, fail: true)
       id = store!("PO Box 77")
       assert {:ok, %{failure: 1}} = Drain.run()
@@ -234,9 +235,42 @@ defmodule StatifierExamples.FormPost.OnObanTest do
       [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = step_jobs(execution_id)
 
       assert :delivered = Delivery.deliver(execution_id, invoke_id, "screened_out")
-      :ok = put_position_blob(execution_id, nil)
 
-      assert_raise RuntimeError, ~r/could not be read \(:execution_position_missing\)/, fn ->
+      # The mark is taken back, as a missed write would leave it, and the
+      # host's prune clears the finished execution's position.
+      {1, _} =
+        Repo.update_all(from(a in CardApplication, where: a.id == ^id),
+          set: [status: "received"]
+        )
+
+      days =
+        :statifier_examples
+        |> Application.fetch_env!(PruneJob)
+        |> Keyword.fetch!(:ended_after_days)
+
+      assert {:ok, %{position_blobs: 1}} =
+               PruneJob.prune(DateTime.add(DateTime.utc_now(), (days + 1) * 86_400, :second))
+
+      # No retry brings the position back, so the retry is the discard it
+      # always was, and the mark cannot be recovered from it.
+      assert {:discarded, :completed} = Delivery.deliver(execution_id, invoke_id, "screened_out")
+      assert %CardApplication{status: "received"} = Repo.get!(CardApplication, id)
+    end
+
+    # Sabotage: made `Delivery`'s read of the finished execution's
+    # position answer `:ok` on every error; the retry was discarded and
+    # this went red on the raise. Reverted from a copy.
+    test "a retry that meets a store error reading the finished position raises" do
+      Application.put_env(:statifier_examples, ScreenApplication, fail: true)
+      id = store!("PO Box 77")
+      assert {:ok, %{failure: 1}} = Drain.run()
+      execution_id = execution_id(id)
+      [%Oban.Job{args: %{"invoke_id" => invoke_id}}] = step_jobs(execution_id)
+
+      assert :delivered = Delivery.deliver(execution_id, invoke_id, "screened_out")
+      :ok = put_position_blob(execution_id, <<0, 1, 2, 3>>)
+
+      assert_raise RuntimeError, ~r/position could not be read/, fn ->
         Delivery.deliver(execution_id, invoke_id, "screened_out")
       end
     end

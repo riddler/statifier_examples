@@ -48,7 +48,12 @@ defmodule StatifierExamples.FormPost.Delivery do
   that as a discard, and before the discard is answered the delivery
   reads the finished execution's stored position and, when it holds the
   screen's word, writes the mark it missed. The answer is the discard it
-  always was, `{:discarded, :completed}`; a store error on that read
+  always was, `{:discarded, :completed}`. A stored position that is gone
+  (`:execution_position_missing`; the host's
+  `StatifierExamples.FormPost.PruneJob` clears the position of every
+  execution that ended before its cutoff) is a fact about the execution
+  that no retry changes, so the discard is answered and the mark, if one
+  was missed, cannot be recovered. Any other store error on that read
   raises, so the job is retried again. The mark is written once: a row
   already screened out keeps the stamp of its first mark.
 
@@ -202,7 +207,9 @@ defmodule StatifierExamples.FormPost.Delivery do
   # stored position is read for the screen's word, so the retry writes the
   # mark the first attempt missed. The row is never deleted (the host's
   # purge clears its fields and keeps it), so a missing one is a broken
-  # invariant and raises, and so does a store error on the read.
+  # invariant and raises, and so does a store error on the read. A pruned
+  # position (`:execution_position_missing`) is gone for good, so the
+  # discard stands.
   @spec record_outcome(term(), String.t(), Storage.t(), Statifier.Machine.t()) :: term()
   defp record_outcome(
          {:ok, %Execution{status: :completed}, %MachineState{} = state} = stepped,
@@ -222,6 +229,7 @@ defmodule StatifierExamples.FormPost.Delivery do
        ) do
     case Storage.load_execution_position(store, execution_id, machine) do
       {:ok, %MachineState{} = state} -> mark_screened_out(state, scope)
+      {:error, :execution_position_missing} -> :ok
       {:error, reason} -> unread(execution_id, reason)
     end
 
