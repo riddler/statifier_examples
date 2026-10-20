@@ -165,10 +165,10 @@ edge from the group into it is dashed as well. They are the ends
 `StatifierBlocks.Describe` answers for the same document. The map also
 draws the dashed ring for such a group deeper in the tail, the last step
 of an arm of the document's last step or of the body of a group that is,
-with a dashed edge from each such group into the one ring. Only the
-document's own flow ends: a step that is last inside an arm or a group's
-body, such as a Send at the foot of an arm, hands back to the block
-around it, which goes on, so no mark is drawn after it. A document with
+with a dashed edge from each such group into the one ring. Apart from
+those, only the document's own flow ends: a step that is last inside an
+arm or a group's body, such as a Send at the foot of an arm, hands back
+to the block around it, which goes on, so no mark is drawn after it. A document with
 no step yet draws no end. Like the start dot, an end mark is not a block:
 a click on it selects nothing.
 
