@@ -10,6 +10,10 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
   import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
 
+  alias Plug.Conn.Query
+
+  doctest StatifierExamplesWeb.SecretResponse
+
   describe "the page" do
     # Sabotage: dropped the profile from the editor's mount; the core
     # types came back onto the palette, then reverted.
@@ -226,38 +230,16 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
     # LiveView's debug log of the response event carried the sentinel,
     # then reverted.
     test "reaches no log line, at debug, from any event the page handles", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/screen-editor")
-
-      screen = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
-      configure(view, screen, %{"key" => "card_pin", "title" => "Protect your card"})
-
-      pin = insert(view, "myapp.screens.secret_question", screen, "nodes", 0)
-
-      configure(view, pin, %{
-        "key" => "library_pin",
-        "label" => "Choose a PIN for your library card",
-        "required" => "true"
-      })
-
-      done = insert(view, "myapp.screens.button", screen, "nodes", 1)
-      configure(view, done, %{"key" => "pin_next", "label" => "Register", "outcome" => "pinned"})
-
-      view |> element("#try") |> render_click()
-
-      level = Logger.level()
-      Logger.configure(level: :debug)
-      on_exit(fn -> Logger.configure(level: level) end)
+      view = tried_pin_screen(conn)
 
       log =
-        capture_log([level: :debug], fn ->
+        debug_log(fn ->
           view
           |> element("#try-responses")
           |> render_change(%{"responses" => %{"library_pin" => @pin}})
 
           view |> element("#pin_next") |> render_click()
         end)
-
-      Logger.configure(level: level)
 
       refute log =~ @pin
 
@@ -268,6 +250,148 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       assert has_element?(view, "#try-collected")
       assert view |> element("#try-collected") |> render() =~ "test-sealed:"
     end
+
+    # Sabotage: made typed/2 keep a secret question's response as the
+    # text; the crash report's State line carried the sentinel, then
+    # reverted.
+    test "is in no line of the crash report when the press crashes", %{conn: conn} do
+      put_sealer(StatifierExamplesWeb.ScreenEditorLiveTest.RaisingSealer)
+      view = tried_pin_screen(conn)
+      Process.flag(:trap_exit, true)
+
+      view
+      |> element("#try-responses")
+      |> render_change(%{"responses" => %{"library_pin" => @pin}})
+
+      log =
+        debug_log(fn ->
+          catch_exit(view |> element("#pin_next") |> render_click())
+          wait_for_crash_report()
+        end)
+
+      refute log =~ @pin
+
+      # The crash report is in the capture, with the lines that print the
+      # last message and the page's state.
+      assert log =~ "terminating"
+      assert log =~ "Last message"
+      assert log =~ "State: "
+    end
+
+    # Sabotage: dropped the guard on the response handler; the page read
+    # the malformed responses and crashed with the sentinel in a
+    # stacktrace's arguments, then reverted.
+    test "in a response event the page cannot read is refused unread", %{conn: conn} do
+      view = tried_pin_screen(conn)
+      Process.flag(:trap_exit, true)
+
+      # Were the page to read it and crash, the crash report would reach the
+      # capture rather than end the test before the search.
+      log =
+        debug_log(fn ->
+          try do
+            render_hook(view, "response", %{"responses" => [["library_pin", @pin]]})
+          catch
+            :exit, _crashed -> wait_for_crash_report()
+          end
+        end)
+
+      refute log =~ @pin
+      assert log =~ ~s(HANDLE EVENT "response")
+      assert has_element?(view, ~s(#library_pin input[type="password"]))
+    end
+
+    # Sabotage: took the translator out of the application's start; the
+    # Last message line printed the posted form string with the sentinel
+    # in it, then reverted.
+    test "posted by a form is in no line of a LiveView crash report" do
+      posted = Query.encode(%{"responses" => %{"library_pin" => @pin}})
+
+      message = %Phoenix.Socket.Message{
+        topic: "lv:phx-crash",
+        event: "event",
+        payload: %{"event" => "response", "type" => "form", "value" => posted}
+      }
+
+      log =
+        debug_log(fn ->
+          {:ok, pid} = GenServer.start(StatifierExamplesWeb.ScreenEditorLiveTest.Crashing, nil)
+          ref = Process.monitor(pid)
+          send(pid, message)
+          assert_receive {:DOWN, ^ref, :process, ^pid, _reason}
+          wait_for_crash_report()
+        end)
+
+      refute log =~ @pin
+      assert log =~ "terminating"
+      assert log =~ ~s(Last message: %Phoenix.Socket.Message{)
+      assert log =~ ~s("responses" => "[FILTERED]")
+    end
+  end
+
+  defmodule Crashing do
+    @moduledoc false
+    use GenServer
+
+    @impl true
+    def init(state), do: {:ok, state}
+
+    @impl true
+    def handle_info(_message, _state), do: raise("the page crashed")
+  end
+
+  defmodule RaisingSealer do
+    @moduledoc false
+    def seal(_plaintext), do: raise("the sealer is unavailable")
+  end
+
+  # The PIN screen authored in the editor and tried: one secret question
+  # and the button that presses on.
+  defp tried_pin_screen(conn) do
+    {:ok, view, _html} = live(conn, ~p"/screen-editor")
+
+    screen = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
+    configure(view, screen, %{"key" => "card_pin", "title" => "Protect your card"})
+
+    pin = insert(view, "myapp.screens.secret_question", screen, "nodes", 0)
+
+    configure(view, pin, %{
+      "key" => "library_pin",
+      "label" => "Choose a PIN for your library card",
+      "required" => "true"
+    })
+
+    done = insert(view, "myapp.screens.button", screen, "nodes", 1)
+    configure(view, done, %{"key" => "pin_next", "label" => "Register", "outcome" => "pinned"})
+
+    view |> element("#try") |> render_click()
+    view
+  end
+
+  # Everything logged while `fun` runs, with the Logger at debug for its
+  # duration, as a dev server logs.
+  defp debug_log(fun) do
+    level = Logger.level()
+    Logger.configure(level: :debug)
+
+    try do
+      capture_log([level: :debug], fun)
+    after
+      Logger.configure(level: level)
+    end
+  end
+
+  # A crash report is logged by the crashed process after its exit is seen
+  # here; a short wait lets it reach the capture before the capture ends.
+  defp wait_for_crash_report, do: Process.sleep(100)
+
+  defp put_sealer(sealer) do
+    previous = Application.get_env(:statifier_examples, StatifierExamples.Signup.Sealer)
+    Application.put_env(:statifier_examples, StatifierExamples.Signup.Sealer, sealer: sealer)
+
+    on_exit(fn ->
+      Application.put_env(:statifier_examples, StatifierExamples.Signup.Sealer, previous)
+    end)
   end
 
   # The block ids the canvas draws, in page order.

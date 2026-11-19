@@ -46,6 +46,18 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
   is drawn answered, and the draft holds that value, so a press that
   changes nothing sends what the reader can see. A secret question is
   presented with no value and starts with none.
+
+  ## A secret question's response
+
+  What a reader types into a secret question - a library card's PIN - is
+  held in the draft as a `StatifierExamplesWeb.SecretResponse`, whose
+  `Inspect` never shows the text, and taken out of it only as the draft
+  is handed to `Journey.submit/4`, which seals it before the chart sees it.
+  A page that crashed with the text in its assigns would print it in the
+  crash report's state. A response event whose responses are not a map is
+  refused unread, so the page cannot crash on one with its contents in a
+  function's arguments; and `StatifierExamplesWeb.CrashReportFilter` keeps
+  a form event's posted values out of the report's last message.
   """
 
   use StatifierExamplesWeb, :live_view
@@ -57,6 +69,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
   alias StatifierExamples.ScreenEditor.Try
   alias StatifierExamples.Signup.Journey
   alias StatifierExamplesWeb.Icons
+  alias StatifierExamplesWeb.SecretResponse
   alias StatifierExamplesWeb.SignupElements
 
   @impl Phoenix.LiveView
@@ -97,18 +110,26 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
     {:noreply, socket}
   end
 
-  def handle_event("response", %{"responses" => responses}, socket) do
+  def handle_event("response", %{"responses" => responses}, socket) when is_map(responses) do
     draft = Map.merge(socket.assigns.draft, typed(socket.assigns.view.nodes, responses))
 
     {:noreply, assign(socket, draft: draft, view: Journey.resolve(socket.assigns.view, draft))}
   end
+
+  # A response event whose responses are not a map is not one this page's
+  # form posts. It is refused, and nothing in it is read: reading it would
+  # crash the page with whatever it carries, a typed PIN included, in the
+  # crash report (the moduledoc's "A secret question's response").
+  def handle_event("response", _params, socket), do: {:noreply, socket}
 
   def handle_event("outcome", _params, %{assigns: %{try: nil}} = socket) do
     {:noreply, socket}
   end
 
   def handle_event("outcome", %{"outcome" => outcome}, %{assigns: assigns} = socket) do
-    case Journey.submit(assigns.try.execution_id, outcome, assigns.draft, assigns.try.opts) do
+    draft = SecretResponse.reveal(assigns.draft)
+
+    case Journey.submit(assigns.try.execution_id, outcome, draft, assigns.try.opts) do
       {:ok, view} -> {:noreply, assign(socket, view: view, draft: presented(view), error: nil)}
       {:invalid, view} -> {:noreply, assign(socket, view: view, error: nil)}
       {:error, reason} -> {:noreply, assign(socket, error: reason)}
@@ -235,6 +256,8 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
 
   defp typed_value("choice_question", values) when is_list(values),
     do: Enum.reject(values, &(&1 == ""))
+
+  defp typed_value("secret_question", text) when is_binary(text), do: %SecretResponse{text: text}
 
   defp typed_value(_type, value), do: value
 

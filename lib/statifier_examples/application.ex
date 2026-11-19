@@ -17,6 +17,12 @@ defmodule StatifierExamples.Application do
     # and why.
     :ok = Tracing.setup()
 
+    # A LiveView crash report prints the last event the page handled; this
+    # keeps the values a form posted in it filtered, a typed PIN among them.
+    # `StatifierExamplesWeb.CrashReportFilter` says why the param filter
+    # alone does not reach them.
+    :ok = Logger.add_translator({StatifierExamplesWeb.CrashReportFilter, :translate})
+
     children = [
       StatifierExamplesWeb.Telemetry,
       StatifierExamples.Repo,
