@@ -736,10 +736,18 @@ defmodule StatifierExamples.Signup.Journey do
     end
   end
 
-  # The keys of the secret questions among `nodes`, a variant's candidates
-  # included.
+  @doc """
+  The keys of the secret questions among `nodes`, a container's `nodes`
+  included at any depth - a variant's candidates, say.
+
+  Public so that every reader of a screen's nodes finds a secret question
+  by the same walk: `resolve/2` keeps them out of the view's responses, and
+  the screen editor page holds their typed text wrapped
+  (`StatifierExamplesWeb.ScreenEditorLive`'s "A secret question's
+  response").
+  """
   @spec secret_keys([Screens.node_doc()]) :: [String.t()]
-  defp secret_keys(nodes) do
+  def secret_keys(nodes) when is_list(nodes) do
     Enum.flat_map(nodes, fn
       %{"type" => "secret_question", "key" => key} -> [key]
       %{"nodes" => inner} when is_list(inner) -> secret_keys(inner)

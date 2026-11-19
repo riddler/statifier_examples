@@ -50,7 +50,8 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
   ## A secret question's response
 
   What a reader types into a secret question - a library card's PIN - is
-  held in the draft as a `StatifierExamplesWeb.SecretResponse`, whose
+  held in the draft as a `StatifierExamplesWeb.SecretResponse` - one
+  inside a container too, found by `Journey.secret_keys/1` - whose
   `Inspect` never shows the text, and taken out of it only as the draft
   is handed to `Journey.submit/4`, which seals it before the chart sees it.
   A page that crashed with the text in its assigns would print it in the
@@ -243,12 +244,18 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
     do: for(%{"key" => key, "value" => value} <- nodes, into: %{}, do: {key, value})
 
   # The responses a form posted, turned into what the questions on the
-  # screen hold (the moduledoc's "What a typed response becomes").
+  # screen hold (the moduledoc's "What a typed response becomes"). A secret
+  # question is found by `Journey.secret_keys/1`'s walk, so one inside a
+  # container is held wrapped too.
   @spec typed([map()], map()) :: map()
   defp typed(nodes, responses) do
     types = Map.new(nodes, &{&1["key"], &1["type"]})
+    secrets = Journey.secret_keys(nodes)
 
-    Map.new(responses, fn {key, value} -> {key, typed_value(types[key], value)} end)
+    Map.new(responses, fn {key, value} ->
+      type = if key in secrets, do: "secret_question", else: types[key]
+      {key, typed_value(type, value)}
+    end)
   end
 
   defp typed_value("boolean_question", value) when value in ["true", "false"],

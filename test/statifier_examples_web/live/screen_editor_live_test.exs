@@ -11,6 +11,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
   import Phoenix.LiveViewTest
 
   alias Plug.Conn.Query
+  alias StatifierExamplesWeb.SecretResponse
 
   doctest StatifierExamplesWeb.SecretResponse
 
@@ -278,6 +279,35 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       assert log =~ "State: "
     end
 
+    # Sabotage: reverted typed/2 to the type lookup over the top-level
+    # nodes alone; the draft held the PIN as the text, then reverted.
+    test "inside a container is held wrapped and is in no line of the crash report", %{
+      conn: conn
+    } do
+      put_sealer(StatifierExamplesWeb.ScreenEditorLiveTest.RaisingSealer)
+      view = tried_pin_screen(conn)
+      nest_secret_question(view)
+      Process.flag(:trap_exit, true)
+
+      view
+      |> element("#try-responses")
+      |> render_change(%{"responses" => %{"library_pin" => @pin}})
+
+      state = :sys.get_state(view.pid)
+      assert %SecretResponse{} = state.socket.assigns.draft["library_pin"]
+      refute inspect(state) =~ @pin
+
+      log =
+        debug_log(fn ->
+          catch_exit(view |> element("#pin_next") |> render_click())
+          wait_for_crash_report()
+        end)
+
+      refute log =~ @pin
+      assert log =~ "terminating"
+      assert log =~ "State: "
+    end
+
     # Sabotage: dropped the guard on the response handler; the page read
     # the malformed responses and crashed with the sentinel in a
     # stacktrace's arguments, then reverted.
@@ -366,6 +396,21 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
 
     view |> element("#try") |> render_click()
     view
+  end
+
+  # The tried screen's view with its secret question moved inside a variant,
+  # as a resolved screen that kept a container would present it. Riddler
+  # resolves a variant to the candidate that wins, so no screen it presents
+  # today keeps one, and the page's own state is changed to hold one.
+  defp nest_secret_question(view) do
+    :sys.replace_state(view.pid, fn state ->
+      {secrets, rest} =
+        Enum.split_with(state.socket.assigns.view.nodes, &(&1["type"] == "secret_question"))
+
+      assert [%{"key" => "library_pin"}] = secrets
+      container = %{"type" => "variant", "key" => "pin_variant", "nodes" => secrets}
+      put_in(state.socket.assigns.view.nodes, [container | rest])
+    end)
   end
 
   # Everything logged while `fun` runs, with the Logger at debug for its
