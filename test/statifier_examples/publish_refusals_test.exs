@@ -430,9 +430,20 @@ defmodule StatifierExamples.PublishRefusalsTest do
         subscribers: [self()]
       )
 
-    on_exit(fn -> if Process.alive?(pid), do: Statifier.Session.stop(pid) end)
+    on_exit(fn -> stop_session(pid) end)
 
     pid
+  end
+
+  # The session is linked to the test process, which exits first, so the
+  # session may already be shutting down when this runs: a liveness check
+  # followed by a stop leaves a window in which the stop exits with
+  # :shutdown or :noproc. Either exit means the session is gone, which is
+  # all the cleanup wants.
+  defp stop_session(pid) do
+    Statifier.Session.stop(pid)
+  catch
+    :exit, _reason -> :ok
   end
 
   defp compile(kase, document),
