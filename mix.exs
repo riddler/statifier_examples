@@ -833,9 +833,11 @@ defmodule StatifierExamples.MixProject do
       # answers what a page draws through `Riddler.Journey`. Before this arm
       # the app carried a stand-in for both, a regex for the template slots
       # and a hand-written required/email check, which was a second
-      # implementation of a contract riddler defines. 0.4.0 is the floor: it
-      # is the release that adds `Riddler.Journey`.
-      {:riddler, "~> 0.4.0"},
+      # implementation of a contract riddler defines. 0.4.0 added
+      # `Riddler.Journey`; 0.5.0 is the floor: it ships the JSON Schema of
+      # the presented answer (`priv/schemas/presented-answer.schema.json`),
+      # which the suite checks every answer the Journey draws against.
+      {:riddler, "~> 0.5.0"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.15", only: :dev, runtime: false},

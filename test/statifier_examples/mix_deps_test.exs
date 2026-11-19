@@ -1266,17 +1266,19 @@ defmodule StatifierExamples.MixDepsTest do
   end
 
   # The screen-document runtime, a Hex requirement from the start and never
-  # a pin. 0.4.0 is the floor: it is the release that adds
-  # `Riddler.Journey`, which `StatifierExamples.Signup.Journey` answers
-  # through.
+  # a pin. 0.5.0 is the floor: it is the release that ships
+  # `priv/schemas/presented-answer.schema.json`, which the suite checks
+  # every answer `StatifierExamples.Signup.Journey` draws against
+  # (`StatifierExamples.PresentedAnswerCheck`); 0.4.0 added
+  # `Riddler.Journey` itself.
   #
-  # Sabotage (run): pointed the LOCK assertion at `"0.3.` and left
-  # `mix.lock` alone; it went red reporting the resolved 0.4.0 entry.
+  # Sabotage (run): pointed the LOCK assertion at `"0.4.` and left
+  # `mix.lock` alone; it went red reporting the resolved 0.5.0 entry.
   # Reverted from a copy.
   test "the riddler dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:riddler, "~> 0.4.0"} in deps
+    assert {:riddler, "~> 0.5.0"} in deps
 
     lock_line =
       "mix.lock"
@@ -1285,7 +1287,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "riddler": )))
 
     assert lock_line, "riddler has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :riddler, "0.4.)
+    assert lock_line =~ ~s({:hex, :riddler, "0.5.)
     refute lock_line =~ ":git,"
   end
 end
