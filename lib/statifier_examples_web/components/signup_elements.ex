@@ -50,6 +50,7 @@ defmodule StatifierExamplesWeb.SignupElements do
   def element(%{node: %{"type" => "text_question"}} = assigns), do: text_question(assigns)
   def element(%{node: %{"type" => "choice_question"}} = assigns), do: choice_question(assigns)
   def element(%{node: %{"type" => "boolean_question"}} = assigns), do: boolean_question(assigns)
+  def element(%{node: %{"type" => "secret_question"}} = assigns), do: secret_question(assigns)
   def element(%{node: %{"type" => "button"}} = assigns), do: button(assigns)
 
   def element(%{node: node}) do
@@ -96,11 +97,12 @@ defmodule StatifierExamplesWeb.SignupElements do
       <input
         type="text"
         name={"responses[#{@node["key"]}]"}
-        value={Map.get(@responses, @node["key"], "")}
+        value={response(@responses, @node) || ""}
         placeholder={@node["placeholder"]}
         required={@node["required"] == true}
         class="input input-bordered w-full"
       />
+      <.help node={@node} />
     </label>
     """
   end
@@ -132,11 +134,12 @@ defmodule StatifierExamplesWeb.SignupElements do
           type={if @many?, do: "checkbox", else: "radio"}
           name={if @many?, do: "responses[#{@node["key"]}][]", else: "responses[#{@node["key"]}]"}
           value={option["value"]}
-          checked={chosen?(@responses, @node["key"], option["value"])}
+          checked={chosen?(response(@responses, @node), option["value"])}
           class={if @many?, do: "checkbox", else: "radio"}
         />
         <span>{option["label"]}</span>
       </label>
+      <.help node={@node} />
     </fieldset>
     """
   end
@@ -156,13 +159,59 @@ defmodule StatifierExamplesWeb.SignupElements do
         type="checkbox"
         name={"responses[#{@node["key"]}]"}
         value="true"
-        checked={Map.get(@responses, @node["key"]) in [true, "true"]}
+        checked={response(@responses, @node) in [true, "true"]}
         class="checkbox"
       />
       <span class="text-sm font-medium">
         {@node["label"]}<span :if={@node["required"]} class="text-error" aria-hidden="true">*</span>
       </span>
+      <.help node={@node} />
     </label>
+    """
+  end
+
+  @doc """
+  A labelled password input, writing to `responses.<key>`.
+
+  It is never drawn with a value. What the reader types is posted with the
+  press and sealed before the chart is told anything
+  (`StatifierExamples.Signup.Journey.submit/4`), so there is no response
+  this page could put back in the field: a resolved secret question carries
+  only `held`, whether a sealed response is kept, and the input says so
+  beside it when one is.
+  """
+  attr :node, :map, required: true
+  attr :responses, :map, default: %{}
+
+  def secret_question(assigns) do
+    ~H"""
+    <label id={@node["key"]} class="flex flex-col gap-1">
+      <span class="text-sm font-medium">
+        {@node["label"]}<span :if={@node["required"]} class="text-error" aria-hidden="true">*</span>
+      </span>
+      <input
+        type="password"
+        name={"responses[#{@node["key"]}]"}
+        autocomplete="off"
+        required={@node["required"] == true and @node["held"] != true}
+        class="input input-bordered w-full"
+      />
+      <.help node={@node} />
+      <span :if={@node["held"] == true} id={"#{@node["key"]}-held"} class="text-xs opacity-70">
+        Kept, sealed. Type a new one to replace it.
+      </span>
+    </label>
+    """
+  end
+
+  # A question's line of guidance, when its author wrote one.
+  attr :node, :map, required: true
+
+  defp help(assigns) do
+    ~H"""
+    <span :if={@node["help"]} id={"#{@node["key"]}-help"} class="text-xs text-base-content/70">
+      {@node["help"]}
+    </span>
     """
   end
 
@@ -185,15 +234,17 @@ defmodule StatifierExamplesWeb.SignupElements do
     """
   end
 
-  # Whether `value` is among what the reader chose for `key`: the one value
-  # of a select of one, or one of the list a select of many holds.
-  @spec chosen?(map(), String.t(), String.t()) :: boolean()
-  defp chosen?(responses, key, value) do
-    case Map.get(responses, key) do
-      values when is_list(values) -> value in values
-      chosen -> chosen == value
-    end
-  end
+  # What a question shows as answered: the reader's response, or else the
+  # `value` riddler presents it with - a response the chart holds, or the
+  # question's default.
+  @spec response(map(), map()) :: term()
+  defp response(responses, node), do: Map.get(responses, node["key"], node["value"])
+
+  # Whether `value` is among what the reader chose: the one value of a
+  # select of one, or one of the list a select of many holds.
+  @spec chosen?(term(), String.t()) :: boolean()
+  defp chosen?(values, value) when is_list(values), do: value in values
+  defp chosen?(chosen, value), do: chosen == value
 
   @doc """
   Convenience for a page: resolve `screen` against `datamodel` and draw it.

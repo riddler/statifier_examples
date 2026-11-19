@@ -16,11 +16,13 @@ defmodule StatifierExamples.PresentedAnswerCheck do
   Journey tests and the page tests that drive the signup Path check every
   answer they draw without saying so. A check also records the answer's
   `"state"` in the calling process (`checked/0`), so a test can show that
-  the check ran.
+  the check ran, and the whole answer (`answers/0`), so a test can read
+  every answer a Journey drew a view from.
   """
 
   @schema_file "priv/schemas/presented-answer.schema.json"
   @checked_key {__MODULE__, :checked}
+  @answers_key {__MODULE__, :answers}
 
   @doc """
   Where the schema is read from: inside the riddler dependency.
@@ -60,6 +62,7 @@ defmodule StatifierExamples.PresentedAnswerCheck do
     case validate(answer) do
       :ok ->
         Process.put(@checked_key, [Map.get(answer, "state") | checked()])
+        Process.put(@answers_key, [answer | answers()])
         :ok
 
       {:error, errors} ->
@@ -76,4 +79,10 @@ defmodule StatifierExamples.PresentedAnswerCheck do
   """
   @spec checked() :: [String.t()]
   def checked, do: Process.get(@checked_key, [])
+
+  @doc """
+  Every answer `check!/1` admitted in the calling process, latest first.
+  """
+  @spec answers() :: [map()]
+  def answers, do: Process.get(@answers_key, [])
 end

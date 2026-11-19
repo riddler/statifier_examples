@@ -31,7 +31,7 @@ defmodule StatifierExamples.ScreenEditor.Variant do
       description: "Shows the first candidate whose condition holds.",
       icon: "arrows-right-left",
       keywords: ["variant", "branch", "alternative", "condition"],
-      order: 8
+      order: 9
     }
   end
 

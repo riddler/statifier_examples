@@ -149,6 +149,75 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
     end
   end
 
+  describe "a default and a secret question, authored and tried" do
+    @pin "SENTINEL-PIN-not-a-real-pin"
+
+    # Sabotage: started the draft empty instead of from the presented
+    # values; the untouched press was refused as card_type required, then
+    # reverted. And: made Journey.resolve/2 lay the typed PIN over the
+    # view; the sentinel was on the page, then reverted.
+    test "starts from the default, and never draws the PIN", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/screen-editor")
+
+      card = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
+      configure(view, card, %{"key" => "card_choice", "title" => "Your card"})
+
+      question = insert(view, "myapp.screens.choice_question", card, "nodes", 0)
+
+      configure(view, question, %{
+        "key" => "card_type",
+        "label" => "Which card would you like?",
+        "select" => "one",
+        "required" => "true",
+        "default" => "standard",
+        "help" => "You can change card at any branch.",
+        "answer_options" => ["standard=Standard card", "family=Family card"]
+      })
+
+      next = insert(view, "myapp.screens.button", card, "nodes", 1)
+      configure(view, next, %{"key" => "card_next", "label" => "Continue", "outcome" => "chosen"})
+
+      pin_screen = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 1)
+      configure(view, pin_screen, %{"key" => "card_pin", "title" => "Protect your card"})
+
+      pin = insert(view, "myapp.screens.secret_question", pin_screen, "nodes", 0)
+
+      configure(view, pin, %{
+        "key" => "library_pin",
+        "label" => "Choose a PIN for your library card",
+        "help" => "You type it at the self-service desk.",
+        "required" => "true"
+      })
+
+      done = insert(view, "myapp.screens.button", pin_screen, "nodes", 1)
+      configure(view, done, %{"key" => "pin_next", "label" => "Register", "outcome" => "pinned"})
+
+      view |> element("#try") |> render_click()
+
+      # The default is drawn chosen, with the help line, and pressing
+      # without touching the form sends it.
+      assert has_element?(view, ~s(#card_type input[type="radio"][value="standard"][checked]))
+      assert has_element?(view, "#card_type-help", "You can change card at any branch.")
+
+      view |> element("#card_next") |> render_click()
+
+      refute has_element?(view, "#try-findings")
+      assert has_element?(view, ~s(#library_pin input[type="password"]))
+      assert has_element?(view, "#library_pin-help", "You type it at the self-service desk.")
+
+      view
+      |> element("#try-responses")
+      |> render_change(%{"responses" => %{"library_pin" => @pin}})
+
+      refute render(view) =~ @pin
+
+      view |> element("#pin_next") |> render_click()
+
+      refute render(view) =~ @pin
+      assert view |> element("#try-collected") |> render() =~ "test-sealed:"
+    end
+  end
+
   # The block ids the canvas draws, in page order.
   defp block_ids(view) do
     Regex.scan(~r/data-block-id="([^"]+)"/, render(view), capture: :all_but_first)

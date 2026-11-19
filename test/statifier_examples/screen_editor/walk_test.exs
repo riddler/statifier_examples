@@ -69,6 +69,26 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
                Enum.find(nodes, &(&1["key"] == "lending_rules"))
     end
 
+    # Sabotage: dropped the secret question from the palette's
+    # registrations; the walk refused the block as no node type, then
+    # reverted.
+    test "asks for a PIN as a secret question, and carries a help line and a default" do
+      assert {:ok, walked} = Walk.screen_document(registration())
+      [details, card] = walked["screens"]
+
+      assert %{
+               "type" => "secret_question",
+               "label" => "Choose a PIN for your library card",
+               "help" => "You type it with your card number to borrow at the self-service desk.",
+               "required" => true
+             } = Enum.find(details["nodes"], &(&1["key"] == "library_pin"))
+
+      assert %{"help" => "We write here when a hold is ready and before a loan is due."} =
+               Enum.find(details["nodes"], &(&1["key"] == "email"))
+
+      assert %{"default" => "standard"} = Enum.find(card["nodes"], &(&1["key"] == "card_type"))
+    end
+
     # Sabotage: made number/3 leave an integer bound as its text; the "min"
     # assertion went red, then reverted.
     test "turns the editor's own shapes back into the document's" do

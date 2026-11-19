@@ -40,6 +40,12 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
   `"false"` and becomes the boolean, and a choice question of many drops
   the blank its renderer posts ahead of its boxes, before the draft is
   resolved or submitted.
+
+  A screen starts its draft from what riddler presents: a question drawn
+  with a `value` - its default, or a response the Journey already holds -
+  is drawn answered, and the draft holds that value, so a press that
+  changes nothing sends what the reader can see. A secret question is
+  presented with no value and starts with none.
   """
 
   use StatifierExamplesWeb, :live_view
@@ -79,7 +85,8 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
   def handle_event("try", _params, socket) do
     with {:ok, try} <- Try.start(socket.assigns.document),
          {:ok, view} <- Journey.current(try.execution_id, try.opts) do
-      {:noreply, assign(socket, try: try, view: view, draft: %{}, refusals: [], error: nil)}
+      {:noreply,
+       assign(socket, try: try, view: view, draft: presented(view), refusals: [], error: nil)}
     else
       {:error, reason} ->
         {:noreply, assign(socket, try: nil, view: nil, draft: %{}, refusals: refusals(reason))}
@@ -102,7 +109,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
 
   def handle_event("outcome", %{"outcome" => outcome}, %{assigns: assigns} = socket) do
     case Journey.submit(assigns.try.execution_id, outcome, assigns.draft, assigns.try.opts) do
-      {:ok, view} -> {:noreply, assign(socket, view: view, draft: %{}, error: nil)}
+      {:ok, view} -> {:noreply, assign(socket, view: view, draft: presented(view), error: nil)}
       {:invalid, view} -> {:noreply, assign(socket, view: view, error: nil)}
       {:error, reason} -> {:noreply, assign(socket, error: reason)}
     end
@@ -207,6 +214,12 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
 
   defp finding(%Riddler.Finding{node_key: key, code: code, message: message}),
     do: "#{key} - #{code}: #{message}"
+
+  # The draft a screen starts from: each presented question's `value` (the
+  # moduledoc's "What a typed response becomes").
+  @spec presented(Journey.view()) :: map()
+  defp presented(%{nodes: nodes}),
+    do: for(%{"key" => key, "value" => value} <- nodes, into: %{}, do: {key, value})
 
   # The responses a form posted, turned into what the questions on the
   # screen hold (the moduledoc's "What a typed response becomes").
