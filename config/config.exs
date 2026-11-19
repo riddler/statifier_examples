@@ -173,7 +173,14 @@ config :phoenix, :json_library, Jason
 # param whose key contains a listed string, so "token" also redacts any
 # other token-named param in those logs, the CSRF token (`_csrf_token`)
 # among them.
-config :phoenix, :filter_parameters, ["password", "token"]
+#
+# "responses" is the param every screen's form posts its answers under,
+# and a screen may ask a secret question - a library card's PIN - whose
+# typed text a LiveView's debug log of the form's events would otherwise
+# print. Filtering the whole responses map, rather than naming the secret
+# questions' keys, means a secret question added later under any key is
+# filtered too; what it costs is the other answers in that log line.
+config :phoenix, :filter_parameters, ["password", "token", "responses"]
 
 # OpenTelemetry. `opentelemetry_statifier` brings only the API, so the SDK's
 # exporter is this app's choice - and the default choice is none. An example

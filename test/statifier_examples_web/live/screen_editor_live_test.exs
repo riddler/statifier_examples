@@ -7,6 +7,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
 
   use StatifierExamplesWeb.ConnCase, async: false
 
+  import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
 
   describe "the page" do
@@ -214,6 +215,57 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       view |> element("#pin_next") |> render_click()
 
       refute render(view) =~ @pin
+      assert view |> element("#try-collected") |> render() =~ "test-sealed:"
+    end
+  end
+
+  describe "a PIN typed on the page" do
+    @pin "SENTINEL-PIN-not-a-real-pin"
+
+    # Sabotage: took "responses" out of :phoenix :filter_parameters; the
+    # LiveView's debug log of the response event carried the sentinel,
+    # then reverted.
+    test "reaches no log line, at debug, from any event the page handles", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/screen-editor")
+
+      screen = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
+      configure(view, screen, %{"key" => "card_pin", "title" => "Protect your card"})
+
+      pin = insert(view, "myapp.screens.secret_question", screen, "nodes", 0)
+
+      configure(view, pin, %{
+        "key" => "library_pin",
+        "label" => "Choose a PIN for your library card",
+        "required" => "true"
+      })
+
+      done = insert(view, "myapp.screens.button", screen, "nodes", 1)
+      configure(view, done, %{"key" => "pin_next", "label" => "Register", "outcome" => "pinned"})
+
+      view |> element("#try") |> render_click()
+
+      level = Logger.level()
+      Logger.configure(level: :debug)
+      on_exit(fn -> Logger.configure(level: level) end)
+
+      log =
+        capture_log([level: :debug], fn ->
+          view
+          |> element("#try-responses")
+          |> render_change(%{"responses" => %{"library_pin" => @pin}})
+
+          view |> element("#pin_next") |> render_click()
+        end)
+
+      Logger.configure(level: level)
+
+      refute log =~ @pin
+
+      # The capture holds the page's own event logs, so an empty search is
+      # not a search of nothing.
+      assert log =~ ~s(HANDLE EVENT "response")
+      assert log =~ ~s(HANDLE EVENT "outcome")
+      assert has_element?(view, "#try-collected")
       assert view |> element("#try-collected") |> render() =~ "test-sealed:"
     end
   end
