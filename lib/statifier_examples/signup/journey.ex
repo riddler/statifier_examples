@@ -56,21 +56,39 @@ defmodule StatifierExamples.Signup.Journey do
 
   The execution says where it is; `Riddler.Journey.present/3` says what that
   means to a reader. A view maps the execution onto riddler's status, and
-  the execution's own status comes first: an execution that is no longer
-  running is `:done` wherever it rests, a running one whose park block is
-  active is `{:screen, key}`, and a running one resting anywhere else is
-  `:waiting`. The view reads the nodes and the `state` off riddler's answer,
-  with the datamodel as the root. So a view's `nodes` are riddler's resolved
-  nodes, and its `state` is riddler's `"screen"`, `"waiting"` or `"done"`.
+  the execution's own status comes first:
+
+    * an execution that is no longer running is `{:done, result}` wherever
+      it rests, and `result` is what it finished with: the receipt the
+      create-account call at the end of the Path wrote at `created`, under
+      that key, or an empty map for an execution that stopped before the
+      call answered;
+    * a running one whose park block is active is `{:screen, key}`;
+    * a running one resting anywhere else is `{:waiting, info}`: `info`'s
+      `"reason"` names the step it waits on, `"company_details_pending"`
+      for the business arm's asynchronous call (`"between_screens"` where
+      no step of this app's is active), and its `"retry_after_ms"` says
+      when to ask again.
+
+  The view reads the nodes, the `state`, the waiting `reason` and
+  `retry_after_ms` and the done `result` off riddler's answer, with the
+  datamodel as the root. So a view's `nodes` are riddler's resolved nodes,
+  and its `state` is riddler's `"screen"`, `"waiting"` or `"done"`.
 
   A finished execution still parked on a screen - abandoned there, or
   failed - therefore answers `state: "done"` and **no nodes**, because
   riddler's done answer carries no screen: a reader is not handed inputs
   for a press the chart will discard. `screen` still names the screen it
-  rests on, so a page can say where it stopped. `resolve/2` re-resolves
-  that screen against a draft whatever the state, which is how `submit/3`
-  still finds the pressed button and answers the refused press as
-  `discarded`.
+  rests on, so a page can say where it stopped. `resolve/2` is the one
+  exception: it re-resolves that screen against a draft whatever the
+  state, which is how `submit/3` still finds the pressed button and
+  answers the refused press as `discarded`.
+
+  A running execution parked on a screen the supplied screens document does
+  not declare is neither: it is a caller passing `current/2` or `submit/4`
+  a different document than it gave `start/2`, and both answer
+  `{:error, {:undeclared_screen, key}}` naming the screen rather than
+  presenting it as waiting.
 
   ## A screens document the caller supplies
 
@@ -186,6 +204,10 @@ defmodule StatifierExamples.Signup.Journey do
 
   @fixture "signup_path"
 
+  # The retry hint a waiting view carries (the moduledoc's "What a page
+  # draws is riddler's answer").
+  @retry_after_ms 5_000
+
   # A screens document as a call reads it: decoded, and admitted by riddler.
   @typep screens :: {map(), Riddler.Screens.Document.t()}
 
@@ -196,7 +218,11 @@ defmodule StatifierExamples.Signup.Journey do
   and `nodes` is then empty. `state` is `Riddler.Journey.present/3`'s
   `"screen"`, `"waiting"` or `"done"` for it; a view whose state is `"done"`
   has empty `nodes` even where `screen` names the screen the execution
-  stopped on. `responses` is what the chart
+  stopped on, except a view `resolve/2` answers, which fills that screen's
+  nodes back in against the draft (the moduledoc's "What a page draws is
+  riddler's answer"). `reason` and `retry_after_ms` are riddler's waiting
+  answer's, and `nil` on any other state; `result` is riddler's done
+  answer's, and `nil` on any other state. `responses` is what the chart
   has collected so far, keyed by element key; `findings` is empty except in the
   `{:invalid, view}` a refused `submit/3` answers with.
 
@@ -216,6 +242,9 @@ defmodule StatifierExamples.Signup.Journey do
           :responses => %{optional(String.t()) => term()},
           :status => Execution.status(),
           :state => String.t(),
+          :reason => String.t() | nil,
+          :retry_after_ms => non_neg_integer() | nil,
+          :result => map() | nil,
           :findings => [Validation.finding()],
           optional(:discarded) => term()
         }
@@ -271,8 +300,10 @@ defmodule StatifierExamples.Signup.Journey do
   than fetched again through `Durable.machine_state/1`. Every page render
   once paid for that second storage walk.
 
-  `{:error, :execution_not_found}` for an id nobody stored, and the storage
-  layer's own refusals otherwise.
+  `{:error, :execution_not_found}` for an id nobody stored,
+  `{:error, {:undeclared_screen, key}}` for a running execution parked on a
+  screen the screens document does not declare, and the storage layer's own
+  refusals otherwise.
 
   `opts[:screens]` and `opts[:path]` are the screens document and the Path
   `start/2` was given, when it was given them.
@@ -281,7 +312,7 @@ defmodule StatifierExamples.Signup.Journey do
   def current(execution_id, opts \\ []) when is_binary(execution_id) and is_list(opts) do
     with {:ok, screens} <- screens_document(opts),
          {:ok, {{%Durable{machine_state: state}, run}, path}} <- resume(execution_id, opts) do
-      {:ok, view(execution_id, run, state.datamodel, screens, path)}
+      view(execution_id, run, state.datamodel, screens, path)
     end
   end
 
@@ -314,7 +345,9 @@ defmodule StatifierExamples.Signup.Journey do
   screen again with `findings` filled in and **nothing sent**: a screen
   that does not validate never reaches the chart, so the execution's position
   does not move and neither does anything in storage. `{:error, reason}` is
-  an execution that could not be loaded, an outcome no button on the current
+  an execution that could not be loaded, `{:undeclared_screen, key}` for a
+  running execution parked on a screen the screens document does not
+  declare, an outcome no button on the current
   screen declares, or `{:seal_secrets, reason}` for a secret question's
   response the screen could not seal (the moduledoc's "A secret question is
   sealed before the chart sees it"); nothing is sent for any of them.
@@ -355,8 +388,8 @@ defmodule StatifierExamples.Signup.Journey do
     with {:ok, screens} <- screens_document(opts),
          {:ok, {{%Durable{machine_state: state} = durable, run}, path}} <-
            resume(execution_id, opts),
-         {:ok, drafted} <-
-           parked_on(resolve(view(execution_id, run, state.datamodel, screens, path), responses)),
+         {:ok, settled} <- view(execution_id, run, state.datamodel, screens, path),
+         {:ok, drafted} <- parked_on(resolve(settled, responses)),
          {:ok, button} <- button(drafted.nodes, outcome),
          {:ok, sealed} <- checked(drafted, responses, screens) do
       pressed(durable, run, execution_id, button, coerce(sealed), {screens, path})
@@ -427,11 +460,12 @@ defmodule StatifierExamples.Signup.Journey do
 
     case Durable.send_event(durable, run, event, responses(typed)) do
       {:ok, {%Durable{machine_state: moved_state}, moved}} ->
-        {:ok, view(execution_id, moved, moved_state.datamodel, screens, path)}
+        view(execution_id, moved, moved_state.datamodel, screens, path)
 
       {:discarded, reason} ->
-        {:ok,
-         Map.put(view(execution_id, run, settled.datamodel, screens, path), :discarded, reason)}
+        with {:ok, view} <- view(execution_id, run, settled.datamodel, screens, path) do
+          {:ok, Map.put(view, :discarded, reason)}
+        end
 
       {:error, _reason} = error ->
         error
@@ -440,35 +474,80 @@ defmodule StatifierExamples.Signup.Journey do
 
   # The view for one reading. Where the execution is goes to
   # `Riddler.Journey.present/3` as its status, and what comes back is what
-  # the view draws: the nodes off the answer's screen, and the answer's
-  # state. `screen_at/2` only answers a key the document declares, so the
-  # `{:screen, key}` status never meets `{:error, :no_such_screen}`.
-  @spec view(String.t(), Execution.t(), map(), screens(), Document.t()) :: view()
+  # the view draws: the nodes off the answer's screen, the answer's state,
+  # its waiting reason and retry hint, and its done result. `screen_at/3`
+  # only answers a key the document declares, so the `{:screen, key}`
+  # status never meets `{:error, :no_such_screen}`.
+  @spec view(String.t(), Execution.t(), map(), screens(), Document.t()) ::
+          {:ok, view()} | {:error, {:undeclared_screen, String.t()}}
   defp view(execution_id, run, datamodel, {document, admitted}, path) do
-    key = screen_at(run, document, path)
-    {:ok, answer} = Riddler.Journey.present(admitted, journey_status(key, run.status), datamodel)
-    :ok = check_presented(answer)
+    with {:ok, key} <- screen_at(run, document, path) do
+      status = journey_status(key, run, path, datamodel)
+      {:ok, answer} = Riddler.Journey.present(admitted, status, datamodel)
+      :ok = check_presented(answer)
 
-    %{
-      execution_id: execution_id,
-      screen: key && Screens.screen(document, key),
-      nodes: presented_nodes(answer),
-      datamodel: datamodel,
-      responses: Map.get(datamodel, "responses") || %{},
-      status: run.status,
-      state: Map.fetch!(answer, "state"),
-      findings: []
-    }
+      {:ok,
+       %{
+         execution_id: execution_id,
+         screen: key && Screens.screen(document, key),
+         nodes: presented_nodes(answer),
+         datamodel: datamodel,
+         responses: Map.get(datamodel, "responses") || %{},
+         status: run.status,
+         state: Map.fetch!(answer, "state"),
+         reason: Map.get(answer, "reason"),
+         retry_after_ms: Map.get(answer, "retry_after_ms"),
+         result: Map.get(answer, "result"),
+         findings: []
+       }}
+    end
   end
 
-  # The execution's position as `Riddler.Journey`'s status. Its own status
-  # comes first: done once it has stopped running, wherever it rests. A
-  # running execution is on a screen when one is parked, and waiting while
-  # it runs on elsewhere - the moduledoc's mid-call.
-  @spec journey_status(String.t() | nil, Execution.status()) :: Riddler.Journey.status()
-  defp journey_status(_key, status) when status != :running, do: :done
-  defp journey_status(key, :running) when is_binary(key), do: {:screen, key}
-  defp journey_status(nil, :running), do: :waiting
+  # The execution's position as `Riddler.Journey`'s status (the moduledoc's
+  # "What a page draws is riddler's answer"). Its own status comes first:
+  # done once it has stopped running, wherever it rests, with what it
+  # finished with. A running execution is on a screen when one is parked,
+  # and waiting while it runs on elsewhere - the moduledoc's mid-call.
+  @spec journey_status(String.t() | nil, Execution.t(), Document.t(), map()) ::
+          Riddler.Journey.status()
+  defp journey_status(_key, %Execution{status: status}, _path, datamodel)
+       when status != :running,
+       do: {:done, result(datamodel)}
+
+  defp journey_status(key, %Execution{status: :running}, _path, _datamodel) when is_binary(key),
+    do: {:screen, key}
+
+  defp journey_status(nil, %Execution{status: :running} = run, path, _datamodel),
+    do: {:waiting, waiting_info(run, path)}
+
+  # What a done execution finished with: the create-account call's receipt
+  # under the key the Path writes it at, or nothing when the execution
+  # stopped before that call answered.
+  @spec result(map()) :: map()
+  defp result(%{"created" => created}) when is_map(created), do: %{"created" => created}
+  defp result(_datamodel), do: %{}
+
+  # Why a running execution with no screen waits, and when to ask again.
+  # The reason names the `myapp.signup_step` it is mid-call on; the retry
+  # hint is the same for every step, because a page that subscribes redraws
+  # when the call answers anyway, and a caller that polls instead needs
+  # only a pace.
+  @spec waiting_info(Execution.t(), Document.t()) :: Riddler.Journey.waiting_info()
+  defp waiting_info(%Execution{active: active}, path) do
+    active = MapSet.new(active)
+
+    reason =
+      Enum.find_value(Document.blocks(path), "between_screens", fn
+        %Block{type: "myapp.signup_step", id: id, config: %{"step" => step}}
+        when is_binary(step) ->
+          MapSet.member?(active, id) && step <> "_pending"
+
+        _block ->
+          nil
+      end)
+
+    %{"reason" => reason, "retry_after_ms" => @retry_after_ms}
+  end
 
   # The suite's check on riddler's answer. Under `config/test.exs` this
   # module's application environment names a module as
@@ -582,15 +661,27 @@ defmodule StatifierExamples.Signup.Journey do
 
   # Which screen a position is resting in. The park of each screen the Path
   # names, looked for in the reading's active blocks; `nil` when the
-  # execution is resting anywhere else, or on a screen `screens` does not
-  # declare.
-  @spec screen_at(Execution.t(), map(), Document.t()) :: String.t() | nil
-  defp screen_at(%Execution{active: active}, screens, path) do
+  # execution is resting anywhere else. A park that is active on a screen
+  # `screens` does not declare is an error naming that screen while the
+  # execution runs (the moduledoc's "What a page draws is riddler's
+  # answer"), and `nil` once it has stopped, when nothing is drawn of it.
+  @spec screen_at(Execution.t(), map(), Document.t()) ::
+          {:ok, String.t() | nil} | {:error, {:undeclared_screen, String.t()}}
+  defp screen_at(%Execution{active: active, status: status}, screens, path) do
     active = MapSet.new(active)
 
-    Enum.find_value(parks(path), fn {park, key} ->
-      MapSet.member?(active, park) && Screens.screen(screens, key) && key
-    end)
+    {declared, undeclared} =
+      path
+      |> parks()
+      |> Enum.filter(fn {park, _key} -> MapSet.member?(active, park) end)
+      |> Enum.map(fn {_park, key} -> key end)
+      |> Enum.split_with(&Screens.screen(screens, &1))
+
+    case {declared, undeclared, status} do
+      {[key | _], _undeclared, _status} -> {:ok, key}
+      {[], [key | _], :running} -> {:error, {:undeclared_screen, key}}
+      {[], _undeclared, _status} -> {:ok, nil}
+    end
   end
 
   # Every park in a Path, in document order, with the screen key it is the

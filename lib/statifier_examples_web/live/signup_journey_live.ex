@@ -46,6 +46,18 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   broadcasts every out-of-band advance on `Durable.topic/1`, so the page
   redraws when the execution moves rather than showing a screen the execution has left.
 
+  ## What the page draws is the view's state
+
+  The page draws by `state`, riddler's word for where the execution is, and
+  never by whether the view names a screen. A `"screen"` view is the form. A
+  `"waiting"` view says why the execution waits and when to ask again - the
+  view's `reason` and `retry_after_ms` - and that the page redraws by itself
+  when the call answers. A `"done"` view says the execution finished, names
+  the screen it stopped on when it rests on one, and shows what it finished
+  with, the view's `result`, when that is not empty. A done execution that
+  rests on a screen therefore draws the finished line and not a bare screen
+  title with nothing under it.
+
   ## A press that did not land
 
   An execution stopped somewhere else - abandoned, or finished - takes no
@@ -175,7 +187,12 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
             </li>
           </ul>
 
-          <form :if={@view.screen} id="journey-responses" phx-change="response" class="contents">
+          <form
+            :if={@view.state == "screen"}
+            id="journey-responses"
+            phx-change="response"
+            class="contents"
+          >
             <SignupElements.screen
               title={@view.screen.title}
               nodes={@view.nodes}
@@ -183,9 +200,30 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
             />
           </form>
 
-          <p :if={is_nil(@view.screen)} id="no-screen" class="text-base-content/70">
-            {off_screen(@view.status)}
-          </p>
+          <div :if={@view.state == "waiting"} id="journey-waiting" class="flex flex-col gap-2">
+            <p class="text-base-content/70">
+              The execution is between screens - it is resting on a call this app runs as a job.
+              This page redraws when the job answers.
+            </p>
+            <p :if={@view.reason} id="waiting-reason" class="text-sm">
+              Waiting on <code>{@view.reason}</code>.
+            </p>
+            <p :if={@view.retry_after_ms} id="waiting-retry" class="text-sm">
+              Ask again in {retry_after(@view.retry_after_ms)}.
+            </p>
+          </div>
+
+          <div :if={@view.state == "done"} id="journey-done" class="flex flex-col gap-2">
+            <p id="journey-finished" class="text-base-content/70">
+              The execution finished: {@view.status}.
+            </p>
+            <p :if={@view.screen} id="journey-stopped-on" class="text-sm">
+              It stopped on <em>{@view.screen.title}</em>.
+            </p>
+            <div :if={@view.result not in [nil, %{}]} class="text-sm">
+              What it finished with: <pre id="journey-result" class="whitespace-pre-wrap">{inspect(@view.result, pretty: true)}</pre>
+            </div>
+          </div>
 
           <details class="text-xs opacity-70">
             <summary>What the chart has collected</summary>
@@ -244,11 +282,10 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     end
   end
 
-  @spec off_screen(atom()) :: String.t()
-  defp off_screen(:running),
-    do:
-      "The execution is between screens - it is resting on a call this app runs as a job. " <>
-        "This page redraws when the job answers."
-
-  defp off_screen(status), do: "The execution finished: #{status}."
+  # The retry hint in words: whole seconds where it is a whole number of
+  # them, milliseconds otherwise.
+  @spec retry_after(non_neg_integer()) :: String.t()
+  defp retry_after(1_000), do: "1 second"
+  defp retry_after(ms) when rem(ms, 1_000) == 0 and ms > 0, do: "#{div(ms, 1_000)} seconds"
+  defp retry_after(ms), do: "#{ms} ms"
 end

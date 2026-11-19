@@ -41,6 +41,12 @@ defmodule StatifierExamples.Signup.JourneyTest do
 
   defp keys(%{nodes: nodes}), do: Enum.map(nodes, & &1["key"])
 
+  defp without_screen(document, screen_key) do
+    Map.update!(document, "screens", fn screens ->
+      Enum.reject(screens, &(&1["key"] == screen_key))
+    end)
+  end
+
   # Everything an execution's own reader can see of it, loaded the way a page
   # loads it: from the id and nothing else.
   defp seen(execution_id) do
@@ -538,6 +544,121 @@ defmodule StatifierExamples.Signup.JourneyTest do
       {:ok, mid_call} = Journey.submit(execution_id, "business_chosen", %{"seats" => "5"})
 
       assert Journey.resolve(mid_call, %{"anything" => "at all"}) == mid_call
+    end
+  end
+
+  describe "what a view says beside its state" do
+    # The business arm's asynchronous call, as riddler's waiting answer: the
+    # reason names the step the execution is mid-call on, and the retry hint
+    # says when to ask again.
+    #
+    # Sabotage: made `journey_status/4`'s waiting clause answer a bare
+    # `:waiting`. Red here on the match (reason and retry hint `nil`), and on
+    # the page's waiting case. Reverted from a copy.
+    # The empty-result case below has its own: `result/1`'s fallback answered
+    # `%{"created" => %{}}`, red there and on the page's stopped case.
+    test "a waiting view carries the step it waits on and when to ask again", %{
+      execution_id: execution_id
+    } do
+      {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
+      {:ok, _mid_call} = Journey.submit(execution_id, "business_chosen", %{"seats" => "5"})
+
+      mid_call = seen(execution_id)
+
+      assert %{state: "waiting", reason: "company_details_pending", retry_after_ms: 5_000} =
+               mid_call
+
+      assert mid_call.result == nil
+    end
+
+    # What a finished execution finished with: the create-account call's
+    # receipt, under the key the Path writes it at.
+    #
+    # Sabotage: made `journey_status/4`'s done clause answer a bare `:done`.
+    # Red here, on the empty-result case below and on the page's done case.
+    # Reverted from a copy. The resolve/2 case below has its own: a
+    # `resolve/2` clause answering a done view unchanged went red there, on
+    # the refused-press case above and on the page's refused-press case.
+    test "a done view carries the receipt the execution finished with", %{
+      execution_id: execution_id
+    } do
+      {:ok, _plan} = Journey.submit(execution_id, "account_submitted", @account)
+      {:ok, _confirm} = Journey.submit(execution_id, "personal_chosen", %{"seats" => "1"})
+      {:ok, _done} = Journey.submit(execution_id, "signup_confirmed", %{})
+
+      done = seen(execution_id)
+
+      assert %{state: "done", reason: nil, retry_after_ms: nil} = done
+
+      assert done.result == %{
+               "created" => %{"created" => true, "email" => "ada@example.com", "collected" => 4}
+             }
+    end
+
+    # An execution stopped before the create-account call answered finished
+    # with nothing, and says so with an empty result rather than none.
+    test "and an execution stopped on a screen finished with nothing", %{
+      execution_id: execution_id
+    } do
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      stopped = seen(execution_id)
+
+      assert %{state: "done", result: result, nodes: []} = stopped
+      assert result == %{}
+      assert key(stopped) == "account"
+    end
+
+    # The typedoc's one exception: a done view carries no nodes, and
+    # `resolve/2` fills the screen it stopped on back in against a draft,
+    # which is how a refused press still finds its button.
+    test "resolve/2 fills a done view's screen back in", %{execution_id: execution_id} do
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      stopped = seen(execution_id)
+      assert stopped.nodes == []
+
+      assert "account_continue" in keys(Journey.resolve(stopped, %{}))
+    end
+  end
+
+  describe "a screen the supplied document does not declare" do
+    # A caller passing `current/2` or `submit/4` a different screens document
+    # than it gave `start/2`, while the execution is parked on a screen that
+    # document lacks. That is a mis-call, not a back-office wait, and the
+    # answer names the screen.
+    #
+    # Sabotage: made `screen_at/3` answer `{:ok, nil}` for a running execution
+    # on an undeclared park. Red here on the first assertion (a waiting view
+    # came back) and nowhere else. Reverted from a copy. The case below has
+    # its own: the same clause matching any status went red there alone.
+    test "answers an error naming the screen, not waiting", %{execution_id: execution_id} do
+      without_account = without_screen(Screens.document(), "account")
+
+      assert {:error, {:undeclared_screen, "account"}} =
+               Journey.current(execution_id, screens: without_account)
+
+      assert {:error, {:undeclared_screen, "account"}} =
+               Journey.submit(execution_id, "account_submitted", @account,
+                 screens: without_account
+               )
+
+      # Nothing was sent: the execution is still on the account screen.
+      assert key(seen(execution_id)) == "account"
+    end
+
+    # Once the execution has stopped there is nothing to draw of the screen
+    # either way, so a done execution is still done.
+    test "and a stopped execution on that screen is still done", %{execution_id: execution_id} do
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      without_account = without_screen(Screens.document(), "account")
+
+      assert {:ok, %{state: "done", screen: nil}} =
+               Journey.current(execution_id, screens: without_account)
     end
   end
 

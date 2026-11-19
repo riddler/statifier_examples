@@ -208,6 +208,69 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     end
   end
 
+  describe "beside the screen" do
+    # The business arm rests on its asynchronous call, and the page says why
+    # it waits and when to ask again rather than only that it is between
+    # screens.
+    #
+    # Sabotage: made the `#waiting-reason` paragraph's `:if` always false. Red
+    # here on the reason and nowhere else. Reverted from a copy.
+    test "a waiting execution shows the reason and the retry hint", %{conn: conn} do
+      %{live: live} = started(conn)
+
+      live |> form("#journey-responses", responses: @account) |> render_change()
+      live |> element("#account_continue") |> render_click()
+      live |> form("#journey-responses", responses: %{"seats" => "5"}) |> render_change()
+      live |> element("#plan_business") |> render_click()
+
+      assert has_element?(live, "#journey-waiting")
+      assert has_element?(live, "#waiting-reason", "company_details_pending")
+      assert has_element?(live, "#waiting-retry", "Ask again in 5 seconds")
+      refute has_element?(live, "#journey-responses")
+      refute has_element?(live, "#journey-done")
+    end
+
+    # The last press finishes the Path, and the page shows the finished line
+    # and the receipt the execution finished with.
+    #
+    # Sabotage: made the result block's `:if` always false. Red here on
+    # `#journey-result` and nowhere else. Reverted from a copy.
+    test "a done execution shows what it finished with", %{conn: conn} do
+      %{live: live} = started(conn)
+
+      live |> form("#journey-responses", responses: @account) |> render_change()
+      live |> element("#account_continue") |> render_click()
+      live |> form("#journey-responses", responses: %{"seats" => "1"}) |> render_change()
+      live |> element("#plan_personal") |> render_click()
+      live |> element("#confirm_finish") |> render_click()
+
+      assert has_element?(live, "#journey-finished", "The execution finished: done.")
+      assert has_element?(live, "#journey-result", "ada@example.com")
+      refute has_element?(live, "#journey-stopped-on")
+      refute has_element?(live, "#journey-waiting")
+    end
+
+    # Loaded fresh for an execution that stopped on a screen, the page draws
+    # the finished line and the screen it stopped on - not that screen's
+    # title with nothing under it.
+    #
+    # Sabotage: put back the old rule, the done section drawn only when the
+    # view names no screen. Red here and on the refused-press case below.
+    # Reverted from a copy.
+    test "an execution stopped on a screen shows the finished line", %{conn: conn} do
+      {:ok, execution_id} = Journey.start("page-#{System.unique_integer([:positive])}")
+      {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
+      assert :ok = Durable.abandon(durable)
+
+      {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=#{execution_id}")
+
+      assert has_element?(live, "#journey-finished", "The execution finished: failed.")
+      assert has_element?(live, "#journey-stopped-on", "Create your account")
+      refute has_element?(live, "#journey-responses")
+      refute has_element?(live, "#journey-result")
+    end
+  end
+
   describe "the execution outlives the page" do
     # THE POINT OF THE PAGE. A second mount of the same URL is a different
     # process with a different socket and nothing carried over, and it opens
