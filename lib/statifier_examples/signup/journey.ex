@@ -412,6 +412,7 @@ defmodule StatifierExamples.Signup.Journey do
   defp view(execution_id, run, datamodel, {document, admitted}, path) do
     key = screen_at(run, document, path)
     {:ok, answer} = Riddler.Journey.present(admitted, journey_status(key, run.status), datamodel)
+    :ok = check_presented(answer)
 
     %{
       execution_id: execution_id,
@@ -433,6 +434,25 @@ defmodule StatifierExamples.Signup.Journey do
   defp journey_status(_key, status) when status != :running, do: :done
   defp journey_status(key, :running) when is_binary(key), do: {:screen, key}
   defp journey_status(nil, :running), do: :waiting
+
+  # The suite's check on riddler's answer. Under `config/test.exs` this
+  # module's application environment names a module as
+  # `:presented_answer_check`, whose `check!/1` raises for an answer that
+  # does not keep to the presented answer schema riddler ships, so every
+  # answer a Journey test or a page test draws from is checked before it is
+  # drawn. Nothing names one outside the tests, and the answer is drawn as
+  # riddler gives it.
+  @spec check_presented(Riddler.Journey.answer()) :: :ok
+  defp check_presented(answer) do
+    :statifier_examples
+    |> Application.get_env(__MODULE__, [])
+    |> Keyword.get(:presented_answer_check)
+    |> check_with(answer)
+  end
+
+  @spec check_with(module() | nil, Riddler.Journey.answer()) :: :ok
+  defp check_with(nil, _answer), do: :ok
+  defp check_with(check, answer), do: check.check!(answer)
 
   @spec presented_nodes(Riddler.Journey.answer()) :: [Screens.node_doc()]
   defp presented_nodes(%{"screen" => %{"nodes" => nodes}}), do: nodes

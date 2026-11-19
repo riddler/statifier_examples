@@ -52,3 +52,10 @@ config :phoenix,
 # each one to the process that made it, so a test reads what the desk was
 # sent instead of reaching a branch desk over the network.
 config :statifier_examples, StatifierExamples.HoldDesk, transport: StatifierExamples.DeskTransport
+
+# Every answer `StatifierExamples.Signup.Journey` draws a view from is
+# checked against the presented answer schema riddler ships, read out of
+# the riddler dependency, before it is drawn; a nonconforming answer fails
+# the test that drew it.
+config :statifier_examples, StatifierExamples.Signup.Journey,
+  presented_answer_check: StatifierExamples.PresentedAnswerCheck
