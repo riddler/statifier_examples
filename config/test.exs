@@ -59,3 +59,9 @@ config :statifier_examples, StatifierExamples.HoldDesk, transport: StatifierExam
 # the test that drew it.
 config :statifier_examples, StatifierExamples.Signup.Journey,
   presented_answer_check: StatifierExamples.PresentedAnswerCheck
+
+# A secret question's response is sealed with the suite's deterministic
+# sealer rather than the endpoint's encryption, so a test can say which
+# sealed string a response became. Outside the tests nothing names one and
+# `StatifierExamples.Signup.Sealer` encrypts under the endpoint secret.
+config :statifier_examples, StatifierExamples.Signup.Sealer, sealer: StatifierExamples.TestSealer

@@ -59,7 +59,7 @@ defmodule StatifierExamples.ScreenEditor.Button do
       description: "A control a patron presses, and the outcome it raises.",
       icon: "cursor-arrow-rays",
       keywords: ["button", "submit", "continue", "back", "outcome"],
-      order: 7
+      order: 8
     }
   end
 

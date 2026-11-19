@@ -13,7 +13,7 @@ defmodule StatifierExamples.ScreenEditorTest do
   doctest StatifierExamples.ScreenEditor.Node
   doctest StatifierExamples.ScreenEditor.ChoiceQuestion
 
-  @node_types ~w(heading text text_question choice_question boolean_question button variant)
+  @node_types ~w(heading text text_question choice_question boolean_question secret_question button variant)
 
   describe "the palette" do
     test "registers the screen and every node type under the document's own names" do
@@ -41,12 +41,13 @@ defmodule StatifierExamples.ScreenEditorTest do
       assert fields("text") == ~w(key condition text)
 
       assert fields("text_question") ==
-               ~w(key condition label placeholder required format pattern min max)
+               ~w(key condition label placeholder help required format pattern min max)
 
       assert fields("choice_question") ==
-               ~w(key condition label select answer_options style required min_selections max_selections)
+               ~w(key condition label select answer_options style help default required min_selections max_selections)
 
-      assert fields("boolean_question") == ~w(key condition label required)
+      assert fields("boolean_question") == ~w(key condition label help required)
+      assert fields("secret_question") == ~w(key condition label help required)
       assert fields("button") == ~w(key condition label outcome writes style validates)
       assert fields("variant") == ~w(key condition)
     end

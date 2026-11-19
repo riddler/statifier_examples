@@ -3,12 +3,12 @@ defmodule StatifierExamples.ScreenEditor.TextQuestion do
   `myapp.screens.text_question`: a question a patron answers with a line of
   text - their first name, or the email the library writes to.
 
-  `label` is what the patron is asked and `placeholder` the hint in the
-  empty field. `required` says an empty response will not do. `format` is
-  one of the validation formats the screen document names, or blank for
-  none; `pattern` is the expression the `pattern` format holds a response
-  to, and `min` and `max` the bounds the `integer` and `number` formats
-  hold one between. The bounds are written as text, a number or blank,
+  `label` is what the patron is asked, `placeholder` the hint in the
+  empty field and `help` a line of guidance shown beside it. `required`
+  says an empty response will not do. `format` is one of the validation
+  formats the screen document names, or blank for none; `pattern` is the
+  expression the `pattern` format holds a response to, and `min` and
+  `max` the bounds the `integer` and `number` formats hold one between. The bounds are written as text, a number or blank,
   because the editor's field types have no number that admits a fraction.
   """
 
@@ -31,6 +31,7 @@ defmodule StatifierExamples.ScreenEditor.TextQuestion do
       [
         Node.field("label", :string, "Label", true, ""),
         Node.field("placeholder", :string, "Placeholder", false, ""),
+        Node.field("help", :string, "Help", false, ""),
         Node.field("required", :boolean, "Required", false, false),
         Node.field("format", {:select, @formats}, "Format", false, ""),
         Node.field("pattern", :string, "Pattern", false, ""),

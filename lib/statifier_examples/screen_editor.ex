@@ -15,8 +15,9 @@ defmodule StatifierExamples.ScreenEditor do
   group and each named for the document's own type under `myapp.screens.`:
   the screen itself (`key`, `title`, and a `nodes` slot), and the node
   types `heading`, `text`, `text_question`, `choice_question`,
-  `boolean_question`, `button` and `variant`. Their fields are spelled as
-  the document spells them. `registrations/0` lists them.
+  `boolean_question`, `secret_question`, `button` and `variant`. Their
+  fields are spelled as the document spells them. `registrations/0` lists
+  them.
 
   The `core.*` vocabulary is registered underneath, because a document's
   root is a block and `core.sequence` is the plain ordered one: its `body`
@@ -51,6 +52,7 @@ defmodule StatifierExamples.ScreenEditor do
     ChoiceQuestion,
     Heading,
     Screen,
+    SecretQuestion,
     Text,
     TextQuestion,
     Variant
@@ -65,6 +67,7 @@ defmodule StatifierExamples.ScreenEditor do
     {"myapp.screens.text_question", TextQuestion},
     {"myapp.screens.choice_question", ChoiceQuestion},
     {"myapp.screens.boolean_question", BooleanQuestion},
+    {"myapp.screens.secret_question", SecretQuestion},
     {"myapp.screens.button", Button},
     {"myapp.screens.variant", Variant}
   ]

@@ -2,7 +2,7 @@ defmodule StatifierExamples.ScreenEditor.BooleanQuestion do
   @moduledoc """
   `myapp.screens.boolean_question`: a lone checkbox or toggle submitting
   true or false - "I agree to the library's lending rules". `required`
-  asks for true.
+  asks for true, and `help` is a line of guidance shown beside it.
   """
 
   use StatifierBlocks.BlockType
@@ -14,6 +14,7 @@ defmodule StatifierExamples.ScreenEditor.BooleanQuestion do
     Node.common_fields() ++
       [
         Node.field("label", :string, "Label", true, ""),
+        Node.field("help", :string, "Help", false, ""),
         Node.field("required", :boolean, "Required", false, false)
       ]
   end

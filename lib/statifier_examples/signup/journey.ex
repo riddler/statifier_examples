@@ -147,6 +147,27 @@ defmodule StatifierExamples.Signup.Journey do
   a field no shipped screen can exercise is a field no test can defend.
   `docs/spikes/signup-skeleton-spike.md` carries it as the ask.
 
+  ## A secret question is sealed before the chart sees it
+
+  A screen may ask a `secret_question` - the patron registration screens
+  ask a new patron for the PIN of their library card. What the reader
+  typed is validated as typed, and then, before anything is sent,
+  `Riddler.Screens.seal_secrets/4` turns every secret question's response on
+  the screen into the sealed form `%{"sealed" => string}`, with
+  `StatifierExamples.Signup.Sealer.seal/1` as the sealer. Only the sealed
+  responses reach the chart, so the event, the datamodel and every stored
+  row hold the sealed string and never the text, and riddler presents the
+  question as `held` from then on.
+
+  The order is the point: the check reads the text, because a required
+  PIN left blank is the reader's mistake to be told about, and the seal
+  comes before the coercion below, because a PIN of digits alone is text
+  and not a number. A response riddler will not seal, or a sealer that
+  does not answer a sealed string, refuses the press as
+  `{:error, {:seal_secrets, reason}}` and sends nothing. `resolve/2` never
+  lays a secret question's typed response over the datamodel, so a view
+  carries nothing of it either.
+
   ## Responses are coerced once, on the way in
 
   A form posts strings. A condition like `responses.seats > 1` - the confirm
@@ -161,7 +182,7 @@ defmodule StatifierExamples.Signup.Journey do
   alias StatifierBlocks.{Block, Compiled, Document}
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{Durable, Execution}
-  alias StatifierExamples.Signup.{Screen, Screens, Validation}
+  alias StatifierExamples.Signup.{Screen, Screens, Sealer, Validation}
 
   @fixture "signup_path"
 
@@ -269,13 +290,15 @@ defmodule StatifierExamples.Signup.Journey do
   screen and not sent - laid over what the chart has stored.
 
   The nodes and the responses move; nothing else does, and nothing is
-  written. See the moduledoc on why a page cannot do without it.
+  written. See the moduledoc on why a page cannot do without it. A secret
+  question's response in the draft is left out: a view never holds the
+  text a reader typed into one.
   """
   @spec resolve(view(), %{optional(String.t()) => term()}) :: view()
   def resolve(%{screen: nil} = view, _draft), do: view
 
   def resolve(%{screen: screen, datamodel: datamodel} = view, draft) when is_map(draft) do
-    merged = merged(datamodel, coerce(draft))
+    merged = merged(datamodel, draft |> coerce() |> Map.drop(secret_keys(screen.nodes)))
 
     %{view | responses: Map.fetch!(merged, "responses"), nodes: Screens.resolve(screen, merged)}
   end
@@ -291,8 +314,10 @@ defmodule StatifierExamples.Signup.Journey do
   screen again with `findings` filled in and **nothing sent**: a screen
   that does not validate never reaches the chart, so the execution's position
   does not move and neither does anything in storage. `{:error, reason}` is
-  an execution that could not be loaded, or an outcome no button on the current
-  screen declares.
+  an execution that could not be loaded, an outcome no button on the current
+  screen declares, or `{:seal_secrets, reason}` for a secret question's
+  response the screen could not seal (the moduledoc's "A secret question is
+  sealed before the chart sees it"); nothing is sent for any of them.
 
   ## A press the chart refused is still `{:ok, view}`
 
@@ -332,11 +357,21 @@ defmodule StatifierExamples.Signup.Journey do
            resume(execution_id, opts),
          {:ok, drafted} <-
            parked_on(resolve(view(execution_id, run, state.datamodel, screens, path), responses)),
-         {:ok, button} <- button(drafted.nodes, outcome) do
-      case Validation.validate(drafted.nodes, responses) do
-        [] -> pressed(durable, run, execution_id, button, coerce(responses), {screens, path})
-        findings -> {:invalid, %{drafted | findings: findings}}
-      end
+         {:ok, button} <- button(drafted.nodes, outcome),
+         {:ok, sealed} <- checked(drafted, responses, screens) do
+      pressed(durable, run, execution_id, button, coerce(sealed), {screens, path})
+    end
+  end
+
+  # The press's responses checked as the reader typed them and then sealed
+  # (the moduledoc's "A secret question is sealed before the chart sees
+  # it"), or the drafted view with its findings when the check refuses them.
+  @spec checked(view(), map(), screens()) ::
+          {:ok, map()} | {:invalid, view()} | {:error, {:seal_secrets, term()}}
+  defp checked(drafted, responses, screens) do
+    case Validation.validate(drafted.nodes, responses) do
+      [] -> seal(screens, drafted.screen, responses)
+      findings -> {:invalid, %{drafted | findings: findings}}
     end
   end
 
@@ -594,6 +629,31 @@ defmodule StatifierExamples.Signup.Journey do
       nil -> {:error, {:unknown_outcome, outcome}}
       button -> {:ok, button}
     end
+  end
+
+  # The moduledoc's "A secret question is sealed before the chart sees
+  # it": the responses with every secret question's on `screen` sealed by
+  # the app's sealer. A response riddler will not seal, or a sealer that
+  # does not answer a sealed string, is `{:error, {:seal_secrets, reason}}`
+  # and nothing is sent.
+  @spec seal(screens(), Screens.screen(), map()) ::
+          {:ok, map()} | {:error, {:seal_secrets, term()}}
+  defp seal({_document, admitted}, %{key: key}, responses) do
+    case Riddler.Screens.seal_secrets(admitted, key, responses, &Sealer.seal/1) do
+      {:ok, sealed} -> {:ok, sealed}
+      {:error, reason} -> {:error, {:seal_secrets, reason}}
+    end
+  end
+
+  # The keys of the secret questions among `nodes`, a variant's candidates
+  # included.
+  @spec secret_keys([Screens.node_doc()]) :: [String.t()]
+  defp secret_keys(nodes) do
+    Enum.flat_map(nodes, fn
+      %{"type" => "secret_question", "key" => key} -> [key]
+      %{"nodes" => inner} when is_list(inner) -> secret_keys(inner)
+      _node -> []
+    end)
   end
 
   @spec merged(map(), map()) :: map()

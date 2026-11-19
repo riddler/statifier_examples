@@ -29,6 +29,9 @@ defmodule StatifierExamples.ScreenEditor.Try do
   signup screens fixture, not out of the document the author wrote. Each
   handler captures every question on the screen into `responses.<key>`,
   as a `myapp.screen` handler does, plus the pressing button's `writes`.
+  A secret question is captured like any other, and what its capture reads
+  is the sealed form: `Journey.submit/4` seals the response before it
+  raises the outcome, so the event never carries the text the patron typed.
   A Path with no branch has no use for an outcome other than "go on", so
   the handlers abandon their screen's group and the sequence moves on.
   """
@@ -40,7 +43,7 @@ defmodule StatifierExamples.ScreenEditor.Try do
   alias StatifierExamples.ScreenEditor.Walk
   alias StatifierExamples.Signup.{Journey, Screen, Validation}
 
-  @questions ["text_question", "choice_question", "boolean_question"]
+  @questions ["text_question", "choice_question", "boolean_question", "secret_question"]
 
   # The root every handler captures under, declared because an assign to a
   # root nothing declares raises error.execution rather than writing it.

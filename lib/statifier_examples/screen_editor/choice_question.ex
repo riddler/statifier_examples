@@ -9,7 +9,10 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
   renderer (radio or dropdown for one; checkboxes or list for many), and a
   renderer with no hint picks by the option count. `required` asks for a
   choice; `min_selections` and `max_selections` bound how many, and only a
-  `many` question reads them.
+  `many` question reads them. `help` is a line of guidance shown beside the
+  question, and `default` the value of the option it starts chosen, for a
+  `one` question: riddler holds a default to one of the question's own
+  option values and refuses any other when the document is admitted.
 
   ## `answer_options`, one row per option
 
@@ -36,6 +39,8 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
         Node.field("select", {:select, @selects}, "Select", true, "one"),
         Node.field("answer_options", {:list, :string}, "Answer options", true, []),
         Node.field("style", :string, "Style", false, ""),
+        Node.field("help", :string, "Help", false, ""),
+        Node.field("default", :string, "Default", false, ""),
         Node.field("required", :boolean, "Required", false, false),
         Node.field("min_selections", :integer, "Min selections", false, nil),
         Node.field("max_selections", :integer, "Max selections", false, nil)

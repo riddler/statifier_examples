@@ -61,6 +61,7 @@
                   "key": "email",
                   "label": "Email address",
                   "placeholder": "rosa@example.com",
+                  "help": "We write here when a hold is ready and before a loan is due.",
                   "required": true,
                   "format": "email"
                 }
@@ -76,6 +77,17 @@
                   "format": "integer",
                   "min": "0",
                   "max": "120"
+                }
+              },
+              {
+                "type": "myapp.screens.secret_question",
+                "id": "blk_prs_library_pin",
+                "type_version": 1,
+                "config": {
+                  "key": "library_pin",
+                  "label": "Choose a PIN for your library card",
+                  "help": "You type it with your card number to borrow at the self-service desk.",
+                  "required": true
                 }
               },
               {
@@ -122,6 +134,7 @@
                   "select": "one",
                   "style": "radio",
                   "required": true,
+                  "default": "standard",
                   "answer_options": [
                     "standard=Standard card",
                     "family=Family card, for two adults and their children",
