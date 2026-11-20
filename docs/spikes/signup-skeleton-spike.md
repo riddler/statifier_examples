@@ -1048,6 +1048,9 @@ Two of those are load-bearing for this skeleton rather than nice to have.
 one level up; `sb-m6ru` is why a Path's branch rests on a host contract that
 neither document states and nothing can check.
 
+*Cross-reference, 2026-11-20: Back no longer moves the Path forward here; see
+the dated paragraph "Back goes back for this app 2026-09-18 (`se-dva`)" under the "Back navigation was not built" finding.*
+
 Residue in this app, filed by the conductor and open here:
 
 | Bead | What |
@@ -1113,6 +1116,8 @@ should not read this document as evidence:
 
 - **Back navigation, and therefore the response-keys ruling's overwrite
   rule.** No Path here goes backwards; see the responses-layout section.
+  *Cross-reference, 2026-11-20: overtaken for this app; see
+  the dated paragraph "Back goes back for this app 2026-09-18 (`se-dva`)" under the "Back navigation was not built" finding.*
 - **A response redrawn into an input.** The renderer takes a stored-response
   map for exactly that and it is unobservable on a linear Path - deleting the
   attribute's value reddened nothing in either suite.
@@ -1152,6 +1157,9 @@ before being written down; all four are true.
    `personal_chosen` and `business_chosen`. The load-bearing claim - pressing
    Back moves the Path forward, because a `core.group`-rooted composite takes
    the default single `done` - is verified and stands.
+   *Cross-reference, 2026-11-20: that held at the time and has since been
+   overtaken for this app; see
+   the dated paragraph "Back goes back for this app 2026-09-18 (`se-dva`)" under the "Back navigation was not built" finding.*
 
 2. **"Six test modules ... moved with them"** (the nouns section's file map) is off by
    one. The stack adds **seven**: `screens_test.exs`, `screen_test.exs`,
