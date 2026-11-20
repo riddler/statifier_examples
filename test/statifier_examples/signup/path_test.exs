@@ -238,6 +238,26 @@ defmodule StatifierExamples.Signup.PathTest do
              ]
     end
 
+    # The narrowing of `back_edge?/2` (the drop reads a composite's derived
+    # outcome slots, not the `on_` prefix). A screen shown again inside
+    # `core.invoke`'s fixed `on_error` slot is the Path handling a failure,
+    # not a reader pressing Back, and so is one in an `on_` slot the screen
+    # does not derive from any of its outcomes: both are still duplicates.
+    #
+    # Sabotage: put the prefix test back (`String.starts_with?(slot, "on_")`
+    # in place of the derived-outcome check). THIS CASE WENT RED, the first
+    # pair (a block in `core.invoke`'s `on_error`) answering `[]`. Reverted
+    # from a copy.
+    test "a screen in a core block's on_ slot, or a slot no outcome derives, is a defect" do
+      for {parent, slot} <- [{core_invoke(), "on_error"}, {screen_host(), "on_nothing"}] do
+        assert [
+                 {:duplicate_response_key, "email", ["blk_account", "blk_again"]},
+                 {:duplicate_response_key, "first_name", ["blk_account", "blk_again"]},
+                 {:duplicate_outcome, "account_submitted", ["blk_account", "blk_again"]}
+               ] = Path.validate(nested_again(parent, slot))
+      end
+    end
+
     # The response-key rule, and the reason the finding names blocks rather
     # than screens: one screen shown twice reaches its response keys twice,
     # and the second visit overwrites what the first one collected. Note what
@@ -256,6 +276,22 @@ defmodule StatifierExamples.Signup.PathTest do
              ]
     end
   end
+
+  # A document with the account screen on the forward line and a second
+  # account screen inside `parent`, built directly so the slot name is
+  # whatever the case wants.
+  defp nested_again(parent, slot) do
+    again = Block.new("myapp.screen", id: "blk_again", config: %{"screen" => "account"})
+    account = Block.new("myapp.screen", id: "blk_account", config: %{"screen" => "account"})
+    parent = %{parent | slots: %{slot => [again]}}
+    root = Block.new("core.sequence", id: "blk_root", slots: %{"body" => [account, parent]})
+
+    Document.new(root)
+  end
+
+  defp core_invoke, do: Block.new("core.invoke", id: "blk_invoke", config: %{})
+
+  defp screen_host, do: Block.new("myapp.screen", id: "blk_host", config: %{"screen" => "plan"})
 
   # One pass per SCREEN, not per screen block: the back edge shows the
   # account screen a second time, and a screen shown again listens for the

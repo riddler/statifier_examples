@@ -51,7 +51,9 @@ defmodule StatifierExamples.Signup.Path do
 
   What tells the two apart is **where the second block sits**. A block
   inside a declared `on_<outcome>` slot - the slot a block type opens for
-  one of its outcomes, `statifier_blocks`' `on_` naming - is on a branch
+  one of its outcomes, `statifier_blocks`' `on_` naming, so a composite's
+  derived outcome slot and not any slot that happens to start with `on_`
+  (`core.invoke`'s `on_error` is not one) - is on a branch
   the Path took off its forward line, so a `myapp.screen` block there
   naming a screen key an **earlier** block already named is a *re-visit*,
   and `validate/1` drops it before either uniqueness rule runs. It is the
@@ -80,6 +82,7 @@ defmodule StatifierExamples.Signup.Path do
   """
 
   alias StatifierBlocks.{Block, Document}
+  alias StatifierExamples.Charts
   alias StatifierExamples.Signup.Screens
 
   @screen_type "myapp.screen"
@@ -206,21 +209,47 @@ defmodule StatifierExamples.Signup.Path do
     Enum.reverse(kept)
   end
 
-  # Whether the block carrying `id` sits anywhere inside a slot named for
-  # an outcome. `Document.fetch_path/2` answers with every
+  # Whether the block carrying `id` sits anywhere inside a composite's
+  # derived outcome slot. `Document.fetch_path/2` answers with every
   # `{parent block id, slot name, index}` step taken to reach the block, so
   # the whole ancestry is in the answer and a screen nested further down
   # inside a back-edge slot counts as one too.
+  #
+  # A step counts only when its parent is a composite and the slot is the
+  # one that composite derives for one of its outcomes
+  # (`StatifierBlocks.Composite.outcomes/2`, spelled `on_<outcome>`). The
+  # `on_` prefix alone is not enough: a core block's fixed slots carry it
+  # too (`core.invoke`'s `on_error`, `core.map`'s and `core.subchart`'s
+  # `on_` slots), and a screen in one of those is the Path handling a
+  # failure, not a reader pressing Back.
   @spec back_edge?(Document.t(), String.t()) :: boolean()
   defp back_edge?(document, id) do
     case Document.fetch_path(document, id) do
       {:ok, path} ->
-        Enum.any?(path, fn {_parent_id, slot, _index} ->
-          String.starts_with?(slot, @outcome_slot_prefix)
+        blocks = Map.new(Document.blocks(document), &{&1.id, &1})
+        palette = Charts.palette()
+
+        Enum.any?(path, fn {parent_id, slot, _index} ->
+          outcome_slot?(palette, Map.get(blocks, parent_id), slot)
         end)
 
       :error ->
         false
+    end
+  end
+
+  @spec outcome_slot?(StatifierBlocks.Palette.t(), Block.t() | nil, String.t()) :: boolean()
+  defp outcome_slot?(_palette, nil, _slot), do: false
+
+  defp outcome_slot?(palette, %Block{type: type} = parent, slot) do
+    with {:ok, ref} <- StatifierBlocks.Palette.fetch(palette, type),
+         true <- StatifierBlocks.Composite.composite?(ref) do
+      parent_outcomes =
+        palette |> StatifierBlocks.Composite.outcomes(parent) |> Enum.map(&elem(&1, 0))
+
+      slot in Enum.map(parent_outcomes, &(@outcome_slot_prefix <> &1))
+    else
+      _not_a_composite -> false
     end
   end
 
