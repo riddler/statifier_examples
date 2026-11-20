@@ -19,9 +19,9 @@ The recipe is written and checked against these releases, which are what
 
 | Package | Version | What the recipe uses it for |
 |---|---|---|
-| `statifier` | 2.13.0 | compiling the chart and running it |
-| `statifier_blocks` | 0.43.0 | the document, `Plan.expressible/3`, the compile |
-| `statifier_persistence` | 0.24.2 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier` | 2.15.0 | compiling the chart and running it |
+| `statifier_blocks` | 0.46.0 | the document, `Plan.expressible/3`, the compile |
+| `statifier_persistence` | 0.26.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.17.2 | the invoke job and its `:invoke_timeout`, the timer job |
 | `statifier_router` | 0.13.0 | two of the publish-time checks |
 
@@ -313,3 +313,18 @@ needed nothing here either: the router adds
 after a nested delivery, and this recipe uses the router for two
 publish-time checks only; statifier_persistence 0.24.2 changes
 documentation only.
+
+The move to statifier 2.15.0, statifier_blocks 0.46.0 and
+statifier_persistence 0.26.0 needed nothing here either.
+statifier_persistence 0.25.0 moves its `statifier` requirement to
+`~> 2.15`, which is what moves `statifier`; statifier 2.14.0 refuses a
+document that writes one attribute twice on one element, and 2.15.0 one
+whose expressions call a function nothing declares, and this chart does
+neither. statifier_blocks 0.44.0 answers an undeclared datamodel path at
+`:error` from the publish-time checks in a document that declares its own
+roots, and the recipe's publish step still passes every check; 0.46.0
+adds Back and `core.checkpoint`, and no block in the document is a
+returnable step, so it compiles to the same bytes as before.
+statifier_persistence 0.26.0 adds an opt-in for durable subchart children
+off Postgres and its migration V09, which this app runs; the recipe
+starts no child.

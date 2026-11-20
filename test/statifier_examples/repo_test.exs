@@ -61,4 +61,30 @@ defmodule StatifierExamples.RepoTest do
 
     assert %{rows: []} = SQL.query!(Repo, "SELECT metadata FROM statifier_executions", [])
   end
+
+  # V09 (`statifier_persistence` 0.26.0): the six linkage columns and their
+  # two indexes. This app leaves `linkage_columns:` off, so no schema here
+  # selects them and nothing else in the suite would notice them missing.
+  #
+  # Sabotage: removed the AddStatifierPersistenceLinkageColumns migration
+  # and dropped the test database -> red on the column assertion, none of
+  # the six columns present. Reverted from a copy.
+  test "the executions table carries V09's linkage columns and indexes" do
+    %{rows: column_rows} = SQL.query!(Repo, "PRAGMA table_info(statifier_executions)", [])
+    present = Enum.map(column_rows, &Enum.at(&1, 1))
+
+    assert ~w(linkage_parent_execution_id linkage_invoke_id linkage_child_index
+              linkage_content_hash linkage_child_count linkage_policy) -- present == []
+
+    %{rows: rows} = SQL.query!(Repo, "PRAGMA index_list(statifier_executions)", [])
+    indexed = Enum.flat_map(rows, &index_columns(Enum.at(&1, 1)))
+
+    assert ["linkage_parent_execution_id", "linkage_invoke_id"] in indexed
+    assert ["linkage_content_hash"] in indexed
+  end
+
+  defp index_columns(name) do
+    %{rows: rows} = SQL.query!(Repo, "PRAGMA index_info(#{name})", [])
+    [Enum.map(rows, &Enum.at(&1, 2))]
+  end
 end

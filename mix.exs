@@ -156,6 +156,18 @@ defmodule StatifierExamples.MixProject do
       # any chart here carries; and drops a failed send to a session halted
       # `:budget_exhausted` without stepping it, which no execution here
       # reaches. Every chart the suite compiles compiles as before.
+      #
+      # 2026-11-20: `mix.lock` resolves 2.15.0 under the same `~> 2.12`
+      # requirement, because `statifier_persistence` 0.26.0 (from 0.25.0
+      # on) states `statifier ~> 2.15`; 2.15.0 is that floor, and the lock
+      # goes no further. 2.14.0 refuses a document that writes one
+      # attribute twice on one element, and changes two answers of a
+      # session halted `:budget_exhausted`; 2.15.0 adds the
+      # `:function_providers` option and refuses a chart whose expressions
+      # call a function nothing declares. No chart here writes an attribute
+      # twice or calls an undeclared function, and no execution here is
+      # halted on its budget: every chart the suite compiles compiles as
+      # before.
       {:statifier, "~> 2.12"},
 
       # A note on every `statifier_persistence` name below, added with
@@ -436,7 +448,25 @@ defmodule StatifierExamples.MixProject do
       # 0.13.0, and the requirement stays. 0.24.2 is a documentation
       # release as well: no migration, no library code, and the same
       # `statifier ~> 2.9`.
-      {:statifier_persistence, "~> 0.24"},
+      #
+      # 2026-11-20: the floor moves to `~> 0.26`, and `mix.lock` resolves
+      # 0.26.0; `~> 0.24` admits it, so the floor names the release this
+      # app now runs, as the 2026-10-08 floor did. 0.25.0 moves the
+      # `statifier` requirement to `~> 2.15`, which is what moves the
+      # `statifier` lock above, and adds `function_providers:`, which this
+      # app does not pass; 0.25.1 is a documentation release. 0.26.0 adds
+      # the `linkage_columns:` option and migration V09, so that a durable
+      # subchart child runs on a backend that is not Postgres, and
+      # `Executions.active_children/2`. `StatifierExamples.Persistence`
+      # leaves the option off, so every answer it gets is 0.25.1's, apart
+      # from a `:supports_linkage?` call in the adapter telemetry. This app
+      # runs V09 all the same
+      # (`priv/repo/migrations/20261120120001_add_statifier_persistence_linkage_columns.exs`),
+      # which the package says a host with the option off may do: the
+      # migration's moduledoc says why. `statifier_oban` 0.17.2
+      # (`~> 0.13`) and `statifier_router` 0.13.0 (`~> 0.18`) both admit
+      # 0.26.0.
+      {:statifier_persistence, "~> 0.26"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so
@@ -837,7 +867,18 @@ defmodule StatifierExamples.MixProject do
       # `Riddler.Journey`; 0.5.0 is the floor: it ships the JSON Schema of
       # the presented answer (`priv/schemas/presented-answer.schema.json`),
       # which the suite checks every answer the Journey draws against.
-      {:riddler, "~> 0.5.0"},
+      #
+      # 2026-11-20: the requirement moves to `~> 0.6.0`, the published
+      # release after 0.5.0; `~> 0.5.0` does not admit it, so the
+      # requirement is the move. 0.6.0 changes two answers.
+      # `Riddler.Journey.decode_submit/1` decodes a back request,
+      # `{"screen" => key, "back" => true}`, as its own shape where 0.5.0
+      # answered a `submit.missing_field` finding; this app does not call
+      # it yet. `Riddler.Screens.Document.validate/1` refuses a button whose
+      # `outcome` is not a string, which 0.5.0 accepted; every button in
+      # the signup screens carries a string `outcome`, so every document
+      # here is admitted as before.
+      {:riddler, "~> 0.6.0"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.15", only: :dev, runtime: false},
@@ -1470,13 +1511,29 @@ defmodule StatifierExamples.MixProject do
   # publish-time checks pass as before. The release's other changes (a
   # blank timer event reads "its event", the hook's first-layout
   # fallback) ask nothing of this app.
+  #
+  # 2026-11-20: the floor moves to `~> 0.46.0`, published, so the arm stays
+  # a Hex requirement; `~> 0.43.0` does not admit it, so the requirement
+  # is the move, through 0.44.0 and 0.45.0. 0.44.0 adds `core.await`'s
+  # `capture` and the editor's `advisories` assign, answers an undeclared
+  # datamodel path at `:error` from `Publish.findings/3` in a document
+  # that declares its own roots, rewords the Map's reading paragraph and
+  # abandon end, and renders a host's `class` on the read-only config form,
+  # which the Plan page's read-only panel now carries beside the package's
+  # own. 0.45.0 adds `core.await`'s `timeout_capture` and a composite's
+  # `subtree/2`. 0.46.0 adds Back: the optional `returnable?/1` callback,
+  # the trail and the reserved back event, `core.checkpoint` (placed last
+  # in the palette's "Structure" group, after the `deadline` recipe), the
+  # `chart_from` key on `core.subchart` and `Runtime.Back.offered?/3`. No
+  # block type here declares `returnable?/1`, so every document this app
+  # ships compiles to the same bytes it did on 0.43.0.
   defp statifier_blocks_dep do
     case System.get_env("STATIFIER_BLOCKS_PATH") do
       path when is_binary(path) and path != "" ->
         {:statifier_blocks, path: path}
 
       _ ->
-        {:statifier_blocks, "~> 0.43.0"}
+        {:statifier_blocks, "~> 0.46.0"}
     end
   end
 

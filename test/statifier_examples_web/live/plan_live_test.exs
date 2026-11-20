@@ -542,6 +542,14 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
     # read-only cases below went red with it, while every write-guard case
     # stayed green - which is the point, a rendering is not the write gate.
     # Reverted from a copy.
+    #
+    # 2026-11-20: from `statifier_blocks` 0.44.0 the read-only form renders
+    # the `class` this page passes, as the editable one always did, so the
+    # read-only class reads `sb-form sb-form--readonly myapp-plan__fields`.
+    # The read-only assertion was itself red on 0.46.0 while it still read
+    # the 0.43.0 string. Sabotage: dropped `myapp-plan__fields` from the
+    # page's `class`; the case went red at the editable half's class
+    # assertion, the first to read it. Reverted from a copy.
     test "a selected composite's field surface is the package's own form", %{conn: conn} do
       for {key, block_id, _module, _sentence} <- @composites do
         {:ok, plan, _html} = live(conn, ~p"/plan?#{[doc: key]}")
@@ -560,7 +568,7 @@ defmodule StatifierExamplesWeb.PlanLiveTest do
 
         read = readonly |> select(block_id) |> section("panel")
 
-        assert read =~ ~s(class="sb-form sb-form--readonly"),
+        assert read =~ ~s(class="sb-form sb-form--readonly myapp-plan__fields"),
                "#{key}: the read-only panel is not the package's read-only form"
 
         assert read =~ ~s(data-read-only="true")
