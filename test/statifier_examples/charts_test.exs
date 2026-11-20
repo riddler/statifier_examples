@@ -86,11 +86,21 @@ defmodule StatifierExamples.ChartsTest do
   #
   # Sabotage: gave myapp.provision order 4; this went red on the signup
   # group's number run, then reverted.
+  #
+  # 2026-11-20: the number run counts the palette's recipes beside its
+  # block types, as `StatifierBlocks.Palette.new/2` checks the two
+  # together. The core `deadline` recipe holds order 17 in "Structure",
+  # and on `statifier_blocks` 0.43.0 it was that group's last entry, so a
+  # run over the types alone (0..16) passed by accident; 0.46.0 adds
+  # `core.checkpoint` at 18, after the recipe. Sabotage: dropped `recipes`
+  # from the run again; this went red naming "Structure" with 17 missing.
+  # Reverted from a copy.
   test "every palette group's order runs 0..n with no gap" do
-    %Palette{types: types} = Charts.palette()
+    %Palette{types: types, recipes: recipes} = Charts.palette()
 
     groups =
       types
+      |> Map.merge(recipes)
       |> Map.values()
       |> Enum.map(& &1.palette_entry())
       |> Enum.group_by(&Map.get(&1, :group))
