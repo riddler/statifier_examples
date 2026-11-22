@@ -20,7 +20,8 @@ defmodule StatifierExamples.SignupTest do
              "myapp.provision" => Provision,
              "myapp.guarded_step" => StatifierExamples.Signup.GuardedStep,
              "myapp.guarded_section" => StatifierExamples.Signup.GuardedSection,
-             "myapp.screen" => StatifierExamples.Signup.Screen
+             "myapp.screen" => StatifierExamples.Signup.Screen,
+             "myapp.step" => StatifierExamples.Signup.ReturnableStep
            }
   end
 

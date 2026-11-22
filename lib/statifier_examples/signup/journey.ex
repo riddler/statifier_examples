@@ -186,6 +186,29 @@ defmodule StatifierExamples.Signup.Journey do
   lays a secret question's typed response over the datamodel, so a view
   carries nothing of it either.
 
+  ## Back through a returnable step
+
+  A Path whose screens are `myapp.step` blocks
+  (`StatifierExamples.Signup.ReturnableStep`) parks on the step's own
+  block, and every such step is a returnable step, so the compiled chart
+  keeps a trail of the steps it entered and answers `statifier_blocks`'
+  reserved back event over it. Two things follow here.
+
+  A view says whether Back is offered. `StatifierBlocks.Runtime.Back.offered?/3`
+  answers it from the execution's datamodel, its active leaf states and the
+  Path, and the answer goes to riddler as the screen status's `"back"`, so
+  the view's `back` is riddler's moves' own. It is `false` at the first
+  step, where there is nothing behind the reader, and everywhere in a Path
+  with no returnable step - the signup Path's included, whose back edge on
+  the plan screen is a button it authored.
+
+  `back/3` goes back. It takes the request a client sends, decodes it with
+  `Riddler.Journey.decode_submit/1`, and raises the reserved event on the
+  execution; the execution re-enters the step before, whose screen is drawn
+  with what the chart already holds for it. Nothing the reader typed on the
+  screen they left is sent, so it is dropped, and the responses the chart
+  held stay as they were.
+
   ## Responses are coerced once, on the way in
 
   A form posts strings. A condition like `responses.seats > 1` - the confirm
@@ -197,7 +220,9 @@ defmodule StatifierExamples.Signup.Journey do
   the one place that now has somewhere to put them.
   """
 
+  alias Statifier.MachineState
   alias StatifierBlocks.{Block, Compiled, Document}
+  alias StatifierBlocks.Runtime.Back
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{Durable, Execution}
   alias StatifierExamples.Signup.{Screen, Screens, Sealer, Validation}
@@ -222,7 +247,10 @@ defmodule StatifierExamples.Signup.Journey do
   nodes back in against the draft (the moduledoc's "What a page draws is
   riddler's answer"). `reason` and `retry_after_ms` are riddler's waiting
   answer's, and `nil` on any other state; `result` is riddler's done
-  answer's, and `nil` on any other state. `responses` is what the chart
+  answer's, and `nil` on any other state. `back` is riddler's moves'
+  `"back"` on a `"screen"` view - whether going back from the screen
+  would take the execution anywhere - and `false` on any other state.
+  `responses` is what the chart
   has collected so far, keyed by element key; `findings` is empty except in the
   `{:invalid, view}` a refused `submit/3` answers with.
 
@@ -242,6 +270,7 @@ defmodule StatifierExamples.Signup.Journey do
           :responses => %{optional(String.t()) => term()},
           :status => Execution.status(),
           :state => String.t(),
+          :back => boolean(),
           :reason => String.t() | nil,
           :retry_after_ms => non_neg_integer() | nil,
           :result => map() | nil,
@@ -312,7 +341,7 @@ defmodule StatifierExamples.Signup.Journey do
   def current(execution_id, opts \\ []) when is_binary(execution_id) and is_list(opts) do
     with {:ok, screens} <- screens_document(opts),
          {:ok, {{%Durable{machine_state: state}, run}, path}} <- resume(execution_id, opts) do
-      view(execution_id, run, state.datamodel, screens, path)
+      view(execution_id, run, state, screens, path)
     end
   end
 
@@ -388,7 +417,7 @@ defmodule StatifierExamples.Signup.Journey do
     with {:ok, screens} <- screens_document(opts),
          {:ok, {{%Durable{machine_state: state} = durable, run}, path}} <-
            resume(execution_id, opts),
-         {:ok, settled} <- view(execution_id, run, state.datamodel, screens, path),
+         {:ok, settled} <- view(execution_id, run, state, screens, path),
          {:ok, drafted} <- parked_on(resolve(settled, responses)),
          {:ok, button} <- button(drafted.nodes, outcome),
          {:ok, sealed} <- checked(drafted, responses, screens) do
@@ -407,6 +436,96 @@ defmodule StatifierExamples.Signup.Journey do
       findings -> {:invalid, %{drafted | findings: findings}}
     end
   end
+
+  @doc """
+  The back half: take the execution keyed `execution_id` back to the step
+  it entered before the one it is on (the moduledoc's "Back through a
+  returnable step").
+
+  `request` is what the client sent, and it has to be riddler's back
+  request, `%{"screen" => key, "back" => true}`: it is decoded with
+  `Riddler.Journey.decode_submit/1`, and the screen it names has to be the
+  one the execution is on.
+
+  `{:ok, view}` is the screen the execution went back to, or, for an
+  execution that stopped after it was loaded here and before the event
+  reached it, the last settled position carrying `discarded`, as
+  `submit/4` answers a refused press. An execution already stopped when it
+  is loaded is refused: it offers no Back. Nothing is sent for any of the
+  refusals:
+  `{:error, {:back_request, findings}}` for a request riddler does not
+  decode, `{:error, :not_a_back_request}` for one it decodes as a submit,
+  `{:error, :not_on_a_screen}` for an execution resting on no screen,
+  `{:error, {:stale_screen, key}}` when the execution is on a screen other
+  than the one the request names, `{:error, :back_not_offered}` where the
+  view's `back` is `false`, and the refusals `current/2` answers.
+
+  `opts[:screens]` and `opts[:path]` are the screens document and the Path
+  `start/2` was given, when it was given them.
+  """
+  @spec back(String.t(), map(), keyword()) :: {:ok, view()} | {:error, term()}
+  def back(execution_id, request, opts \\ [])
+      when is_binary(execution_id) and is_map(request) and is_list(opts) do
+    with {:ok, key} <- back_request(request),
+         {:ok, screens} <- screens_document(opts),
+         {:ok, {{%Durable{machine_state: state} = durable, run}, path}} <-
+           resume(execution_id, opts),
+         {:ok, settled} <- view(execution_id, run, state, screens, path),
+         {:ok, _on} <- parked_on(settled),
+         :ok <- on_screen(settled, key),
+         :ok <- back_offered(settled) do
+      went_back(durable, run, execution_id, {screens, path})
+    end
+  end
+
+  # The screen a back request names, once riddler has decoded it as one.
+  @spec back_request(map()) ::
+          {:ok, String.t()}
+          | {:error, {:back_request, [Riddler.Finding.t()]} | :not_a_back_request}
+  defp back_request(request) do
+    case Riddler.Journey.decode_submit(request) do
+      {:ok, %{"back" => true, "screen" => key}} -> {:ok, key}
+      {:ok, _submit} -> {:error, :not_a_back_request}
+      {:error, findings} -> {:error, {:back_request, findings}}
+    end
+  end
+
+  @spec on_screen(view(), String.t()) :: :ok | {:error, {:stale_screen, String.t()}}
+  defp on_screen(%{screen: %{key: key}}, key), do: :ok
+  defp on_screen(%{screen: %{key: current}}, _key), do: {:error, {:stale_screen, current}}
+
+  @spec back_offered(view()) :: :ok | {:error, :back_not_offered}
+  defp back_offered(%{back: true}), do: :ok
+  defp back_offered(_view), do: {:error, :back_not_offered}
+
+  # The reserved back event, raised with no data: going back presses no
+  # button, so nothing the reader typed travels with it.
+  @spec went_back(Durable.t(), Execution.t(), String.t(), {screens(), Document.t()}) ::
+          {:ok, view()} | {:error, term()}
+  defp went_back(%Durable{machine_state: settled} = durable, run, execution_id, {screens, path}) do
+    case Durable.send_event(durable, run, back_event()) do
+      {:ok, {%Durable{machine_state: moved_state}, moved}} ->
+        view(execution_id, moved, moved_state, screens, path)
+
+      {:discarded, reason} ->
+        with {:ok, view} <- view(execution_id, run, settled, screens, path) do
+          {:ok, Map.put(view, :discarded, reason)}
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  @doc """
+  The reserved event that takes an execution back to the returnable step
+  before its position: `statifier_blocks.back`, `statifier_blocks`'
+  ADR-0004 Amendment of 2026-11-20, `L3`. The package spells it in its
+  compiler and exports no function for it, so the host spells it here,
+  once.
+  """
+  @spec back_event() :: String.t()
+  def back_event, do: "statifier_blocks.back"
 
   @doc """
   What a press sends, for the responses `typed`: the responses.
@@ -460,10 +579,10 @@ defmodule StatifierExamples.Signup.Journey do
 
     case Durable.send_event(durable, run, event, responses(typed)) do
       {:ok, {%Durable{machine_state: moved_state}, moved}} ->
-        view(execution_id, moved, moved_state.datamodel, screens, path)
+        view(execution_id, moved, moved_state, screens, path)
 
       {:discarded, reason} ->
-        with {:ok, view} <- view(execution_id, run, settled.datamodel, screens, path) do
+        with {:ok, view} <- view(execution_id, run, settled, screens, path) do
           {:ok, Map.put(view, :discarded, reason)}
         end
 
@@ -478,11 +597,13 @@ defmodule StatifierExamples.Signup.Journey do
   # its waiting reason and retry hint, and its done result. `screen_at/3`
   # only answers a key the document declares, so the `{:screen, key}`
   # status never meets `{:error, :no_such_screen}`.
-  @spec view(String.t(), Execution.t(), map(), screens(), Document.t()) ::
+  @spec view(String.t(), Execution.t(), MachineState.t(), screens(), Document.t()) ::
           {:ok, view()} | {:error, {:undeclared_screen, String.t()}}
-  defp view(execution_id, run, datamodel, {document, admitted}, path) do
+  defp view(execution_id, run, %MachineState{datamodel: datamodel} = state, screens, path) do
+    {document, admitted} = screens
+
     with {:ok, key} <- screen_at(run, document, path) do
-      status = journey_status(key, run, path, datamodel)
+      status = journey_status(key, run, path, state)
       {:ok, answer} = Riddler.Journey.present(admitted, status, datamodel)
       :ok = check_presented(answer)
 
@@ -495,6 +616,7 @@ defmodule StatifierExamples.Signup.Journey do
          responses: Map.get(datamodel, "responses") || %{},
          status: run.status,
          state: Map.fetch!(answer, "state"),
+         back: back_presented?(answer),
          reason: Map.get(answer, "reason"),
          retry_after_ms: Map.get(answer, "retry_after_ms"),
          result: Map.get(answer, "result"),
@@ -508,17 +630,35 @@ defmodule StatifierExamples.Signup.Journey do
   # done once it has stopped running, wherever it rests, with what it
   # finished with. A running execution is on a screen when one is parked,
   # and waiting while it runs on elsewhere - the moduledoc's mid-call.
-  @spec journey_status(String.t() | nil, Execution.t(), Document.t(), map()) ::
+  #
+  # A screen is presented with `"back"` set to what statifier_blocks' Back
+  # reader answers for the execution's position (the moduledoc's "Back
+  # through a returnable step"), so riddler's moves say whether a Back
+  # control belongs on it.
+  @spec journey_status(String.t() | nil, Execution.t(), Document.t(), MachineState.t()) ::
           Riddler.Journey.status()
-  defp journey_status(_key, %Execution{status: status}, _path, datamodel)
+  defp journey_status(_key, %Execution{status: status}, _path, %MachineState{datamodel: datamodel})
        when status != :running,
        do: {:done, result(datamodel)}
 
-  defp journey_status(key, %Execution{status: :running}, _path, _datamodel) when is_binary(key),
-    do: {:screen, key}
+  defp journey_status(key, %Execution{status: :running}, path, state) when is_binary(key),
+    do: {:screen, key, %{"back" => back_offered?(state, path)}}
 
-  defp journey_status(nil, %Execution{status: :running} = run, path, _datamodel),
+  defp journey_status(nil, %Execution{status: :running} = run, path, _state),
     do: {:waiting, waiting_info(run, path)}
+
+  # statifier_blocks' Back reader over the execution's datamodel and its
+  # active leaf states. A Path with no returnable step answers `false`
+  # wherever it rests.
+  @spec back_offered?(MachineState.t(), Document.t()) :: boolean()
+  defp back_offered?(%MachineState{datamodel: datamodel} = state, path),
+    do: Back.offered?(datamodel, Statifier.active_leaf_states(state), path)
+
+  # Riddler's moves say whether Back is offered on the screen it presents;
+  # every other answer carries no moves, and offers none.
+  @spec back_presented?(Riddler.Journey.answer()) :: boolean()
+  defp back_presented?(%{"moves" => %{"back" => back}}), do: back == true
+  defp back_presented?(_no_moves), do: false
 
   # What a done execution finished with: the create-account call's receipt
   # under the key the Path writes it at, or nothing when the execution
@@ -696,6 +836,9 @@ defmodule StatifierExamples.Signup.Journey do
   @spec park(Block.t()) :: [{String.t(), String.t()}]
   defp park(%Block{type: "myapp.screen", id: id, config: config}),
     do: [{Screen.park_block_id(id), Map.get(config, "screen", "")}]
+
+  defp park(%Block{type: "myapp.step", id: id, config: config}),
+    do: [{id, Map.get(config, "screen", "")}]
 
   defp park(%Block{type: "core.await", id: id, config: %{"event" => event}})
        when is_binary(event) do

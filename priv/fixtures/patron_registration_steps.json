@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_patron_registration_steps",
+  "revision": 1,
+  "metadata": {
+    "name": "Patron registration in steps",
+    "description": "A new patron registers for a library card in three steps, each a myapp.step block over priv/fixtures/patron_registration_steps_screens.json. myapp.step is a returnable step, so a patron may go back from the card or the branch to the step before it, and finds what they gave there still filled in.",
+    "domain": "library"
+  },
+  "datamodel": [
+    {
+      "id": "responses",
+      "description": "What the steps collected, keyed by question key. Each myapp.step writes responses.<key> for the keys it names, from the press that finished it."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_prst_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.step",
+          "id": "blk_prst_name",
+          "type_version": 1,
+          "config": {
+            "screen": "patron_name",
+            "outcomes": ["name_given"],
+            "responses": ["first_name", "email"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_prst_card",
+          "type_version": 1,
+          "config": {
+            "screen": "patron_card",
+            "outcomes": ["card_chosen"],
+            "responses": ["card_type"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_prst_branch",
+          "type_version": 1,
+          "config": {
+            "screen": "patron_branch",
+            "outcomes": ["branch_chosen"],
+            "responses": ["home_branch"]
+          }
+        }
+      ]
+    }
+  }
+}

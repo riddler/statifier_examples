@@ -37,6 +37,14 @@ defmodule StatifierExamples.Signup do
   `signup_path` is the document that reads it. `StatifierExamples.Signup.Path`
   is the check the two halves agree.
 
+  `myapp.step` is the sixth: one screen again, as a **plain** block type
+  rather than a composite, declared a returnable step so that the
+  engine's own Back reaches it (`StatifierExamples.Signup.ReturnableStep`).
+  A composite cannot be declared one, so the signup Path keeps its
+  `myapp.screen` blocks and the authored back edge on its plan screen, and
+  `StatifierExamples.Library.RegistrationSteps` is the document that reads
+  this type.
+
   `signup_onboarding` is the smallest of the three and exists for one
   reading: a parent chart that embeds the wizard as a `core.subchart` and
   routes on the outcome it finished with. The child really runs - it
@@ -50,7 +58,15 @@ defmodule StatifierExamples.Signup do
 
   alias StatifierBlocks.{Block, Decode, Document, Edit}
   alias StatifierExamples.Charts.Fixture
-  alias StatifierExamples.Signup.{GuardedSection, GuardedStep, Provision, Screen, SignupStep}
+
+  alias StatifierExamples.Signup.{
+    GuardedSection,
+    GuardedStep,
+    Provision,
+    ReturnableStep,
+    Screen,
+    SignupStep
+  }
 
   @typedoc """
   One example document, as `StatifierExamples.Charts.fixtures/0` lists it.
@@ -118,7 +134,8 @@ defmodule StatifierExamples.Signup do
       "myapp.provision" => Provision,
       "myapp.guarded_step" => GuardedStep,
       "myapp.guarded_section" => GuardedSection,
-      "myapp.screen" => Screen
+      "myapp.screen" => Screen,
+      "myapp.step" => ReturnableStep
     }
 
   @doc """
