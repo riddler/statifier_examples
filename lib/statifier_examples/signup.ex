@@ -42,8 +42,9 @@ defmodule StatifierExamples.Signup do
   engine's own Back reaches it (`StatifierExamples.Signup.ReturnableStep`).
   A composite cannot be declared one, so the signup Path keeps its
   `myapp.screen` blocks and the authored back edge on its plan screen, and
-  `StatifierExamples.Library.RegistrationSteps` is the document that reads
-  this type.
+  `StatifierExamples.Library.RegistrationSteps` and the three branch
+  library setups `StatifierExamples.Library.Setups` lists are the
+  documents that read this type.
 
   `signup_onboarding` is the smallest of the three and exists for one
   reading: a parent chart that embeds the wizard as a `core.subchart` and

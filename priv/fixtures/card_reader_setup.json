@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_card_reader_setup",
+  "revision": 1,
+  "metadata": {
+    "name": "Card-reader setup",
+    "description": "One setup of a branch library's onboarding: which card reader the branch has, where it stands, and whether it read a test card. Three myapp.step blocks over priv/fixtures/card_reader_setup_screens.json, so the person setting it up may go back to the step before. Runnable alone, and written to run as a child of the onboarding: its root finishes with the outcome done.",
+    "domain": "library"
+  },
+  "datamodel": [
+    {
+      "id": "responses",
+      "description": "What the steps collected, keyed by question key. Each myapp.step writes responses.<key> for the keys it names, from the press that finished it."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_cr_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.step",
+          "id": "blk_cr_model",
+          "type_version": 1,
+          "config": {
+            "screen": "reader_model",
+            "outcomes": ["model_chosen"],
+            "responses": ["reader_kind"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_cr_location",
+          "type_version": 1,
+          "config": {
+            "screen": "reader_place",
+            "outcomes": ["location_given"],
+            "responses": ["reader_location"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_cr_test",
+          "type_version": 1,
+          "config": {
+            "screen": "reader_test",
+            "outcomes": ["test_reported"],
+            "responses": ["reader_test_result"]
+          }
+        }
+      ]
+    }
+  }
+}

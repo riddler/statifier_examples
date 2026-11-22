@@ -8,7 +8,7 @@ defmodule StatifierExamples.BlockSchemaTest do
   The shipped block documents are found by glob rather than listed, so a
   document added under `priv/fixtures/`, `priv/first_workflow/` or
   `priv/form_post/` is checked without anyone remembering to add it here.
-  The three files under `priv/fixtures/` that are not block documents are
+  The files under `priv/fixtures/` that are not block documents are
   named below, and the test proves that each is not one.
 
   From `statifier_blocks` 0.38.0 a block type's declared field types bind,
@@ -40,12 +40,16 @@ defmodule StatifierExamples.BlockSchemaTest do
 
   # Not block documents, so the block document's schema is not about them:
   # a datamodel document (`statifier_datamodel`'s shape, versioned by
-  # `version` and holding `scopes`) and two element documents (the signup
-  # wizard's screens and the patron registration steps' screens, each
-  # holding `screens`). None has a `root` block.
+  # `version` and holding `scopes`) and element documents (the signup
+  # wizard's screens, the patron registration steps' screens and each
+  # branch library setup's screens, each holding `screens`). None has a
+  # `root` block.
   @not_block_documents [
     "priv/fixtures/card-processing.datamodel.json",
+    "priv/fixtures/card_reader_setup_screens.json",
+    "priv/fixtures/catalogue_sync_screens.json",
     "priv/fixtures/patron_registration_steps_screens.json",
+    "priv/fixtures/reading_list_import_screens.json",
     "priv/fixtures/signup_screens.json"
   ]
 

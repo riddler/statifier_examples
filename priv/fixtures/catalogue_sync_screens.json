@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "id": "edoc_catalogue_sync_screens",
+  "metadata": {
+    "name": "Catalogue sync",
+    "description": "Three short screens a branch library fills in to sync its catalogue - the source, the schedule, who hears when a sync fails - with Back between them. An element document; priv/fixtures/catalogue_sync.json is the Path that shows them, one myapp.step block per screen.",
+    "domain": "library"
+  },
+  "screens": [
+    {
+      "key": "catalogue_source",
+      "title": "Where the catalogue comes from",
+      "nodes": [
+        {
+          "type": "heading",
+          "key": "catalogue_heading",
+          "level": 1,
+          "text": "Sync the branch catalogue"
+        },
+        {
+          "type": "choice_question",
+          "key": "catalogue_feed",
+          "label": "Where does the branch's catalogue come from?",
+          "select": "one",
+          "required": true,
+          "answer_options": [
+            {"value": "union_catalogue", "label": "The regional union catalogue"},
+            {"value": "branch_export", "label": "An export from the branch's own system"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "catalogue_source_continue",
+          "label": "Continue",
+          "outcome": "feed_chosen"
+        }
+      ]
+    },
+    {
+      "key": "catalogue_schedule",
+      "title": "How often it syncs",
+      "nodes": [
+        {
+          "type": "choice_question",
+          "key": "sync_schedule",
+          "label": "How often should the catalogue sync?",
+          "select": "one",
+          "required": true,
+          "answer_options": [
+            {"value": "nightly", "label": "Every night"},
+            {"value": "weekly", "label": "Once a week"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "catalogue_schedule_continue",
+          "label": "Continue",
+          "outcome": "schedule_chosen"
+        }
+      ]
+    },
+    {
+      "key": "catalogue_contact",
+      "title": "When a sync fails",
+      "nodes": [
+        {
+          "type": "text",
+          "key": "catalogue_contact_intro",
+          "text": "A sync that fails leaves yesterday's catalogue in place until someone looks."
+        },
+        {
+          "type": "text_question",
+          "key": "sync_contact_email",
+          "label": "Who should hear when a sync fails?",
+          "placeholder": "desk@example.com",
+          "required": true,
+          "format": "email"
+        },
+        {
+          "type": "button",
+          "key": "catalogue_start",
+          "label": "Start syncing",
+          "outcome": "sync_confirmed"
+        }
+      ]
+    }
+  ]
+}

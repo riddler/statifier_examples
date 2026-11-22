@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "id": "edoc_reading_list_import_screens",
+  "metadata": {
+    "name": "Reading-list import",
+    "description": "Three short screens a branch library fills in to import the schools' reading lists - the format, the term, whether to hold the titles - with Back between them. An element document; priv/fixtures/reading_list_import.json is the Path that shows them, one myapp.step block per screen.",
+    "domain": "library"
+  },
+  "screens": [
+    {
+      "key": "reading_list_source",
+      "title": "Where the lists come from",
+      "nodes": [
+        {
+          "type": "heading",
+          "key": "reading_list_heading",
+          "level": 1,
+          "text": "Import reading lists"
+        },
+        {
+          "type": "choice_question",
+          "key": "reading_list_format",
+          "label": "How do the schools send their reading lists?",
+          "select": "one",
+          "required": true,
+          "answer_options": [
+            {"value": "spreadsheet", "label": "A spreadsheet from each school"},
+            {"value": "booklist_link", "label": "A link to a shared booklist"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "reading_list_source_continue",
+          "label": "Continue",
+          "outcome": "format_chosen"
+        }
+      ]
+    },
+    {
+      "key": "reading_list_when",
+      "title": "Which term",
+      "nodes": [
+        {
+          "type": "text_question",
+          "key": "reading_list_term",
+          "label": "Which term are the lists for?",
+          "placeholder": "Spring term",
+          "required": true
+        },
+        {
+          "type": "button",
+          "key": "reading_list_term_continue",
+          "label": "Continue",
+          "outcome": "term_given"
+        }
+      ]
+    },
+    {
+      "key": "reading_list_titles",
+      "title": "Holding the titles",
+      "nodes": [
+        {
+          "type": "text",
+          "key": "reading_list_holds_intro",
+          "text": "A title on a list can wait at the branch before the class asks for it."
+        },
+        {
+          "type": "choice_question",
+          "key": "reading_list_holds",
+          "label": "What should the import do with the titles?",
+          "select": "one",
+          "required": true,
+          "answer_options": [
+            {"value": "place_holds", "label": "Place a hold on every title"},
+            {"value": "lists_only", "label": "Import the lists only"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "reading_list_import_confirm",
+          "label": "Import",
+          "outcome": "import_confirmed"
+        }
+      ]
+    }
+  ]
+}

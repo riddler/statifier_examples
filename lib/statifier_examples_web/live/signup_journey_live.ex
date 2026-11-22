@@ -72,8 +72,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   ## Another Path, and Back
 
   `?path=` names a Path other than the signup one, from the short list
-  this page runs: today `patron_registration_steps`,
-  `StatifierExamples.Library.RegistrationSteps`, three `myapp.step` blocks.
+  this page runs: `patron_registration_steps`,
+  `StatifierExamples.Library.RegistrationSteps`, and the three branch
+  library setups `StatifierExamples.Library.Setups` lists, each three
+  `myapp.step` blocks. `StatifierExamplesWeb.SettingsLive` starts a setup
+  and sends the reader here with its key and the new execution's id.
   The page hands that Path and its screens document to every `Journey`
   call, as the screen editor's Try does, and carries the key in the URL
   beside the execution id. A key the list does not hold is refused on the
@@ -95,13 +98,9 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   use StatifierExamplesWeb, :live_view
 
   alias StatifierExamples.Charts.Durable
-  alias StatifierExamples.Library.RegistrationSteps
+  alias StatifierExamples.Library.{RegistrationSteps, Setups}
   alias StatifierExamples.Signup.Journey
   alias StatifierExamplesWeb.SignupElements
-
-  # The Paths this page runs besides the signup one, by the key `?path=`
-  # names (the moduledoc's "Another Path, and Back").
-  @paths %{RegistrationSteps.key() => RegistrationSteps}
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -338,15 +337,15 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   end
 
   # The options every Journey call takes for the Path `?path=` names: none
-  # for the signup Path, the listed Path's otherwise.
+  # for the signup Path, the listed Path's otherwise (the moduledoc's
+  # "Another Path, and Back"); `:error` for a key no list holds.
   @spec path_options(String.t() | nil) :: {:ok, keyword()} | :error
   defp path_options(nil), do: {:ok, []}
 
   defp path_options(key) do
-    case Map.fetch(@paths, key) do
-      {:ok, module} -> {:ok, module.options()}
-      :error -> :error
-    end
+    if key == RegistrationSteps.key(),
+      do: {:ok, RegistrationSteps.options()},
+      else: Setups.options(key)
   end
 
   @spec journey_url(String.t() | nil, String.t()) :: String.t()

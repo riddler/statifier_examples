@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_reading_list_import",
+  "revision": 1,
+  "metadata": {
+    "name": "Reading-list import",
+    "description": "One setup of a branch library's onboarding: where the schools' reading lists come from, which term they are for, and whether the branch holds their titles. Three myapp.step blocks over priv/fixtures/reading_list_import_screens.json, so the person setting it up may go back to the step before. Runnable alone, and written to run as a child of the onboarding: its root finishes with the outcome done.",
+    "domain": "library"
+  },
+  "datamodel": [
+    {
+      "id": "responses",
+      "description": "What the steps collected, keyed by question key. Each myapp.step writes responses.<key> for the keys it names, from the press that finished it."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_rl_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.step",
+          "id": "blk_rl_source",
+          "type_version": 1,
+          "config": {
+            "screen": "reading_list_source",
+            "outcomes": ["format_chosen"],
+            "responses": ["reading_list_format"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_rl_term",
+          "type_version": 1,
+          "config": {
+            "screen": "reading_list_when",
+            "outcomes": ["term_given"],
+            "responses": ["reading_list_term"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_rl_holds",
+          "type_version": 1,
+          "config": {
+            "screen": "reading_list_titles",
+            "outcomes": ["import_confirmed"],
+            "responses": ["reading_list_holds"]
+          }
+        }
+      ]
+    }
+  }
+}
