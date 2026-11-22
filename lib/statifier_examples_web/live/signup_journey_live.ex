@@ -68,29 +68,67 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   press was not recorded. The notice is worded for the person filling in
   the form rather than for a developer: the reason `Journey` carries is
   the execution's status, which the line above it already shows.
+
+  ## Another Path, and Back
+
+  `?path=` names a Path other than the signup one, from the short list
+  this page runs: today `patron_registration_steps`,
+  `StatifierExamples.Library.RegistrationSteps`, three `myapp.step` blocks.
+  The page hands that Path and its screens document to every `Journey`
+  call, as the screen editor's Try does, and carries the key in the URL
+  beside the execution id. A key the list does not hold is refused on the
+  page.
+
+  The Back control is drawn where the view's `back` is `true`, and nowhere
+  else: whether Back is offered is statifier_blocks' Back reader's answer,
+  which `Journey` puts in riddler's moves, so the page never decides it
+  from which Path it runs. The signup Path's reader answers `false` on
+  every screen, and that Path keeps its own authored Back button on the
+  plan screen. Pressing the control sends riddler's back request,
+  `%{"screen" => key, "back" => true}`, to `Journey.back/3`. The draft is
+  dropped with the screen it was typed on, and the screen gone back to
+  starts its draft from what the chart holds for it, so pressing Continue
+  there without retyping sends what the reader gave before. A secret
+  question is the exception: its text is never held, so it is typed again.
   """
 
   use StatifierExamplesWeb, :live_view
 
   alias StatifierExamples.Charts.Durable
+  alias StatifierExamples.Library.RegistrationSteps
   alias StatifierExamples.Signup.Journey
   alias StatifierExamplesWeb.SignupElements
 
+  # The Paths this page runs besides the signup one, by the key `?path=`
+  # names (the moduledoc's "Another Path, and Back").
+  @paths %{RegistrationSteps.key() => RegistrationSteps}
+
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, view: nil, draft: %{}, error: nil, topic: nil)}
+    {:ok, assign(socket, view: nil, draft: %{}, error: nil, topic: nil, path: nil, opts: [])}
   end
 
   @impl Phoenix.LiveView
   def handle_params(params, _uri, socket) do
-    {:noreply, load(socket, params["execution"])}
+    case path_options(params["path"]) do
+      {:ok, opts} ->
+        {:noreply,
+         socket |> assign(path: params["path"], opts: opts) |> load(params["execution"])}
+
+      :error ->
+        {:noreply,
+         assign(socket, view: nil, path: nil, opts: [], error: {:unknown_path, params["path"]})}
+    end
   end
 
   @impl Phoenix.LiveView
+  def handle_event("start", _params, %{assigns: %{error: {:unknown_path, _key}}} = socket),
+    do: {:noreply, socket}
+
   def handle_event("start", _params, socket) do
-    case Journey.start() do
+    case Journey.start(Durable.new_execution_id(), socket.assigns.opts) do
       {:ok, execution_id} ->
-        {:noreply, push_patch(socket, to: ~p"/signup-journey?execution=#{execution_id}")}
+        {:noreply, push_patch(socket, to: journey_url(socket.assigns.path, execution_id))}
 
       {:error, reason} ->
         {:noreply, assign(socket, error: reason)}
@@ -125,9 +163,26 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   end
 
   def handle_event("outcome", %{"outcome" => outcome}, %{assigns: assigns} = socket) do
-    case Journey.submit(assigns.view.execution_id, outcome, assigns.draft) do
+    case Journey.submit(assigns.view.execution_id, outcome, assigns.draft, assigns.opts) do
       {:ok, view} -> {:noreply, assign(socket, view: view, draft: %{}, error: nil)}
       {:invalid, view} -> {:noreply, assign(socket, view: view, error: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error: reason)}
+    end
+  end
+
+  # Back, from a page whose execution has since been refused: the same
+  # refusal as the two clauses above, for the same reason.
+  def handle_event("back", _params, %{assigns: %{view: nil}} = socket) do
+    {:noreply, assign(socket, error: socket.assigns.error || :no_execution)}
+  end
+
+  # The control sends the screen it was drawn on; the page sends riddler's
+  # back request for it (the moduledoc's "Another Path, and Back").
+  def handle_event("back", %{"screen" => key}, %{assigns: assigns} = socket) do
+    request = %{"screen" => key, "back" => true}
+
+    case Journey.back(assigns.view.execution_id, request, assigns.opts) do
+      {:ok, view} -> {:noreply, assign(socket, view: view, draft: held(view), error: nil)}
       {:error, reason} -> {:noreply, assign(socket, error: reason)}
     end
   end
@@ -200,6 +255,17 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
             />
           </form>
 
+          <button
+            :if={@view.state == "screen" and @view.back}
+            id="journey-back"
+            type="button"
+            class="btn btn-ghost btn-sm self-start"
+            phx-click="back"
+            phx-value-screen={@view.screen.key}
+          >
+            Back
+          </button>
+
           <div :if={@view.state == "waiting"} id="journey-waiting" class="flex flex-col gap-2">
             <p class="text-base-content/70">
               The execution is between screens - it is resting on a call this app runs as a job.
@@ -241,7 +307,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   # nothing would be hiding the storage guard doing its job.
   @spec load(Phoenix.LiveView.Socket.t(), String.t() | nil) :: Phoenix.LiveView.Socket.t()
   defp load(socket, execution_id) when is_binary(execution_id) do
-    case Journey.current(execution_id) do
+    case Journey.current(execution_id, socket.assigns.opts) do
       {:ok, view} -> socket |> watch(execution_id) |> assign(view: view, draft: %{}, error: nil)
       {:error, reason} -> assign(socket, view: nil, error: reason)
     end
@@ -270,6 +336,32 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
         assign(socket, topic: topic)
     end
   end
+
+  # The options every Journey call takes for the Path `?path=` names: none
+  # for the signup Path, the listed Path's otherwise.
+  @spec path_options(String.t() | nil) :: {:ok, keyword()} | :error
+  defp path_options(nil), do: {:ok, []}
+
+  defp path_options(key) do
+    case Map.fetch(@paths, key) do
+      {:ok, module} -> {:ok, module.options()}
+      :error -> :error
+    end
+  end
+
+  @spec journey_url(String.t() | nil, String.t()) :: String.t()
+  defp journey_url(nil, execution_id), do: ~p"/signup-journey?#{[execution: execution_id]}"
+
+  defp journey_url(path, execution_id),
+    do: ~p"/signup-journey?#{[path: path, execution: execution_id]}"
+
+  # The draft a screen gone back to starts from: each presented question's
+  # `value`, which riddler draws from what the chart holds, as the screen
+  # editor's Try starts its draft. A secret question is presented with no
+  # value, so it starts with none.
+  @spec held(Journey.view()) :: %{optional(String.t()) => term()}
+  defp held(%{nodes: nodes}),
+    do: for(%{"key" => key, "value" => value} <- nodes, into: %{}, do: {key, value})
 
   # A finding names an element key; a reader knows the question by its
   # label. The nodes are already resolved, so the label is the one on the

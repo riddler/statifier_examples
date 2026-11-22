@@ -14,6 +14,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
   import Phoenix.LiveViewTest
 
   alias StatifierExamples.Charts.Durable
+  alias StatifierExamples.Library.RegistrationSteps
   alias StatifierExamples.Signup.Journey
 
   @account %{"first_name" => "Ada", "email" => "ada@example.com"}
@@ -332,6 +333,119 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
       assert html =~ "execution_not_found"
       refute html =~ "no_execution"
+    end
+  end
+
+  describe "Back through returnable steps" do
+    @steps_path "/signup-journey?path=patron_registration_steps"
+    @name %{"first_name" => "Rosa", "email" => "rosa@example.com"}
+
+    defp steps_started(conn) do
+      {:ok, live, _html} = live(conn, @steps_path)
+      live |> element("#start-journey") |> render_click()
+
+      live
+    end
+
+    # Sabotage: made `journey_url/2` drop the `path` param. The patched URL
+    # named no Path and this went red. Reverted from a copy.
+    test "the page runs the patron registration steps, and offers no Back on the first", %{
+      conn: conn
+    } do
+      live = steps_started(conn)
+
+      assert has_element?(live, "#name_continue")
+      refute has_element?(live, "#journey-back")
+      assert assert_patch(live) =~ "path=patron_registration_steps"
+    end
+
+    # Sabotage: rendered `#journey-back` whatever `@view.back` held. The
+    # first step drew a Back control and this went red, as did the test
+    # above and the signup Path case below. Reverted from a copy.
+    #
+    # Sabotage: made `handle_event("back", ...)` send `"back" => "true"`, a
+    # string. Riddler decoded it as a submit, the execution stayed on the
+    # card step and this went red. Reverted from a copy.
+    test "Back sends riddler's back request and the step gone back to carries its held values",
+         %{conn: conn} do
+      live = steps_started(conn)
+
+      live |> form("#journey-responses", responses: @name) |> render_change()
+      live |> element("#name_continue") |> render_click()
+      assert has_element?(live, "#card_continue")
+      assert has_element?(live, "#journey-back")
+
+      live |> form("#journey-responses", responses: %{"card_type" => "family"}) |> render_change()
+      html = live |> element("#journey-back") |> render_click()
+
+      assert has_element?(live, "#name_continue")
+      refute has_element?(live, "#journey-back")
+      refute has_element?(live, "#journey-error")
+      assert html =~ ~s(value="Rosa")
+      assert html =~ ~s(value="rosa@example.com")
+      refute html =~ "family"
+    end
+
+    # Sabotage: made the back clause assign `draft: %{}` in place of
+    # `held(view)`. Pressing Continue on the re-shown step sent nothing,
+    # the required name came back as a finding and this went red. Reverted
+    # from a copy.
+    test "a step gone back to moves on again without retyping", %{conn: conn} do
+      live = steps_started(conn)
+
+      live |> form("#journey-responses", responses: @name) |> render_change()
+      live |> element("#name_continue") |> render_click()
+      live |> element("#journey-back") |> render_click()
+
+      live |> element("#name_continue") |> render_click()
+
+      refute has_element?(live, "#findings")
+      assert has_element?(live, "#card_continue")
+      assert has_element?(live, "#journey-back")
+    end
+
+    # Sabotage: made `load/2` call `Journey.current/1` without the page's
+    # options. A reload of the steps execution read it against the signup
+    # Path and this went red. Reverted from a copy.
+    test "a reload picks the steps execution up where it was", %{conn: conn} do
+      opts = RegistrationSteps.options()
+
+      {:ok, execution_id} =
+        Journey.start("page-steps-#{System.unique_integer([:positive])}", opts)
+
+      {:ok, _card} = Journey.submit(execution_id, "name_given", @name, opts)
+
+      {:ok, live, _html} = live(conn, "#{@steps_path}&execution=#{execution_id}")
+
+      assert has_element?(live, "#card_continue")
+      assert has_element?(live, "#journey-back")
+    end
+
+    # Sabotage: made `path_options/1` answer the signup Path for a key the
+    # list does not hold. No refusal was drawn and this went red. Reverted
+    # from a copy.
+    test "a path the page does not run is refused", %{conn: conn} do
+      {:ok, live, html} = live(conn, ~p"/signup-journey?path=no_such_path")
+
+      assert html =~ "unknown_path"
+      assert has_element?(live, "#journey-error")
+      live |> element("#start-journey") |> render_click()
+      refute has_element?(live, "#journey-responses")
+    end
+
+    # Sabotage: made `back_offered?/2` in `Journey` answer `true` for every
+    # position. The signup Path's plan screen drew a Back control and this
+    # went red. Reverted from a copy.
+    test "the signup Path draws no engine Back control, and keeps its authored Back button", %{
+      conn: conn
+    } do
+      %{live: live} = started(conn)
+
+      live |> form("#journey-responses", responses: @account) |> render_change()
+      live |> element("#account_continue") |> render_click()
+
+      assert has_element?(live, "#plan_back")
+      refute has_element?(live, "#journey-back")
     end
   end
 end

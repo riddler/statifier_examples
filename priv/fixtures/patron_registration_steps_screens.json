@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "id": "edoc_patron_registration_steps_screens",
+  "metadata": {
+    "name": "Patron registration in steps",
+    "description": "Three short screens a new patron fills in to register for a library card - who they are, which card, which branch - with Back between them. An element document; priv/fixtures/patron_registration_steps.json is the Path that shows them, one myapp.step block per screen.",
+    "domain": "library"
+  },
+  "screens": [
+    {
+      "key": "patron_name",
+      "title": "Who you are",
+      "nodes": [
+        {
+          "type": "heading",
+          "key": "name_heading",
+          "level": 1,
+          "text": "Register for a library card"
+        },
+        {
+          "type": "text_question",
+          "key": "first_name",
+          "label": "First name",
+          "placeholder": "Rosa",
+          "required": true
+        },
+        {
+          "type": "text_question",
+          "key": "email",
+          "label": "Email address",
+          "placeholder": "rosa@example.com",
+          "required": true,
+          "format": "email"
+        },
+        {
+          "type": "button",
+          "key": "name_continue",
+          "label": "Continue",
+          "outcome": "name_given"
+        }
+      ]
+    },
+    {
+      "key": "patron_card",
+      "title": "Your card",
+      "nodes": [
+        {
+          "type": "choice_question",
+          "key": "card_type",
+          "label": "Which card would you like?",
+          "select": "one",
+          "required": true,
+          "answer_options": [
+            {"value": "standard", "label": "Standard card"},
+            {"value": "family", "label": "Family card"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "card_continue",
+          "label": "Continue",
+          "outcome": "card_chosen"
+        }
+      ]
+    },
+    {
+      "key": "patron_branch",
+      "title": "Your branch",
+      "nodes": [
+        {
+          "type": "text",
+          "key": "branch_intro",
+          "text": "A hold you place waits a week at the branch you collect from."
+        },
+        {
+          "type": "choice_question",
+          "key": "home_branch",
+          "label": "Which branch will you collect holds from?",
+          "select": "one",
+          "required": true,
+          "answer_options": [
+            {"value": "central", "label": "Riverbend Central"},
+            {"value": "eastside", "label": "Eastside"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "branch_register",
+          "label": "Register",
+          "outcome": "branch_chosen"
+        }
+      ]
+    }
+  ]
+}
