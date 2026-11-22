@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "id": "edoc_card_reader_setup_screens",
+  "metadata": {
+    "name": "Card-reader setup",
+    "description": "Three short screens a branch library fills in to set up a library-card reader - which reader, where it stands, whether it read a test card - with Back between them. An element document; priv/fixtures/card_reader_setup.json is the Path that shows them, one myapp.step block per screen.",
+    "domain": "library"
+  },
+  "screens": [
+    {
+      "key": "reader_model",
+      "title": "Which reader",
+      "nodes": [
+        {
+          "type": "heading",
+          "key": "reader_heading",
+          "level": 1,
+          "text": "Set up a card reader"
+        },
+        {
+          "type": "choice_question",
+          "key": "reader_kind",
+          "label": "Which reader does the branch have?",
+          "select": "one",
+          "required": true,
+          "answer_options": [
+            {"value": "desk_reader", "label": "A reader at the circulation desk"},
+            {"value": "self_checkout", "label": "A self-checkout kiosk"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "reader_model_continue",
+          "label": "Continue",
+          "outcome": "model_chosen"
+        }
+      ]
+    },
+    {
+      "key": "reader_place",
+      "title": "Where it stands",
+      "nodes": [
+        {
+          "type": "text_question",
+          "key": "reader_location",
+          "label": "Where in the branch is it?",
+          "placeholder": "Beside the returns slot",
+          "required": true
+        },
+        {
+          "type": "button",
+          "key": "reader_location_continue",
+          "label": "Continue",
+          "outcome": "location_given"
+        }
+      ]
+    },
+    {
+      "key": "reader_test",
+      "title": "A test card",
+      "nodes": [
+        {
+          "type": "text",
+          "key": "reader_test_intro",
+          "text": "Scan any library card at the reader, then say what happened."
+        },
+        {
+          "type": "choice_question",
+          "key": "reader_test_result",
+          "label": "Did the reader read the card?",
+          "select": "one",
+          "required": true,
+          "answer_options": [
+            {"value": "card_read", "label": "It read the card"},
+            {"value": "not_read", "label": "Nothing happened"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "reader_finish",
+          "label": "Finish",
+          "outcome": "test_reported"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_catalogue_sync",
+  "revision": 1,
+  "metadata": {
+    "name": "Catalogue sync",
+    "description": "One setup of a branch library's onboarding: where the branch's catalogue comes from, how often it syncs, and who hears when a sync fails. Three myapp.step blocks over priv/fixtures/catalogue_sync_screens.json, so the person setting it up may go back to the step before. Runnable alone, and written to run as a child of the onboarding: its root finishes with the outcome done.",
+    "domain": "library"
+  },
+  "datamodel": [
+    {
+      "id": "responses",
+      "description": "What the steps collected, keyed by question key. Each myapp.step writes responses.<key> for the keys it names, from the press that finished it."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_cs_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.step",
+          "id": "blk_cs_source",
+          "type_version": 1,
+          "config": {
+            "screen": "catalogue_source",
+            "outcomes": ["feed_chosen"],
+            "responses": ["catalogue_feed"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_cs_schedule",
+          "type_version": 1,
+          "config": {
+            "screen": "catalogue_schedule",
+            "outcomes": ["schedule_chosen"],
+            "responses": ["sync_schedule"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_cs_contact",
+          "type_version": 1,
+          "config": {
+            "screen": "catalogue_contact",
+            "outcomes": ["sync_confirmed"],
+            "responses": ["sync_contact_email"]
+          }
+        }
+      ]
+    }
+  }
+}
