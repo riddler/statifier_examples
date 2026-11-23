@@ -14,7 +14,7 @@ defmodule StatifierExamples.Library.OnboardingTest do
   alias Statifier.Machine.Identity
   alias StatifierBlocks.Compiled
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Durable, Execution, Subchart}
+  alias StatifierExamples.Charts.{Durable, Execution, ExecutionLock, Subchart}
   alias StatifierExamples.Library.{Onboarding, Setups}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Journey, Screen}
@@ -176,6 +176,50 @@ defmodule StatifierExamples.Library.OnboardingTest do
              end)
 
       {^second, view} = focused_view(id)
+      assert view.screen.key == "reader_model"
+    end
+
+    # Sabotage: made `focus/1` take the head of `active_children/2`'s list
+    # again. This test went red: the focus was on the first pass's child, not
+    # the stray later pass's.
+    test "with two active children of the invocation, the focus is on the newest pass's" do
+      id = start()
+      {:ok, _view} = pick(id, ["bdoc_catalogue_sync"])
+      first = first_child(id)
+
+      {:ok, %Compiled{} = compiled} = Onboarding.resolve_chart("bdoc_catalogue_sync", %{})
+      {:ok, setup} = Setups.fetch_document("bdoc_catalogue_sync")
+      {:ok, {durable, _run}} = Durable.resume(compiled, setup, first)
+      {:ok, %{metadata: metadata}} = Storage.fetch_execution(store(), first)
+      assert {:ok, linkage} = Linkage.from_metadata(metadata)
+
+      older = Linkage.child_execution_id(id, "blk_bo_setup", 0, "2.0")
+      newest = Linkage.child_execution_id(id, "blk_bo_setup", 0, "10.1")
+
+      # Ids that sort between the first pass's and each other as strings, so
+      # the head of the package's list is not the newest pass's.
+      for stray <- [newest, older] do
+        assert {:ok, _execution, _state} =
+                 Executions.create(store(), stray, durable.machine,
+                   executor: fn _effect, _context -> :ok end,
+                   serialization: {ExecutionLock, ExecutionLock},
+                   linkage: linkage
+                 )
+      end
+
+      assert [_first, _second, _third] = children(id)
+      assert {:ok, {^newest, opts}} = Onboarding.focus(id)
+      assert opts[:child]
+    end
+
+    # The moduledoc and the fixture's description say the setups run in the
+    # order the response lists them; the foreach walks it as submitted.
+    test "the setups run in the order the response lists them" do
+      id = start()
+      {:ok, _view} = pick(id, ["bdoc_card_reader_setup", "bdoc_catalogue_sync"])
+
+      {target, view} = focused_view(id)
+      assert target == first_child(id)
       assert view.screen.key == "reader_model"
     end
 

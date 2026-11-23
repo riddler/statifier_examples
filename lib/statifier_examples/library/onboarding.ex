@@ -19,8 +19,10 @@ defmodule StatifierExamples.Library.Onboarding do
   id to `setup_document`, and the one block in its body is a
   `core.subchart` that names its child by `chart_from: "setup_document"`
   rather than by a literal `chart`. Each pass therefore starts the setup
-  the branch picked, in the order the options list them, and the Path
-  goes on to its closing screen once the last one has finished.
+  the branch picked, in the order the response lists them (the order the
+  branch submitted the ids, not the order the pick screen declares its
+  options in), and the Path goes on to its closing screen once the last
+  one has finished.
 
   The subchart declares the one outcome `done`, which is the one root
   outcome each setup declares (`StatifierExamples.Library.Setups`' "How a
@@ -60,6 +62,15 @@ defmodule StatifierExamples.Library.Onboarding do
   and the onboarding execution itself otherwise. A page asks again after
   every press, because the press that finishes a setup moves the
   onboarding execution on.
+
+  `active_children/2` orders by invocation id and child index, not by
+  pass, so with more than one active child of the one invocation (a stray
+  the package names as a limit off Postgres) its head can be the first
+  pass's child while the parent waits on the newest. `focus/1` therefore
+  picks the child of the newest pass itself: a child id without a pass
+  suffix is the first pass's, and a later pass's id carries
+  `StatifierPersistence.Execution.Linkage.invocation/1`'s
+  `"<macrostep>.<round>"` after an `"@"`, which orders the later passes.
 
   Back inside a setup goes back between the setup's own steps; Back
   between the branch's own screens goes back between those. Back across
@@ -160,8 +171,26 @@ defmodule StatifierExamples.Library.Onboarding do
          {:ok, children} <- Executions.active_children(store, execution_id) do
       case children do
         [] -> {:ok, {execution_id, options()}}
-        [child | _later] -> child_focus(child)
+        [_one | _more] -> child_focus(newest_pass(children))
       end
+    end
+  end
+
+  # The child of the newest pass: the first pass's id has no suffix, a later
+  # pass's id ends in `@<macrostep>.<round>` (`Linkage.child_execution_id/4`).
+  @spec newest_pass([StatifierPersistence.Execution.t(), ...]) ::
+          StatifierPersistence.Execution.t()
+  defp newest_pass(children), do: Enum.max_by(children, &pass_order(&1.execution_id))
+
+  @spec pass_order(String.t()) :: {integer(), integer()}
+  defp pass_order(child_id) do
+    with [_first, invocation] <- String.split(child_id, "@", parts: 2),
+         [macrostep, round] <- String.split(invocation, ".", parts: 2),
+         {macrostep, ""} <- Integer.parse(macrostep),
+         {round, ""} <- Integer.parse(round) do
+      {macrostep, round}
+    else
+      _first_pass -> {-1, -1}
     end
   end
 
