@@ -21,11 +21,9 @@ defmodule StatifierExamples.Signup.SealedSecretTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierBlocks.Document
-  alias StatifierExamples.Charts.Durable
   alias StatifierExamples.PresentedAnswerCheck
   alias StatifierExamples.Repo
   alias StatifierExamples.ScreenEditor.Try
-  alias StatifierExamples.ScreenEditor.Walk
   alias StatifierExamples.Signup.Journey
   alias StatifierExamples.Signup.Sealer
   alias StatifierExamples.TestSealer
@@ -181,25 +179,12 @@ defmodule StatifierExamples.Signup.SealedSecretTest do
     on_exit(fn -> Application.put_env(:statifier_examples, Sealer, previous) end)
   end
 
-  # A Journey over the patron registration screens, on the Path the screen
-  # editor's Try derives for them. The age question's `integer` format is
-  # left out: the Journey's check has a message for `email` alone and
-  # raises on any other format, which is why `Try.start/1` refuses this
-  # document as it stands.
+  # A Journey over the patron registration screens as authored, started the
+  # way the screen editor's Try action starts one.
   defp start do
     {:ok, document} = @registration |> File.read!() |> Document.from_json()
-    {:ok, walked} = Walk.screen_document(document)
-    screens = without_age_format(walked)
-    opts = [screens: screens, path: Try.path(screens)]
-    {:ok, id} = Journey.start(Durable.new_execution_id(), opts)
+    {:ok, %{execution_id: id, opts: opts}} = Try.start(document)
     {id, opts}
-  end
-
-  defp without_age_format(walked) do
-    update_in(walked, ["screens", Access.all(), "nodes", Access.all()], fn
-      %{"key" => "age"} = node -> Map.drop(node, ["format", "min", "max"])
-      node -> node
-    end)
   end
 
   # Every value of every row of every table the test's sandbox can read, as

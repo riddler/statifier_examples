@@ -56,7 +56,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       configure(view, details, %{"key" => "patron_details", "title" => "Your details"})
 
       age = insert(view, "myapp.screens.text_question", details, "nodes", 0)
-      configure(view, age, %{"key" => "age", "label" => "Age", "format" => "integer"})
+      configure(view, age, %{"key" => "age", "label" => "Age", "format" => "phone"})
 
       next = insert(view, "myapp.screens.button", details, "nodes", 1)
 
@@ -221,6 +221,55 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
 
       refute render(view) =~ @pin
       assert view |> element("#try-collected") |> render() =~ "test-sealed:"
+    end
+  end
+
+  describe "a question inside a chosen variant candidate, authored and tried" do
+    # Riddler resolves a variant to the candidate that wins, and the winner
+    # replaces the variant (riddler 0.6.0, the `Riddler.Screens` moduledoc on
+    # containers), so the draft's seeding over the presented top-level nodes
+    # reaches a question that sat in a candidate.
+    #
+    # Sabotage: made presented/1 seed an empty draft; the untouched press was
+    # refused as card_type required, then reverted from a copy.
+    test "starts from its default, with no top-level question beside it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/screen-editor")
+
+      card = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
+      configure(view, card, %{"key" => "card_choice", "title" => "Your card"})
+
+      variant = insert(view, "myapp.screens.variant", card, "nodes", 0)
+      configure(view, variant, %{"key" => "card_variant"})
+
+      question = insert(view, "myapp.screens.choice_question", variant, "nodes", 0)
+
+      configure(view, question, %{
+        "key" => "card_type",
+        "label" => "Which card would you like?",
+        "select" => "one",
+        "required" => "true",
+        "default" => "family",
+        "answer_options" => ["standard=Standard card", "family=Family card"]
+      })
+
+      next = insert(view, "myapp.screens.button", card, "nodes", 1)
+      configure(view, next, %{"key" => "card_next", "label" => "Continue", "outcome" => "chosen"})
+
+      done = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 1)
+      configure(view, done, %{"key" => "all_done", "title" => "Done"})
+
+      finish = insert(view, "myapp.screens.button", done, "nodes", 0)
+      configure(view, finish, %{"key" => "finish", "label" => "Finish", "outcome" => "finished"})
+
+      view |> element("#try") |> render_click()
+
+      assert has_element?(view, ~s(#card_type input[type="radio"][value="family"][checked]))
+
+      view |> element("#card_next") |> render_click()
+
+      refute has_element?(view, "#try-findings")
+      assert has_element?(view, "#finish")
+      assert view |> element("#try-collected") |> render() =~ "family"
     end
   end
 

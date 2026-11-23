@@ -131,6 +131,7 @@
                 "config": {
                   "key": "card_type",
                   "label": "Which card would you like?",
+                  "help": "You can change card at any branch.",
                   "select": "one",
                   "style": "radio",
                   "required": true,
@@ -200,6 +201,7 @@
                 "config": {
                   "key": "lending_rules",
                   "label": "I agree to the library's lending rules",
+                  "help": "They cover loan periods, renewals and fines.",
                   "required": true
                 }
               },

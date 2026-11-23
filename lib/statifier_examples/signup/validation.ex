@@ -31,9 +31,9 @@ defmodule StatifierExamples.Signup.Validation do
 
   The one rule this module keeps is which formats a document may ask for.
   Riddler checks more than one, and this app has a reader-facing message
-  for `email` alone, so a `text_question` naming any other format
-  **raises**, for `StatifierExamplesWeb.SignupElements`' reason about an
-  unknown element type: a check this app cannot explain to a reader is a
+  for `email`, `integer` and `number` alone, so a `text_question` naming
+  any other format **raises**, for `StatifierExamplesWeb.SignupElements`'
+  reason about an unknown element type: a check this app cannot explain to a reader is a
   screen that cannot be finished, which is worse than a page that will not
   draw.
 
@@ -43,8 +43,9 @@ defmodule StatifierExamples.Signup.Validation do
   ruled by the operator for Riddler, 2026-09-12), so a page can put the
   message beside the input it belongs to without a second lookup, and the
   order is the document's. The key is riddler's `node_key`; the message is
-  this app's for the two codes a shipped screen can raise, and riddler's own
-  for any other.
+  this app's for the two codes a shipped screen can raise (a format finding
+  is worded for the format the question names), and riddler's own for any
+  other, an out-of-range number among them.
   """
 
   alias Riddler.Finding
@@ -57,8 +58,14 @@ defmodule StatifierExamples.Signup.Validation do
   """
   @type finding :: {key :: String.t(), message :: String.t()}
 
-  # The formats this app has a message for. See the moduledoc.
-  @formats ["email"]
+  # The formats this app has a message for, and the message each is put as.
+  # See the moduledoc.
+  @format_messages %{
+    "email" => "must look like an email address",
+    "integer" => "must be a whole number",
+    "number" => "must be a number"
+  }
+  @formats Map.keys(@format_messages) |> Enum.sort()
 
   # The screen the nodes are wrapped in to reach riddler. Its key and title
   # are never shown and never read back.
@@ -89,8 +96,12 @@ defmodule StatifierExamples.Signup.Validation do
     document = admit!(nodes)
 
     case Riddler.Screens.validate_screen(document, @screen_key, %{"responses" => responses}) do
-      :ok -> []
-      {:error, findings} -> Enum.map(findings, &pair/1)
+      :ok ->
+        []
+
+      {:error, findings} ->
+        formats = formats_by_key(nodes)
+        Enum.map(findings, &pair(&1, formats))
     end
   end
 
@@ -100,7 +111,7 @@ defmodule StatifierExamples.Signup.Validation do
   moduledoc).
 
       iex> StatifierExamples.Signup.Validation.formats()
-      ["email"]
+      ["email", "integer", "number"]
   """
   @spec formats() :: [String.t()]
   def formats, do: @formats
@@ -143,11 +154,25 @@ defmodule StatifierExamples.Signup.Validation do
     end
   end
 
-  @spec pair(Finding.t()) :: finding()
-  defp pair(%Finding{code: "response.required", node_key: key}), do: {key, "is required"}
+  # The format each text question names, by its key: a format finding is
+  # worded for the format its question asks for.
+  @spec formats_by_key([Screens.node_doc()]) :: %{optional(String.t()) => String.t()}
+  defp formats_by_key(nodes) do
+    for %{"type" => "text_question", "key" => key, "format" => format} <- nodes,
+        into: %{},
+        do: {key, format}
+  end
 
-  defp pair(%Finding{code: "response.format", node_key: key}),
-    do: {key, "must look like an email address"}
+  @spec pair(Finding.t(), %{optional(String.t()) => String.t()}) :: finding()
+  defp pair(%Finding{code: "response.required", node_key: key}, _formats),
+    do: {key, "is required"}
 
-  defp pair(%Finding{node_key: key, message: message}), do: {key, message}
+  defp pair(%Finding{code: "response.format", node_key: key} = finding, formats) do
+    case Map.fetch(@format_messages, Map.get(formats, key)) do
+      {:ok, message} -> {key, message}
+      :error -> {key, finding.message}
+    end
+  end
+
+  defp pair(%Finding{node_key: key, message: message}, _formats), do: {key, message}
 end
