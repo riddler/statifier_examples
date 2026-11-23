@@ -267,7 +267,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       log =
         debug_log(fn ->
           catch_exit(view |> element("#pin_next") |> render_click())
-          wait_for_crash_report()
+          wait_for_crash_report(view.pid)
         end)
 
       refute log =~ @pin
@@ -300,7 +300,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       log =
         debug_log(fn ->
           catch_exit(view |> element("#pin_next") |> render_click())
-          wait_for_crash_report()
+          wait_for_crash_report(view.pid)
         end)
 
       refute log =~ @pin
@@ -322,7 +322,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
           try do
             render_hook(view, "response", %{"responses" => [["library_pin", @pin]]})
           catch
-            :exit, _crashed -> wait_for_crash_report()
+            :exit, _crashed -> wait_for_crash_report(view.pid)
           end
         end)
 
@@ -349,7 +349,6 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
           ref = Process.monitor(pid)
           send(pid, message)
           assert_receive {:DOWN, ^ref, :process, ^pid, _reason}
-          wait_for_crash_report()
         end)
 
       refute log =~ @pin
@@ -426,9 +425,17 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
     end
   end
 
-  # A crash report is logged by the crashed process after its exit is seen
-  # here; a short wait lets it reach the capture before the capture ends.
-  defp wait_for_crash_report, do: Process.sleep(100)
+  # A crashing GenServer logs its crash report from its own process before
+  # it exits, so the report is in the capture once the process is down. The
+  # wait is on that exit, by a monitor, and bounded: a process that never
+  # goes down fails here, by name, rather than as a missing line later.
+  defp wait_for_crash_report(pid) do
+    ref = Process.monitor(pid)
+
+    assert_receive {:DOWN, ^ref, :process, ^pid, _reason},
+                   1_000,
+                   "the page process did not go down, so no crash report was logged"
+  end
 
   defp put_sealer(sealer) do
     previous = Application.get_env(:statifier_examples, StatifierExamples.Signup.Sealer)
