@@ -11,7 +11,15 @@ defmodule StatifierExamples.Library.OnboardingEndToEndTest do
   `StatifierExamples.Persistence` by its id. A restart is therefore a step
   taken by a process that has never seen the execution, holding nothing
   but the id. `restarted/2` checks the stored row is there and running,
-  then takes the next step from a fresh `Task`.
+  restarts every supervised process of this application that keeps
+  execution-adjacent state in memory - the engine's session runtime, the
+  per-execution lock and the edited-documents store - and takes the next
+  step from a fresh `Task`. The database and the Oban instance stay up:
+  the sandbox owns the first, and the store is what a restart must read
+  back from. Clearing those processes is what a node restart does to the
+  state the application holds in memory; the compiled-module and
+  `:persistent_term` caches are not cleared by it, and none of them holds an
+  execution (they hold compiled charts and routing config).
 
   Not async: durable executions step through the application's named
   `StatifierExamples.Charts.ExecutionLock`.
@@ -22,6 +30,7 @@ defmodule StatifierExamples.Library.OnboardingEndToEndTest do
   alias Ecto.Adapters.SQL.Sandbox
   alias StatifierBlocks.{Block, Document}
   alias StatifierExamples.Charts.{Durable, Execution}
+  alias StatifierExamples.Documents
   alias StatifierExamples.Library.{Onboarding, Setups}
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.{Journey, Screen}
@@ -49,7 +58,37 @@ defmodule StatifierExamples.Library.OnboardingEndToEndTest do
   # step is taken by a process that never saw it.
   defp restarted(execution_id, step) do
     assert %Stored{status: :active} = stored(execution_id)
+    :ok = restart_memory()
     step |> Task.async() |> Task.await()
+  end
+
+  # The application's in-memory state, dropped: each process is stopped and
+  # started again from its child spec, so it comes back empty.
+  @memory [
+    Statifier.Supervisor,
+    StatifierExamples.Charts.ExecutionLock,
+    StatifierExamples.Documents
+  ]
+
+  defp restart_memory do
+    # Something held in memory before, gone after: a sentinel in the
+    # documents store must not survive the restart.
+    sentinel = "restart-sentinel"
+    held = Onboarding.document()
+    gone = %Document{held | id: "bdoc_restart_gone"}
+    :ok = Documents.put(sentinel, held)
+    assert Documents.get(sentinel, gone) == held
+
+    for id <- @memory do
+      old = Process.whereis(id)
+      assert is_pid(old)
+      :ok = Supervisor.terminate_child(StatifierExamples.Supervisor, id)
+      assert {:ok, new} = Supervisor.restart_child(StatifierExamples.Supervisor, id)
+      assert new != old
+    end
+
+    assert Documents.get(sentinel, gone) == gone
+    :ok
   end
 
   # The execution the onboarding's focus is on, and the view it shows.
@@ -127,6 +166,11 @@ defmodule StatifierExamples.Library.OnboardingEndToEndTest do
     }
   end
 
+  # Not covered here, on purpose: the parent's routing on a child's outcome.
+  # Every setup declares the single outcome `done`, so there is one outcome
+  # to route on; a second one needs a setup that can end with it (the open
+  # bead se-qb73), and the routing assertion belongs with that fixture.
+  #
   # Sabotage notes, one per mutation, each run and turned red on an
   # assertion, then reverted from a copy:
   # - `Onboarding.focus/1` always answering the onboarding execution
@@ -137,6 +181,15 @@ defmodule StatifierExamples.Library.OnboardingEndToEndTest do
   #   the pick's view, the onboarding not resting on a child.
   # - `Durable.rest/3` leaving out the settled position's fold: red on the
   #   catalogue sync's screen key after its first press.
+  # - `Durable.start_child/5` answering `:pending` for a refused child (the
+  #   refusal note kept): red on the misfit parent's stored status being
+  #   `:failed`, it being `:active`.
+  # - `restart_memory/0` not stopping the processes before restarting
+  #   them: red on the restart answering `{:ok, new}`, it answering
+  #   `{:error, :running}`; this pins that the restart happens, it does not
+  #   prove which process's state a step would have leaned on. The
+  #   documents sentinel shows the in-memory state is non-empty before the
+  #   restart and empty after it.
   # - statifier_blocks' outcome fit judging no child undeclared (a
   #   dependency mutation, recompiled for the test env): red on the misfit
   #   parent having a child execution.
@@ -253,9 +306,20 @@ defmodule StatifierExamples.Library.OnboardingEndToEndTest do
 
     assert children(misfit_id) == []
 
+    # The parent's state after the refusal: the refusal routes down the
+    # setup's error edge and the parent ends failed, with no donedata and
+    # nothing left active or waiting.
+    assert %Stored{status: :failed, failure: "failed_final", donedata: nil} = stored(misfit_id)
+    assert %Execution{status: :failed, active: [], invoke: nil} = moved
+
     assert Enum.any?(
              Execution.entries(moved),
              &(&1.label == "Child chart refused" and &1.detail =~ "child_outcome_undeclared")
            )
+
+    labels = Enum.map(Execution.entries(moved), &{&1.label, &1.detail})
+    refused = Enum.find_index(labels, &match?({"Child chart refused", _}, &1))
+    errored = Enum.find_index(labels, &(&1 == {"Outcome", "error on blk_bo_setup"}))
+    assert is_integer(refused) and is_integer(errored) and refused < errored
   end
 end
