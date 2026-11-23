@@ -86,6 +86,58 @@ defmodule StatifierExamples.ScreenEditor.TryTest do
       assert done.screen == nil
     end
 
+    # Sabotage: dropped "integer" from Validation's formats; Try.start/1
+    # refused the fixture as {:unsupported_format, ["age"]}, then reverted
+    # from a copy.
+    test "starts on the patron registration fixture as it is authored" do
+      {:ok, document} =
+        "priv/fixtures/patron_registration_screens.json" |> File.read!() |> Document.from_json()
+
+      assert {:ok, %{execution_id: execution_id, opts: opts}} = Try.start(document)
+
+      {:ok, details} = Journey.current(execution_id, opts)
+      assert %{key: "patron_details"} = details.screen
+
+      details_responses = %{
+        "first_name" => "Rosa",
+        "email" => "rosa@example.com",
+        "age" => "old",
+        "library_pin" => "1234"
+      }
+
+      assert {:invalid, refused} =
+               Journey.submit(execution_id, "details_submitted", details_responses, opts)
+
+      assert refused.findings == [{"age", "must be a whole number"}]
+    end
+
+    # The fixture is where the boolean and choice blocks' `help` field is
+    # used. Sabotage: took the boolean question's help out of the fixture; the
+    # card screen presented one help line and this went red, then reverted
+    # from a copy.
+    test "presents the help the fixture puts on a choice and a boolean question" do
+      {:ok, document} =
+        "priv/fixtures/patron_registration_screens.json" |> File.read!() |> Document.from_json()
+
+      {:ok, %{execution_id: execution_id, opts: opts}} = Try.start(document)
+
+      details = %{
+        "first_name" => "Rosa",
+        "email" => "rosa@example.com",
+        "age" => "34",
+        "library_pin" => "1234"
+      }
+
+      {:ok, card} = Journey.submit(execution_id, "details_submitted", details, opts)
+
+      helps = for %{"key" => key, "help" => help} <- card.nodes, into: %{}, do: {key, help}
+
+      assert helps == %{
+               "card_type" => "You can change card at any branch.",
+               "lending_rules" => "They cover loan periods, renewals and fines."
+             }
+    end
+
     # Sabotage: made walk/1 answer the walk's refusals unwrapped; the
     # {:walk, _} match went red, then reverted.
     test "refuses a document the walk refuses, starting nothing" do

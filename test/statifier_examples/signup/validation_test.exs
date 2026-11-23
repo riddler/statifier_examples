@@ -68,6 +68,31 @@ defmodule StatifierExamples.Signup.ValidationTest do
                []
     end
 
+    # Sabotage: put every format finding as the email message; this test and
+    # the Try test on the patron registration fixture went red, then reverted
+    # from a copy.
+    test "integer and number are put in their own words" do
+      integer = [question(%{"format" => "integer"})]
+      number = [question(%{"key" => "n", "format" => "number"})]
+
+      for typo <- ["abc", "3.5", "12 years"] do
+        assert Validation.validate(integer, %{"q" => typo}) == [{"q", "must be a whole number"}]
+      end
+
+      assert Validation.validate(number, %{"n" => "x"}) == [{"n", "must be a number"}]
+      assert Validation.validate(integer, %{"q" => "34"}) == []
+      assert Validation.validate(number, %{"n" => "3.5"}) == []
+    end
+
+    # Sabotage: put any finding other than the two this module words as "is
+    # invalid"; this test went red, then reverted from a copy.
+    test "a number outside its range keeps riddler's own sentence" do
+      nodes = [question(%{"format" => "integer", "min" => 0, "max" => 120})]
+
+      assert [{"q", message}] = Validation.validate(nodes, %{"q" => "121"})
+      assert message =~ "at most 120"
+    end
+
     # A format is checked only when there is something to check: an optional
     # question left empty is not a malformed response, and reporting it as one
     # would make every `format` imply `required`.
