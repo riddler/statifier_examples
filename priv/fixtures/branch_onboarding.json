@@ -4,7 +4,7 @@
   "revision": 1,
   "metadata": {
     "name": "Branch onboarding",
-    "description": "A branch library joining: the branch says who it is, picks the integrations it needs, and runs the setup of each one it picked, in the order picked, each as a durable child execution of its own. The pick is a multi-select whose values are the setups' document ids; a core.foreach walks the response and a core.subchart names its child from the loop's item (chart_from), so which children run is data. The branch's own steps are myapp.step blocks, so Back works between them; Back does not cross into or out of a setup.",
+    "description": "A branch library joining: the branch says who it is, picks the integrations it needs, and runs the setup of each one it picked, in the order the response lists them, each as a durable child execution of its own. The pick is a multi-select whose values are the setups' document ids; a core.foreach walks the response and a core.subchart names its child from the loop's item (chart_from), so which children run is data. The branch's own steps are myapp.step blocks, so Back works between them; Back does not cross into or out of a setup.",
     "domain": "library"
   },
   "datamodel": [
