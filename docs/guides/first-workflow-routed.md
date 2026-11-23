@@ -355,7 +355,11 @@ document that writes one attribute twice on one element, and 2.15.0 one
 whose expressions call a function nothing declares, and this chart does
 neither. statifier_blocks 0.46.0 adds Back and `core.checkpoint`, and no
 block in the document is a returnable step, so it compiles to the same
-bytes as before. statifier_persistence 0.26.0 adds an opt-in for durable
+bytes as before. statifier_blocks 0.44.0 makes
+`StatifierBlocks.Publish.findings/3` answer an undeclared datamodel path
+at `:error` in a document that declares its own datamodel roots; the
+routed document has no `datamodel` entry, so the publish step answers as
+before. statifier_persistence 0.26.0 adds an opt-in for durable
 subchart children off Postgres and its migration V09, which this app
 runs; the router's own migration is unchanged. statifier_persistence
 0.27.0 starts a child for every pass of a durable subchart inside a loop
