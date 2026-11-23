@@ -24,17 +24,17 @@ The recipe is written and checked against these releases, which are what
 | Package | Version | What the recipe uses it for |
 |---|---|---|
 | `statifier_router` | 0.13.0 | the binding, the delivery, the address and dedupe tables, the route, the reapers, the migration's `:leading_columns`, `:on_create` and `:on_step` |
-| `statifier_persistence` | 0.26.0 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_persistence` | 0.27.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_blocks` | 0.46.0 | the document and the compile |
 | `statifier` | 2.15.0 | compiling the chart and running it |
 
 `statifier_router` 0.13.0 requires `statifier ~> 2.10` and
 `statifier_persistence ~> 0.18`, as 0.9.2, 0.10.0, 0.11.3 and 0.12.0 did.
-`mix.exs` asks for `statifier ~> 2.12` and `statifier_persistence ~> 0.26`
+`mix.exs` asks for `statifier ~> 2.12` and `statifier_persistence ~> 0.27`
 all the same: 0.20.0 is the release that adds
 `Executions.migrate_batch/3`, which
 `docs/guides/migrating-waiting-executions.md` walks, `mix.lock` resolves
-0.26.0, and its `statifier ~> 2.15` is what moves `statifier` to 2.15.0.
+0.27.0, and its `statifier ~> 2.15` is what moves `statifier` to 2.15.0.
 The jobs run on this app's own Oban. The first line the command prints
 names the versions it actually loaded.
 
@@ -357,7 +357,10 @@ neither. statifier_blocks 0.46.0 adds Back and `core.checkpoint`, and no
 block in the document is a returnable step, so it compiles to the same
 bytes as before. statifier_persistence 0.26.0 adds an opt-in for durable
 subchart children off Postgres and its migration V09, which this app
-runs; the router's own migration is unchanged.
+runs; the router's own migration is unchanged. statifier_persistence
+0.27.0 starts a child for every pass of a durable subchart inside a loop
+and adds no migration; the recipe starts no child, so the move to it
+needed nothing here either.
 
 The move before it, from statifier_router 0.12.0 to 0.13.0 with
 statifier_persistence 0.24.2, needed nothing in this recipe: 0.13.0 adds

@@ -234,10 +234,18 @@ defmodule StatifierExamples.Charts.Execution do
     append(run, :invoked, "Invoke dispatched", "#{invoke.type} on #{label}", execution_id)
   end
 
+  # A trace point of another execution is not folded. Its state indexes and
+  # its configuration are that execution's chart's, and a parent this
+  # reading's child answers is traced: the parent's step runs inside the
+  # finishing child's drive, so the parent's trace reaches the child's
+  # reading. Read against the child's chart its indexes name the wrong
+  # states, or none at all.
+  def absorb(%__MODULE__{} = run, {:effect_of, _execution_id, _other, {:trace, _point}}),
+    do: run
+
   # Every other effect of another execution is folded as the reading's own,
   # as it was before the invoke clause above existed. A delayed send and a
-  # log name no block. A trace does, but a durable child is created without
-  # tracing, so no child's trace reaches a parent's reading.
+  # log name no block.
   def absorb(%__MODULE__{} = run, {:effect_of, _execution_id, _other, effect}),
     do: absorb(run, {:effect, effect})
 

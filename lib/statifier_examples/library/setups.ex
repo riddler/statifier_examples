@@ -35,8 +35,8 @@ defmodule StatifierExamples.Library.Setups do
   over it takes.
   """
 
-  alias StatifierBlocks.{Compiler, Decode, Document}
-  alias StatifierExamples.Charts
+  alias StatifierBlocks.{Decode, Document}
+  alias StatifierExamples.Charts.Subchart
 
   # `{key, path file, screens file}`, in the order a page offers them.
   # Listed rather than globbed, as `StatifierExamples.Library` lists its
@@ -104,17 +104,14 @@ defmodule StatifierExamples.Library.Setups do
 
   @doc """
   The root outcomes the setup's document declares, as its compile for use
-  as a child reads them (the moduledoc's "How a setup finishes").
+  as a child reads them (the moduledoc's "How a setup finishes"): the
+  compile `StatifierExamples.Charts.Subchart.child_compile/1` makes, the
+  one child recipe.
   """
   @spec outcomes(String.t()) :: {:ok, [String.t()]} | :error
   def outcomes(key) do
     with {:ok, document} <- document(key) do
-      {:ok, compiled} =
-        Compiler.compile(document, Charts.palette(),
-          known_invoke_types: Charts.invoke_types(),
-          child_use: true
-        )
-
+      {:ok, compiled} = Subchart.child_compile(document)
       {:ok, compiled.interface.declared_outcomes}
     end
   end

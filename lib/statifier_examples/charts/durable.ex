@@ -147,6 +147,7 @@ defmodule StatifierExamples.Charts.Durable do
   alias StatifierBlocks.Runtime.DurableSubchart
   alias StatifierExamples.Charts
   alias StatifierExamples.Documents
+  alias StatifierExamples.Library.{Onboarding, Setups}
 
   alias StatifierExamples.Charts.{
     AsyncCalls,
@@ -1126,15 +1127,35 @@ defmodule StatifierExamples.Charts.Durable do
 
   @spec charts() :: [{String.t(), Machine.t()}]
   defp charts do
-    Enum.flat_map(Charts.fixtures(), fn fixture ->
-      Enum.flat_map(
+    Enum.flat_map(compiles(), fn {compiled, _document} -> machine_entry(compiled) end)
+  end
+
+  # Every compile this app may hold a durable execution of, with the
+  # document it compiles: both compiles of every shipped fixture, then the
+  # charts it runs durably with children that are not among the fixtures -
+  # the branch onboarding Path, compiled as `StatifierExamples.Signup.Journey`
+  # compiles a supplied Path, and each setup it runs, compiled with the
+  # child recipe. A setup finishing answers the onboarding execution, and a
+  # drive narrating that answer names the onboarding's blocks, so both
+  # readers below find its chart here.
+  @spec compiles() :: [{term(), Document.t()}]
+  defp compiles do
+    fixtures =
+      Enum.flat_map(Charts.fixtures(), fn fixture ->
         [
-          compile(fixture.document, fixture.declare, fixture.datamodel),
-          Subchart.child_compile(fixture.document)
-        ],
-        &machine_entry/1
-      )
-    end)
+          {compile(fixture.document, fixture.declare, fixture.datamodel), fixture.document},
+          {Subchart.child_compile(fixture.document), fixture.document}
+        ]
+      end)
+
+    onboarding = Onboarding.document()
+
+    setups =
+      for key <- Setups.keys(),
+          {:ok, document} <- [Setups.document(key)],
+          do: {Subchart.child_compile(document), document}
+
+    fixtures ++ [{compile(onboarding, []), onboarding} | setups]
   end
 
   @spec machine_entry(term()) :: [{String.t(), Machine.t()}]
@@ -1223,8 +1244,20 @@ defmodule StatifierExamples.Charts.Durable do
       |> drain([])
       |> Enum.reduce({run, %{}}, fn item, {run, readings} -> fold(run, item, readings) end)
 
-    {:ok, {durable, finish(run, status)}}
+    # The settled position's configuration, folded last, as `resume/3`
+    # folds it: a durable subchart child is created without tracing, so no
+    # trace of its own marks where its drive left it, and without this the
+    # reading of a child would still name the state it was resumed on. For
+    # a traced execution it repeats the drive's own last stable point. A
+    # create discarded before any position was decoded has none to fold.
+    {:ok, {durable, run |> settled_at(durable.machine_state) |> finish(status)}}
   end
+
+  @spec settled_at(Execution.t(), Statifier.MachineState.t() | nil) :: Execution.t()
+  defp settled_at(run, nil), do: run
+
+  defp settled_at(run, machine_state),
+    do: Execution.absorb(run, {:effect, {:trace, stable(machine_state)}})
 
   # `readings` holds the reading of every other execution this drive has
   # folded a call of, by content hash, so each chart is resolved once per
@@ -1248,21 +1281,17 @@ defmodule StatifierExamples.Charts.Durable do
     do: {Execution.note(run, kind, label, detail, source), readings}
 
   # The reading of another execution's chart, for naming its blocks. The
-  # chart is found by content hash across both compiles of every shipped
-  # document, for `resolve_chart/1`'s reason, comparing the hash of each
-  # compile's source the way `child_chart/1` does, so only the match is
+  # chart is found by content hash across `compiles/0`, for
+  # `resolve_chart/1`'s reason, comparing the hash of each compile's source
+  # the way `child_chart/1` does, so only the match is
   # compiled into a machine. `nil` for a hash this app does not ship, which
   # the reading says as an unmapped state. The execution id a reading is
   # built with is not read by the naming, so the content hash stands in
   # for it.
   @spec other_reading(String.t()) :: Execution.t() | nil
   defp other_reading(content_hash) do
-    Enum.find_value(Charts.fixtures(), fn fixture ->
-      [
-        compile(fixture.document, fixture.declare, fixture.datamodel),
-        Subchart.child_compile(fixture.document)
-      ]
-      |> Enum.find_value(&reading_of(&1, fixture.document, content_hash))
+    Enum.find_value(compiles(), fn {compiled, document} ->
+      reading_of(compiled, document, content_hash)
     end)
   end
 
@@ -1405,14 +1434,16 @@ defmodule StatifierExamples.Charts.Durable do
           {:start_child, Statifier.Effect.Invoke.t(), {:invoke, Statifier.Effect.Invoke.t()}}
           | {:error, keyword()}
   defp start_child(reader, execution_id, type, params, dispatch_context) do
-    case DurableSubchart.dispatch(type, params, dispatch_context, Subchart) do
+    case DurableSubchart.dispatch(type, params, dispatch_context, subchart_host(dispatch_context)) do
       {:start_child, _resolved, {:invoke, invoke}} = instruction ->
+        child_execution_id = child_execution_id(dispatch_context)
+
         note(
           reader,
           execution_id,
           "Child chart started",
-          child_detail(execution_id, invoke),
-          child_execution_id(execution_id, invoke)
+          "#{invoke.src} as execution #{child_execution_id}",
+          child_execution_id
         )
 
         instruction
@@ -1427,25 +1458,48 @@ defmodule StatifierExamples.Charts.Durable do
     end
   end
 
-  # The child's execution id, said in the feed at the moment it is started. It is
-  # `StatifierPersistence.Execution.Linkage.child_execution_id/3`'s deterministic
-  # construction rather than a value read back out of storage, because at
-  # this point the child does not exist yet - the driver creates it when
-  # this drive's dispatch fun returns. It is what a reader types into the
-  # page URL to open the child as an execution of its own, which is the whole
-  # point of a durable subchart, so the feed says it rather than making
-  # someone query for it.
-  @spec child_detail(String.t(), Statifier.Effect.Invoke.t()) :: String.t()
-  defp child_detail(execution_id, invoke) do
-    "#{invoke.src} as execution #{child_execution_id(execution_id, invoke)}"
+  # Which host module resolves a subchart invocation: the branch onboarding
+  # Path's allow-list when the invoking execution's chart is that Path
+  # (`StatifierExamples.Library.Onboarding`'s "The allow-list"), and the
+  # shipped fixture list otherwise. The choice is made off the invoking
+  # chart's content hash, which the dispatch context carries, so a document
+  # cannot name its way into the other list.
+  @spec subchart_host(map()) :: module()
+  defp subchart_host(%{content_hash: content_hash}) when is_binary(content_hash) do
+    if Onboarding.parent?(content_hash), do: Onboarding, else: Subchart
   end
 
-  # The same construction, read twice: once into the row's sentence and
-  # once into the mark that says the row is a child's. One function so the
-  # two cannot name different executions.
-  @spec child_execution_id(String.t(), Statifier.Effect.Invoke.t()) :: String.t()
-  defp child_execution_id(execution_id, invoke) do
-    Linkage.child_execution_id(execution_id, invoke.invoke_id, 0)
+  defp subchart_host(_dispatch_context), do: Subchart
+
+  # The child's execution id, said in the feed at the moment it is started,
+  # once into the row's sentence and once into the mark that says the row
+  # is a child's. It is what a reader types into the page URL to open the
+  # child as an execution of its own, which is the whole point of a durable
+  # subchart, so the feed says it rather than making someone query for it.
+  #
+  # The child does not exist yet - the driver creates it when this drive's
+  # dispatch fun returns - so the id is derived the way the driver derives
+  # it, from the invoking execution (`context.execution_id`, never the
+  # drive's own id: a finishing child's drive starts its parent's next
+  # child) and the invoke effect. A child outside a loop, and the first
+  # pass's child of one inside a loop, takes
+  # `StatifierPersistence.Execution.Linkage.child_execution_id/3`'s id. A
+  # later pass of the same `<invoke>` element finds that id held by an
+  # earlier pass's child that has ended, and the driver creates its child
+  # under `Linkage.child_execution_id/4` with `Linkage.invocation/1` of the
+  # pass's own invoke effect instead (statifier_persistence 0.27.0), so the
+  # same one read of the first id decides it here.
+  @spec child_execution_id(map()) :: String.t()
+  defp child_execution_id(%{execution_id: parent, invoke_id: invoke_id, invoke: invoke}) do
+    first = Linkage.child_execution_id(parent, invoke_id, 0)
+
+    with {:ok, store} <- store(),
+         {:ok, %{status: status}} when status in [:completed, :failed, :cancelled] <-
+           Storage.fetch_execution(store, first) do
+      Linkage.child_execution_id(parent, invoke_id, 0, Linkage.invocation(invoke))
+    else
+      _first_pass -> first
+    end
   end
 
   # The asynchronous arm. The job was stored by the executor a moment ago

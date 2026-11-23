@@ -41,10 +41,12 @@ defmodule StatifierExamples.BlockSchemaTest do
   # Not block documents, so the block document's schema is not about them:
   # a datamodel document (`statifier_datamodel`'s shape, versioned by
   # `version` and holding `scopes`) and element documents (the signup
-  # wizard's screens, the patron registration steps' screens and each
-  # branch library setup's screens, each holding `screens`). None has a
+  # wizard's screens, the patron registration steps' screens, the branch
+  # onboarding's screens and each branch library setup's screens, each
+  # holding `screens`). None has a
   # `root` block.
   @not_block_documents [
+    "priv/fixtures/branch_onboarding_screens.json",
     "priv/fixtures/card-processing.datamodel.json",
     "priv/fixtures/card_reader_setup_screens.json",
     "priv/fixtures/catalogue_sync_screens.json",

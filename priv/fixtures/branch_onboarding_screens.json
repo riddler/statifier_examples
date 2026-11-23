@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "id": "edoc_branch_onboarding_screens",
+  "metadata": {
+    "name": "Branch onboarding",
+    "description": "The branch's own screens in its onboarding: which branch is joining, which integrations it needs, and the closing screen once every picked setup has finished. An element document; priv/fixtures/branch_onboarding.json is the Path that shows them, one myapp.step block per screen. Each setup's screens are its own document beside its Path.",
+    "domain": "library"
+  },
+  "screens": [
+    {
+      "key": "onboarding_branch",
+      "title": "Which branch is joining",
+      "nodes": [
+        {
+          "type": "heading",
+          "key": "onboarding_heading",
+          "level": 1,
+          "text": "Welcome to the library network"
+        },
+        {
+          "type": "text_question",
+          "key": "branch_name",
+          "label": "Which branch is joining?",
+          "placeholder": "Riverside branch",
+          "required": true
+        },
+        {
+          "type": "button",
+          "key": "onboarding_branch_continue",
+          "label": "Continue",
+          "outcome": "branch_named"
+        }
+      ]
+    },
+    {
+      "key": "onboarding_integrations",
+      "title": "What the branch needs",
+      "nodes": [
+        {
+          "type": "choice_question",
+          "key": "integrations",
+          "label": "Which of these should we set up for the branch?",
+          "select": "many",
+          "required": true,
+          "min_selections": 1,
+          "answer_options": [
+            {"value": "bdoc_catalogue_sync", "label": "Catalogue sync"},
+            {"value": "bdoc_reading_list_import", "label": "Reading-list import"},
+            {"value": "bdoc_card_reader_setup", "label": "Card-reader setup"}
+          ]
+        },
+        {
+          "type": "button",
+          "key": "onboarding_integrations_continue",
+          "label": "Start the setups",
+          "outcome": "integrations_chosen"
+        }
+      ]
+    },
+    {
+      "key": "onboarding_finished",
+      "title": "The branch is set up",
+      "nodes": [
+        {
+          "type": "text",
+          "key": "onboarding_finished_text",
+          "text": "Every setup the branch picked has finished. The branch can lend from tomorrow morning."
+        },
+        {
+          "type": "button",
+          "key": "onboarding_finish",
+          "label": "Finish",
+          "outcome": "onboarding_confirmed"
+        }
+      ]
+    }
+  ]
+}

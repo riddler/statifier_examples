@@ -466,7 +466,19 @@ defmodule StatifierExamples.MixProject do
       # migration's moduledoc says why. `statifier_oban` 0.17.2
       # (`~> 0.13`) and `statifier_router` 0.13.0 (`~> 0.18`) both admit
       # 0.26.0.
-      {:statifier_persistence, "~> 0.26"},
+      #
+      # 2026-11-23: the floor moves to `~> 0.27`, and `mix.lock` resolves
+      # 0.27.0; only its line moves, because 0.27.0 keeps the `statifier ~>
+      # 2.15` requirement. 0.27.0 starts a durable subchart child for every
+      # pass of a loop, where the second pass adopted the first pass's
+      # finished child and the parent waited for good, which is what the
+      # branch onboarding (`StatifierExamples.Library.Onboarding`, one
+      # child per picked setup inside a `core.foreach`) needs. It adds no
+      # migration. A later pass's child is stored under
+      # `Linkage.child_execution_id/4`, and `StatifierExamples.Charts.Durable`
+      # derives the id it says in the feed that way.
+      # `statifier_oban` 0.17.2 and `statifier_router` 0.13.0 admit it.
+      {:statifier_persistence, "~> 0.27"},
 
       # Durable timers. `statifier_oban` never owns an Oban instance
       # (its ADR-0002): this app supplies one, on Oban's SQLite engine, so

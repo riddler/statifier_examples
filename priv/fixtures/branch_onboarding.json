@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "id": "bdoc_branch_onboarding",
+  "revision": 1,
+  "metadata": {
+    "name": "Branch onboarding",
+    "description": "A branch library joining: the branch says who it is, picks the integrations it needs, and runs the setup of each one it picked, in the order picked, each as a durable child execution of its own. The pick is a multi-select whose values are the setups' document ids; a core.foreach walks the response and a core.subchart names its child from the loop's item (chart_from), so which children run is data. The branch's own steps are myapp.step blocks, so Back works between them; Back does not cross into or out of a setup.",
+    "domain": "library"
+  },
+  "datamodel": [
+    {
+      "id": "responses",
+      "description": "What the branch's own steps collected, keyed by question key: the branch's name and the integrations it picked, as the setups' document ids. Each setup's own responses stay in the setup's own execution."
+    }
+  ],
+  "root": {
+    "type": "core.sequence",
+    "id": "blk_bo_root",
+    "type_version": 1,
+    "slots": {
+      "body": [
+        {
+          "type": "myapp.step",
+          "id": "blk_bo_branch",
+          "type_version": 1,
+          "config": {
+            "screen": "onboarding_branch",
+            "outcomes": ["branch_named"],
+            "responses": ["branch_name"]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_bo_pick",
+          "type_version": 1,
+          "config": {
+            "screen": "onboarding_integrations",
+            "outcomes": ["integrations_chosen"],
+            "responses": ["integrations"]
+          }
+        },
+        {
+          "type": "core.foreach",
+          "id": "blk_bo_each",
+          "type_version": 1,
+          "config": {
+            "items": "responses.integrations",
+            "item_as": "setup_document",
+            "index_as": ""
+          },
+          "slots": {
+            "body": [
+              {
+                "type": "core.subchart",
+                "id": "blk_bo_setup",
+                "type_version": 1,
+                "config": {
+                  "chart_from": "setup_document",
+                  "outcomes": "done"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "myapp.step",
+          "id": "blk_bo_finish",
+          "type_version": 1,
+          "config": {
+            "screen": "onboarding_finished",
+            "outcomes": ["onboarding_confirmed"],
+            "responses": []
+          }
+        }
+      ]
+    }
+  }
+}

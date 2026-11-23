@@ -40,8 +40,8 @@ any other chart is left alone. The counts below are then this run's alone.
 ## The pins
 
 The migration surface is `statifier_persistence`'s. `mix.exs` asks for
-`~> 0.26`, the line the first-workflow guides' pin tables name, and
-`mix.lock` resolves 0.26.0; `Executions.migrate_batch/3` is 0.20.0's.
+`~> 0.27`, the line the first-workflow guides' pin tables name, and
+`mix.lock` resolves 0.27.0; `Executions.migrate_batch/3` is 0.20.0's.
 The first line the command prints names the version it loaded.
 
 The migration surface is the verb and its report. A dry run is the

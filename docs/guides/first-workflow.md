@@ -21,7 +21,7 @@ The recipe is written and checked against these releases, which are what
 |---|---|---|
 | `statifier` | 2.15.0 | compiling the chart and running it |
 | `statifier_blocks` | 0.46.0 | the document, `Plan.expressible/3`, the compile |
-| `statifier_persistence` | 0.26.0 | the chart registry, the execution, the input log, `ended_at` |
+| `statifier_persistence` | 0.27.0 | the chart registry, the execution, the input log, `ended_at` |
 | `statifier_oban` | 0.17.2 | the invoke job and its `:invoke_timeout`, the timer job |
 | `statifier_router` | 0.13.0 | two of the publish-time checks |
 
@@ -327,4 +327,6 @@ adds Back and `core.checkpoint`, and no block in the document is a
 returnable step, so it compiles to the same bytes as before.
 statifier_persistence 0.26.0 adds an opt-in for durable subchart children
 off Postgres and its migration V09, which this app runs; the recipe
-starts no child.
+starts no child. statifier_persistence 0.27.0 starts a child for every
+pass of a durable subchart inside a loop and adds no migration; the
+recipe starts no child, so the move to it needed nothing here either.
