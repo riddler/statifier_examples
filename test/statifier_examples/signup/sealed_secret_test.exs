@@ -7,6 +7,12 @@ defmodule StatifierExamples.Signup.SealedSecretTest do
 
   The PIN in these tests is a sentinel string, so a search for it anywhere -
   a stored row, a presented answer, a log line - finds only a leak.
+
+  The stored-row search is the proof for a stored blob, and the log search
+  is not: Ecto's debug query log cuts each binary parameter short after
+  about 50 bytes, so a captured log line can lack the bytes a plaintext
+  secret would occupy. An empty search of the log alone therefore proves
+  nothing about what was written.
   """
 
   use ExUnit.Case, async: false
@@ -72,6 +78,9 @@ defmodule StatifierExamples.Signup.SealedSecretTest do
 
       stored = stored_values()
       refute Enum.any?(stored, &String.contains?(&1, @sentinel))
+      # The log search below cannot stand alone for stored blobs: the query
+      # log truncates binary parameters, so the stored-row search above is
+      # the proof that no row holds the PIN.
       refute log =~ @sentinel
       for view <- views, do: refute(inspect(view) =~ @sentinel)
 

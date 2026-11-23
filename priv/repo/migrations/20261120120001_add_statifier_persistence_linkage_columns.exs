@@ -11,10 +11,12 @@ defmodule StatifierExamples.Repo.Migrations.AddStatifierPersistenceLinkageColumn
   is the one it made at V08, and a durable child's linkage stays under the
   package's reserved key in `metadata`, where this app's own listing
   callbacks read it. The package's upgrading page says a host in exactly
-  that shape may run V09 or leave it. This app runs it now so that the
-  database is already at the version the option needs on the day a host
-  here turns it on, rather than adding the migration in the same change.
-  V09 reads and writes no row and backfills nothing, and every statement
+  that shape may run V09 or leave it. This app runs it to keep its database
+  at the package's current DDL version, not because it will turn the option
+  on: its own SQLite adapter reads `metadata` itself, and the upgrading page
+  says an adapter that does so should leave `linkage_columns` off, since
+  with it on a new child's linkage would move out of the column those
+  callbacks read. V09 reads and writes no row and backfills nothing, and every statement
   in it runs on SQLite.
 
   Its own migration with its own floor, for the reason every
