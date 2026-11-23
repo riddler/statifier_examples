@@ -111,6 +111,19 @@ defmodule StatifierExamples.Signup.Journey do
   storage layer's identity guard. `start/2` refuses one that does not
   compile, as `{:error, {:path_document, findings}}`.
 
+  ## A durable subchart child
+
+  A supplied Path may be running as a durable subchart child of another
+  execution: a setup the branch onboarding started
+  (`StatifierExamples.Library.Onboarding`). The driver created that
+  execution with the child recipe,
+  `StatifierExamples.Charts.Subchart.child_compile/1`, so its stored
+  identity is that compile's. `current/2`, `submit/4` and `back/3` take
+  `child: true` beside `path:` and `screens:` for such an execution and
+  resume it on the child compile; without it the storage layer's identity
+  guard refuses the resume. `start/2` does not read it: a child is started
+  by the driver, never here.
+
   A screen of a supplied Path is wherever it parks: a `myapp.screen`
   block's park, as the fixture's are, or a `core.await` listening for a
   screen's park event (`StatifierExamples.Signup.Screen.parked_screen/1`),
@@ -224,7 +237,7 @@ defmodule StatifierExamples.Signup.Journey do
   alias StatifierBlocks.{Block, Compiled, Document}
   alias StatifierBlocks.Runtime.Back
   alias StatifierExamples.Charts
-  alias StatifierExamples.Charts.{Durable, Execution}
+  alias StatifierExamples.Charts.{Durable, Execution, Subchart}
   alias StatifierExamples.Signup.{Screen, Screens, Sealer, Validation}
 
   @fixture "signup_path"
@@ -755,6 +768,23 @@ defmodule StatifierExamples.Signup.Journey do
     end
   end
 
+  # The Path a resumed execution runs, compiled the way the execution was
+  # created: with the child recipe for a durable subchart child
+  # (`opts[:child]`, the moduledoc's "A durable subchart child"), and as
+  # `start/2` compiles a supplied Path otherwise.
+  @spec compile_resumed(Document.t(), keyword()) ::
+          {:ok, Compiled.t()} | {:error, {:path_document, term()}}
+  defp compile_resumed(%Document{} = path, opts) do
+    if Keyword.get(opts, :child, false) do
+      case Subchart.child_compile(path) do
+        {:ok, compiled} -> {:ok, compiled}
+        {:error, findings} -> {:error, {:path_document, findings}}
+      end
+    else
+      compile_path(path)
+    end
+  end
+
   # The execution and the Path it runs. A supplied Path is compiled and the
   # execution resumed on it; otherwise the chart comes out of the record, and
   # the Path read for its screens is the shipped one.
@@ -763,7 +793,7 @@ defmodule StatifierExamples.Signup.Journey do
   defp resume(execution_id, opts) do
     case Keyword.fetch(opts, :path) do
       {:ok, path} ->
-        with {:ok, compiled} <- compile_path(path),
+        with {:ok, compiled} <- compile_resumed(path, opts),
              {:ok, driven} <- Durable.resume(compiled, path, execution_id) do
           {:ok, {driven, path}}
         end

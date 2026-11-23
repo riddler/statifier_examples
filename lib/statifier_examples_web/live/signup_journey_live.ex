@@ -93,18 +93,42 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   starts its draft from what the chart holds for it, so pressing Continue
   there without retyping sends what the reader gave before. A secret
   question is the exception: its text is never held, so it is typed again.
+
+  ## The branch onboarding: a press goes to the active child
+
+  `?path=branch_onboarding` runs `StatifierExamples.Library.Onboarding`,
+  whose setups run as durable child executions of the onboarding
+  execution. The URL keeps the onboarding execution's id, and the page
+  asks `StatifierExamples.Library.Onboarding.focus/1` which execution to
+  present: the active child, read through statifier_persistence's
+  active-children reader, while a setup runs, and the onboarding
+  execution itself otherwise. Every press and every back request goes to
+  that execution with its own options, and the page asks again after each
+  press, because the press that finishes a setup moves the onboarding
+  execution on to the next setup or to its closing screen. Back inside a
+  setup goes back between that setup's steps; the setup's first step
+  offers none, so Back never crosses into or out of a setup.
   """
 
   use StatifierExamplesWeb, :live_view
 
   alias StatifierExamples.Charts.Durable
-  alias StatifierExamples.Library.{RegistrationSteps, Setups}
+  alias StatifierExamples.Library.{Onboarding, RegistrationSteps, Setups}
   alias StatifierExamples.Signup.Journey
   alias StatifierExamplesWeb.SignupElements
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, view: nil, draft: %{}, error: nil, topic: nil, path: nil, opts: [])}
+    {:ok,
+     assign(socket,
+       view: nil,
+       draft: %{},
+       error: nil,
+       topic: nil,
+       path: nil,
+       opts: [],
+       root: nil
+     )}
   end
 
   @impl Phoenix.LiveView
@@ -112,7 +136,9 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     case path_options(params["path"]) do
       {:ok, opts} ->
         {:noreply,
-         socket |> assign(path: params["path"], opts: opts) |> load(params["execution"])}
+         socket
+         |> assign(path: params["path"], opts: opts, root: params["execution"])
+         |> load(params["execution"])}
 
       :error ->
         {:noreply,
@@ -162,8 +188,10 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   end
 
   def handle_event("outcome", %{"outcome" => outcome}, %{assigns: assigns} = socket) do
-    case Journey.submit(assigns.view.execution_id, outcome, assigns.draft, assigns.opts) do
-      {:ok, view} -> {:noreply, assign(socket, view: view, draft: %{}, error: nil)}
+    with {:ok, {execution_id, opts}} <- target(socket),
+         {:ok, view} <- Journey.submit(execution_id, outcome, assigns.draft, opts) do
+      {:noreply, socket |> assign(view: view, draft: %{}, error: nil) |> refocus()}
+    else
       {:invalid, view} -> {:noreply, assign(socket, view: view, error: nil)}
       {:error, reason} -> {:noreply, assign(socket, error: reason)}
     end
@@ -177,11 +205,13 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
   # The control sends the screen it was drawn on; the page sends riddler's
   # back request for it (the moduledoc's "Another Path, and Back").
-  def handle_event("back", %{"screen" => key}, %{assigns: assigns} = socket) do
+  def handle_event("back", %{"screen" => key}, socket) do
     request = %{"screen" => key, "back" => true}
 
-    case Journey.back(assigns.view.execution_id, request, assigns.opts) do
-      {:ok, view} -> {:noreply, assign(socket, view: view, draft: held(view), error: nil)}
+    with {:ok, {execution_id, opts}} <- target(socket),
+         {:ok, view} <- Journey.back(execution_id, request, opts) do
+      {:noreply, assign(socket, view: view, draft: held(view), error: nil)}
+    else
       {:error, reason} -> {:noreply, assign(socket, error: reason)}
     end
   end
@@ -219,6 +249,14 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
         <div :if={@view} class="flex flex-col gap-6">
           <p id="execution-id" class="font-mono text-xs opacity-60">
             execution {@view.execution_id} - {@view.status}
+          </p>
+
+          <p
+            :if={@root && @view.execution_id != @root}
+            id="presented-child"
+            class="text-xs opacity-60"
+          >
+            A setup of the onboarding execution <span class="font-mono">{@root}</span>.
           </p>
 
           <p
@@ -306,13 +344,46 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   # nothing would be hiding the storage guard doing its job.
   @spec load(Phoenix.LiveView.Socket.t(), String.t() | nil) :: Phoenix.LiveView.Socket.t()
   defp load(socket, execution_id) when is_binary(execution_id) do
-    case Journey.current(execution_id, socket.assigns.opts) do
-      {:ok, view} -> socket |> watch(execution_id) |> assign(view: view, draft: %{}, error: nil)
+    with {:ok, {presented, opts}} <- focus(socket, execution_id),
+         {:ok, view} <- Journey.current(presented, opts) do
+      socket |> watch(execution_id) |> assign(view: view, draft: %{}, error: nil)
+    else
       {:error, reason} -> assign(socket, view: nil, error: reason)
     end
   end
 
   defp load(socket, _absent), do: socket
+
+  # Which execution the page presents for the one `?execution=` names, and
+  # the options a call over it takes: the onboarding's focus (the
+  # moduledoc's "The branch onboarding"), and the named execution with the
+  # page's options for every other Path.
+  @spec focus(Phoenix.LiveView.Socket.t(), String.t()) ::
+          {:ok, {String.t(), keyword()}} | {:error, term()}
+  defp focus(socket, execution_id) do
+    if onboarding?(socket),
+      do: Onboarding.focus(execution_id),
+      else: {:ok, {execution_id, socket.assigns.opts}}
+  end
+
+  # Where a press or a back request goes: the onboarding's focus, asked
+  # again at the moment of the press, and the execution on the page for
+  # every other Path.
+  @spec target(Phoenix.LiveView.Socket.t()) :: {:ok, {String.t(), keyword()}} | {:error, term()}
+  defp target(%{assigns: %{root: root}} = socket) when is_binary(root),
+    do: focus(socket, root)
+
+  defp target(socket), do: {:ok, {socket.assigns.view.execution_id, socket.assigns.opts}}
+
+  # After a press in the onboarding the page presents whatever the focus
+  # now is: the press that finishes a setup moves the onboarding on.
+  @spec refocus(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp refocus(socket) do
+    if onboarding?(socket), do: load(socket, socket.assigns.root), else: socket
+  end
+
+  @spec onboarding?(Phoenix.LiveView.Socket.t()) :: boolean()
+  defp onboarding?(socket), do: socket.assigns.path == Onboarding.key()
 
   @spec watch(Phoenix.LiveView.Socket.t(), String.t()) :: Phoenix.LiveView.Socket.t()
   defp watch(socket, execution_id) do
@@ -343,9 +414,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   defp path_options(nil), do: {:ok, []}
 
   defp path_options(key) do
-    if key == RegistrationSteps.key(),
-      do: {:ok, RegistrationSteps.options()},
-      else: Setups.options(key)
+    cond do
+      key == RegistrationSteps.key() -> {:ok, RegistrationSteps.options()}
+      key == Onboarding.key() -> {:ok, Onboarding.options()}
+      true -> Setups.options(key)
+    end
   end
 
   @spec journey_url(String.t() | nil, String.t()) :: String.t()

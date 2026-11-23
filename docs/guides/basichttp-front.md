@@ -69,7 +69,7 @@ started keeps the old location until the host refreshes it.
 |---|---|---|
 | `statifier_router` | 0.13.0 | the `:basichttp` key, the location, `StatifierRouter.BasicHTTP.Front`, the location table, `deliver_event/4` for a failed send |
 | `statifier` | 2.15.0 | the Basic HTTP Event I/O Processor and its decoder |
-| `statifier_persistence` | 0.26.0 | the chart registry, the execution, the input log |
+| `statifier_persistence` | 0.27.0 | the chart registry, the execution, the input log |
 
 0.13.0 is the floor because it is the published release `mix.exs`
 requires. 0.9.2 was the first `statifier_router` release whose

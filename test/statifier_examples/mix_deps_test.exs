@@ -1001,10 +1001,16 @@ defmodule StatifierExamples.MixDepsTest do
   # `StatifierExamples.RepoTest` reads its columns). Sabotage: pointed the
   # LOCK assertion back at `"0.24.` and left `mix.lock` alone; it went red
   # reporting the resolved 0.26.0 entry. Reverted from a copy.
+  #
+  # 2026-11-23: the requirement moves to `~> 0.27`, and `mix.lock`
+  # resolves 0.27.0, which starts a durable subchart child for every pass
+  # of a loop and adds no migration. Sabotage: pointed the requirement
+  # expectation back at `"~> 0.26"` and left `mix.exs` alone; the
+  # membership assertion went red. Reverted from a copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:statifier_persistence, "~> 0.26"} in deps
+    assert {:statifier_persistence, "~> 0.27"} in deps
 
     lock_line =
       "mix.lock"
@@ -1013,7 +1019,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.26.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.27.)
     refute lock_line =~ ":git,"
   end
 

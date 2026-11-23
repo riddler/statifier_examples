@@ -26,7 +26,7 @@ The recipe is written and checked against these releases, which are what
 |---|---|---|
 | `statifier_router` | 0.13.0 | the webhook front, the binding, the delivery, the address, dedupe and ledger tables, the typed-send routes, `:around_delivery`, `:on_create` and `:on_step` |
 | `statifier_oban` | 0.17.2 | the steps' jobs and the deadline timers, on this app's Oban |
-| `statifier_persistence` | 0.26.0 | the chart registry, the execution, the input log, `Retention.prune/3` |
+| `statifier_persistence` | 0.27.0 | the chart registry, the execution, the input log, `Retention.prune/3` |
 | `statifier_blocks` | 0.46.0 | the document and the compile |
 | `statifier` | 2.15.0 | compiling the chart and running it |
 
