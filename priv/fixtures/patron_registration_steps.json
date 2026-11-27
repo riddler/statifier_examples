@@ -22,30 +22,30 @@
         {
           "type": "myapp.step",
           "id": "blk_prst_name",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "patron_name",
-            "outcomes": ["name_given"],
+            "buttons": ["name_given"],
             "responses": ["first_name", "email"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_prst_card",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "patron_card",
-            "outcomes": ["card_chosen"],
+            "buttons": ["card_chosen"],
             "responses": ["card_type"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_prst_branch",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "patron_branch",
-            "outcomes": ["branch_chosen"],
+            "buttons": ["branch_chosen"],
             "responses": ["home_branch"]
           }
         }

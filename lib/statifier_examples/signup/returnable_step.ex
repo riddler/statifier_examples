@@ -26,18 +26,36 @@ defmodule StatifierExamples.Signup.ReturnableStep do
       (`StatifierExamples.Signup.Journey`'s "A screens document the caller
       supplies"). It is not read here: the block type never sees the
       screens document, so one type serves every document that names it.
-    * `outcomes` - the outcomes of the screen's buttons. Pressing any of
-      them finishes the step; the press raises
-      `StatifierExamples.Signup.Screen.outcome_event/1` of the outcome,
-      the same event a `myapp.screen` button raises.
+    * `buttons` - the screen's buttons, each named by the outcome it
+      carries on the screen. Pressing any of them finishes the step; the
+      press raises `StatifierExamples.Signup.Screen.outcome_event/1` of
+      that outcome, the same event a `myapp.screen` button raises.
     * `responses` - the keys of the questions on the screen. Each press
       writes `responses.<key>` from the key of the same name in the
       press's data, and only where the press carried it, so a response the
       chart already holds is not overwritten by a press that left it out.
 
-  The step finishes as `done` whichever button was pressed: it has one
-  outcome, and a Path that wants to branch on a button reads what the
-  press recorded rather than which outcome the step finished with.
+  `StatifierExamples.Signup.Journey.start/2` refuses a Path whose step
+  disagrees with the screen it names: a configured button or response the
+  screen does not carry, or a button or question on the screen the step
+  does not configure, since that press would have no transition and that
+  answer would never be recorded.
+
+  ## One outcome, `done`
+
+  The step finishes as `done` whichever button was pressed. The type
+  declares no `outcomes/1`, so it has the one outcome every block has
+  when it declares none (`StatifierBlocks.BlockType`'s `outcomes/1`), and
+  a Path cannot route on which button was pressed; a Path that wants to
+  branch on a button reads what the press recorded instead.
+
+  That is why the key is `buttons` and not `outcomes`, its name before
+  version 2: `outcomes` is the block type vocabulary's word for the ways a
+  block can finish, and this list is not that. Declaring one outcome per
+  button would make it that, and would leave every step whose button is
+  not `done` unconsumed in the `core.sequence` that holds it, so a Path
+  built of steps would stop advancing. `migrate_config/2` renames the key
+  in a version 1 block as it resolves.
 
   ## What the compiled step is
 
@@ -71,8 +89,8 @@ defmodule StatifierExamples.Signup.ReturnableStep do
   alias StatifierBlocks.Core.Emit
   alias StatifierExamples.Signup.Screen
 
-  # An outcome becomes an event name and a response key a datamodel path,
-  # so both are held to one segment of either.
+  # A button's outcome becomes an event name and a response key a datamodel
+  # path, so both are held to one segment of either.
   @name ~r/\A[a-z][a-z0-9_]*\z/
 
   @impl StatifierBlocks.BlockType
@@ -87,7 +105,7 @@ defmodule StatifierExamples.Signup.ReturnableStep do
         default: ""
       },
       %{
-        key: "outcomes",
+        key: "buttons",
         type: {:list, :string},
         label: "Its buttons' outcomes",
         required?: true,
@@ -108,7 +126,7 @@ defmodule StatifierExamples.Signup.ReturnableStep do
     findings =
       []
       |> check_screen(Map.get(config, "screen"))
-      |> check_names("outcomes", Map.get(config, "outcomes"), :required)
+      |> check_names("buttons", Map.get(config, "buttons"), :required)
       |> check_names("responses", Map.get(config, "responses", []), :optional)
 
     case findings do
@@ -116,6 +134,30 @@ defmodule StatifierExamples.Signup.ReturnableStep do
       findings -> {:error, Enum.reverse(findings)}
     end
   end
+
+  @doc """
+  Version 2: the buttons' list is `buttons`, where version 1 called it
+  `outcomes` (the moduledoc's "One outcome, `done`").
+  """
+  @impl StatifierBlocks.BlockType
+  def current_version, do: 2
+
+  @doc """
+  The single hop from version 1's `outcomes` to version 2's `buttons`.
+
+  Only the key moves. A version 1 config that carried no `outcomes`
+  migrates to one with no `buttons`, which `validate_config/1` then refuses
+  as it refused the missing key before.
+  """
+  @impl StatifierBlocks.BlockType
+  def migrate_config(1, config) do
+    case Map.pop(config, "outcomes") do
+      {nil, rest} -> {:ok, rest}
+      {buttons, rest} -> {:ok, Map.put(rest, "buttons", buttons)}
+    end
+  end
+
+  def migrate_config(from, _config), do: {:error, {:no_migration_from, from}}
 
   @doc """
   Every block of this type is a returnable step (see the moduledoc).
@@ -150,7 +192,7 @@ defmodule StatifierExamples.Signup.ReturnableStep do
     assigns = Enum.map(Map.get(config, "responses", []), &assign/1)
 
     presses =
-      for outcome <- Map.get(config, "outcomes", []) do
+      for outcome <- Map.get(config, "buttons", []) do
         Emit.transition([event: Screen.outcome_event(outcome), target: done], assigns)
       end
 

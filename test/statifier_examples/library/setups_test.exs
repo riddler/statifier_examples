@@ -85,10 +85,10 @@ defmodule StatifierExamples.Library.SetupsTest do
   end
 
   describe "each step's config agrees with the screen it names" do
-    # Sabotage: changed `"outcomes": ["schedule_chosen"]` on the catalogue
+    # Sabotage: changed `"buttons": ["schedule_chosen"]` on the catalogue
     # sync's schedule step to `["schedule_given"]`. This went red naming
     # the block. Restored from a copy.
-    test "its outcomes are the screen's buttons' and its responses the screen's questions'" do
+    test "its buttons are the screen's buttons and its responses the screen's questions" do
       for {name, %Document{} = document, screens} <- paths() do
         steps = for %Block{type: "myapp.step"} = block <- Document.blocks(document), do: block
         assert steps != [], "#{name} has no myapp.step block"
@@ -97,8 +97,8 @@ defmodule StatifierExamples.Library.SetupsTest do
           screen = Enum.find(screens["screens"], &(&1["key"] == config["screen"]))
           assert screen, "#{name} #{id} names a screen its screens document does not declare"
 
-          assert Enum.sort(config["outcomes"]) == screen |> outcomes() |> Enum.sort(),
-                 "#{name} #{id}'s outcomes are not its screen's buttons'"
+          assert Enum.sort(config["buttons"]) == screen |> outcomes() |> Enum.sort(),
+                 "#{name} #{id}'s buttons are not its screen's buttons"
 
           assert Enum.sort(Map.get(config, "responses", [])) ==
                    screen |> questions() |> Enum.sort(),

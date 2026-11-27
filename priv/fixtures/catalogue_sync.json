@@ -22,30 +22,30 @@
         {
           "type": "myapp.step",
           "id": "blk_cs_source",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "catalogue_source",
-            "outcomes": ["feed_chosen"],
+            "buttons": ["feed_chosen"],
             "responses": ["catalogue_feed"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_cs_schedule",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "catalogue_schedule",
-            "outcomes": ["schedule_chosen"],
+            "buttons": ["schedule_chosen"],
             "responses": ["sync_schedule"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_cs_contact",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "catalogue_contact",
-            "outcomes": ["sync_confirmed"],
+            "buttons": ["sync_confirmed"],
             "responses": ["sync_contact_email"]
           }
         }

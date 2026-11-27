@@ -12,7 +12,7 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
   use ExUnit.Case, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias StatifierBlocks.{BlockType, Palette}
+  alias StatifierBlocks.{Block, BlockType, Document, Palette}
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Library.RegistrationSteps
@@ -70,29 +70,60 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
     end
 
     # Sabotage: made `check_names/4`'s list clause skip the segment check.
-    # The capitalised outcome was admitted and this went red. Reverted from
+    # The capitalised button was admitted and this went red. Reverted from
     # a copy.
-    test "refuses a config that names no screen, no outcome, or a name that is not one segment" do
+    test "refuses a config that names no screen, no button, or a name that is not one segment" do
       assert ReturnableStep.validate_config(%{
                "screen" => "patron_name",
-               "outcomes" => ["name_given"],
+               "buttons" => ["name_given"],
                "responses" => ["first_name"]
              }) == :ok
 
       assert {:error, findings} =
                ReturnableStep.validate_config(%{
                  "screen" => "",
-                 "outcomes" => [],
+                 "buttons" => [],
                  "responses" => ["first name"]
                })
 
-      assert Enum.map(findings, &elem(&1, 0)) == ["screen", "outcomes", "responses"]
+      assert Enum.map(findings, &elem(&1, 0)) == ["screen", "buttons", "responses"]
 
-      assert {:error, [{"outcomes", _message}]} =
-               ReturnableStep.validate_config(%{"screen" => "s", "outcomes" => ["Went"]})
+      assert {:error, [{"buttons", _message}]} =
+               ReturnableStep.validate_config(%{"screen" => "s", "buttons" => ["Went"]})
 
-      assert {:error, [{"outcomes", _message}]} =
-               ReturnableStep.validate_config(%{"screen" => "s", "outcomes" => ["a", "a"]})
+      assert {:error, [{"buttons", _message}]} =
+               ReturnableStep.validate_config(%{"screen" => "s", "buttons" => ["a", "a"]})
+    end
+
+    # Sabotage: made `migrate_config/2` answer the version 1 config as it
+    # stood. The migrated config carried no `buttons` and this went red.
+    # Restored from a copy.
+    test "is at version 2, and a version 1 block's outcomes resolve as its buttons" do
+      assert ReturnableStep.current_version() == 2
+
+      v1 = %{
+        "screen" => "patron_card",
+        "outcomes" => ["card_chosen"],
+        "responses" => ["card_type"]
+      }
+
+      assert ReturnableStep.migrate_config(1, v1) ==
+               {:ok,
+                %{
+                  "screen" => "patron_card",
+                  "buttons" => ["card_chosen"],
+                  "responses" => ["card_type"]
+                }}
+
+      assert {:error, {:no_migration_from, 3}} = ReturnableStep.migrate_config(3, v1)
+
+      block = %Block{type: "myapp.step", id: "blk_v1", type_version: 1, config: v1, slots: %{}}
+
+      assert {:ok, ReturnableStep, %Block{config: config}} =
+               Palette.resolve(Charts.palette(), block)
+
+      assert config["buttons"] == ["card_chosen"]
+      refute Map.has_key?(config, "outcomes")
     end
 
     # Sabotage: made `returnable?/1` answer `false`. The compiled chart had
@@ -233,6 +264,92 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
       assert key(view) == "patron_branch"
     end
   end
+
+  describe "Journey start refuses a step that disagrees with its screen, and starts nothing" do
+    # Sabotage: dropped the `:button_not_on_screen` term from
+    # `step_disagreements/3` in `Journey`. The Path started and this went
+    # red on the match. Restored from a copy.
+    test "a configured button the screen does not carry" do
+      opts =
+        with_step("blk_prst_card", &Map.update!(&1, "buttons", fn b -> b ++ ["card_skipped"] end))
+
+      assert refused(opts) ==
+               {:error,
+                {:steps_disagree, [{"blk_prst_card", :button_not_on_screen, "card_skipped"}]}}
+    end
+
+    # Sabotage: dropped the `:button_not_configured` term from
+    # `step_disagreements/3` in `Journey`. The Path started and this went
+    # red on the match. Restored from a copy.
+    test "a button on the screen the step does not configure" do
+      opts = with_step("blk_prst_card", &Map.put(&1, "buttons", ["card_skipped"]))
+
+      assert refused(opts) ==
+               {:error,
+                {:steps_disagree,
+                 [
+                   {"blk_prst_card", :button_not_on_screen, "card_skipped"},
+                   {"blk_prst_card", :button_not_configured, "card_chosen"}
+                 ]}}
+    end
+
+    # Sabotage: dropped the `:question_not_on_screen` term from
+    # `step_disagreements/3` in `Journey`. The Path started and this went
+    # red on the match. Restored from a copy.
+    test "a configured response the screen asks no question for" do
+      opts = with_step("blk_prst_name", &Map.update!(&1, "responses", fn r -> r ++ ["phone"] end))
+
+      assert refused(opts) ==
+               {:error, {:steps_disagree, [{"blk_prst_name", :question_not_on_screen, "phone"}]}}
+    end
+
+    # Sabotage: dropped the `:question_not_configured` term from
+    # `step_disagreements/3` in `Journey`. The Path started and this went
+    # red on the match. Restored from a copy.
+    test "a question on the screen the step does not configure" do
+      opts = with_step("blk_prst_name", &Map.put(&1, "responses", ["first_name"]))
+
+      assert refused(opts) ==
+               {:error, {:steps_disagree, [{"blk_prst_name", :question_not_configured, "email"}]}}
+    end
+
+    # Sabotage: made `step_config/1` answer a version 1 block's config
+    # unmigrated. Its `outcomes` read as no buttons, the screen's button
+    # as unconfigured, and this went red on the start.
+    # Restored from a copy.
+    test "but starts a version 1 step whose outcomes are its screen's buttons" do
+      opts =
+        with_step(
+          "blk_prst_branch",
+          fn config ->
+            {buttons, rest} = Map.pop(config, "buttons")
+            Map.put(rest, "outcomes", buttons)
+          end,
+          1
+        )
+
+      assert {:ok, execution_id} = refused(opts)
+      assert {:ok, %{screen: %{key: "patron_name"}}} = Journey.current(execution_id, opts)
+    end
+  end
+
+  # The registration steps' options, with the step `id`'s config passed
+  # through `change` (and its stored version set to `version`).
+  defp with_step(id, change, version \\ 2) do
+    opts = RegistrationSteps.options()
+    %Document{root: root} = path = opts[:path]
+
+    body =
+      for %Block{id: block_id} = block <- root.slots["body"] do
+        if block_id == id,
+          do: %{block | config: change.(block.config), type_version: version},
+          else: block
+      end
+
+    Keyword.put(opts, :path, %Document{path | root: %{root | slots: %{"body" => body}}})
+  end
+
+  defp refused(opts), do: Journey.start("steps-#{System.unique_integer([:positive])}", opts)
 
   describe "the signup Path" do
     # Sabotage: made `back_offered/1` answer `:ok` for every view. The plan
