@@ -15,11 +15,37 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Riddler.Journey.Scope
+  alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Library.Onboarding
+  alias StatifierExamples.Persistence
   alias StatifierExamples.Signup.Journey
   alias StatifierPersistence.Execution.Linkage
+  alias StatifierPersistence.{Executions, Storage}
 
   @path "/signup-journey?path=branch_onboarding"
+  @riverside %{"kind" => "branch", "id" => "riverside"}
+
+  # The onboarding is a branch library's, and this app has no sign-in:
+  # every test here puts the riverside branch's librarian in its session,
+  # and a test of a refusal builds its own connection.
+  setup %{conn: conn} do
+    {:ok, conn: init_test_session(conn, librarian_of: "riverside")}
+  end
+
+  defp execution_count do
+    %{rows: [[count]]} =
+      StatifierExamples.Repo.query!("SELECT count(*) FROM statifier_executions")
+
+    count
+  end
+
+  # The one active child of the onboarding execution `execution_id`.
+  defp active_child(execution_id) do
+    {:ok, store} = Storage.new(Persistence, [])
+    {:ok, [child]} = Executions.active_children(store, execution_id)
+    child.execution_id
+  end
 
   defp started(conn) do
     {:ok, live, _html} = live(conn, @path)
@@ -137,8 +163,13 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
   # resting on its subchart, with no screen, and this went red. Reverted
   # from a copy.
   test "a reload of the onboarding URL presents the running setup", %{conn: conn} do
+    {:ok, riverside} = Scope.new("branch", "riverside")
+
     {:ok, execution_id} =
-      Journey.start("onboarding-page-#{System.unique_integer([:positive])}", Onboarding.options())
+      Journey.start(
+        "onboarding-page-#{System.unique_integer([:positive])}",
+        Onboarding.options() ++ [scope: riverside]
+      )
 
     {:ok, _view} =
       Journey.submit(
@@ -160,5 +191,81 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
 
     assert has_element?(live, key("reading_list_source_continue"))
     assert has_element?(live, "#presented-child")
+  end
+
+  # THE INHERITED SCOPE. The onboarding is started under the librarian's
+  # branch scope, and the setup it runs as a durable child carries the same
+  # scope, copied by the driver when it created the child.
+  #
+  # Sabotage (run): dropped `inherited_metadata_keys:` from
+  # `Durable.driver/1`. The child recorded no scope, `Durable.scope/1`
+  # answered `{:ok, nil}` for it and this went red.
+  test "a setup the onboarding runs carries the onboarding's branch scope", %{conn: conn} do
+    {_live, execution_id} = picked(conn, ["bdoc_catalogue_sync"])
+    child_id = active_child(execution_id)
+
+    assert child_id != execution_id
+    assert {:ok, @riverside} = Durable.scope(execution_id)
+    assert {:ok, @riverside} = Durable.scope(child_id)
+
+    {:ok, store} = Storage.new(Persistence, [])
+    {:ok, child} = Storage.fetch_execution(store, child_id)
+    assert child.metadata["scope"] == @riverside
+  end
+
+  # THE REFUSAL. A librarian of another branch, and a visitor who is no
+  # librarian, are not members of the riverside branch's scope: each sees
+  # the one refusal and nothing of the Journey.
+  #
+  # Sabotage (run): made `JourneyAccess.member?/2` answer `true` for every
+  # scope. The other branch's librarian was drawn the setup's screen and
+  # this went red on the refusal.
+  #
+  # Sabotage (run): made `load/2` draw any reason a stored execution
+  # cannot be drawn without asking membership. The setup named by its own
+  # id drew its reason to the outsider and this went red on the refusal.
+  test "a visitor outside the branch's scope sees the one refusal and nothing else", %{
+    conn: conn
+  } do
+    {_live, execution_id} = picked(conn, ["bdoc_catalogue_sync"])
+    url = "#{@path}&execution=#{execution_id}"
+
+    for outsider <- [
+          init_test_session(build_conn(), librarian_of: "hillside"),
+          build_conn()
+        ] do
+      {:ok, live, html} = live(outsider, url)
+
+      assert has_element?(live, "#journey-refused[data-riddler-refused]")
+      assert html =~ "There is nothing to show here."
+      refute has_element?(live, "#journey form")
+      refute has_element?(live, "#execution-id")
+      refute has_element?(live, "#collected")
+      refute html =~ execution_id
+
+      # The setup itself, named by its own id, is refused against the
+      # scope it inherited.
+      child_id = active_child(execution_id)
+      {:ok, child, child_html} = live(outsider, "#{@path}&execution=#{child_id}")
+
+      assert has_element?(child, "#journey-refused[data-riddler-refused]")
+      refute has_element?(child, "#journey-error")
+      refute child_html =~ child_id
+    end
+  end
+
+  # Sabotage (run): made the page start the onboarding under the riverside
+  # branch scope without asking the access module. The page still drew the
+  # refusal, since it asks again before it draws, but an execution was
+  # started and this went red on the count.
+  test "a visitor who is no librarian is refused Start on the onboarding" do
+    {:ok, live, _html} = live(build_conn(), @path)
+    before = execution_count()
+
+    live |> element("#start-journey") |> render_click()
+
+    assert has_element?(live, "#journey-refused[data-riddler-refused]")
+    refute has_element?(live, "#journey form")
+    assert execution_count() == before
   end
 end

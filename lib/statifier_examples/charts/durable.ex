@@ -169,6 +169,13 @@ defmodule StatifierExamples.Charts.Durable do
   # id and an event, and a chart is neither.
   @fixture_key "fixture"
 
+  # The execution-record metadata key carrying the scope a Journey was
+  # started under, in `Riddler.Journey.Scope`'s data form. It is the one key
+  # a durable subchart child copies from its parent when it is created
+  # (`inherited_metadata_keys:` on the driver), so a setup the branch
+  # onboarding runs carries the branch the onboarding was started for.
+  @scope_key "scope"
+
   # The execution-record metadata key carrying the host-provenance pin: which
   # child chart each `core.subchart` in this execution's document resolved to
   # when the execution was created (ruled by the operator). See
@@ -244,13 +251,21 @@ defmodule StatifierExamples.Charts.Durable do
   all - most executions of this app - and a child that cannot be resolved or
   compiled today is left out rather than recorded as an error, because a
   pin to nothing is not a pin.
-  """
-  @spec start(Compiled.t(), Document.t(), String.t(), String.t() | nil) ::
-          {:ok, driven()} | {:error, term()}
-  def start(compiled, document, execution_id, fixture_key \\ nil)
 
-  def start(%Compiled{} = compiled, %Document{} = document, execution_id, fixture_key)
-      when is_binary(execution_id) do
+  ## And the scope
+
+  `scope` is the data form of the `Riddler.Journey.Scope` a Journey is
+  started under (`Riddler.Journey.Scope.to_data/1`), recorded under the
+  `"scope"` key, or `nil` for an execution started under none, which
+  records no key. It is written at create and never rewritten, and every
+  durable subchart child the execution starts copies it (`scope/1`).
+  """
+  @spec start(Compiled.t(), Document.t(), String.t(), String.t() | nil, map() | nil) ::
+          {:ok, driven()} | {:error, term()}
+  def start(compiled, document, execution_id, fixture_key \\ nil, scope \\ nil)
+
+  def start(%Compiled{} = compiled, %Document{} = document, execution_id, fixture_key, scope)
+      when is_binary(execution_id) and (is_map(scope) or is_nil(scope)) do
     with {:ok, machine} <- Statifier.compile(compiled.scxml),
          {:ok, store} <- store() do
       durable = %__MODULE__{execution_id: execution_id, store: store, machine: machine}
@@ -260,9 +275,25 @@ defmodule StatifierExamples.Charts.Durable do
       settle(
         durable,
         run,
-        Driver.create(driver(durable), execution_id, create_opts(fixture_key, document))
+        Driver.create(driver(durable), execution_id, create_opts(fixture_key, document, scope))
       )
     end
+  end
+
+  @doc """
+  The scope the execution `execution_id` records, in its data form: the
+  one `start/5` was given, or, for a durable subchart child, the one the
+  driver copied from its parent when it created the child
+  (`StatifierPersistence.Executions.inherited_metadata/3`). `{:ok, nil}`
+  for an execution that records none, and the storage layer's own
+  refusals otherwise, `{:error, :execution_not_found}` for an id nobody
+  stored.
+  """
+  @spec scope(String.t()) :: {:ok, map() | nil} | {:error, term()}
+  def scope(execution_id) when is_binary(execution_id) do
+    with {:ok, store} <- store(),
+         {:ok, inherited} <- Executions.inherited_metadata(store, execution_id, [@scope_key]),
+         do: {:ok, Map.get(inherited, @scope_key)}
   end
 
   @doc """
@@ -997,7 +1028,8 @@ defmodule StatifierExamples.Charts.Durable do
   #
   # A durable subchart child records **no** fixture key: it is created by
   # `StatifierPersistence.Driver` rather than by this module, and the
-  # metadata it gets is the package's own linkage and nothing else. What it
+  # metadata it gets is the package's own linkage and the one key the
+  # driver is told to copy from its parent, the scope. What it
   # does carry is its `content_hash`, and the compile that produced it is
   # the child recipe (`StatifierExamples.Charts.Subchart.child_compile/1`),
   # so the resolution is a walk over the shipped documents comparing hashes.
@@ -1090,7 +1122,8 @@ defmodule StatifierExamples.Charts.Durable do
       invoke_types: invoke_types(),
       serialization: serialization(),
       chart_resolver: &resolve_chart/1,
-      child_canceller: FanOut.canceller()
+      child_canceller: FanOut.canceller(),
+      inherited_metadata_keys: [@scope_key]
     )
   end
 
@@ -1176,20 +1209,22 @@ defmodule StatifierExamples.Charts.Durable do
     end
   end
 
-  @spec create_opts(String.t() | nil, Document.t()) :: keyword()
-  defp create_opts(fixture_key, document) do
-    [initialize: [trace: true], metadata: metadata(fixture_key, document)]
+  @spec create_opts(String.t() | nil, Document.t(), map() | nil) :: keyword()
+  defp create_opts(fixture_key, document, scope) do
+    [initialize: [trace: true], metadata: metadata(fixture_key, document, scope)]
   end
 
-  # The two facts a created execution records about the chart it is an execution of:
+  # The facts a created execution records about the chart it is an execution of:
   # which shipped fixture it came from, for a cold node rebuilding it, and
   # which child charts its subcharts resolved to, for a reader asking
-  # afterwards what actually ran (ruled by the operator).
-  @spec metadata(String.t() | nil, Document.t()) :: %{optional(String.t()) => term()}
-  defp metadata(fixture_key, document) do
+  # afterwards what actually ran (ruled by the operator); and the scope it
+  # was started under, when it was started under one.
+  @spec metadata(String.t() | nil, Document.t(), map() | nil) :: %{optional(String.t()) => term()}
+  defp metadata(fixture_key, document, scope) do
     %{}
     |> put_present(@fixture_key, fixture_key)
     |> put_present(@subcharts_key, subcharts(document))
+    |> put_present(@scope_key, scope)
   end
 
   @spec subcharts(Document.t()) :: %{optional(String.t()) => String.t()} | nil

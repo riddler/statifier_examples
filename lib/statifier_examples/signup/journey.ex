@@ -233,6 +233,7 @@ defmodule StatifierExamples.Signup.Journey do
   the one place that now has somewhere to put them.
   """
 
+  alias Riddler.Journey.Scope
   alias Statifier.MachineState
   alias StatifierBlocks.{Block, Compiled, Document}
   alias StatifierBlocks.Runtime.Back
@@ -319,13 +320,20 @@ defmodule StatifierExamples.Signup.Journey do
   admit with zero findings - `reason` is `StatifierExamples.Signup.Screens.admit/1`'s
   - and `{:error, {:undeclared_screens, keys}}` for one that does not
   declare every screen the Path names. Nothing is started for either.
+
+  `opts[:scope]`, a `Riddler.Journey.Scope`, is the scope the Journey is
+  started under: the execution records it, and every durable subchart child
+  it starts copies it (`StatifierExamples.Charts.Durable.scope/1`). An
+  execution started without one records none. Only `start/2` reads it.
   """
   @spec start(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def start(execution_id, opts) when is_binary(execution_id) and is_list(opts) do
+    scope = scope_data(Keyword.get(opts, :scope))
+
     with {:ok, screens} <- screens_document(opts),
          {:ok, {path, compiled, fixture_key}} <- path_chart(opts),
          :ok <- declares_path_screens(screens, path),
-         {:ok, _driven} <- Durable.start(compiled, path, execution_id, fixture_key) do
+         {:ok, _driven} <- Durable.start(compiled, path, execution_id, fixture_key, scope) do
       {:ok, execution_id}
     else
       :error -> {:error, :no_such_fixture}
@@ -780,6 +788,11 @@ defmodule StatifierExamples.Signup.Journey do
   @spec presented_nodes(Riddler.Journey.answer()) :: [Screens.node_doc()]
   defp presented_nodes(%{"screen" => %{"elements" => elements}}), do: elements
   defp presented_nodes(_no_screen), do: []
+
+  # The data form a started execution records for `opts[:scope]`.
+  @spec scope_data(Scope.t() | nil) :: map() | nil
+  defp scope_data(%Scope{} = scope), do: Scope.to_data(scope)
+  defp scope_data(nil), do: nil
 
   # The screens document the call reads, decoded and admitted: the one
   # `opts[:screens]` supplies, or the fixture.

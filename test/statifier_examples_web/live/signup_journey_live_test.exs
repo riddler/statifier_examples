@@ -13,6 +13,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Riddler.Journey.Scope
   alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Library.RegistrationSteps
   alias StatifierExamples.Signup.Journey
@@ -425,11 +426,14 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     # Sabotage: made `load/2` call `Journey.current/1` without the page's
     # options. A reload of the steps execution read it against the signup
     # Path and this went red. Reverted from a copy.
+    # The steps run under the patron scope of the visitor reloading them.
     test "a reload picks the steps execution up where it was", %{conn: conn} do
       opts = RegistrationSteps.options()
+      {:ok, patron} = Scope.new("patron", "P-1001")
+      conn = init_test_session(conn, visitor: "P-1001")
 
       {:ok, execution_id} =
-        Journey.start("page-steps-#{System.unique_integer([:positive])}", opts)
+        Journey.start("page-steps-#{System.unique_integer([:positive])}", opts ++ [scope: patron])
 
       {:ok, _card} = Journey.submit(execution_id, "name_given", @name, opts)
 

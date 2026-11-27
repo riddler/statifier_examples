@@ -54,20 +54,37 @@ defmodule StatifierExamplesWeb.JourneyHost do
 
   ## The scope
 
-  Every Journey here is answered under one fixed scope, `scope/0`, and
-  `StatifierExamplesWeb.JourneyAccess` is the access module for it. Both
-  are interim: they go when the app's Journeys start under a scope of
-  their own.
+  A Journey starts under the scope the page that starts it gives,
+  `start/2`'s, and the execution records it
+  (`StatifierExamples.Charts.Durable.scope/1`). Which kind of scope a
+  Path's Journeys take is `scope_kind/1`'s: a branch library's for the
+  branch onboarding and the setups, a patron's for patron registration,
+  and the open scope every visitor holds for the signup Path.
+  `start/2` refuses a scope of another kind.
+
+  `present/1` answers the scope the presented execution records, so the
+  component checks it with `StatifierExamplesWeb.JourneyAccess`, the
+  access module for all of them. A setup the branch onboarding runs is a
+  durable subchart child, and it records the onboarding's branch scope
+  because the driver copies it into the child when it creates it: the
+  check on a press inside a setup is asked against that copy. An
+  execution of a library Path that records no scope - one started by code
+  rather than by a page - is a Journey this module does not have. A
+  signup Path execution that records none is answered under the open
+  scope, and one that records another scope is refused, so an execution
+  of a library Path named without its page key is not opened as the
+  signup Path's.
   """
 
   @behaviour Riddler.Journey.Host
 
-  alias Riddler.Journey.Scope
+  alias Riddler.Journey.{Access, Scope}
   alias StatifierBlocks.Decode
   alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Library.{Onboarding, RegistrationSteps, Setups}
   alias StatifierExamples.ScreenEditor.Try
   alias StatifierExamples.Signup.{Journey, Validation}
+  alias StatifierExamplesWeb.JourneyAccess
 
   # The signup Path, named for a start: on the page it is the Path no
   # `?path=` names.
@@ -79,13 +96,57 @@ defmodule StatifierExamplesWeb.JourneyHost do
   @registration_file "patron_registration_screens.json"
 
   @doc """
-  The one scope every Journey here is answered under (see the moduledoc's
-  "The scope").
+  The scope a Journey of the signup Path runs under: the open scope every
+  visitor holds (`StatifierExamplesWeb.JourneyAccess.open_scope/0`).
   """
   @spec scope() :: Scope.t()
-  def scope do
-    {:ok, scope} = Scope.new("branch", "riverside")
-    scope
+  def scope, do: JourneyAccess.open_scope()
+
+  @doc """
+  The kind of scope a Journey of the Path the page key `path` names runs
+  under (the moduledoc's "The scope"), `:error` for a key no list holds.
+
+      iex> StatifierExamplesWeb.JourneyHost.scope_kind("catalogue_sync")
+      {:ok, "branch"}
+      iex> StatifierExamplesWeb.JourneyHost.scope_kind("patron_registration_steps")
+      {:ok, "patron"}
+      iex> StatifierExamplesWeb.JourneyHost.scope_kind(nil)
+      {:ok, "open"}
+  """
+  @spec scope_kind(String.t() | nil) :: {:ok, String.t()} | :error
+  def scope_kind(nil), do: {:ok, "open"}
+
+  def scope_kind(key) when is_binary(key) do
+    cond do
+      key in [RegistrationSteps.key(), @registration] -> {:ok, "patron"}
+      key == Onboarding.key() or key in Setups.keys() -> {:ok, "branch"}
+      true -> :error
+    end
+  end
+
+  @doc """
+  The name `start/2` takes for the Path the page key `path` names:
+  `"signup_path"` for the signup Path (`nil`), the key otherwise.
+  """
+  @spec path_name(String.t() | nil) :: String.t()
+  def path_name(nil), do: @signup
+  def path_name(key) when is_binary(key), do: key
+
+  @doc """
+  The scope of the Journey named `journey`: the one the execution a call
+  steps records (the moduledoc's "The scope"), or
+  `{:error, :no_such_journey}` for a Journey this module does not have.
+  """
+  @spec scope_of(String.t()) :: {:ok, Scope.t()} | {:error, :no_such_journey}
+  def scope_of(journey) do
+    with {:ok, path, _execution_id, {target, _opts}} <- target(journey),
+         {:ok, kind} <- scope_kind(path),
+         {:ok, scope} <- recorded_scope(path, target),
+         :ok <- Access.check_kind(scope, kind) do
+      {:ok, scope}
+    else
+      _refused -> {:error, :no_such_journey}
+    end
   end
 
   @doc """
@@ -151,8 +212,8 @@ defmodule StatifierExamplesWeb.JourneyHost do
 
   @doc """
   Starts a Journey of the Path named `path` - a page key, or
-  `"signup_path"` for the signup Path - under `scope`, which has to be
-  `scope/0`.
+  `"signup_path"` for the signup Path - under `scope`, which has to be of
+  the kind `scope_kind/1` names for it. The execution records `scope`.
   """
   @impl Riddler.Journey.Host
   @spec start(String.t(), Scope.t()) ::
@@ -160,9 +221,11 @@ defmodule StatifierExamplesWeb.JourneyHost do
   def start(path, %Scope{} = scope) when is_binary(path) do
     key = if path == @signup, do: nil, else: path
 
-    with true <- scope == scope(),
+    with {:ok, kind} <- scope_kind(key),
+         :ok <- Access.check_kind(scope, kind),
          {:ok, opts} <- path_options(key),
-         {:ok, execution_id} <- Journey.start(Durable.new_execution_id(), opts),
+         {:ok, execution_id} <-
+           Journey.start(Durable.new_execution_id(), opts ++ [scope: scope]),
          {:ok, answer} <- answer(key, execution_id, opts) do
       {:ok, journey(key, execution_id), answer}
     else
@@ -170,15 +233,19 @@ defmodule StatifierExamplesWeb.JourneyHost do
     end
   end
 
-  @doc "Where the Journey named `journey` is, under `scope/0`."
+  @doc """
+  Where the Journey named `journey` is, beside the scope it runs under
+  (`scope_of/1`).
+  """
   @impl Riddler.Journey.Host
   @spec present(String.t()) ::
           {:ok, Scope.t(), Riddler.Journey.answer()} | {:error, :no_such_journey}
   def present(journey) do
     with {:ok, path, execution_id} <- parse(journey),
          {:ok, opts} <- path_options(path),
+         {:ok, scope} <- scope_of(journey),
          {:ok, answer} <- answer(path, execution_id, opts) do
-      {:ok, scope(), answer}
+      {:ok, scope, answer}
     else
       _refused -> {:error, :no_such_journey}
     end
@@ -248,6 +315,19 @@ defmodule StatifierExamplesWeb.JourneyHost do
       {:ok, path, execution_id, focus}
     else
       _refused -> {:error, :no_such_journey}
+    end
+  end
+
+  # The scope the execution `target` records, read back from its data
+  # form. A signup Path execution that records none is under the open
+  # scope; an execution that records another scope is never read as one of
+  # the signup Path's, so a page key left off the URL opens nothing.
+  @spec recorded_scope(String.t() | nil, String.t()) :: {:ok, Scope.t()} | :error
+  defp recorded_scope(path, target) do
+    case Durable.scope(target) do
+      {:ok, data} when is_map(data) -> Scope.from_data(data)
+      {:ok, nil} when is_nil(path) -> {:ok, scope()}
+      _none -> :error
     end
   end
 

@@ -8,6 +8,7 @@ defmodule StatifierExamplesWeb.Router do
     plug :put_root_layout, html: {StatifierExamplesWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug StatifierExamplesWeb.Visitor
   end
 
   pipeline :api do
