@@ -22,12 +22,31 @@ defmodule StatifierExamples.Library.Setups do
 
   ## How a setup finishes
 
-  Each document's root is a `core.sequence`, so it declares one root
-  outcome, `done`, and a document compiled for use as a child finishes
-  with it (`outcomes/1`). What happened inside a setup - which catalogue
-  source, whether the reader read a test card - is in its `responses`,
-  where each step's press recorded it, and not in the outcome: a
-  `myapp.step` finishes as `done` whichever button was pressed.
+  A setup whose root is a `core.sequence` declares one root outcome,
+  `done`, and a document compiled for use as a child finishes with it
+  (`outcomes/1`). The catalogue sync and the reading-list import are such
+  setups. What happened inside one - which catalogue source, which term -
+  is in its `responses`, where each step's press recorded it, and not in
+  the outcome: a `myapp.step` finishes as `done` whichever button was
+  pressed.
+
+  A setup that should be able to tell its parent how it went has a
+  `myapp.setup` root instead (`StatifierExamples.Library.Setup`), which
+  declares `done` and the one ending its config names. The card-reader
+  setup is one: a Finish on its test-card screen saying the reader read
+  nothing ends it with `site_visit_needed`, which `outcomes/1` answers
+  beside `done` and the onboarding reads
+  (`StatifierExamples.Library.Onboarding`).
+
+  ## What a librarian reads
+
+  Each document's `metadata` description is written for whoever edits the
+  document: it names block types and fixture files. The settings page
+  draws `description/1` instead, one sentence per setup for the librarian
+  choosing which to run. It is kept here, beside the one list, rather than
+  in the documents, because which setups a page offers and how it words
+  them is this list's, and the document's own description already has a
+  reader: the person editing it.
 
   None of the three is among the fixtures `StatifierExamples.Charts.fixtures/0`
   lists. Like the patron registration steps, each is run as a supplied
@@ -38,13 +57,16 @@ defmodule StatifierExamples.Library.Setups do
   alias StatifierBlocks.{Decode, Document}
   alias StatifierExamples.Charts.Subchart
 
-  # `{key, path file, screens file}`, in the order a page offers them.
-  # Listed rather than globbed, as `StatifierExamples.Library` lists its
-  # documents: a stray file in `priv/` should not become a setup.
+  # `{key, path file, screens file, description}`, in the order a page
+  # offers them. Listed rather than globbed, as `StatifierExamples.Library`
+  # lists its documents: a stray file in `priv/` should not become a setup.
   @setups [
-    {"catalogue_sync", "catalogue_sync.json", "catalogue_sync_screens.json"},
-    {"reading_list_import", "reading_list_import.json", "reading_list_import_screens.json"},
-    {"card_reader_setup", "card_reader_setup.json", "card_reader_setup_screens.json"}
+    {"catalogue_sync", "catalogue_sync.json", "catalogue_sync_screens.json",
+     "Keep this branch's catalogue in step: choose where its records come from, how often they sync and who hears when a sync fails."},
+    {"reading_list_import", "reading_list_import.json", "reading_list_import_screens.json",
+     "Bring in the reading lists local schools send for a term, and choose whether their titles are held at the branch."},
+    {"card_reader_setup", "card_reader_setup.json", "card_reader_setup_screens.json",
+     "Set up the branch's library-card reader and check it reads a card; a reader that reads nothing is sent for a site visit."}
   ]
 
   @doc "The setups' keys, in the order a page offers them."
@@ -57,7 +79,7 @@ defmodule StatifierExamples.Library.Setups do
   """
   @spec document(String.t()) :: {:ok, Document.t()} | :error
   def document(key) do
-    with {:ok, {_key, path_file, _screens_file}} <- setup(key) do
+    with {:ok, {_key, path_file, _screens_file, _description}} <- setup(key) do
       case Decode.decode(File.read!(fixture(path_file))) do
         {:ok, document} -> {:ok, document}
         {:error, error} -> raise "#{path_file} is not a block document: #{inspect(error)}"
@@ -66,12 +88,23 @@ defmodule StatifierExamples.Library.Setups do
   end
 
   @doc """
+  What the setup does, in one sentence for a librarian (the moduledoc's
+  "What a librarian reads"), or `:error` for a key this module does not
+  list.
+  """
+  @spec description(String.t()) :: {:ok, String.t()} | :error
+  def description(key) do
+    with {:ok, {_key, _path_file, _screens_file, description}} <- setup(key),
+         do: {:ok, description}
+  end
+
+  @doc """
   The screens document the setup's steps name, decoded: `{:ok, screens}`,
   or `:error` for a key this module does not list.
   """
   @spec screens(String.t()) :: {:ok, map()} | :error
   def screens(key) do
-    with {:ok, {_key, _path_file, screens_file}} <- setup(key),
+    with {:ok, {_key, _path_file, screens_file, _description}} <- setup(key),
          do: {:ok, screens_file |> fixture() |> File.read!() |> Jason.decode!()}
   end
 
@@ -116,7 +149,8 @@ defmodule StatifierExamples.Library.Setups do
     end
   end
 
-  @spec setup(String.t()) :: {:ok, {String.t(), String.t(), String.t()}} | :error
+  @spec setup(String.t()) ::
+          {:ok, {String.t(), String.t(), String.t(), String.t()}} | :error
   defp setup(key) do
     case List.keyfind(@setups, key, 0) do
       nil -> :error

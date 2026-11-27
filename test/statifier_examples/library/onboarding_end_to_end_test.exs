@@ -166,10 +166,10 @@ defmodule StatifierExamples.Library.OnboardingEndToEndTest do
     }
   end
 
-  # Not covered here, on purpose: the parent's routing on a child's outcome.
-  # Every setup declares the single outcome `done`, so there is one outcome
-  # to route on; a second one needs a setup that can end with it (the open
-  # bead se-qb73), and the routing assertion belongs with that fixture.
+  # Not covered here, on purpose: the parent reading a child's outcome. The
+  # card-reader setup can end with `site_visit_needed` as well as `done`,
+  # and `StatifierExamples.Library.OnboardingTest`'s "how a setup ended"
+  # walks both and reads what the onboarding recorded.
   #
   # Sabotage notes, one per mutation, each run and turned red on an
   # assertion, then reverted from a copy:

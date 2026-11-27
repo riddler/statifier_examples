@@ -306,6 +306,7 @@ defmodule StatifierExamples.Charts do
     [
       CardAuth.block_types(),
       Signup.block_types(),
+      Library.block_types(),
       Messaging.block_types(),
       %{TypedSendStep.type_name() => TypedSendStep}
     ]

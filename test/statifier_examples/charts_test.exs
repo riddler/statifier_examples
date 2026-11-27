@@ -40,6 +40,7 @@ defmodule StatifierExamples.ChartsTest do
              "myapp.resolve_review",
              "myapp.risk_rating",
              "myapp.screen",
+             "myapp.setup",
              "myapp.signup_step",
              "myapp.step",
              "myapp.three_ds_challenge",

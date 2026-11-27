@@ -4,7 +4,7 @@
   "revision": 1,
   "metadata": {
     "name": "Card-reader setup",
-    "description": "One setup of a branch library's onboarding: which card reader the branch has, where it stands, and whether it read a test card. Three myapp.step blocks over priv/fixtures/card_reader_setup_screens.json, so the person setting it up may go back to the step before. Runnable alone, and written to run as a child of the onboarding: its root finishes with the outcome done.",
+    "description": "One setup of a branch library's onboarding: which card reader the branch has, where it stands, and whether it read a test card. Three myapp.step blocks over priv/fixtures/card_reader_setup_screens.json, so the person setting it up may go back to the step before, under a myapp.setup root that declares one ending besides done. Runnable alone, and written to run as a child of the onboarding: it finishes with the outcome done, or with site_visit_needed when the test card was not read.",
     "domain": "library"
   },
   "datamodel": [
@@ -14,9 +14,14 @@
     }
   ],
   "root": {
-    "type": "core.sequence",
+    "type": "myapp.setup",
     "id": "blk_cr_root",
     "type_version": 1,
+    "config": {
+      "ending": "site_visit_needed",
+      "ending_on": "test_reported",
+      "ending_when": "_event.data.reader_test_result == 'not_read'"
+    },
     "slots": {
       "body": [
         {

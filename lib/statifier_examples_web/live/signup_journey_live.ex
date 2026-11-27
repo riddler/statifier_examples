@@ -94,6 +94,16 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   therefore draws the finished line and not a bare screen title with nothing
   under it.
 
+  ## Which Path the page names
+
+  The heading names the Path the page runs, and so does the notice of a
+  press that did not land: the signup Path is "Signup journey" and "this
+  signup", as it always was, and any other Path is named by its own
+  document, so a card-reader setup reads "Card-reader setup" and "this
+  card-reader setup". The branch onboarding is named as the onboarding
+  while one of its setups is presented; the line under the execution id
+  says which setup's screen is drawn.
+
   ## A press that did not land
 
   An execution stopped somewhere else - abandoned, or finished - takes no
@@ -166,6 +176,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   # label (the moduledoc's "What the page draws is the view's state").
   @receipt_fields [{"email", "Account for"}, {"collected", "Responses collected"}]
 
+  # The heading and the notice's word for the signup Path (the moduledoc's
+  # "Which Path the page names").
+  @signup_title "Signup journey"
+  @signup_noun "signup"
+
   @impl Phoenix.LiveView
   def mount(_params, session, socket) do
     {:ok,
@@ -177,7 +192,9 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
        topic: nil,
        path: nil,
        opts: [],
-       root: nil
+       root: nil,
+       title: @signup_title,
+       noun: @signup_noun
      )}
   end
 
@@ -188,6 +205,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
         {:noreply,
          socket
          |> assign(path: params["path"], opts: opts, root: params["execution"])
+         |> assign(title(params["path"], opts))
          |> load(params["execution"])}
 
       :error ->
@@ -265,7 +283,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     <Layouts.app flash={@flash}>
       <div class="mx-auto flex max-w-xl flex-col gap-6 p-6">
         <header class="flex items-center justify-between gap-4">
-          <h1 class="text-sm font-semibold uppercase tracking-wide opacity-60">Signup journey</h1>
+          <h1 class="text-sm font-semibold uppercase tracking-wide opacity-60">{@title}</h1>
           <button id="start-journey" type="button" class="btn btn-sm" phx-click="start">
             Start a new execution
           </button>
@@ -303,7 +321,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
             role="status"
             class="alert alert-warning text-sm"
           >
-            This signup had already ended, so your last press was not recorded.
+            This {@noun} had already ended, so your last press was not recorded.
             The page shows where it stopped.
           </p>
 
@@ -446,6 +464,35 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
         assign(socket, topic: topic)
     end
   end
+
+  # The heading the page draws and the word its discarded-press notice
+  # names the Path by (the moduledoc's "Which Path the page names"): the
+  # signup Path's own for no key, and otherwise the name the Path's block
+  # document carries, or its screens document's when the block document
+  # names none, the key itself last.
+  @spec title(String.t() | nil, keyword()) :: [title: String.t(), noun: String.t()]
+  defp title(nil, _opts), do: [title: @signup_title, noun: @signup_noun]
+
+  defp title(key, opts) do
+    name =
+      document_name(Keyword.get(opts, :path)) || screens_name(Keyword.get(opts, :screens)) ||
+        key
+
+    {first, rest} = String.split_at(name, 1)
+    [title: name, noun: String.downcase(first) <> rest]
+  end
+
+  @spec document_name(term()) :: String.t() | nil
+  defp document_name(%{metadata: %{"name" => name}}) when is_binary(name) and name != "",
+    do: name
+
+  defp document_name(_document), do: nil
+
+  @spec screens_name(term()) :: String.t() | nil
+  defp screens_name(%{"metadata" => %{"name" => name}}) when is_binary(name) and name != "",
+    do: name
+
+  defp screens_name(_screens), do: nil
 
   @spec journey_url(String.t() | nil, String.t()) :: String.t()
   defp journey_url(nil, execution_id), do: ~p"/signup-journey?#{[execution: execution_id]}"
