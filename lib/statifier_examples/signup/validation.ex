@@ -66,8 +66,9 @@ defmodule StatifierExamples.Signup.Validation do
     "integer" => "must be a whole number",
     "number" => "must be a number",
     "date" => "must be a date, written YYYY-MM-DD",
-    "time" => "must be a time, written HH:MM",
-    "datetime" => "must be a date and time, written YYYY-MM-DDTHH:MM:SS with Z or an offset"
+    "time" => "must be a time, written HH:MM or HH:MM:SS",
+    "datetime" =>
+      "must be a date and time, written YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS, then Z or an offset such as +02:00"
   }
   @formats Map.keys(@format_messages) |> Enum.sort()
 
