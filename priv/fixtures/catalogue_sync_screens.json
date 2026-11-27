@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "edoc_catalogue_sync_screens",
   "metadata": {
     "name": "Catalogue sync",
@@ -10,7 +10,7 @@
     {
       "key": "catalogue_source",
       "title": "Where the catalogue comes from",
-      "nodes": [
+      "elements": [
         {
           "type": "heading",
           "key": "catalogue_heading",
@@ -39,7 +39,7 @@
     {
       "key": "catalogue_schedule",
       "title": "How often it syncs",
-      "nodes": [
+      "elements": [
         {
           "type": "choice_question",
           "key": "sync_schedule",
@@ -62,7 +62,7 @@
     {
       "key": "catalogue_contact",
       "title": "When a sync fails",
-      "nodes": [
+      "elements": [
         {
           "type": "text",
           "key": "catalogue_contact_intro",

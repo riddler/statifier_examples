@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "edoc_branch_onboarding_screens",
   "metadata": {
     "name": "Branch onboarding",
@@ -10,7 +10,7 @@
     {
       "key": "onboarding_branch",
       "title": "Which branch is joining",
-      "nodes": [
+      "elements": [
         {
           "type": "heading",
           "key": "onboarding_heading",
@@ -35,7 +35,7 @@
     {
       "key": "onboarding_integrations",
       "title": "What the branch needs",
-      "nodes": [
+      "elements": [
         {
           "type": "choice_question",
           "key": "integrations",
@@ -60,7 +60,7 @@
     {
       "key": "onboarding_finished",
       "title": "The branch is set up",
-      "nodes": [
+      "elements": [
         {
           "type": "text",
           "key": "onboarding_finished_text",

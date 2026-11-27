@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "edoc_patron_registration_steps_screens",
   "metadata": {
     "name": "Patron registration in steps",
@@ -10,7 +10,7 @@
     {
       "key": "patron_name",
       "title": "Who you are",
-      "nodes": [
+      "elements": [
         {
           "type": "heading",
           "key": "name_heading",
@@ -43,7 +43,7 @@
     {
       "key": "patron_card",
       "title": "Your card",
-      "nodes": [
+      "elements": [
         {
           "type": "choice_question",
           "key": "card_type",
@@ -66,7 +66,7 @@
     {
       "key": "patron_branch",
       "title": "Your branch",
-      "nodes": [
+      "elements": [
         {
           "type": "text",
           "key": "branch_intro",

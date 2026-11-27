@@ -22,7 +22,7 @@
             "title": "Your details"
           },
           "slots": {
-            "nodes": [
+            "elements": [
               {
                 "type": "myapp.screens.heading",
                 "id": "blk_prs_details_heading",
@@ -113,7 +113,7 @@
             "title": "Your card"
           },
           "slots": {
-            "nodes": [
+            "elements": [
               {
                 "type": "myapp.screens.heading",
                 "id": "blk_prs_card_heading",
@@ -171,7 +171,7 @@
                   "key": "card_notice"
                 },
                 "slots": {
-                  "nodes": [
+                  "elements": [
                     {
                       "type": "myapp.screens.text",
                       "id": "blk_prs_family_notice",

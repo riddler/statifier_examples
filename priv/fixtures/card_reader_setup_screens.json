@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "edoc_card_reader_setup_screens",
   "metadata": {
     "name": "Card-reader setup",
@@ -10,7 +10,7 @@
     {
       "key": "reader_model",
       "title": "Which reader",
-      "nodes": [
+      "elements": [
         {
           "type": "heading",
           "key": "reader_heading",
@@ -39,7 +39,7 @@
     {
       "key": "reader_place",
       "title": "Where it stands",
-      "nodes": [
+      "elements": [
         {
           "type": "text_question",
           "key": "reader_location",
@@ -58,7 +58,7 @@
     {
       "key": "reader_test",
       "title": "A test card",
-      "nodes": [
+      "elements": [
         {
           "type": "text",
           "key": "reader_test_intro",

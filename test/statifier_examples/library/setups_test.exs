@@ -119,7 +119,7 @@ defmodule StatifierExamples.Library.SetupsTest do
     # copy.
     test "no setup asks a boolean question" do
       for {name, _document, screens} <- paths(), screen <- screens["screens"] do
-        refute Enum.any?(screen["nodes"], &(&1["type"] == "boolean_question")),
+        refute Enum.any?(screen["elements"], &(&1["type"] == "boolean_question")),
                "#{name}'s #{screen["key"]} asks a boolean question"
       end
     end
@@ -188,10 +188,10 @@ defmodule StatifierExamples.Library.SetupsTest do
   end
 
   defp outcomes(screen),
-    do: for(%{"type" => "button", "outcome" => outcome} <- screen["nodes"], do: outcome)
+    do: for(%{"type" => "button", "outcome" => outcome} <- screen["elements"], do: outcome)
 
   defp questions(screen) do
-    for %{"type" => type, "key" => key} <- screen["nodes"],
+    for %{"type" => type, "key" => key} <- screen["elements"],
         String.ends_with?(type, "_question"),
         do: key
   end

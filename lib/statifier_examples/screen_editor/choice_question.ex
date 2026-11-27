@@ -27,23 +27,23 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
 
   use StatifierBlocks.BlockType
 
-  alias StatifierExamples.ScreenEditor.Node
+  alias StatifierExamples.ScreenEditor.Element
 
   @selects [{"one", "One"}, {"many", "Many"}]
 
   @impl StatifierBlocks.BlockType
   def config_schema(_config) do
-    Node.common_fields() ++
+    Element.common_fields() ++
       [
-        Node.field("label", :string, "Label", true, ""),
-        Node.field("select", {:select, @selects}, "Select", true, "one"),
-        Node.field("answer_options", {:list, :string}, "Answer options", true, []),
-        Node.field("style", :string, "Style", false, ""),
-        Node.field("help", :string, "Help", false, ""),
-        Node.field("default", :string, "Default", false, ""),
-        Node.field("required", :boolean, "Required", false, false),
-        Node.field("min_selections", :integer, "Min selections", false, nil),
-        Node.field("max_selections", :integer, "Max selections", false, nil)
+        Element.field("label", :string, "Label", true, ""),
+        Element.field("select", {:select, @selects}, "Select", true, "one"),
+        Element.field("answer_options", {:list, :string}, "Answer options", true, []),
+        Element.field("style", :string, "Style", false, ""),
+        Element.field("help", :string, "Help", false, ""),
+        Element.field("default", :string, "Default", false, ""),
+        Element.field("required", :boolean, "Required", false, false),
+        Element.field("min_selections", :integer, "Min selections", false, nil),
+        Element.field("max_selections", :integer, "Max selections", false, nil)
       ]
   end
 
@@ -51,9 +51,9 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
   def validate_config(config) do
     options = Map.get(config, "answer_options")
 
-    Node.validate(
+    Element.validate(
       config,
-      Node.present(config, "label", "a question needs the label a patron is asked") ++
+      Element.present(config, "label", "a question needs the label a patron is asked") ++
         option_findings(options) ++ selection_findings(config, options)
     )
   end
@@ -71,7 +71,7 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
   end
 
   @impl StatifierBlocks.BlockType
-  def emit(_block, context), do: Node.emit_leaf(context)
+  def emit(_block, context), do: Element.emit_leaf(context)
 
   @doc """
   The `{value, label}` pairs `rows` hold, in order, or `:error` when a row
@@ -118,8 +118,8 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
 
   defp value_findings(values) do
     cond do
-      not Enum.all?(values, &Node.key?/1) ->
-        [{"answer_options", "an option value is key-shaped, like a node key"}]
+      not Enum.all?(values, &Element.key?/1) ->
+        [{"answer_options", "an option value is key-shaped, like an element key"}]
 
       Enum.uniq(values) != values ->
         [{"answer_options", "each option value is unique within the question"}]

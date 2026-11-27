@@ -49,7 +49,7 @@ defmodule StatifierExamples.ScreenEditor.Try do
   # root nothing declares raises error.execution rather than writing it.
   @responses %DatamodelEntry{
     id: "responses",
-    description: "What the screens collected, keyed by node key."
+    description: "What the screens collected, keyed by element key."
   }
 
   @typedoc """
@@ -129,13 +129,13 @@ defmodule StatifierExamples.ScreenEditor.Try do
   # buttons and questions read off the screen itself.
   @spec group(map(), String.t()) :: Block.t()
   defp group(%{"key" => key} = screen, id) do
-    nodes = flatten(Map.get(screen, "nodes", []))
+    elements = flatten(Map.get(screen, "elements", []))
 
-    questions = for %{"type" => type, "key" => key} <- nodes, type in @questions, do: key
+    questions = for %{"type" => type, "key" => key} <- elements, type in @questions, do: key
     capture = Map.new(questions, &{"responses." <> &1, &1})
 
     handlers =
-      nodes
+      elements
       |> Enum.filter(&(&1["type"] == "button"))
       |> Enum.uniq_by(& &1["outcome"])
       |> Enum.with_index(1)
@@ -181,10 +181,10 @@ defmodule StatifierExamples.ScreenEditor.Try do
   defp explained_formats(%{"screens" => screens}) do
     keys =
       for screen <- screens,
-          %{"type" => "text_question", "format" => format} = node <-
-            flatten(Map.get(screen, "nodes", [])),
+          %{"type" => "text_question", "format" => format} = element <-
+            flatten(Map.get(screen, "elements", [])),
           format not in Validation.formats(),
-          do: Map.get(node, "key")
+          do: Map.get(element, "key")
 
     case keys do
       [] -> :ok
@@ -192,14 +192,14 @@ defmodule StatifierExamples.ScreenEditor.Try do
     end
   end
 
-  # A screen's nodes with every variant's candidates in among them, since
+  # A screen's elements with every variant's candidates in among them, since
   # whichever candidate a reader is shown, its questions and buttons are the
   # screen's.
   @spec flatten([map()]) :: [map()]
-  defp flatten(nodes) do
-    Enum.flat_map(nodes, fn
-      %{"type" => "variant", "nodes" => inner} -> flatten(inner)
-      node -> [node]
+  defp flatten(elements) do
+    Enum.flat_map(elements, fn
+      %{"type" => "variant", "elements" => inner} -> flatten(inner)
+      element -> [element]
     end)
   end
 end

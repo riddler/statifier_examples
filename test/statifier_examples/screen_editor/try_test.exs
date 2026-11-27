@@ -177,18 +177,18 @@ defmodule StatifierExamples.ScreenEditor.TryTest do
   defp registration do
     card =
       screen("blk_try_card", "card_choice", "Your card", [
-        node("choice_question", "card_type", %{
+        element("choice_question", "card_type", %{
           "label" => "Which card would you like?",
           "select" => "one",
           "style" => "radio",
           "required" => true,
           "answer_options" => ["standard=Standard card", "family=Family card"]
         }),
-        node("boolean_question", "lending_rules", %{
+        element("boolean_question", "lending_rules", %{
           "label" => "I agree to the lending rules",
           "required" => true
         }),
-        node("button", "card_next", %{
+        element("button", "card_next", %{
           "label" => "Continue",
           "outcome" => "card_chosen",
           "writes" => ["responses.card_source=online"]
@@ -197,10 +197,10 @@ defmodule StatifierExamples.ScreenEditor.TryTest do
 
     welcome =
       screen("blk_try_welcome", "welcome", "Welcome", [
-        node("text", "welcome_text", %{
+        element("text", "welcome_text", %{
           "text" => "Your {{ responses.card_type }} card is on its way."
         }),
-        node("button", "welcome_done", %{
+        element("button", "welcome_done", %{
           "label" => "Finish",
           "outcome" => "registration_finished"
         })
@@ -210,15 +210,15 @@ defmodule StatifierExamples.ScreenEditor.TryTest do
     Document.new(root, id: "doc_patron_registration")
   end
 
-  defp screen(id, key, title, nodes) do
+  defp screen(id, key, title, elements) do
     Block.new("myapp.screens.screen",
       id: id,
       config: %{"key" => key, "title" => title},
-      slots: %{"nodes" => nodes}
+      slots: %{"elements" => elements}
     )
   end
 
-  defp node(type, key, config) do
+  defp element(type, key, config) do
     Block.new("myapp.screens." <> type,
       id: "blk_try_" <> key,
       config: Map.put(config, "key", key)

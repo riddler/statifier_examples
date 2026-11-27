@@ -7,23 +7,23 @@ defmodule StatifierExamples.ScreenEditor.BooleanQuestion do
 
   use StatifierBlocks.BlockType
 
-  alias StatifierExamples.ScreenEditor.Node
+  alias StatifierExamples.ScreenEditor.Element
 
   @impl StatifierBlocks.BlockType
   def config_schema(_config) do
-    Node.common_fields() ++
+    Element.common_fields() ++
       [
-        Node.field("label", :string, "Label", true, ""),
-        Node.field("help", :string, "Help", false, ""),
-        Node.field("required", :boolean, "Required", false, false)
+        Element.field("label", :string, "Label", true, ""),
+        Element.field("help", :string, "Help", false, ""),
+        Element.field("required", :boolean, "Required", false, false)
       ]
   end
 
   @impl StatifierBlocks.BlockType
   def validate_config(config) do
-    Node.validate(
+    Element.validate(
       config,
-      Node.present(config, "label", "a question needs the label a patron is asked")
+      Element.present(config, "label", "a question needs the label a patron is asked")
     )
   end
 
@@ -40,5 +40,5 @@ defmodule StatifierExamples.ScreenEditor.BooleanQuestion do
   end
 
   @impl StatifierBlocks.BlockType
-  def emit(_block, context), do: Node.emit_leaf(context)
+  def emit(_block, context), do: Element.emit_leaf(context)
 end

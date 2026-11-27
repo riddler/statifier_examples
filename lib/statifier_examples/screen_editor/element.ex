@@ -1,31 +1,32 @@
-defmodule StatifierExamples.ScreenEditor.Node do
+defmodule StatifierExamples.ScreenEditor.Element do
   @moduledoc """
-  What every block type in the screen-node palette shares: the two fields
-  every node of a screen document carries, the checks on them, and the
-  chart a node compiles to.
+  What every block type in the screen-element palette shares: the two
+  fields every element of a screen document carries, the checks on them,
+  and the chart an element compiles to.
 
   ## The two common fields
 
-  `key` names the node, and it is required and key-shaped - a lowercase
+  `key` names the element, and it is required and key-shaped - a lowercase
   letter, then lowercase letters, digits and underscores - because a
   question's key is where its response lands (`responses.<key>`) and a
   condition reads it back by that name. `condition` is optional, an
-  expression over `responses` and `context` that decides whether the node
-  is shown at all. Both are spelled as the screen document spells them, so
-  the walk from a block document to a screen document copies a field
-  rather than renaming it.
+  expression over `responses` and `context` that decides whether the
+  element is shown at all. Both are spelled as the screen document spells
+  them, so the walk from a block document to a screen document copies a
+  field rather than renaming it.
 
-  ## What a node compiles to
+  ## What an element compiles to
 
   The blocks editor compiles every document it holds for its findings pane,
-  and a screen document is not a chart: nothing executes a screen's nodes
-  in order. So a node compiles to an inert state that is entered and done
-  at once, and a container (`StatifierExamples.ScreenEditor.Screen` and
-  `StatifierExamples.ScreenEditor.Variant`) compiles to its nodes in
+  and a screen document is not a chart: nothing executes a screen's
+  elements in order. So an element compiles to an inert state that is
+  entered and done at once, and a container
+  (`StatifierExamples.ScreenEditor.Screen` and
+  `StatifierExamples.ScreenEditor.Variant`) compiles to its elements in
   document order. What the pane then reports is what an author can act on:
   a field a type refuses, a slot arity the document breaks. The chart
-  itself is never run; the screen-node profile mounts the editor with no
-  run pane (`StatifierExamples.ScreenEditor.profile/0`).
+  itself is never run; the screen editor's profile mounts the editor with
+  no run pane (`StatifierExamples.ScreenEditor.profile/0`).
   """
 
   alias StatifierBlocks.Block
@@ -55,13 +56,13 @@ defmodule StatifierExamples.ScreenEditor.Node do
   end
 
   @doc """
-  Whether `value` is key-shaped: what a node key, an option value and an
-  outcome name are held to.
+  Whether `value` is key-shaped: what an element key, an option value and
+  an outcome name are held to.
 
-      iex> StatifierExamples.ScreenEditor.Node.key?("card_type")
+      iex> StatifierExamples.ScreenEditor.Element.key?("card_type")
       true
 
-      iex> StatifierExamples.ScreenEditor.Node.key?("Card type")
+      iex> StatifierExamples.ScreenEditor.Element.key?("Card type")
       false
   """
   @spec key?(term()) :: boolean()
@@ -85,7 +86,7 @@ defmodule StatifierExamples.ScreenEditor.Node do
 
   @doc """
   A finding on `field` when the config's value there is not a non-blank
-  string, for a field a node cannot be read without.
+  string, for a field an element cannot be read without.
   """
   @spec present(Block.config(), String.t(), String.t()) :: [BlockType.finding()]
   def present(config, field, message) do
@@ -95,16 +96,16 @@ defmodule StatifierExamples.ScreenEditor.Node do
     end
   end
 
-  @doc "The inert state a leaf node compiles to: entered, and done at once."
+  @doc "The inert state a leaf element compiles to: entered, and done at once."
   @spec emit_leaf(Context.t()) :: {:ok, StatifierBlocks.Emission.t()}
   def emit_leaf(context) do
     done = Context.done_id(context)
     {:ok, Emit.state(context.state_id, done, [Emit.final(done)])}
   end
 
-  @doc "A container's nodes, in document order."
-  @spec emit_nodes(Context.t()) :: {:ok, StatifierBlocks.Emission.t()}
-  def emit_nodes(context), do: Emit.ordered(context, Context.children(context, "nodes"))
+  @doc "A container's elements, in document order."
+  @spec emit_elements(Context.t()) :: {:ok, StatifierBlocks.Emission.t()}
+  def emit_elements(context), do: Emit.ordered(context, Context.children(context, "elements"))
 
   @spec key_findings(Block.config()) :: [BlockType.finding()]
   defp key_findings(config) do
@@ -113,7 +114,7 @@ defmodule StatifierExamples.ScreenEditor.Node do
     else
       [
         {"key",
-         "a node key starts with a lowercase letter and holds only lowercase letters, " <>
+         "an element key starts with a lowercase letter and holds only lowercase letters, " <>
            "digits and underscores"}
       ]
     end

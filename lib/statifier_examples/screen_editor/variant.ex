@@ -1,27 +1,27 @@
 defmodule StatifierExamples.ScreenEditor.Variant do
   @moduledoc """
-  `myapp.screens.variant`: a node that shows one of the candidates in its
-  `nodes` slot, the first whose condition holds - a notice for a patron who
+  `myapp.screens.variant`: an element that shows one of the candidates in
+  its `elements` slot, the first whose condition holds - a notice for a patron who
   already holds a card ahead of the default welcome, say. The last
   candidate with no condition is the default.
 
   Its slot needs at least one candidate, because a variant with none has
-  nothing to show. Its own fields are the two every node carries
-  (`StatifierExamples.ScreenEditor.Node`).
+  nothing to show. Its own fields are the two every element carries
+  (`StatifierExamples.ScreenEditor.Element`).
   """
 
   use StatifierBlocks.BlockType
 
-  alias StatifierExamples.ScreenEditor.Node
+  alias StatifierExamples.ScreenEditor.Element
 
   @impl StatifierBlocks.BlockType
-  def slots(_config), do: [{"nodes", :at_least_one, "Candidates"}]
+  def slots(_config), do: [{"elements", :at_least_one, "Candidates"}]
 
   @impl StatifierBlocks.BlockType
-  def config_schema(_config), do: Node.common_fields()
+  def config_schema(_config), do: Element.common_fields()
 
   @impl StatifierBlocks.BlockType
-  def validate_config(config), do: Node.validate(config, [])
+  def validate_config(config), do: Element.validate(config, [])
 
   @impl StatifierBlocks.BlockType
   def palette_entry do
@@ -36,5 +36,5 @@ defmodule StatifierExamples.ScreenEditor.Variant do
   end
 
   @impl StatifierBlocks.BlockType
-  def emit(_block, context), do: Node.emit_nodes(context)
+  def emit(_block, context), do: Element.emit_elements(context)
 end
