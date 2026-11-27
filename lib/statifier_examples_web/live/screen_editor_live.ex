@@ -15,10 +15,12 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
   The header's Try button hands the document the editor last committed to
   `StatifierExamples.ScreenEditor.Try.start/1`, which walks it into a screen
   document, derives a Path for it and starts a Journey over the two. The
-  page then draws the Journey under the editor as
-  `StatifierExamplesWeb.SignupJourneyLive` draws the signup Journey: the
-  current screen, the findings a refused press answers, and what the
-  Journey has collected. The screen document and the Path are held in the
+  page then draws the Journey under the editor with this app's own
+  per-kind renderer, `StatifierExamplesWeb.SignupElements`: the current
+  screen, the findings a refused press answers, and what the Journey has
+  collected. (The Journey page, `StatifierExamplesWeb.SignupJourneyLive`,
+  renders through `RiddlerLiveView.Journey` instead.) The screen document
+  and the Path are held in the
   assigns beside the execution id and passed to every `Journey` call, so
   the Journey runs on the document as it stood when Try was pressed;
   pressing Try again starts a new Journey on the document as it stands now.
@@ -231,10 +233,10 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
   defp refusals(reason), do: [inspect(reason)]
 
   @spec finding(Riddler.Finding.t()) :: String.t()
-  defp finding(%Riddler.Finding{node_key: nil, code: code, message: message}),
+  defp finding(%Riddler.Finding{element_key: nil, code: code, message: message}),
     do: "#{code}: #{message}"
 
-  defp finding(%Riddler.Finding{node_key: key, code: code, message: message}),
+  defp finding(%Riddler.Finding{element_key: key, code: code, message: message}),
     do: "#{key} - #{code}: #{message}"
 
   # The draft a screen starts from: each presented question's `value` (the

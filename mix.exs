@@ -890,7 +890,29 @@ defmodule StatifierExamples.MixProject do
       # `outcome` is not a string, which 0.5.0 accepted; every button in
       # the signup screens carries a string `outcome`, so every document
       # here is admitted as before.
-      {:riddler, "~> 0.6.0"},
+      #
+      # 2026-11-27: the requirement moves to `~> 0.9.0`, and `mix.lock`
+      # resolves 0.9.0. 0.8.0 renamed what riddler answers: the presented
+      # answer and the resolved screen carry a screen's children under
+      # `elements`, and a finding names its question by `element_key`, where
+      # 0.7.0 said `nodes` and `node_key`; the call sites that read either
+      # moved with it. Every screens document this app ships, and every one
+      # the screen editor walks, is still a version 1 document, spelling
+      # `nodes`, and 0.9.0 admits it and resolves it to the same content
+      # under the new key (`StatifierExamples.ScreenDocumentsTest` asserts
+      # it). 0.9.0 adds element types, formats and hints this app's
+      # documents do not use, so they resolve and validate as on 0.8.0.
+      {:riddler, "~> 0.9.0"},
+
+      # The Journey page's renderer: `RiddlerLiveView.Journey` draws what
+      # `Riddler.Journey.present/3` answers and hands back what the reader
+      # submits, through `StatifierExamplesWeb.JourneyHost`. 0.2.0 is the
+      # floor: it is the release that presents a screen again for what the
+      # reader has typed and not sent (its `re_present` assign), which the
+      # signup Path's plan screen needs for its two plan buttons. It asks
+      # for `riddler ~> 0.9` and `phoenix_live_view ~> 1.2`, which the
+      # requirements here already admit.
+      {:riddler_live_view, "~> 0.2.0"},
 
       # Dev / test. The gate is ex_quality's; see `.quality.exs`.
       {:ex_quality, "~> 0.15", only: :dev, runtime: false},

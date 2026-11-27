@@ -16,13 +16,15 @@ defmodule StatifierExamplesWeb.SettingsLiveTest do
   # it carries, and the second screen's continue button.
   @first_steps %{
     "catalogue_sync" =>
-      {"#catalogue_source_continue", %{"catalogue_feed" => "branch_export"},
-       "#catalogue_schedule_continue"},
+      {~s([data-riddler-key="catalogue_source_continue"]), %{"catalogue_feed" => "branch_export"},
+       ~s([data-riddler-key="catalogue_schedule_continue"])},
     "reading_list_import" =>
-      {"#reading_list_source_continue", %{"reading_list_format" => "booklist_link"},
-       "#reading_list_term_continue"},
+      {~s([data-riddler-key="reading_list_source_continue"]),
+       %{"reading_list_format" => "booklist_link"},
+       ~s([data-riddler-key="reading_list_term_continue"])},
     "card_reader_setup" =>
-      {"#reader_model_continue", %{"reader_kind" => "self_checkout"}, "#reader_location_continue"}
+      {~s([data-riddler-key="reader_model_continue"]), %{"reader_kind" => "self_checkout"},
+       ~s([data-riddler-key="reader_location_continue"])}
   }
 
   # Press a setup's Start and follow the navigation to the Journey page.
@@ -73,7 +75,7 @@ defmodule StatifierExamplesWeb.SettingsLiveTest do
 
       {:ok, journey, _html} = live(conn, to)
       assert has_element?(journey, first_button)
-      refute has_element?(journey, "#journey-back")
+      refute has_element?(journey, "[data-riddler-back]")
       refute has_element?(journey, "#journey-error")
     end
   end
@@ -85,16 +87,20 @@ defmodule StatifierExamplesWeb.SettingsLiveTest do
     for {key, {first_button, press, second_button}} <- @first_steps do
       journey = started(conn, key)
 
-      journey |> form("#journey-responses", responses: press) |> render_change()
-      journey |> element(first_button) |> render_click()
+      journey |> form("#journey form", press) |> render_change()
+
+      journey
+      |> form("#journey form")
+      |> put_submitter("button" <> first_button)
+      |> render_submit()
 
       assert has_element?(journey, second_button), "#{key} did not move on"
-      assert has_element?(journey, "#journey-back"), "#{key} offers no Back"
+      assert has_element?(journey, "[data-riddler-back]"), "#{key} offers no Back"
 
-      journey |> element("#journey-back") |> render_click()
+      journey |> element("[data-riddler-back]") |> render_click()
 
       assert has_element?(journey, first_button), "#{key} did not go back"
-      refute has_element?(journey, "#journey-back")
+      refute has_element?(journey, "[data-riddler-back]")
       refute has_element?(journey, "#journey-error")
     end
   end
