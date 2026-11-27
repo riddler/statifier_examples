@@ -15,9 +15,18 @@ defmodule StatifierExamples.ScreenEditor do
   group and each named for the document's own type under `myapp.screens.`:
   the screen itself (`key`, `title`, and an `elements` slot), and the
   element types `heading`, `text`, `text_question`, `choice_question`,
-  `boolean_question`, `secret_question`, `button` and `variant`. Their
-  fields are spelled as the document spells them. `registrations/0` lists
-  them.
+  `boolean_question`, `secret_question`, `button`, `variant`, `image`,
+  `divider` and `link`. Their fields are spelled as the document spells
+  them, but for the few the walk turns back into the document's shape
+  (`StatifierExamples.ScreenEditor.Walk`). `registrations/0` lists them.
+
+  A text question's date and time formats are choices of its `format`
+  field, and a slider is its `style` hint with a numeric format, `min`,
+  `max` and `step`, because the document spells both on a text question
+  rather than as types of their own. An option's description and a
+  question's checks are rows on the question
+  (`StatifierExamples.ScreenEditor.ChoiceQuestion`,
+  `StatifierExamples.ScreenEditor.Element.checks_field/0`).
 
   The `core.*` vocabulary is registered underneath, because a document's
   root is a block and `core.sequence` is the plain ordered one: its `body`
@@ -51,7 +60,10 @@ defmodule StatifierExamples.ScreenEditor do
     BooleanQuestion,
     Button,
     ChoiceQuestion,
+    Divider,
     Heading,
+    Image,
+    Link,
     Screen,
     SecretQuestion,
     Text,
@@ -70,7 +82,10 @@ defmodule StatifierExamples.ScreenEditor do
     {"myapp.screens.boolean_question", BooleanQuestion},
     {"myapp.screens.secret_question", SecretQuestion},
     {"myapp.screens.button", Button},
-    {"myapp.screens.variant", Variant}
+    {"myapp.screens.variant", Variant},
+    {"myapp.screens.image", Image},
+    {"myapp.screens.divider", Divider},
+    {"myapp.screens.link", Link}
   ]
 
   @doc """
@@ -103,8 +118,10 @@ defmodule StatifierExamples.ScreenEditor do
   end
 
   @doc """
-  The values the screen editor offers for a choice question's `style`: an
-  open list, so a renderer's own style name can still be typed.
+  The values the screen editor offers for the hints a renderer reads - a
+  choice question's and a text question's `style`, an image's `size` and
+  `fit`, and a link's `style` - each as an open list, so a renderer's own
+  name can still be typed.
   """
   @spec field_candidates() :: %{optional({String.t(), String.t()}) => term()}
   def field_candidates do
@@ -116,7 +133,26 @@ defmodule StatifierExamples.ScreenEditor do
            {"dropdown", "Dropdown"},
            {"checkboxes", "Checkboxes"},
            {"list", "List"}
-         ]}
+         ]},
+      {"myapp.screens.text_question", "style"} =>
+        {:open,
+         [
+           {"multiline", "More than one line"},
+           {"slider", "Slider, for a number"},
+           {"stepper", "Stepper, for a number"}
+         ]},
+      {"myapp.screens.image", "size"} =>
+        {:open,
+         [
+           {"icon", "Icon"},
+           {"avatar", "Avatar"},
+           {"small", "Small"},
+           {"medium", "Medium"},
+           {"large", "Large"},
+           {"banner", "Banner"}
+         ]},
+      {"myapp.screens.image", "fit"} => {:open, [{"contain", "Contain"}, {"cover", "Cover"}]},
+      {"myapp.screens.link", "style"} => {:open, [{"inline", "Inline"}, {"button", "Button"}]}
     }
   end
 end

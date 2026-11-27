@@ -28,12 +28,21 @@ defmodule StatifierExamples.ScreenEditor.Walk do
   of writes) is left out, as a document that never wrote it would be, while
   `false` is a value and is kept.
 
-  Three fields are written differently in the editor, and the walk turns
+  Some fields are written differently in the editor, and the walk turns
   each back into the document's shape:
 
     * a choice question's `answer_options` rows, `value=Label`, become
-      `[%{"value" => value, "label" => label}]` in order;
-    * a text question's `min` and `max`, written as text, become numbers;
+      `[%{"value" => value, "label" => label}]` in order, and each of its
+      `option_descriptions` rows, `value=Description`, becomes the
+      `"description"` of the option it names; `option_descriptions` itself
+      is left out, since the document has no such field;
+    * a text question's `min` and `max`, written as text, become numbers,
+      except under the `date`, `time` and `datetime` formats, where a
+      bound is a value in the format's own shape and stays the text it is;
+      its `step`, written as text, becomes a number;
+    * a question's `checks` rows, `code: condition => message`, become
+      `[%{"condition" => condition, "code" => code, "message" => message}]`
+      in order (`StatifierExamples.ScreenEditor.Element.checks/1`);
     * a button's `writes` rows, `responses.<path>=value`, become the map
       `%{"responses.<path>" => ["const", value]}`. The value is read as
       JSON when it is JSON - `3`, `true`, `["a", "b"]`, `"12"` - and as
@@ -59,6 +68,7 @@ defmodule StatifierExamples.ScreenEditor.Walk do
   @prefix "myapp.screens."
   @screen @prefix <> "screen"
   @variant @prefix <> "variant"
+  @dated ScreenEditor.TextQuestion.dated_formats()
 
   @typedoc "One block the walk cannot turn into the document, and why."
   @type refusal :: {Block.id(), String.t()}
@@ -136,7 +146,8 @@ defmodule StatifierExamples.ScreenEditor.Walk do
   # The fields the editor writes in a shape of its own, turned back into
   # the document's, one at a time; the first that cannot be is the refusal.
   defp convert(element, id) do
-    Enum.reduce_while([&options/1, &bounds/1, &writes/1], {:ok, element}, fn step, {:ok, acc} ->
+    [&options/1, &bounds/1, &step/1, &checks/1, &writes/1]
+    |> Enum.reduce_while({:ok, element}, fn step, {:ok, acc} ->
       case step.(acc) do
         {:ok, acc} -> {:cont, {:ok, acc}}
         {:error, message} -> {:halt, {:error, [{id, message}]}}
@@ -146,16 +157,35 @@ defmodule StatifierExamples.ScreenEditor.Walk do
 
   defp options(%{"answer_options" => rows} = element) do
     case ScreenEditor.ChoiceQuestion.answer_options(List.wrap(rows)) do
-      {:ok, pairs} ->
-        options = Enum.map(pairs, fn {value, label} -> %{"value" => value, "label" => label} end)
-        {:ok, %{element | "answer_options" => options}}
-
-      :error ->
-        {:error, "each option is written value=Label"}
+      {:ok, pairs} -> described(element, pairs)
+      :error -> {:error, "each option is written value=Label"}
     end
   end
 
+  defp options(%{"option_descriptions" => _rows} = element), do: described(element, [])
   defp options(element), do: {:ok, element}
+
+  defp described(element, pairs) do
+    {rows, element} = Map.pop(element, "option_descriptions", [])
+    values = Enum.map(pairs, &elem(&1, 0))
+
+    case ScreenEditor.ChoiceQuestion.option_descriptions(List.wrap(rows), values) do
+      {:ok, descriptions} ->
+        options =
+          Enum.map(pairs, fn {value, label} ->
+            put_present(%{"value" => value, "label" => label}, "description", descriptions[value])
+          end)
+
+        {:ok, put_present(element, "answer_options", options)}
+
+      :error ->
+        {:error, "each option description is written value=Description, naming an option once"}
+    end
+  end
+
+  defp bounds(%{"type" => "text_question", "format" => format} = element)
+       when format in @dated,
+       do: {:ok, element}
 
   defp bounds(%{"type" => "text_question"} = element) do
     Enum.reduce_while(["min", "max"], {:ok, element}, fn field, {:ok, acc} ->
@@ -167,6 +197,24 @@ defmodule StatifierExamples.ScreenEditor.Walk do
   end
 
   defp bounds(element), do: {:ok, element}
+
+  defp step(%{"type" => "text_question", "step" => text} = element) when is_binary(text) do
+    case number(element, "step", text) do
+      {:cont, answer} -> answer
+      {:halt, {:error, _bound}} -> {:error, "step is a number, or blank for no step"}
+    end
+  end
+
+  defp step(element), do: {:ok, element}
+
+  defp checks(%{"checks" => rows} = element) do
+    case ScreenEditor.Element.checks(List.wrap(rows)) do
+      {:ok, checks} -> {:ok, %{element | "checks" => checks}}
+      :error -> {:error, "each check is written check.<name>: condition => message"}
+    end
+  end
+
+  defp checks(element), do: {:ok, element}
 
   defp number(element, field, text) do
     case Integer.parse(text) do

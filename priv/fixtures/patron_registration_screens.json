@@ -24,6 +24,17 @@
           "slots": {
             "elements": [
               {
+                "type": "myapp.screens.image",
+                "id": "blk_prs_logo",
+                "type_version": 1,
+                "config": {
+                  "key": "library_logo",
+                  "src": "/images/logo.svg",
+                  "alt": "Riverbend Public Library",
+                  "size": "small"
+                }
+              },
+              {
                 "type": "myapp.screens.heading",
                 "id": "blk_prs_details_heading",
                 "type_version": 1,
@@ -77,6 +88,29 @@
                   "format": "integer",
                   "min": "0",
                   "max": "120"
+                }
+              },
+              {
+                "type": "myapp.screens.text_question",
+                "id": "blk_prs_birth_date",
+                "type_version": 1,
+                "config": {
+                  "key": "birth_date",
+                  "label": "Date of birth",
+                  "help": "Patrons under 13 borrow on a family card.",
+                  "format": "date",
+                  "min": "1900-01-01",
+                  "checks": [
+                    "check.birth_date_in_future: trim(responses.birth_date)::date <= context.today::date => A date of birth cannot be in the future."
+                  ]
+                }
+              },
+              {
+                "type": "myapp.screens.divider",
+                "id": "blk_prs_details_divider",
+                "type_version": 1,
+                "config": {
+                  "key": "details_divider"
                 }
               },
               {
@@ -140,6 +174,9 @@
                     "standard=Standard card",
                     "family=Family card, for two adults and their children",
                     "student=Student card"
+                  ],
+                  "option_descriptions": [
+                    "student=For patrons in full-time education, with a longer loan period"
                   ]
                 }
               },
@@ -161,6 +198,20 @@
                     "audiobooks=Audiobooks",
                     "children=Children's books"
                   ]
+                }
+              },
+              {
+                "type": "myapp.screens.text_question",
+                "id": "blk_prs_items_at_once",
+                "type_version": 1,
+                "config": {
+                  "key": "items_at_once",
+                  "label": "How many items would you like to borrow at once?",
+                  "format": "integer",
+                  "min": "1",
+                  "max": "20",
+                  "style": "slider",
+                  "step": "1"
                 }
               },
               {
@@ -192,6 +243,16 @@
                       }
                     }
                   ]
+                }
+              },
+              {
+                "type": "myapp.screens.link",
+                "id": "blk_prs_rules_link",
+                "type_version": 1,
+                "config": {
+                  "key": "rules_link",
+                  "label": "Read the lending rules",
+                  "href": "https://library.example.com/lending-rules"
                 }
               },
               {

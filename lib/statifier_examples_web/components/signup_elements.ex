@@ -58,6 +58,9 @@ defmodule StatifierExamplesWeb.SignupElements do
   def element(%{node: %{"type" => "boolean_question"}} = assigns), do: boolean_question(assigns)
   def element(%{node: %{"type" => "secret_question"}} = assigns), do: secret_question(assigns)
   def element(%{node: %{"type" => "button"}} = assigns), do: button(assigns)
+  def element(%{node: %{"type" => "image"}} = assigns), do: image(assigns)
+  def element(%{node: %{"type" => "divider"}} = assigns), do: divider(assigns)
+  def element(%{node: %{"type" => "link"}} = assigns), do: link_element(assigns)
 
   def element(%{node: node}) do
     raise ArgumentError,
@@ -237,6 +240,42 @@ defmodule StatifierExamplesWeb.SignupElements do
     >
       {@node["label"]}
     </button>
+    """
+  end
+
+  @doc """
+  A picture and its alt text. The `size` and `fit` hints are not read.
+  """
+  attr :node, :map, required: true
+  attr :responses, :map, default: %{}
+
+  def image(assigns) do
+    ~H"""
+    <img id={@node["key"]} src={@node["src"]} alt={@node["alt"]} class="max-w-full" />
+    """
+  end
+
+  @doc "A rule between the elements before it and the elements after it."
+  attr :node, :map, required: true
+  attr :responses, :map, default: %{}
+
+  def divider(assigns) do
+    ~H"""
+    <hr id={@node["key"]} class="border-base-300" />
+    """
+  end
+
+  @doc """
+  A place the reader may go from the screen. The `style` hint is not read.
+  """
+  attr :node, :map, required: true
+  attr :responses, :map, default: %{}
+
+  def link_element(assigns) do
+    ~H"""
+    <a id={@node["key"]} href={@node["href"]} class="link link-primary w-fit">
+      {@node["label"]}
+    </a>
     """
   end
 

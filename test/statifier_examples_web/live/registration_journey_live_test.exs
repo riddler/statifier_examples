@@ -46,6 +46,24 @@ defmodule StatifierExamplesWeb.RegistrationJourneyLiveTest do
     live
   end
 
+  # Sabotage: took the divider block out of the fixture; the details
+  # screen drew no rule and this went red, then reverted from a copy.
+  test "the details and card screens draw the image, divider, link, date input and slider", %{
+    conn: conn
+  } do
+    {:ok, live, _html} = live(conn, @path)
+    live |> element("#start-journey") |> render_click()
+
+    assert has_element?(live, "img" <> key("library_logo"))
+    assert has_element?(live, "hr" <> key("details_divider"))
+    assert has_element?(live, ~s(input[type="date"][name="birth_date"]))
+
+    press(live, "details_continue", @details)
+
+    assert has_element?(live, ~s(a[href="https://library.example.com/lending-rules"]))
+    assert has_element?(live, ~s(input[type="range"][name="items_at_once"][step="1"]))
+  end
+
   # The component types the ticked box as `true` before the host sees it,
   # which riddler's check of a boolean question requires.
   #

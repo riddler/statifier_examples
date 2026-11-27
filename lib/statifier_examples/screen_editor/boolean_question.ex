@@ -3,6 +3,8 @@ defmodule StatifierExamples.ScreenEditor.BooleanQuestion do
   `myapp.screens.boolean_question`: a lone checkbox or toggle submitting
   true or false - "I agree to the library's lending rules". `required`
   asks for true, and `help` is a line of guidance shown beside it.
+  `checks` are the question's own conditions, one row each
+  (`StatifierExamples.ScreenEditor.Element.checks_field/0`).
   """
 
   use StatifierBlocks.BlockType
@@ -15,7 +17,8 @@ defmodule StatifierExamples.ScreenEditor.BooleanQuestion do
       [
         Element.field("label", :string, "Label", true, ""),
         Element.field("help", :string, "Help", false, ""),
-        Element.field("required", :boolean, "Required", false, false)
+        Element.field("required", :boolean, "Required", false, false),
+        Element.checks_field()
       ]
   end
 
@@ -23,7 +26,8 @@ defmodule StatifierExamples.ScreenEditor.BooleanQuestion do
   def validate_config(config) do
     Element.validate(
       config,
-      Element.present(config, "label", "a question needs the label a patron is asked")
+      Element.present(config, "label", "a question needs the label a patron is asked") ++
+        Element.check_findings(config)
     )
   end
 

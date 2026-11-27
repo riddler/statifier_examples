@@ -8,7 +8,9 @@ defmodule StatifierExamples.ScreenEditor.SecretQuestion do
   the whole of it: a secret question carries no `placeholder`, no
   `format`, and neither `default` nor `prefill`, because riddler's
   `secret_question` names none of them and refuses the last two - a secret
-  is a value only the patron supplies.
+  is a value only the patron supplies. It may carry `checks`
+  (`StatifierExamples.ScreenEditor.Element.checks_field/0`), and riddler
+  refuses one whose condition reads a secret question's response.
 
   What a host does with the response is
   `StatifierExamples.Signup.Journey.submit/4`'s: it is validated as the
@@ -26,7 +28,8 @@ defmodule StatifierExamples.ScreenEditor.SecretQuestion do
       [
         Element.field("label", :string, "Label", true, ""),
         Element.field("help", :string, "Help", false, ""),
-        Element.field("required", :boolean, "Required", false, false)
+        Element.field("required", :boolean, "Required", false, false),
+        Element.checks_field()
       ]
   end
 
@@ -34,7 +37,8 @@ defmodule StatifierExamples.ScreenEditor.SecretQuestion do
   def validate_config(config) do
     Element.validate(
       config,
-      Element.present(config, "label", "a question needs the label a patron is asked")
+      Element.present(config, "label", "a question needs the label a patron is asked") ++
+        Element.check_findings(config)
     )
   end
 

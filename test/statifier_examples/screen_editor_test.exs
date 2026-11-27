@@ -12,8 +12,9 @@ defmodule StatifierExamples.ScreenEditorTest do
 
   doctest StatifierExamples.ScreenEditor.Element
   doctest StatifierExamples.ScreenEditor.ChoiceQuestion
+  doctest StatifierExamples.ScreenEditor.TextQuestion
 
-  @element_types ~w(heading text text_question choice_question boolean_question secret_question button variant)
+  @element_types ~w(heading text text_question choice_question boolean_question secret_question button variant image divider link)
 
   describe "the palette" do
     test "registers the screen and every element type under the document's own names" do
@@ -41,15 +42,18 @@ defmodule StatifierExamples.ScreenEditorTest do
       assert fields("text") == ~w(key condition text)
 
       assert fields("text_question") ==
-               ~w(key condition label placeholder help required format pattern min max)
+               ~w(key condition label placeholder help required format pattern min max style step checks)
 
       assert fields("choice_question") ==
-               ~w(key condition label select answer_options style help default required min_selections max_selections)
+               ~w(key condition label select answer_options option_descriptions style help default required min_selections max_selections checks)
 
-      assert fields("boolean_question") == ~w(key condition label help required)
-      assert fields("secret_question") == ~w(key condition label help required)
+      assert fields("boolean_question") == ~w(key condition label help required checks)
+      assert fields("secret_question") == ~w(key condition label help required checks)
       assert fields("button") == ~w(key condition label outcome writes style validates)
       assert fields("variant") == ~w(key condition)
+      assert fields("image") == ~w(key condition src alt size fit)
+      assert fields("divider") == ~w(key condition)
+      assert fields("link") == ~w(key condition label href style)
     end
 
     test "requires no style of a button, and a select of a choice question" do
@@ -86,6 +90,24 @@ defmodule StatifierExamples.ScreenEditorTest do
                ScreenEditor.field_candidates()
 
       assert Enum.map(styles, &elem(&1, 0)) == ~w(radio dropdown checkboxes list)
+    end
+
+    # Sabotage: took "slider" out of the text question's style candidates;
+    # the text question assertion went red, then reverted from a copy.
+    test "offers riddler's hint names for a text question, an image and a link" do
+      candidates = ScreenEditor.field_candidates()
+
+      assert names(candidates, "text_question", "style") == ~w(multiline slider stepper)
+      assert names(candidates, "image", "size") == ~w(icon avatar small medium large banner)
+      assert names(candidates, "image", "fit") == ~w(contain cover)
+      assert names(candidates, "link", "style") == ~w(inline button)
+    end
+
+    test "offers the date and time formats as choices of a text question's format" do
+      assert %{type: {:select, formats}} = field("text_question", "format")
+
+      assert Enum.map(formats, &elem(&1, 0)) -- [""] ==
+               ~w(email phone pattern integer number date time datetime)
     end
   end
 
@@ -163,6 +185,69 @@ defmodule StatifierExamples.ScreenEditorTest do
       assert {:error, [{"outcome", _}]} = validate("button", %{button | "outcome" => ""})
     end
 
+    # Sabotage: made validate_config/1 skip Element.present/3 on "alt";
+    # the blank alt case answered :ok, then reverted from a copy.
+    test "holds an image to a source and an alt text, and a link to a label and a URL" do
+      image = %{"key" => "logo", "src" => "/images/logo.svg", "alt" => "Riverbend"}
+      assert :ok = validate("image", image)
+      assert {:error, [{"alt", _}]} = validate("image", %{image | "alt" => ""})
+      assert {:error, [{"src", _}]} = validate("image", Map.delete(image, "src"))
+
+      link = %{"key" => "rules", "label" => "Lending rules", "href" => "/lending-rules"}
+      assert :ok = validate("link", link)
+      assert {:error, [{"href", _}]} = validate("link", %{link | "href" => " "})
+      assert :ok = validate("divider", %{"key" => "rule"})
+    end
+
+    # Sabotage: made bound_findings/2 hold a date bound to being a number;
+    # the date bound case went red, then reverted from a copy.
+    test "reads a date bound as text, and holds a step to a number" do
+      question = %{"key" => "birth_date", "label" => "Date of birth", "format" => "date"}
+      assert :ok = validate("text_question", Map.put(question, "min", "1900-01-01"))
+
+      slider = %{"key" => "items", "label" => "Items", "format" => "integer"}
+      assert :ok = validate("text_question", Map.put(slider, "step", "1"))
+      assert {:error, [{"step", _}]} = validate("text_question", Map.put(slider, "step", "one"))
+    end
+
+    # Sabotage: dropped the membership test from option_descriptions/2; the
+    # row naming no option validated :ok, then reverted from a copy.
+    test "holds an option description to value=Description, naming an option once" do
+      assert :ok =
+               validate(
+                 "choice_question",
+                 choice(%{"option_descriptions" => ["family=Two adults"]})
+               )
+
+      for rows <- [["student=Ages 12 to 18"], ["family"], ["family=A", "family=B"]] do
+        assert {:error, [{"option_descriptions", _}]} =
+                 validate("choice_question", choice(%{"option_descriptions" => rows}))
+      end
+    end
+
+    # Sabotage: made check_row/1 accept a code outside the check. shape; the
+    # "adult:" row validated :ok, then reverted from a copy.
+    test "holds a question's checks to code: condition => message, each code once" do
+      row = "check.adult: responses.age::integer >= 18 => You must be 18 or over."
+      question = %{"key" => "age", "label" => "Age"}
+
+      for type <- ~w(text_question boolean_question secret_question) do
+        assert :ok = validate(type, Map.put(question, "checks", [row]))
+      end
+
+      assert :ok = validate("choice_question", choice(%{"checks" => [row]}))
+
+      for rows <- [
+            ["adult: responses.age >= 18 => You must be 18."],
+            ["check.adult: responses.age >= 18"],
+            ["check.adult:  => You must be 18."],
+            [row, row]
+          ] do
+        assert {:error, [{"checks", _}]} =
+                 validate("text_question", Map.put(question, "checks", rows))
+      end
+    end
+
     test "parses the option rows a walk reads" do
       assert ChoiceQuestion.answer_options(["family=Family card = two adults"]) ==
                {:ok, [{"family", "Family card = two adults"}]}
@@ -177,6 +262,11 @@ defmodule StatifierExamples.ScreenEditorTest do
 
   defp validate(type, config), do: module(type).validate_config(config)
 
+  defp names(candidates, type, field) do
+    {:open, pairs} = Map.fetch!(candidates, {"myapp.screens." <> type, field})
+    Enum.map(pairs, &elem(&1, 0))
+  end
+
   defp choice(overrides) do
     Map.merge(
       %{
@@ -190,7 +280,8 @@ defmodule StatifierExamples.ScreenEditorTest do
   end
 
   # Every type once: one screen holding a heading, a text, each question,
-  # a variant with a conditional and a default candidate, and a button.
+  # a variant with a conditional and a default candidate, an image, a
+  # divider, a link and a button.
   defp registration do
     elements = [
       element("heading", "title", %{"level" => 1, "text" => "Register for a library card"}),
@@ -215,6 +306,9 @@ defmodule StatifierExamples.ScreenEditorTest do
           ]
         }
       ),
+      element("image", "logo", %{"src" => "/images/logo.svg", "alt" => "Riverbend"}),
+      element("divider", "rule", %{}),
+      element("link", "rules", %{"label" => "Lending rules", "href" => "/lending-rules"}),
       element("button", "continue", %{"label" => "Continue", "outcome" => "details_submitted"})
     ]
 
