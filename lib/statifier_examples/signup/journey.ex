@@ -966,8 +966,9 @@ defmodule StatifierExamples.Signup.Journey do
   end
 
   @doc """
-  The keys of the secret questions among `nodes`, a container's `nodes`
-  included at any depth - a variant's candidates, say.
+  The keys of the secret questions among `nodes`, a container's children
+  included at any depth - a variant's candidates, say, spelled `nodes` in a
+  version 1 document and `elements` in a version 2 one.
 
   Public so that every reader of a screen's nodes finds a secret question
   by the same walk: `resolve/2` keeps them out of the view's responses, and
@@ -980,6 +981,7 @@ defmodule StatifierExamples.Signup.Journey do
     Enum.flat_map(nodes, fn
       %{"type" => "secret_question", "key" => key} -> [key]
       %{"nodes" => inner} when is_list(inner) -> secret_keys(inner)
+      %{"elements" => inner} when is_list(inner) -> secret_keys(inner)
       _node -> []
     end)
   end

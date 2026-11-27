@@ -55,10 +55,10 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       details = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
       configure(view, details, %{"key" => "patron_details", "title" => "Your details"})
 
-      age = insert(view, "myapp.screens.text_question", details, "nodes", 0)
+      age = insert(view, "myapp.screens.text_question", details, "elements", 0)
       configure(view, age, %{"key" => "age", "label" => "Age", "format" => "phone"})
 
-      next = insert(view, "myapp.screens.button", details, "nodes", 1)
+      next = insert(view, "myapp.screens.button", details, "elements", 1)
 
       configure(view, next, %{
         "key" => "details_next",
@@ -86,7 +86,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       card = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
       configure(view, card, %{"key" => "card_choice", "title" => "Your card"})
 
-      question = insert(view, "myapp.screens.choice_question", card, "nodes", 0)
+      question = insert(view, "myapp.screens.choice_question", card, "elements", 0)
 
       configure(view, question, %{
         "key" => "card_type",
@@ -97,7 +97,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
         "answer_options" => ["standard=Standard card", "family=Family card"]
       })
 
-      rules = insert(view, "myapp.screens.boolean_question", card, "nodes", 1)
+      rules = insert(view, "myapp.screens.boolean_question", card, "elements", 1)
 
       configure(view, rules, %{
         "key" => "lending_rules",
@@ -105,7 +105,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
         "required" => "true"
       })
 
-      next = insert(view, "myapp.screens.button", card, "nodes", 2)
+      next = insert(view, "myapp.screens.button", card, "elements", 2)
 
       configure(view, next, %{
         "key" => "card_next",
@@ -116,7 +116,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       welcome = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 1)
       configure(view, welcome, %{"key" => "welcome", "title" => "Welcome"})
 
-      text = insert(view, "myapp.screens.text", welcome, "nodes", 0)
+      text = insert(view, "myapp.screens.text", welcome, "elements", 0)
 
       configure(view, text, %{
         "key" => "welcome_text",
@@ -168,7 +168,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       card = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
       configure(view, card, %{"key" => "card_choice", "title" => "Your card"})
 
-      question = insert(view, "myapp.screens.choice_question", card, "nodes", 0)
+      question = insert(view, "myapp.screens.choice_question", card, "elements", 0)
 
       configure(view, question, %{
         "key" => "card_type",
@@ -180,13 +180,13 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
         "answer_options" => ["standard=Standard card", "family=Family card"]
       })
 
-      next = insert(view, "myapp.screens.button", card, "nodes", 1)
+      next = insert(view, "myapp.screens.button", card, "elements", 1)
       configure(view, next, %{"key" => "card_next", "label" => "Continue", "outcome" => "chosen"})
 
       pin_screen = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 1)
       configure(view, pin_screen, %{"key" => "card_pin", "title" => "Protect your card"})
 
-      pin = insert(view, "myapp.screens.secret_question", pin_screen, "nodes", 0)
+      pin = insert(view, "myapp.screens.secret_question", pin_screen, "elements", 0)
 
       configure(view, pin, %{
         "key" => "library_pin",
@@ -195,7 +195,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
         "required" => "true"
       })
 
-      done = insert(view, "myapp.screens.button", pin_screen, "nodes", 1)
+      done = insert(view, "myapp.screens.button", pin_screen, "elements", 1)
       configure(view, done, %{"key" => "pin_next", "label" => "Register", "outcome" => "pinned"})
 
       view |> element("#try") |> render_click()
@@ -238,10 +238,10 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       card = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
       configure(view, card, %{"key" => "card_choice", "title" => "Your card"})
 
-      variant = insert(view, "myapp.screens.variant", card, "nodes", 0)
+      variant = insert(view, "myapp.screens.variant", card, "elements", 0)
       configure(view, variant, %{"key" => "card_variant"})
 
-      question = insert(view, "myapp.screens.choice_question", variant, "nodes", 0)
+      question = insert(view, "myapp.screens.choice_question", variant, "elements", 0)
 
       configure(view, question, %{
         "key" => "card_type",
@@ -252,13 +252,13 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
         "answer_options" => ["standard=Standard card", "family=Family card"]
       })
 
-      next = insert(view, "myapp.screens.button", card, "nodes", 1)
+      next = insert(view, "myapp.screens.button", card, "elements", 1)
       configure(view, next, %{"key" => "card_next", "label" => "Continue", "outcome" => "chosen"})
 
       done = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 1)
       configure(view, done, %{"key" => "all_done", "title" => "Done"})
 
-      finish = insert(view, "myapp.screens.button", done, "nodes", 0)
+      finish = insert(view, "myapp.screens.button", done, "elements", 0)
       configure(view, finish, %{"key" => "finish", "label" => "Finish", "outcome" => "finished"})
 
       view |> element("#try") |> render_click()
@@ -431,7 +431,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
     screen = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
     configure(view, screen, %{"key" => "card_pin", "title" => "Protect your card"})
 
-    pin = insert(view, "myapp.screens.secret_question", screen, "nodes", 0)
+    pin = insert(view, "myapp.screens.secret_question", screen, "elements", 0)
 
     configure(view, pin, %{
       "key" => "library_pin",
@@ -439,7 +439,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       "required" => "true"
     })
 
-    done = insert(view, "myapp.screens.button", screen, "nodes", 1)
+    done = insert(view, "myapp.screens.button", screen, "elements", 1)
     configure(view, done, %{"key" => "pin_next", "label" => "Register", "outcome" => "pinned"})
 
     view |> element("#try") |> render_click()
@@ -456,7 +456,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
         Enum.split_with(state.socket.assigns.view.nodes, &(&1["type"] == "secret_question"))
 
       assert [%{"key" => "library_pin"}] = secrets
-      container = %{"type" => "variant", "key" => "pin_variant", "nodes" => secrets}
+      container = %{"type" => "variant", "key" => "pin_variant", "elements" => secrets}
       put_in(state.socket.assigns.view.nodes, [container | rest])
     end)
   end

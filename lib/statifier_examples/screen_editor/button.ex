@@ -25,27 +25,27 @@ defmodule StatifierExamples.ScreenEditor.Button do
 
   use StatifierBlocks.BlockType
 
-  alias StatifierExamples.ScreenEditor.Node
+  alias StatifierExamples.ScreenEditor.Element
 
   @response_path ~r/\Aresponses\.[^.\s][^\s]*\z/
 
   @impl StatifierBlocks.BlockType
   def config_schema(_config) do
-    Node.common_fields() ++
+    Element.common_fields() ++
       [
-        Node.field("label", :string, "Label", true, ""),
-        Node.field("outcome", :string, "Outcome", true, ""),
-        Node.field("writes", {:list, :string}, "Writes", false, []),
-        Node.field("style", :string, "Style", false, ""),
-        Node.field("validates", :boolean, "Validates the screen", false, true)
+        Element.field("label", :string, "Label", true, ""),
+        Element.field("outcome", :string, "Outcome", true, ""),
+        Element.field("writes", {:list, :string}, "Writes", false, []),
+        Element.field("style", :string, "Style", false, ""),
+        Element.field("validates", :boolean, "Validates the screen", false, true)
       ]
   end
 
   @impl StatifierBlocks.BlockType
   def validate_config(config) do
-    Node.validate(
+    Element.validate(
       config,
-      Node.present(config, "label", "a button needs its label") ++
+      Element.present(config, "label", "a button needs its label") ++
         outcome_findings(Map.get(config, "outcome")) ++
         writes_findings(Map.get(config, "writes"))
     )
@@ -64,12 +64,12 @@ defmodule StatifierExamples.ScreenEditor.Button do
   end
 
   @impl StatifierBlocks.BlockType
-  def emit(_block, context), do: Node.emit_leaf(context)
+  def emit(_block, context), do: Element.emit_leaf(context)
 
   defp outcome_findings(outcome) do
-    if Node.key?(outcome),
+    if Element.key?(outcome),
       do: [],
-      else: [{"outcome", "an outcome is a name like a node key, such as details_submitted"}]
+      else: [{"outcome", "an outcome is a name like an element key, such as details_submitted"}]
   end
 
   defp writes_findings(rows) when is_list(rows) do

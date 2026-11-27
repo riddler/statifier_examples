@@ -1,10 +1,11 @@
 defmodule StatifierExamples.ScreenDocumentsTest do
   @moduledoc """
   Every screens document this app ships, and the one the screen editor
-  walks out of its patron registration document, is a version 1 document,
-  spelling a screen's children `nodes`, and the riddler release `mix.lock`
-  resolves still admits each one and resolves it to the same content under
-  the key it answers now, `elements`.
+  walks out of its patron registration document, is admitted by the
+  riddler release `mix.lock` resolves and resolves to its content under the
+  key it answers, `elements`. The signup fixture is a version 1 document,
+  spelling a screen's children `nodes`, and stays one; every other is a
+  version 2 document, spelling them `elements`.
   """
 
   use ExUnit.Case, async: true
@@ -38,16 +39,26 @@ defmodule StatifierExamples.ScreenDocumentsTest do
 
   # Every key a screen wrote, a variant candidate's included: a variant
   # resolves to the candidate whose condition holds.
-  defp authored_keys(nodes) do
-    Enum.flat_map(nodes, fn node -> [node["key"] | authored_keys(node["nodes"] || [])] end)
+  defp authored_keys(children) do
+    Enum.flat_map(children, fn child ->
+      [child["key"] | authored_keys(child["nodes"] || child["elements"] || [])]
+    end)
   end
+
+  # The version each document is at: the signup fixture stays at 1, and
+  # every other screens document, the walked one included, is at 2.
+  defp version("signup_" <> _name), do: 1
+  defp version(_name), do: 2
+
+  defp children_key(1), do: "nodes"
+  defp children_key(2), do: "elements"
 
   # Sabotage (run): made `StatifierExamples.Signup.Screens.admit/1` hand
   # riddler each screen's `nodes` under the version 2 key, `elements`, with
   # the document still at version 1. Riddler refused every document with
   # `document.other_version_spelling` and this went red on the first
   # admit. Restored from a copy.
-  test "every screens document is version 1, is admitted, and resolves under elements" do
+  test "every screens document is at its version, is admitted, and resolves under elements" do
     documents = [walked() | shipped()]
 
     assert length(documents) == 7,
@@ -55,19 +66,24 @@ defmodule StatifierExamples.ScreenDocumentsTest do
              inspect(Enum.map(documents, &elem(&1, 0)))
 
     for {name, document} <- documents do
-      assert document["schema_version"] == 1, "#{name} is not a version 1 document"
+      version = version(name)
+      key = children_key(version)
+      other = children_key(3 - version)
+
+      assert document["schema_version"] == version,
+             "#{name} is not a version #{version} document"
 
       assert {:ok, admitted} = Screens.admit(document)
 
       for screen <- document["screens"] do
-        assert is_list(screen["nodes"]) and screen["nodes"] != []
-        refute Map.has_key?(screen, "elements")
+        assert is_list(screen[key]) and screen[key] != []
+        refute Map.has_key?(screen, other)
 
         assert {:ok, resolved, _diagnostics} =
                  Riddler.Screens.resolve_screen(admitted, screen["key"], %{})
 
         shown = Enum.map(resolved.elements, & &1.key)
-        authored = authored_keys(screen["nodes"])
+        authored = authored_keys(screen[key])
 
         assert shown != [], "#{name}'s #{screen["key"]} resolves to nothing"
         assert shown -- authored == [], "#{name}'s #{screen["key"]} resolves keys it never wrote"
@@ -75,9 +91,9 @@ defmodule StatifierExamples.ScreenDocumentsTest do
         # Every element with no condition and no candidates is shown, in
         # the order the document wrote it.
         always =
-          for node <- screen["nodes"],
-              not Map.has_key?(node, "condition") and node["type"] != "variant",
-              do: node["key"]
+          for child <- screen[key],
+              not Map.has_key?(child, "condition") and child["type"] != "variant",
+              do: child["key"]
 
         assert Enum.filter(shown, &(&1 in always)) == always,
                "#{name}'s #{screen["key"]} drops or reorders an unconditional element"

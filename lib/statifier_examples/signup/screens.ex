@@ -65,6 +65,13 @@ defmodule StatifierExamples.Signup.Screens do
   one: `screens/1` and `screen/2` read a decoded screens document a caller
   supplies, and `admit/1` is the check that one is a document riddler
   admits with no findings. The zero-argument forms read the fixture.
+
+  A supplied document may be version 2, as the library domains' screens
+  documents and the screen editor's walk are: it spells a screen's
+  children `elements` where the signup fixture, a version 1 document,
+  spells them `nodes`. `screens/1` reads each under its own version's key
+  and keeps the version on the screen, so `resolve/2` wraps the screen in
+  an envelope of that same version: nothing is rewritten on the way.
   """
 
   alias Riddler.Screens.Document
@@ -78,8 +85,18 @@ defmodule StatifierExamples.Signup.Screens do
   @typedoc "One element node, as it appears in the document."
   @type node_doc :: %{required(String.t()) => term()}
 
-  @typedoc "One screen: a key, a title, and a flat list of nodes."
-  @type screen :: %{key: String.t(), title: String.t(), nodes: [node_doc()]}
+  @typedoc """
+  One screen: a key, a title, and a flat list of nodes - the screen's
+  children, read from `nodes` in a version 1 document and from `elements`
+  in a version 2 one. `schema_version` is the version of the document the
+  screen was read from; a screen without one is version 1.
+  """
+  @type screen :: %{
+          required(:key) => String.t(),
+          required(:title) => String.t(),
+          required(:nodes) => [node_doc()],
+          optional(:schema_version) => 1 | 2
+        }
 
   # `{{ responses.first_name }}`: the delimiters, any surrounding whitespace,
   # and a dotted path of word characters between them.
@@ -100,13 +117,16 @@ defmodule StatifierExamples.Signup.Screens do
   """
   @spec screens(map()) :: [screen()]
   def screens(document) when is_map(document) do
+    version = Map.get(document, "schema_version", 1)
+
     document
     |> Map.fetch!("screens")
     |> Enum.map(fn screen ->
       %{
         key: Map.fetch!(screen, "key"),
         title: Map.fetch!(screen, "title"),
-        nodes: Map.fetch!(screen, "nodes")
+        nodes: Map.fetch!(screen, children_key(version)),
+        schema_version: version
       }
     end)
   end
@@ -141,8 +161,9 @@ defmodule StatifierExamples.Signup.Screens do
       false
   """
   @spec resolve(screen(), map()) :: [node_doc()]
-  def resolve(%{key: key, title: title, nodes: nodes}, datamodel) when is_map(datamodel) do
-    document = admit_screen!(key, title, nodes)
+  def resolve(%{key: key, title: title, nodes: nodes} = screen, datamodel)
+      when is_map(datamodel) do
+    document = admit_screen!(key, title, nodes, Map.get(screen, :schema_version, 1))
     {:ok, resolved, _diagnostics} = Riddler.Screens.resolve_screen(document, key, datamodel)
 
     Enum.map(resolved.elements, &to_node_doc/1)
@@ -166,7 +187,7 @@ defmodule StatifierExamples.Signup.Screens do
         :error -> probe
       end
 
-    case Document.admit(envelope("shown", "shown", [probe])) do
+    case Document.admit(envelope("shown", "shown", [probe], 1)) do
       nil ->
         false
 
@@ -256,22 +277,27 @@ defmodule StatifierExamples.Signup.Screens do
   # answers `nil` only for a spine that is not a document's; a node that is
   # wrong rather than absent is admitted, so this raises only for a screen no
   # document could hold.
-  @spec admit_screen!(String.t(), String.t(), [node_doc()]) :: Document.t()
-  defp admit_screen!(key, title, nodes) do
-    case Document.admit(envelope(key, title, nodes)) do
+  @spec admit_screen!(String.t(), String.t(), [node_doc()], 1 | 2) :: Document.t()
+  defp admit_screen!(key, title, nodes, version) do
+    case Document.admit(envelope(key, title, nodes, version)) do
       nil -> raise ArgumentError, "screen #{inspect(key)} is not one riddler admits"
       document -> document
     end
   end
 
-  @spec envelope(String.t(), String.t(), [node_doc()]) :: map()
-  defp envelope(key, title, nodes) do
+  @spec envelope(String.t(), String.t(), [node_doc()], 1 | 2) :: map()
+  defp envelope(key, title, nodes, version) do
     %{
-      "schema_version" => 1,
+      "schema_version" => version,
       "id" => @single_screen_id,
-      "screens" => [%{"key" => key, "title" => title, "nodes" => nodes}]
+      "screens" => [%{"key" => key, "title" => title, children_key(version) => nodes}]
     }
   end
+
+  # The key a screen's children are spelled under at each version; any
+  # other version is riddler's to refuse when the document is admitted.
+  defp children_key(2), do: "elements"
+  defp children_key(_version_one), do: "nodes"
 
   # Riddler resolves to atom-keyed nodes; a node here is string-keyed, as the
   # document writes it and as every page and check in this app reads it. The

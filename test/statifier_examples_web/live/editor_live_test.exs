@@ -1785,22 +1785,22 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       {screen, _document} = insert_into(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
 
-      node_types =
+      element_types =
         Enum.map(
           ~w(heading text text_question choice_question boolean_question button variant),
           &("myapp.screens." <> &1)
         )
 
       placed =
-        for {type, index} <- Enum.with_index(node_types) do
-          insert_into(view, type, screen.id, "nodes", index)
+        for {type, index} <- Enum.with_index(element_types) do
+          insert_into(view, type, screen.id, "elements", index)
         end
 
       {variant, _document} = List.last(placed)
-      {_text, document} = insert_into(view, "myapp.screens.text", variant.id, "nodes", 0)
+      {_text, document} = insert_into(view, "myapp.screens.text", variant.id, "elements", 0)
 
-      assert Enum.map(slot_blocks(document, screen.id, "nodes"), & &1.type) == node_types
-      assert [%{type: "myapp.screens.text"}] = slot_blocks(document, variant.id, "nodes")
+      assert Enum.map(slot_blocks(document, screen.id, "elements"), & &1.type) == element_types
+      assert [%{type: "myapp.screens.text"}] = slot_blocks(document, variant.id, "elements")
     end
   end
 

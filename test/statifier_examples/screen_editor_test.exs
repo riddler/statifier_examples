@@ -10,15 +10,15 @@ defmodule StatifierExamples.ScreenEditorTest do
   alias StatifierExamples.ScreenEditor
   alias StatifierExamples.ScreenEditor.ChoiceQuestion
 
-  doctest StatifierExamples.ScreenEditor.Node
+  doctest StatifierExamples.ScreenEditor.Element
   doctest StatifierExamples.ScreenEditor.ChoiceQuestion
 
-  @node_types ~w(heading text text_question choice_question boolean_question secret_question button variant)
+  @element_types ~w(heading text text_question choice_question boolean_question secret_question button variant)
 
   describe "the palette" do
-    test "registers the screen and every node type under the document's own names" do
+    test "registers the screen and every element type under the document's own names" do
       assert Enum.map(ScreenEditor.registrations(), &elem(&1, 0)) ==
-               ["myapp.screens.screen" | Enum.map(@node_types, &("myapp.screens." <> &1))]
+               ["myapp.screens.screen" | Enum.map(@element_types, &("myapp.screens." <> &1))]
     end
 
     test "resolves every type, preflights clean and draws every icon" do
@@ -58,12 +58,12 @@ defmodule StatifierExamples.ScreenEditorTest do
       assert Enum.map(selects, &elem(&1, 0)) == ["one", "many"]
     end
 
-    test "gives a screen and a variant a nodes slot, and no node any other" do
+    test "gives a screen and a variant an elements slot, and no element any other" do
       for {name, module} <- ScreenEditor.registrations() do
         slots = Enum.map(module.slots(%{}), &elem(&1, 0))
 
         if name in ["myapp.screens.screen", "myapp.screens.variant"],
-          do: assert(slots == ["nodes"]),
+          do: assert(slots == ["elements"]),
           else: assert(slots == [])
       end
     end
@@ -98,7 +98,7 @@ defmodule StatifierExamples.ScreenEditorTest do
   end
 
   describe "validate_config/1" do
-    test "refuses a node key that is not key-shaped" do
+    test "refuses an element key that is not key-shaped" do
       assert {:error, [{"key", _message}]} =
                validate("text", %{"key" => "Welcome", "text" => "Hello"})
     end
@@ -192,13 +192,13 @@ defmodule StatifierExamples.ScreenEditorTest do
   # Every type once: one screen holding a heading, a text, each question,
   # a variant with a conditional and a default candidate, and a button.
   defp registration do
-    nodes = [
-      node("heading", "title", %{"level" => 1, "text" => "Register for a library card"}),
-      node("text", "intro", %{"text" => "It takes a minute."}),
-      node("text_question", "first_name", %{"label" => "First name", "required" => true}),
-      node("text_question", "email", %{"label" => "Email", "format" => "email"}),
-      node("choice_question", "card_type", Map.delete(choice(%{}), "key")),
-      node("boolean_question", "lending_rules", %{
+    elements = [
+      element("heading", "title", %{"level" => 1, "text" => "Register for a library card"}),
+      element("text", "intro", %{"text" => "It takes a minute."}),
+      element("text_question", "first_name", %{"label" => "First name", "required" => true}),
+      element("text_question", "email", %{"label" => "Email", "format" => "email"}),
+      element("choice_question", "card_type", Map.delete(choice(%{}), "key")),
+      element("boolean_question", "lending_rules", %{
         "label" => "I agree to the lending rules",
         "required" => true
       }),
@@ -206,29 +206,29 @@ defmodule StatifierExamples.ScreenEditorTest do
         id: "blk_pr_notice",
         config: %{"key" => "notice"},
         slots: %{
-          "nodes" => [
-            node("text", "family_notice", %{
+          "elements" => [
+            element("text", "family_notice", %{
               "text" => "A family card covers two adults.",
               "condition" => "responses.card_type == 'family'"
             }),
-            node("text", "default_notice", %{"text" => "Welcome."})
+            element("text", "default_notice", %{"text" => "Welcome."})
           ]
         }
       ),
-      node("button", "continue", %{"label" => "Continue", "outcome" => "details_submitted"})
+      element("button", "continue", %{"label" => "Continue", "outcome" => "details_submitted"})
     ]
 
     screen =
       Block.new("myapp.screens.screen",
         id: "blk_pr_details",
         config: %{"key" => "patron_details", "title" => "Your details"},
-        slots: %{"nodes" => nodes}
+        slots: %{"elements" => elements}
       )
 
     Document.new(Block.new("core.sequence", id: "blk_pr_root", slots: %{"body" => [screen]}))
   end
 
-  defp node(type, key, config) do
+  defp element(type, key, config) do
     Block.new("myapp.screens." <> type,
       id: "blk_pr_" <> key,
       config: Map.put(config, "key", key)

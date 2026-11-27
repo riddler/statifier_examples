@@ -28,10 +28,11 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
     test "walks back to the shipped document, every field carried" do
       fixture = Screens.document()
       document = author(fixture)
+      {:ok, upgraded} = Riddler.Screens.upgrade(fixture)
 
       assert :ok = Document.validate(document)
       assert {:ok, _compiled} = Compiler.compile(document, ScreenEditor.palette())
-      assert {:ok, ^fixture} = Walk.screen_document(document)
+      assert {:ok, ^upgraded} = Walk.screen_document(document)
     end
 
     # Sabotage: made collect/2 return its answers reversed; the node keys
@@ -41,7 +42,7 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
 
       assert Enum.map(walked["screens"], & &1["key"]) == ~w(account plan confirm)
 
-      assert walked["screens"] |> hd() |> Map.fetch!("nodes") |> Enum.map(& &1["key"]) ==
+      assert walked["screens"] |> hd() |> Map.fetch!("elements") |> Enum.map(& &1["key"]) ==
                ~w(account_heading account_intro first_name email account_greeting account_continue)
     end
   end
@@ -57,20 +58,20 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
 
     test "holds a choice question of each select and a boolean question" do
       {:ok, walked} = Walk.screen_document(registration())
-      nodes = Enum.flat_map(walked["screens"], & &1["nodes"])
+      elements = Enum.flat_map(walked["screens"], & &1["elements"])
 
       assert %{"select" => "one", "answer_options" => [%{"value" => "standard"} | _]} =
-               Enum.find(nodes, &(&1["key"] == "card_type"))
+               Enum.find(elements, &(&1["key"] == "card_type"))
 
       assert %{"select" => "many", "min_selections" => 0, "max_selections" => 3} =
-               Enum.find(nodes, &(&1["key"] == "interests"))
+               Enum.find(elements, &(&1["key"] == "interests"))
 
       assert %{"type" => "boolean_question", "required" => true} =
-               Enum.find(nodes, &(&1["key"] == "lending_rules"))
+               Enum.find(elements, &(&1["key"] == "lending_rules"))
     end
 
     # Sabotage: dropped the secret question from the palette's
-    # registrations; the walk refused the block as no node type, then
+    # registrations; the walk refused the block as no element type, then
     # reverted.
     test "asks for a PIN as a secret question, and carries a help line and a default" do
       assert {:ok, walked} = Walk.screen_document(registration())
@@ -81,21 +82,21 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
                "label" => "Choose a PIN for your library card",
                "help" => "You type it with your card number to borrow at the self-service desk.",
                "required" => true
-             } = Enum.find(details["nodes"], &(&1["key"] == "library_pin"))
+             } = Enum.find(details["elements"], &(&1["key"] == "library_pin"))
 
       assert %{"help" => "We write here when a hold is ready and before a loan is due."} =
-               Enum.find(details["nodes"], &(&1["key"] == "email"))
+               Enum.find(details["elements"], &(&1["key"] == "email"))
 
-      assert %{"default" => "standard"} = Enum.find(card["nodes"], &(&1["key"] == "card_type"))
+      assert %{"default" => "standard"} = Enum.find(card["elements"], &(&1["key"] == "card_type"))
     end
 
     # Sabotage: made number/3 leave an integer bound as its text; the "min"
     # assertion went red, then reverted.
     test "turns the editor's own shapes back into the document's" do
       {:ok, walked} = Walk.screen_document(registration())
-      nodes = Enum.flat_map(walked["screens"], & &1["nodes"])
+      elements = Enum.flat_map(walked["screens"], & &1["elements"])
 
-      assert %{"min" => 0, "max" => 120} = Enum.find(nodes, &(&1["key"] == "age"))
+      assert %{"min" => 0, "max" => 120} = Enum.find(elements, &(&1["key"] == "age"))
 
       assert %{
                "writes" => %{
@@ -103,12 +104,12 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
                  "responses.newsletter" => ["const", true]
                },
                "style" => "primary"
-             } = Enum.find(nodes, &(&1["key"] == "card_finish"))
+             } = Enum.find(elements, &(&1["key"] == "card_finish"))
 
-      assert %{"validates" => false} = Enum.find(nodes, &(&1["key"] == "card_back"))
+      assert %{"validates" => false} = Enum.find(elements, &(&1["key"] == "card_back"))
 
-      assert %{"type" => "variant", "nodes" => [%{"key" => "family_notice"}, _default]} =
-               Enum.find(nodes, &(&1["key"] == "card_notice"))
+      assert %{"type" => "variant", "elements" => [%{"key" => "family_notice"}, _default]} =
+               Enum.find(elements, &(&1["key"] == "card_notice"))
     end
 
     test "is a document the screen palette authors, with no finding" do
@@ -128,7 +129,9 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
 
   describe "the envelope and the blanks" do
     # Sabotage: made put_present/3 keep blank values; the blank condition
-    # and the empty writes came out, then reverted.
+    # and the empty writes came out, then reverted. Sabotage: made
+    # envelope/2 write schema_version 1; the envelope match went red, then
+    # reverted from a copy.
     test "leaves blank fields out and keeps false" do
       button = %{"label" => "Back", "outcome" => "went_back", "condition" => "", "writes" => []}
       question = %{"label" => "Nickname", "required" => false, "placeholder" => nil}
@@ -136,8 +139,8 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
       {:ok, walked} =
         Walk.screen_document(
           one_screen([
-            node("button", "back", button),
-            node("text_question", "nickname", question)
+            element("button", "back", button),
+            element("text_question", "nickname", question)
           ])
         )
 
@@ -145,12 +148,12 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
                %{"type" => "button", "key" => "back", "label" => "Back", "outcome" => "went_back"} =
                  back,
                %{"key" => "nickname", "required" => false} = nickname
-             ] = walked |> Map.fetch!("screens") |> hd() |> Map.fetch!("nodes")
+             ] = walked |> Map.fetch!("screens") |> hd() |> Map.fetch!("elements")
 
       refute Map.has_key?(back, "condition")
       refute Map.has_key?(back, "writes")
       refute Map.has_key?(nickname, "placeholder")
-      assert %{"schema_version" => 1, "id" => "sdoc_walk"} = walked
+      assert %{"schema_version" => 2, "id" => "sdoc_walk"} = walked
       refute Map.has_key?(walked, "metadata")
     end
   end
@@ -182,7 +185,7 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
       rows = ["responses.card=family", "responses.card=standard"]
 
       assert {:error, [{"blk_walk_go", message}]} =
-               Walk.screen_document(one_screen([node("button", "go", button(rows))]))
+               Walk.screen_document(one_screen([element("button", "go", button(rows))]))
 
       assert message =~ "responses.card is written twice"
     end
@@ -207,9 +210,9 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
                Walk.screen_document(Document.new(root, id: "sdoc_walk"))
     end
 
-    # Sabotage: widened walk_node/1's guard to any type name; the nested
-    # screen walked as a node, then reverted.
-    test "a block in a nodes slot that is not a node, and one in the body that is not a screen" do
+    # Sabotage: widened walk_element/1's guard to any type name; the nested
+    # screen walked as an element, then reverted.
+    test "a block in an elements slot that is not an element, and one in the body that is not a screen" do
       nested = Block.new("myapp.screens.screen", id: "blk_walk_nested", config: %{"key" => "x"})
       wait = Block.new("core.wait", id: "blk_walk_wait", config: %{"duration" => "1s"})
       stray = Block.new("myapp.screens.text", id: "blk_walk_stray", config: %{"key" => "stray"})
@@ -224,13 +227,13 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
     # choice question case answered :ok, then reverted.
     test "an option row, a bound or a write row it cannot read" do
       cases = [
-        node("choice_question", "card", %{
+        element("choice_question", "card", %{
           "label" => "Card",
           "select" => "one",
           "answer_options" => ["standard"]
         }),
-        node("text_question", "age", %{"label" => "Age", "min" => "ten"}),
-        node("button", "go", button(["card=family"]))
+        element("text_question", "age", %{"label" => "Age", "min" => "ten"}),
+        element("button", "go", button(["card=family"]))
       ]
 
       for block <- cases do
@@ -249,7 +252,7 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
         Block.new("myapp.screens.screen",
           id: "blk_screen_" <> screen["key"],
           config: Map.take(screen, ["key", "title"]),
-          slots: %{"nodes" => Enum.map(screen["nodes"], &author_node/1)}
+          slots: %{"elements" => Enum.map(screen["nodes"], &author_node/1)}
         )
       end
 
@@ -273,7 +276,7 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
       config: config,
       slots:
         if(node_doc["nodes"],
-          do: %{"nodes" => Enum.map(node_doc["nodes"], &author_node/1)},
+          do: %{"elements" => Enum.map(node_doc["nodes"], &author_node/1)},
           else: %{}
         )
     )
@@ -302,28 +305,37 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
   end
 
   defp writes(rows) do
-    {:ok, walked} = Walk.screen_document(one_screen([node("button", "go", button(rows))]))
-    walked |> Map.fetch!("screens") |> hd() |> Map.fetch!("nodes") |> hd() |> Map.fetch!("writes")
+    {:ok, walked} = Walk.screen_document(one_screen([element("button", "go", button(rows))]))
+
+    walked
+    |> Map.fetch!("screens")
+    |> hd()
+    |> Map.fetch!("elements")
+    |> hd()
+    |> Map.fetch!("writes")
   end
 
   defp button(rows), do: %{"label" => "Go", "outcome" => "went_on", "writes" => rows}
 
-  defp one_screen(nodes) do
+  defp one_screen(elements) do
     root =
-      Block.new("core.sequence", id: "blk_walk_root", slots: %{"body" => [screen_block(nodes)]})
+      Block.new("core.sequence",
+        id: "blk_walk_root",
+        slots: %{"body" => [screen_block(elements)]}
+      )
 
     Document.new(root, id: "sdoc_walk")
   end
 
-  defp screen_block(nodes) do
+  defp screen_block(elements) do
     Block.new("myapp.screens.screen",
       id: "blk_walk_screen",
       config: %{"key" => "patron_details", "title" => "Your details"},
-      slots: %{"nodes" => nodes}
+      slots: %{"elements" => elements}
     )
   end
 
-  defp node(type, key, config) do
+  defp element(type, key, config) do
     Block.new("myapp.screens." <> type,
       id: "blk_walk_" <> key,
       config: Map.put(config, "key", key)

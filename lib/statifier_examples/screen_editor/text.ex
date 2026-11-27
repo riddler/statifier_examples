@@ -6,15 +6,15 @@ defmodule StatifierExamples.ScreenEditor.Text do
 
   use StatifierBlocks.BlockType
 
-  alias StatifierExamples.ScreenEditor.Node
+  alias StatifierExamples.ScreenEditor.Element
 
   @impl StatifierBlocks.BlockType
   def config_schema(_config),
-    do: Node.common_fields() ++ [Node.field("text", :string, "Text", true, "")]
+    do: Element.common_fields() ++ [Element.field("text", :string, "Text", true, "")]
 
   @impl StatifierBlocks.BlockType
   def validate_config(config),
-    do: Node.validate(config, Node.present(config, "text", "a text node needs its text"))
+    do: Element.validate(config, Element.present(config, "text", "a text element needs its text"))
 
   @impl StatifierBlocks.BlockType
   def palette_entry do
@@ -29,5 +29,5 @@ defmodule StatifierExamples.ScreenEditor.Text do
   end
 
   @impl StatifierBlocks.BlockType
-  def emit(_block, context), do: Node.emit_leaf(context)
+  def emit(_block, context), do: Element.emit_leaf(context)
 end

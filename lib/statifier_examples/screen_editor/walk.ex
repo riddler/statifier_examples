@@ -12,16 +12,17 @@ defmodule StatifierExamples.ScreenEditor.Walk do
 
   The document's root is `core.sequence` and its `body` holds the screens
   in order (`StatifierExamples.ScreenEditor`, "The palette"). Each screen
-  is a `myapp.screens.screen` block whose `nodes` slot holds its nodes in
-  order, and a `myapp.screens.variant` holds its candidates the same way.
-  The walk follows those slots, so a screen's nodes come out in the order
-  they sit in the slot.
+  is a `myapp.screens.screen` block whose `elements` slot holds its
+  elements in order, and a `myapp.screens.variant` holds its candidates
+  the same way. The walk follows those slots, so a screen's elements come
+  out in the order they sit in the slot.
 
   ## What it answers
 
-  The envelope carries `schema_version` 1, the block document's `id`, and
-  its `metadata` when there is any. A screen carries its `key`, `title` and
-  `nodes`; a node carries `type` - the block type's name after
+  The envelope carries `schema_version` 2, the block document's `id`, and
+  its `metadata` when there is any: a version 2 document, which spells a
+  screen's children `elements`. A screen carries its `key`, `title` and
+  `elements`; an element carries `type` - the block type's name after
   `myapp.screens.` - and the fields its block type declares, copied under
   the same names. A field left blank (`nil`, an empty string, an empty list
   of writes) is left out, as a document that never wrote it would be, while
@@ -45,7 +46,8 @@ defmodule StatifierExamples.ScreenEditor.Walk do
   `{:error, refusals}` lists every block the walk cannot turn into the
   document, each as `{block_id, message}`, in document order: a root that
   is not `core.sequence`, a block in the root's body that is not a screen,
-  a block in a `nodes` slot that is not a node type, and a row a field
+  a block in an `elements` slot that is not an element type, and a row a
+  field
   cannot be read from. What the walk answers is not yet checked as a
   document; that is `Riddler.Screens.Document.validate/1`'s job.
   """
@@ -79,33 +81,33 @@ defmodule StatifierExamples.ScreenEditor.Walk do
     do: {:error, [{id, "the root of a screen document is a core.sequence of screens"}]}
 
   defp envelope(document, screens) do
-    %{"schema_version" => 1, "id" => document.id, "screens" => screens}
+    %{"schema_version" => 2, "id" => document.id, "screens" => screens}
     |> put_present("metadata", document.metadata)
   end
 
   defp screen(%Block{type: @screen} = block) do
-    with {:ok, nodes} <- nodes(block) do
-      {:ok, Map.put(fields(block, ["key", "title"]), "nodes", nodes)}
+    with {:ok, elements} <- elements(block) do
+      {:ok, Map.put(fields(block, ["key", "title"]), "elements", elements)}
     end
   end
 
   defp screen(%Block{id: id}),
     do: {:error, [{id, "a screen document's body holds screens and nothing else"}]}
 
-  defp nodes(block) do
-    case collect(Map.get(block.slots, "nodes", []), &walk_node/1) do
-      {nodes, []} -> {:ok, nodes}
-      {_nodes, refusals} -> {:error, refusals}
+  defp elements(block) do
+    case collect(Map.get(block.slots, "elements", []), &walk_element/1) do
+      {elements, []} -> {:ok, elements}
+      {_elements, refusals} -> {:error, refusals}
     end
   end
 
-  defp walk_node(%Block{type: @variant} = block) do
-    with {:ok, nodes} <- nodes(block) do
-      {:ok, block |> base(["key", "condition"]) |> Map.put("nodes", nodes)}
+  defp walk_element(%Block{type: @variant} = block) do
+    with {:ok, elements} <- elements(block) do
+      {:ok, block |> base(["key", "condition"]) |> Map.put("elements", elements)}
     end
   end
 
-  defp walk_node(%Block{type: @prefix <> _name = type} = block) when type != @screen do
+  defp walk_element(%Block{type: @prefix <> _name = type} = block) when type != @screen do
     case Map.fetch(modules(), type) do
       {:ok, module} ->
         keys = Enum.map(module.config_schema(block.config), & &1.key)
@@ -116,10 +118,10 @@ defmodule StatifierExamples.ScreenEditor.Walk do
     end
   end
 
-  defp walk_node(block), do: unknown(block)
+  defp walk_element(block), do: unknown(block)
 
   defp unknown(%Block{id: id, type: type}),
-    do: {:error, [{id, "#{type} is not a node type a screen holds"}]}
+    do: {:error, [{id, "#{type} is not an element type a screen holds"}]}
 
   defp base(%Block{type: @prefix <> name} = block, keys),
     do: Map.put(fields(block, keys), "type", name)
@@ -133,8 +135,8 @@ defmodule StatifierExamples.ScreenEditor.Walk do
 
   # The fields the editor writes in a shape of its own, turned back into
   # the document's, one at a time; the first that cannot be is the refusal.
-  defp convert(node, id) do
-    Enum.reduce_while([&options/1, &bounds/1, &writes/1], {:ok, node}, fn step, {:ok, acc} ->
+  defp convert(element, id) do
+    Enum.reduce_while([&options/1, &bounds/1, &writes/1], {:ok, element}, fn step, {:ok, acc} ->
       case step.(acc) do
         {:ok, acc} -> {:cont, {:ok, acc}}
         {:error, message} -> {:halt, {:error, [{id, message}]}}
@@ -142,21 +144,21 @@ defmodule StatifierExamples.ScreenEditor.Walk do
     end)
   end
 
-  defp options(%{"answer_options" => rows} = node) do
+  defp options(%{"answer_options" => rows} = element) do
     case ScreenEditor.ChoiceQuestion.answer_options(List.wrap(rows)) do
       {:ok, pairs} ->
         options = Enum.map(pairs, fn {value, label} -> %{"value" => value, "label" => label} end)
-        {:ok, %{node | "answer_options" => options}}
+        {:ok, %{element | "answer_options" => options}}
 
       :error ->
         {:error, "each option is written value=Label"}
     end
   end
 
-  defp options(node), do: {:ok, node}
+  defp options(element), do: {:ok, element}
 
-  defp bounds(%{"type" => "text_question"} = node) do
-    Enum.reduce_while(["min", "max"], {:ok, node}, fn field, {:ok, acc} ->
+  defp bounds(%{"type" => "text_question"} = element) do
+    Enum.reduce_while(["min", "max"], {:ok, element}, fn field, {:ok, acc} ->
       case Map.fetch(acc, field) do
         {:ok, text} when is_binary(text) -> number(acc, field, text)
         _absent_or_number -> {:cont, {:ok, acc}}
@@ -164,32 +166,32 @@ defmodule StatifierExamples.ScreenEditor.Walk do
     end)
   end
 
-  defp bounds(node), do: {:ok, node}
+  defp bounds(element), do: {:ok, element}
 
-  defp number(node, field, text) do
+  defp number(element, field, text) do
     case Integer.parse(text) do
       {integer, ""} ->
-        {:cont, {:ok, %{node | field => integer}}}
+        {:cont, {:ok, %{element | field => integer}}}
 
       _not_an_integer ->
         case Float.parse(text) do
-          {float, ""} -> {:cont, {:ok, %{node | field => float}}}
+          {float, ""} -> {:cont, {:ok, %{element | field => float}}}
           _not_a_number -> {:halt, {:error, "#{field} is a number, or blank for no bound"}}
         end
     end
   end
 
-  defp writes(%{"writes" => rows} = node) when is_list(rows) do
+  defp writes(%{"writes" => rows} = element) when is_list(rows) do
     rows
     |> Enum.reduce_while({:ok, %{}}, fn row, {:ok, acc} -> write(row, acc) end)
     |> case do
-      {:ok, writes} -> {:ok, %{node | "writes" => writes}}
+      {:ok, writes} -> {:ok, %{element | "writes" => writes}}
       {:error, message} -> {:error, message}
     end
   end
 
   defp writes(%{"writes" => _other}), do: {:error, "each write is written responses.<path>=value"}
-  defp writes(node), do: {:ok, node}
+  defp writes(element), do: {:ok, element}
 
   defp write(row, acc) do
     case split_write(row) do

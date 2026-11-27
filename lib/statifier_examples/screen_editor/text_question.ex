@@ -14,7 +14,7 @@ defmodule StatifierExamples.ScreenEditor.TextQuestion do
 
   use StatifierBlocks.BlockType
 
-  alias StatifierExamples.ScreenEditor.Node
+  alias StatifierExamples.ScreenEditor.Element
 
   @formats [
     {"", "None"},
@@ -27,24 +27,24 @@ defmodule StatifierExamples.ScreenEditor.TextQuestion do
 
   @impl StatifierBlocks.BlockType
   def config_schema(_config) do
-    Node.common_fields() ++
+    Element.common_fields() ++
       [
-        Node.field("label", :string, "Label", true, ""),
-        Node.field("placeholder", :string, "Placeholder", false, ""),
-        Node.field("help", :string, "Help", false, ""),
-        Node.field("required", :boolean, "Required", false, false),
-        Node.field("format", {:select, @formats}, "Format", false, ""),
-        Node.field("pattern", :string, "Pattern", false, ""),
-        Node.field("min", :string, "Min", false, ""),
-        Node.field("max", :string, "Max", false, "")
+        Element.field("label", :string, "Label", true, ""),
+        Element.field("placeholder", :string, "Placeholder", false, ""),
+        Element.field("help", :string, "Help", false, ""),
+        Element.field("required", :boolean, "Required", false, false),
+        Element.field("format", {:select, @formats}, "Format", false, ""),
+        Element.field("pattern", :string, "Pattern", false, ""),
+        Element.field("min", :string, "Min", false, ""),
+        Element.field("max", :string, "Max", false, "")
       ]
   end
 
   @impl StatifierBlocks.BlockType
   def validate_config(config) do
-    Node.validate(
+    Element.validate(
       config,
-      Node.present(config, "label", "a question needs the label a patron is asked") ++
+      Element.present(config, "label", "a question needs the label a patron is asked") ++
         bound_findings(config, "min") ++ bound_findings(config, "max")
     )
   end
@@ -62,7 +62,7 @@ defmodule StatifierExamples.ScreenEditor.TextQuestion do
   end
 
   @impl StatifierBlocks.BlockType
-  def emit(_block, context), do: Node.emit_leaf(context)
+  def emit(_block, context), do: Element.emit_leaf(context)
 
   defp bound_findings(config, field) do
     case Map.get(config, field) do

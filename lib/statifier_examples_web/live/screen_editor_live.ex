@@ -270,7 +270,7 @@ defmodule StatifierExamplesWeb.ScreenEditorLive do
 
   defp typed_value(_type, value), do: value
 
-  # A finding names a node key; a reader knows the question by its label.
+  # A finding names an element key; a reader knows the question by its label.
   @spec label_for([map()], String.t()) :: String.t()
   defp label_for(nodes, key) do
     case Enum.find(nodes, &(&1["key"] == key)) do

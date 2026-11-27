@@ -6,23 +6,23 @@ defmodule StatifierExamples.ScreenEditor.Heading do
 
   use StatifierBlocks.BlockType
 
-  alias StatifierExamples.ScreenEditor.Node
+  alias StatifierExamples.ScreenEditor.Element
 
   @impl StatifierBlocks.BlockType
   def config_schema(_config) do
-    Node.common_fields() ++
+    Element.common_fields() ++
       [
-        Node.field("level", :integer, "Level", true, 1),
-        Node.field("text", :string, "Text", true, "")
+        Element.field("level", :integer, "Level", true, 1),
+        Element.field("text", :string, "Text", true, "")
       ]
   end
 
   @impl StatifierBlocks.BlockType
   def validate_config(config) do
-    Node.validate(
+    Element.validate(
       config,
       level_findings(Map.get(config, "level")) ++
-        Node.present(config, "text", "a heading needs its text")
+        Element.present(config, "text", "a heading needs its text")
     )
   end
 
@@ -39,7 +39,7 @@ defmodule StatifierExamples.ScreenEditor.Heading do
   end
 
   @impl StatifierBlocks.BlockType
-  def emit(_block, context), do: Node.emit_leaf(context)
+  def emit(_block, context), do: Element.emit_leaf(context)
 
   defp level_findings(level) when is_integer(level) and level in 1..6, do: []
   defp level_findings(_level), do: [{"level", "a heading level is an integer from 1 to 6"}]

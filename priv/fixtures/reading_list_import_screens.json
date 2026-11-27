@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "edoc_reading_list_import_screens",
   "metadata": {
     "name": "Reading-list import",
@@ -10,7 +10,7 @@
     {
       "key": "reading_list_source",
       "title": "Where the lists come from",
-      "nodes": [
+      "elements": [
         {
           "type": "heading",
           "key": "reading_list_heading",
@@ -39,7 +39,7 @@
     {
       "key": "reading_list_when",
       "title": "Which term",
-      "nodes": [
+      "elements": [
         {
           "type": "text_question",
           "key": "reading_list_term",
@@ -58,7 +58,7 @@
     {
       "key": "reading_list_titles",
       "title": "Holding the titles",
-      "nodes": [
+      "elements": [
         {
           "type": "text",
           "key": "reading_list_holds_intro",
