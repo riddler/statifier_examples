@@ -51,11 +51,14 @@ defmodule StatifierExamples.Signup.ReturnableStep do
 
   That is why the key is `buttons` and not `outcomes`, its name before
   version 2: `outcomes` is the block type vocabulary's word for the ways a
-  block can finish, and this list is not that. Declaring one outcome per
-  button would make it that, and would leave every step whose button is
-  not `done` unconsumed in the `core.sequence` that holds it, so a Path
-  built of steps would stop advancing. `migrate_config/2` renames the key
-  in a version 1 block as it resolves.
+  block can finish, and this list is not that; it is the screen's buttons.
+  The other honest answer was open too: declare `outcomes/1` with one
+  outcome per button, so the list would be what its old name said and a
+  Path could route on the button. This type takes the rename instead, on
+  that same ground: a step is one screen whose answers a Path reads from
+  `responses`, and its buttons are how the reader leaves the screen, not
+  ways the step can finish. `migrate_config/2` renames the key in a
+  version 1 block as it resolves.
 
   ## What the compiled step is
 

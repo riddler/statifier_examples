@@ -273,7 +273,7 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
       opts =
         with_step("blk_prst_card", &Map.update!(&1, "buttons", fn b -> b ++ ["card_skipped"] end))
 
-      assert refused(opts) ==
+      assert start(opts) ==
                {:error,
                 {:steps_disagree, [{"blk_prst_card", :button_not_on_screen, "card_skipped"}]}}
     end
@@ -284,7 +284,7 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
     test "a button on the screen the step does not configure" do
       opts = with_step("blk_prst_card", &Map.put(&1, "buttons", ["card_skipped"]))
 
-      assert refused(opts) ==
+      assert start(opts) ==
                {:error,
                 {:steps_disagree,
                  [
@@ -299,7 +299,7 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
     test "a configured response the screen asks no question for" do
       opts = with_step("blk_prst_name", &Map.update!(&1, "responses", fn r -> r ++ ["phone"] end))
 
-      assert refused(opts) ==
+      assert start(opts) ==
                {:error, {:steps_disagree, [{"blk_prst_name", :question_not_on_screen, "phone"}]}}
     end
 
@@ -309,7 +309,7 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
     test "a question on the screen the step does not configure" do
       opts = with_step("blk_prst_name", &Map.put(&1, "responses", ["first_name"]))
 
-      assert refused(opts) ==
+      assert start(opts) ==
                {:error, {:steps_disagree, [{"blk_prst_name", :question_not_configured, "email"}]}}
     end
 
@@ -328,7 +328,7 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
           1
         )
 
-      assert {:ok, execution_id} = refused(opts)
+      assert {:ok, execution_id} = start(opts)
       assert {:ok, %{screen: %{key: "patron_name"}}} = Journey.current(execution_id, opts)
     end
   end
@@ -349,7 +349,7 @@ defmodule StatifierExamples.Signup.ReturnableStepTest do
     Keyword.put(opts, :path, %Document{path | root: %{root | slots: %{"body" => body}}})
   end
 
-  defp refused(opts), do: Journey.start("steps-#{System.unique_integer([:positive])}", opts)
+  defp start(opts), do: Journey.start("steps-#{System.unique_integer([:positive])}", opts)
 
   describe "the signup Path" do
     # Sabotage: made `back_offered/1` answer `:ok` for every view. The plan
