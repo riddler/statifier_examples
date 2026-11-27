@@ -101,6 +101,15 @@ defmodule StatifierExamples.Signup.Journey do
   buttons have to declare the outcomes the Path's screens declare, because
   those are the events the chart listens for.
 
+  A `myapp.step` names its screen's buttons and questions in its own
+  config (`StatifierExamples.Signup.ReturnableStep`), so `start/2` also
+  refuses a Path with a step that disagrees with the screen it names: a
+  button outcome or a response key the step configures and the screen does
+  not carry, or a button or a question on the screen the step does not
+  configure. The first is a press the reader can never make or an answer
+  never asked; the second a press the chart has no transition for or an
+  answer it never records.
+
   ## A Path the caller supplies
 
   The chart is the Path fixture unless a caller passes `path:` - a block
@@ -239,7 +248,7 @@ defmodule StatifierExamples.Signup.Journey do
   alias StatifierBlocks.Runtime.Back
   alias StatifierExamples.Charts
   alias StatifierExamples.Charts.{Durable, Execution, Subchart}
-  alias StatifierExamples.Signup.{Screen, Screens, Sealer, Validation}
+  alias StatifierExamples.Signup.{ReturnableStep, Screen, Screens, Sealer, Validation}
 
   @fixture "signup_path"
 
@@ -318,8 +327,15 @@ defmodule StatifierExamples.Signup.Journey do
 
   `{:error, {:screens_document, reason}}` for a document riddler does not
   admit with zero findings - `reason` is `StatifierExamples.Signup.Screens.admit/1`'s
-  - and `{:error, {:undeclared_screens, keys}}` for one that does not
-  declare every screen the Path names. Nothing is started for either.
+  - `{:error, {:undeclared_screens, keys}}` for one that does not
+  declare every screen the Path names, and
+  `{:error, {:steps_disagree, disagreements}}` for a Path whose
+  `myapp.step` blocks disagree with the screens they name (the
+  moduledoc's "A screens document the caller supplies"). Each
+  disagreement is `{block_id, reason, name}`, `reason` one of
+  `:button_not_on_screen`, `:button_not_configured`,
+  `:question_not_on_screen` and `:question_not_configured`, in document
+  order. Nothing is started for any of them.
 
   `opts[:scope]`, a `Riddler.Journey.Scope`, is the scope the Journey is
   started under: the execution records it, and every durable subchart child
@@ -333,6 +349,7 @@ defmodule StatifierExamples.Signup.Journey do
     with {:ok, screens} <- screens_document(opts),
          {:ok, {path, compiled, fixture_key}} <- path_chart(opts),
          :ok <- declares_path_screens(screens, path),
+         :ok <- steps_agree(screens, path),
          {:ok, _driven} <- Durable.start(compiled, path, execution_id, fixture_key, scope) do
       {:ok, execution_id}
     else
@@ -890,6 +907,100 @@ defmodule StatifierExamples.Signup.Journey do
       keys -> {:error, {:undeclared_screens, keys}}
     end
   end
+
+  # Every `myapp.step` in the Path configures exactly the buttons and the
+  # questions of the screen it names (the moduledoc's "A screens document
+  # the caller supplies"). A step whose screen is undeclared is
+  # `declares_path_screens/2`'s, which runs first.
+  @spec steps_agree(screens(), Document.t()) ::
+          :ok
+          | {:error,
+             {:steps_disagree,
+              [
+                {Block.id(),
+                 :button_not_on_screen
+                 | :button_not_configured
+                 | :question_not_on_screen
+                 | :question_not_configured, String.t()}
+              ]}}
+  defp steps_agree({document, _admitted}, path) do
+    disagreements =
+      for %Block{type: "myapp.step"} = block <- Document.blocks(path),
+          config = step_config(block),
+          %{nodes: nodes} <- [Screens.screen(document, Map.get(config, "screen", ""))],
+          disagreement <- step_disagreements(block.id, config, nodes),
+          do: disagreement
+
+    case disagreements do
+      [] -> :ok
+      found -> {:error, {:steps_disagree, found}}
+    end
+  end
+
+  # A step's config as it compiles: a version 1 block's migrated, so its
+  # `outcomes` is read as the `buttons` it resolves to.
+  @spec step_config(Block.t()) :: map()
+  defp step_config(%Block{type_version: 1, config: config}) do
+    case ReturnableStep.migrate_config(1, config) do
+      {:ok, migrated} -> migrated
+      {:error, _reason} -> config
+    end
+  end
+
+  defp step_config(%Block{config: config}), do: config
+
+  @spec step_disagreements(Block.id(), map(), [Screens.node_doc()]) ::
+          [{Block.id(), atom(), String.t()}]
+  defp step_disagreements(id, config, nodes) do
+    on_screen = screen_names(nodes)
+    buttons = names(Map.get(config, "buttons"))
+    questions = names(Map.get(config, "responses"))
+
+    for {reason, name} <-
+          missing(buttons, on_screen.buttons, :button_not_on_screen) ++
+            missing(on_screen.buttons, buttons, :button_not_configured) ++
+            missing(questions, on_screen.questions, :question_not_on_screen) ++
+            missing(on_screen.questions, questions, :question_not_configured),
+        do: {id, reason, name}
+  end
+
+  @spec missing([String.t()], [String.t()], atom()) :: [{atom(), String.t()}]
+  defp missing(names, from, reason), do: for(name <- names, name not in from, do: {reason, name})
+
+  @spec names(term()) :: [String.t()]
+  defp names(list) when is_list(list), do: Enum.filter(list, &is_binary/1)
+  defp names(_not_a_list), do: []
+
+  # The button outcomes and the question keys on a screen, a container's
+  # children included at any depth (a variant's candidates), in document
+  # order and each once.
+  @spec screen_names([Screens.node_doc()]) :: %{buttons: [String.t()], questions: [String.t()]}
+  defp screen_names(nodes) do
+    found = Enum.flat_map(nodes, &screen_name/1)
+
+    %{
+      buttons: for({:button, name} <- found, uniq: true, do: name),
+      questions: for({:question, name} <- found, uniq: true, do: name)
+    }
+  end
+
+  @spec screen_name(Screens.node_doc()) :: [{:button | :question, String.t()}]
+  defp screen_name(%{"type" => "button", "outcome" => outcome}) when is_binary(outcome),
+    do: [{:button, outcome}]
+
+  defp screen_name(%{"type" => type, "key" => key} = node_doc) when is_binary(type) do
+    own = if String.ends_with?(type, "_question"), do: [{:question, key}], else: []
+    own ++ children(node_doc)
+  end
+
+  defp screen_name(node_doc), do: children(node_doc)
+
+  @spec children(Screens.node_doc()) :: [{:button | :question, String.t()}]
+  defp children(%{"elements" => inner}) when is_list(inner),
+    do: Enum.flat_map(inner, &screen_name/1)
+
+  defp children(%{"nodes" => inner}) when is_list(inner), do: Enum.flat_map(inner, &screen_name/1)
+  defp children(_leaf), do: []
 
   # A view with a screen in it, as an error-shaped answer for `submit/3`:
   # pressing a button on an execution that has moved on is not a validation

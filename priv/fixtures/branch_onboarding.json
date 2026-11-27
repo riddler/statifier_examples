@@ -22,20 +22,20 @@
         {
           "type": "myapp.step",
           "id": "blk_bo_branch",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "onboarding_branch",
-            "outcomes": ["branch_named"],
+            "buttons": ["branch_named"],
             "responses": ["branch_name"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_bo_pick",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "onboarding_integrations",
-            "outcomes": ["integrations_chosen"],
+            "buttons": ["integrations_chosen"],
             "responses": ["integrations"]
           }
         },
@@ -65,10 +65,10 @@
         {
           "type": "myapp.step",
           "id": "blk_bo_finish",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "onboarding_finished",
-            "outcomes": ["onboarding_confirmed"],
+            "buttons": ["onboarding_confirmed"],
             "responses": []
           }
         }

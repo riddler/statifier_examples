@@ -22,30 +22,30 @@
         {
           "type": "myapp.step",
           "id": "blk_cr_model",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "reader_model",
-            "outcomes": ["model_chosen"],
+            "buttons": ["model_chosen"],
             "responses": ["reader_kind"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_cr_location",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "reader_place",
-            "outcomes": ["location_given"],
+            "buttons": ["location_given"],
             "responses": ["reader_location"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_cr_test",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "reader_test",
-            "outcomes": ["test_reported"],
+            "buttons": ["test_reported"],
             "responses": ["reader_test_result"]
           }
         }

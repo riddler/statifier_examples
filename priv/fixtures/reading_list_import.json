@@ -22,30 +22,30 @@
         {
           "type": "myapp.step",
           "id": "blk_rl_source",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "reading_list_source",
-            "outcomes": ["format_chosen"],
+            "buttons": ["format_chosen"],
             "responses": ["reading_list_format"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_rl_term",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "reading_list_when",
-            "outcomes": ["term_given"],
+            "buttons": ["term_given"],
             "responses": ["reading_list_term"]
           }
         },
         {
           "type": "myapp.step",
           "id": "blk_rl_holds",
-          "type_version": 1,
+          "type_version": 2,
           "config": {
             "screen": "reading_list_titles",
-            "outcomes": ["import_confirmed"],
+            "buttons": ["import_confirmed"],
             "responses": ["reading_list_holds"]
           }
         }
