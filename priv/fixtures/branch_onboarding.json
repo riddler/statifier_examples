@@ -4,13 +4,17 @@
   "revision": 1,
   "metadata": {
     "name": "Branch onboarding",
-    "description": "A branch library joining: the branch says who it is, picks the integrations it needs, and runs the setup of each one it picked, in the order the response lists them, each as a durable child execution of its own. The pick is a multi-select whose values are the setups' document ids; a core.foreach walks the response and a core.subchart names its child from the loop's item (chart_from), so which children run is data. The branch's own steps are myapp.step blocks, so Back works between them; Back does not cross into or out of a setup.",
+    "description": "A branch library joining: the branch says who it is, picks the integrations it needs, and runs the setup of each one it picked, in the order the response lists them, each as a durable child execution of its own. The pick is a multi-select whose values are the setups' document ids; a core.foreach walks the response and a core.subchart names its child from the loop's item (chart_from), so which children run is data. The subchart declares every outcome a setup can finish with and writes what each setup finished with to last_setup. The branch's own steps are myapp.step blocks, so Back works between them; Back does not cross into or out of a setup.",
     "domain": "library"
   },
   "datamodel": [
     {
       "id": "responses",
       "description": "What the branch's own steps collected, keyed by question key: the branch's name and the integrations it picked, as the setups' document ids. Each setup's own responses stay in the setup's own execution."
+    },
+    {
+      "id": "last_setup",
+      "description": "What the setup of the latest pass finished with, written by the subchart as each setup finishes: the setup's done data, whose outcome is its root outcome - done, or site_visit_needed when a card-reader setup's test card was not read."
     }
   ],
   "root": {
@@ -56,7 +60,8 @@
                 "type_version": 1,
                 "config": {
                   "chart_from": "setup_document",
-                  "outcomes": "done"
+                  "outcomes": "done\nsite_visit_needed",
+                  "assign_to": "last_setup"
                 }
               }
             ]

@@ -96,8 +96,9 @@ defmodule StatifierExamples.Library.OnboardingTest do
     test "answers each of the three setups by its document id, compiled as a child" do
       for key <- Setups.keys() do
         {:ok, document} = Setups.document(key)
+        {:ok, outcomes} = Setups.outcomes(key)
 
-        assert {:ok, %Compiled{interface: %{declared_outcomes: ["done"]}}} =
+        assert {:ok, %Compiled{interface: %{declared_outcomes: ^outcomes}}} =
                  Onboarding.resolve_chart(document.id, %{})
       end
     end
@@ -240,6 +241,53 @@ defmodule StatifierExamples.Library.OnboardingTest do
 
       {:ok, done} = press(id, "onboarding_confirmed", %{})
       assert done.state == "done"
+    end
+  end
+
+  describe "how a setup ended" do
+    # The onboarding's datamodel, read from the stored execution.
+    defp last_setup(execution_id) do
+      document = Onboarding.document()
+      {:ok, compiled} = Durable.compile(document, [])
+      {:ok, {durable, _run}} = Durable.resume(compiled, document, execution_id)
+      durable.machine_state.datamodel["last_setup"]
+    end
+
+    defp donedata(execution_id) do
+      {:ok, record} = Storage.fetch_execution(store(), execution_id)
+      StatifierPersistence.Execution.from_record(record).donedata
+    end
+
+    # Sabotage: made `myapp.setup`'s `declared_outcomes/1` answer `done`
+    # alone. The child finished with `done` on the not-read card and this
+    # went red. Restored from a copy.
+    #
+    # Sabotage: dropped the subchart's `assign_to` from
+    # `branch_onboarding.json`. The onboarding recorded nothing and this
+    # went red on `last_setup`. Restored from a copy.
+    test "a card-reader setup that read nothing ends with site_visit_needed, and the onboarding reads it" do
+      for {result, outcome} <- [{"not_read", "site_visit_needed"}, {"card_read", "done"}] do
+        id = start()
+        {:ok, _view} = pick(id, ["bdoc_card_reader_setup", "bdoc_catalogue_sync"])
+        reader = first_child(id)
+
+        walk =
+          List.replace_at(
+            @card_reader_setup,
+            2,
+            {"test_reported", %{"reader_test_result" => result}}
+          )
+
+        presses(id, walk)
+
+        assert donedata(reader) == %{"outcome" => outcome}, "#{result} ended otherwise"
+        assert last_setup(id) == %{"outcome" => outcome}
+
+        # The onboarding moves on to the next pick either way.
+        {next, view} = focused_view(id)
+        assert next != id and next != reader
+        assert view.screen.key == "catalogue_source"
+      end
     end
   end
 

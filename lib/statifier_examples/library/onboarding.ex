@@ -24,10 +24,13 @@ defmodule StatifierExamples.Library.Onboarding do
   options in), and the Path goes on to its closing screen once the last
   one has finished.
 
-  The subchart declares the one outcome `done`, which is the one root
-  outcome each setup declares (`StatifierExamples.Library.Setups`' "How a
-  setup finishes"). statifier_blocks refuses, at child creation, a child
-  whose root declares an outcome the block did not.
+  The subchart declares `done` and `site_visit_needed`, every root outcome
+  a setup declares (`StatifierExamples.Library.Setups`' "How a setup
+  finishes"): statifier_blocks refuses, at child creation, a child whose
+  root declares an outcome the block did not. It writes what each setup
+  finished with to `last_setup`, the setup's done data, whose `outcome` is
+  the setup's root outcome, so the onboarding can read how the setup of
+  the latest pass ended.
 
   ## The allow-list: `resolve_chart/2`
 

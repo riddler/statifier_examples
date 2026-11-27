@@ -16,6 +16,8 @@ defmodule StatifierExamples.Library.SetupsTest do
   alias StatifierExamples.Repo
   alias StatifierExamples.Signup.Journey
 
+  doctest StatifierExamples.Library.Setup
+
   # Each setup's walk, a press per step: the screen it rests on, the
   # outcome pressed and what the press carried.
   @walks %{
@@ -77,10 +79,30 @@ defmodule StatifierExamples.Library.SetupsTest do
 
     # Sabotage: made `outcomes/1` answer the interface's `references` (`[]`)
     # in place of its declared outcomes. This went red. Reverted from a copy.
-    test "each document declares the root outcome done, compiled for use as a child" do
+    #
+    # Sabotage: made `myapp.setup`'s `declared_outcomes/1` answer `done`
+    # alone. The card-reader setup declared one outcome and this went red.
+    # Restored from a copy.
+    test "each document declares its root outcomes, compiled for use as a child" do
+      assert Setups.outcomes("catalogue_sync") == {:ok, ["done"]}
+      assert Setups.outcomes("reading_list_import") == {:ok, ["done"]}
+      assert Setups.outcomes("card_reader_setup") == {:ok, ["done", "site_visit_needed"]}
+    end
+
+    # Pins the sentence's register; that the page draws it is
+    # `StatifierExamplesWeb.SettingsLiveTest`'s.
+    #
+    # Sabotage: named the catalogue sync's file in its sentence. This went
+    # red on the file refute. Restored from a copy.
+    test "each setup has a sentence for a librarian, and no block type or file in it" do
       for key <- Setups.keys() do
-        assert Setups.outcomes(key) == {:ok, ["done"]}
+        assert {:ok, description} = Setups.description(key)
+        assert description != ""
+        refute description =~ "myapp."
+        refute description =~ ".json"
       end
+
+      assert Setups.description("branch_closure") == :error
     end
   end
 
@@ -150,6 +172,35 @@ defmodule StatifierExamples.Library.SetupsTest do
 
         expected = walk |> Enum.map(&elem(&1, 2)) |> Enum.reduce(%{}, &Map.merge(&2, &1))
         assert final.responses == expected
+      end
+    end
+
+    # The card-reader setup's ending is on its last screen, so this walks a
+    # test-only copy whose ending is on the first: a press that ends the
+    # setup leaves the steps after it unvisited.
+    #
+    # Sabotage: made the ending's handler drop its `ending_when` condition.
+    # The desk reader's press ended the setup too and this went red on its
+    # screen. Restored from a copy.
+    test "a press its root names as an ending ends it, with the steps after it unvisited" do
+      {:ok, [screens: screens, path: %Document{root: root} = path]} =
+        Setups.options("card_reader_setup")
+
+      config = %{
+        "ending" => "no_reader_yet",
+        "ending_on" => "model_chosen",
+        "ending_when" => "_event.data.reader_kind == 'self_checkout'"
+      }
+
+      opts = [screens: screens, path: %Document{path | root: %{root | config: config}}]
+
+      for {kind, expected} <- [{"self_checkout", nil}, {"desk_reader", "reader_place"}] do
+        {:ok, id} = Journey.start("setup-ending-#{System.unique_integer([:positive])}", opts)
+        {:ok, view} = Journey.submit(id, "model_chosen", %{"reader_kind" => kind}, opts)
+
+        assert screen_key(view) == expected, "#{kind} did not rest on #{inspect(expected)}"
+        assert view.responses == %{"reader_kind" => kind}
+        assert view.state == "done" == is_nil(expected)
       end
     end
 

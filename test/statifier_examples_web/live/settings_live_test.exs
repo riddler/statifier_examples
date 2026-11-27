@@ -69,6 +69,59 @@ defmodule StatifierExamplesWeb.SettingsLiveTest do
     refute html =~ "settings-error"
   end
 
+  # Sabotage: drew the document's own `metadata` description again. The
+  # librarian's sentence was not on the page and this went red. Restored
+  # from a copy.
+  test "describes each setup in the sentence for a librarian, not the document's own", %{
+    conn: conn
+  } do
+    {:ok, live, _html} = live(conn, ~p"/settings")
+
+    for key <- Setups.keys() do
+      {:ok, description} = Setups.description(key)
+      {:ok, document} = Setups.document(key)
+
+      assert has_element?(live, "#setup-#{key} p", description)
+      refute render(live) =~ document.metadata["description"]
+    end
+
+    assert has_element?(live, "#setup-card_reader_setup code", "site_visit_needed")
+  end
+
+  # Sabotage: made the Journey page's heading and notice read the signup
+  # wording for every Path. The heading read "Signup journey" and this went
+  # red. Restored from a copy.
+  test "the Journey page names the setup it runs, in its heading and its ended notice", %{
+    conn: conn
+  } do
+    {:ok, settings, _html} = live(conn, ~p"/settings")
+
+    {:error, {:live_redirect, %{to: to}}} =
+      settings |> element("#start-card_reader_setup") |> render_click()
+
+    %{"execution" => execution_id} = to |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+    {:ok, journey, _html} = live(conn, to)
+
+    assert has_element?(journey, "h1", "Card-reader setup")
+    refute has_element?(journey, "h1", "Signup journey")
+
+    # Stopped out of band while the page still shows the first screen.
+    {:ok, [screens: _screens, path: document]} = Setups.options("card_reader_setup")
+    {:ok, compiled} = Durable.compile(document, [])
+    {:ok, {durable, _run}} = Durable.resume(compiled, document, execution_id)
+    :ok = Durable.abandon(durable)
+
+    journey |> form("#journey form", %{"reader_kind" => "desk_reader"}) |> render_change()
+
+    journey
+    |> form("#journey form")
+    |> put_submitter(~s(button[data-riddler-key="reader_model_continue"]))
+    |> render_submit()
+
+    assert has_element?(journey, "#press-discarded", "This card-reader setup had already ended")
+    refute has_element?(journey, "#press-discarded", "signup")
+  end
+
   # Sabotage: made the start clause navigate to the Journey page without
   # `path`. The URL named no setup and this went red. Reverted from a copy.
   #

@@ -6,7 +6,9 @@ defmodule StatifierExamplesWeb.SettingsLive do
   The page lists what `StatifierExamples.Library.Setups` lists - a
   catalogue sync, a reading-list import and a card-reader setup - with
   each one's name, what it does and the root outcomes its document
-  declares. Pressing a setup's Start starts it alone as a durable Journey
+  declares. What it does is the sentence `StatifierExamples.Library.Setups`
+  keeps for a librarian (its "What a librarian reads"), not the document's
+  own description, which is written for whoever edits the document. Pressing a setup's Start starts it alone as a durable Journey
   under the librarian's branch scope, through
   `StatifierExamplesWeb.JourneyHost.start/2`, and sends the reader to the
   Journey page
@@ -116,11 +118,12 @@ defmodule StatifierExamplesWeb.SettingsLive do
     for key <- Setups.keys() do
       {:ok, %Document{metadata: metadata}} = Setups.document(key)
       {:ok, outcomes} = Setups.outcomes(key)
+      {:ok, description} = Setups.description(key)
 
       %{
         key: key,
         name: Map.get(metadata, "name", key),
-        description: Map.get(metadata, "description", ""),
+        description: description,
         outcomes: outcomes
       }
     end
