@@ -35,16 +35,27 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
   # it answers, so a press that went to the wrong execution fails here on an
   # assertion rather than in the form helper.
   defp answer(live, responses, button) do
-    assert has_element?(live, "#" <> button)
-    live |> form("#journey-responses", responses: responses) |> render_change()
-    live |> element("##{button}") |> render_click()
+    assert has_element?(live, key(button))
+    live |> form("#journey form", responses) |> render_change()
+    press(live, button)
+  end
+
+  # An element of the screen RiddlerLiveView.Journey draws, by its key.
+  defp key(key), do: ~s([data-riddler-key="#{key}"])
+
+  # Presses the button keyed `key`: a submit of the component's form with
+  # that button as its submitter, answering the page as drawn once the
+  # press has landed.
+  defp press(live, key) do
+    live |> form("#journey form") |> put_submitter("button" <> key(key)) |> render_submit()
+    render(live)
   end
 
   defp picked(conn, ids) do
     {live, execution_id} = started(conn)
     answer(live, %{"branch_name" => "Riverside branch"}, "onboarding_branch_continue")
-    render_change(live, "response", %{"responses" => %{"integrations" => ids}})
-    live |> element("#onboarding_integrations_continue") |> render_click()
+    live |> form("#journey form", %{"integrations" => ids}) |> render_change()
+    press(live, "onboarding_integrations_continue")
 
     {live, execution_id}
   end
@@ -54,7 +65,7 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
   test "the page runs the branch onboarding and starts on its first screen", %{conn: conn} do
     {live, _execution_id} = started(conn)
 
-    assert has_element?(live, "#onboarding_branch_continue")
+    assert has_element?(live, key("onboarding_branch_continue"))
     refute has_element?(live, "#presented-child")
     refute has_element?(live, "#journey-error")
   end
@@ -66,10 +77,10 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     {live, execution_id} = picked(conn, ["bdoc_catalogue_sync", "bdoc_card_reader_setup"])
 
     child = Linkage.child_execution_id(execution_id, "blk_bo_setup", 0)
-    assert has_element?(live, "#catalogue_source_continue")
+    assert has_element?(live, key("catalogue_source_continue"))
     assert has_element?(live, "#presented-child")
     assert has_element?(live, "#execution-id", child)
-    refute has_element?(live, "#journey-back")
+    refute has_element?(live, "[data-riddler-back]")
   end
 
   # Sabotage: made `target/1` answer the execution on the URL with the
@@ -82,7 +93,7 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     answer(live, %{"sync_schedule" => "nightly"}, "catalogue_schedule_continue")
     answer(live, %{"sync_contact_email" => "desk@example.com"}, "catalogue_start")
 
-    assert has_element?(live, "#reader_model_continue")
+    assert has_element?(live, key("reader_model_continue"))
     assert has_element?(live, "#presented-child")
     refute has_element?(live, "#journey-error")
   end
@@ -97,10 +108,10 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     answer(live, %{"reader_location" => "Front desk"}, "reader_location_continue")
     answer(live, %{"reader_test_result" => "card_read"}, "reader_finish")
 
-    assert has_element?(live, "#onboarding_finish")
+    assert has_element?(live, key("onboarding_finish"))
     refute has_element?(live, "#presented-child")
 
-    live |> element("#onboarding_finish") |> render_click()
+    press(live, "onboarding_finish")
     assert has_element?(live, "#journey-done")
   end
 
@@ -111,12 +122,12 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     {live, _execution_id} = picked(conn, ["bdoc_card_reader_setup"])
 
     answer(live, %{"reader_kind" => "desk_reader"}, "reader_model_continue")
-    assert has_element?(live, "#journey-back")
+    assert has_element?(live, "[data-riddler-back]")
 
-    html = live |> element("#journey-back") |> render_click()
+    html = live |> element("[data-riddler-back]") |> render_click()
 
-    assert has_element?(live, "#reader_model_continue")
-    refute has_element?(live, "#journey-back")
+    assert has_element?(live, key("reader_model_continue"))
+    refute has_element?(live, "[data-riddler-back]")
     refute has_element?(live, "#journey-error")
     assert html =~ "desk_reader"
   end
@@ -147,7 +158,7 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
 
     {:ok, live, _html} = live(conn, "#{@path}&execution=#{execution_id}")
 
-    assert has_element?(live, "#reading_list_source_continue")
+    assert has_element?(live, key("reading_list_source_continue"))
     assert has_element?(live, "#presented-child")
   end
 end

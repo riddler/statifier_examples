@@ -75,11 +75,29 @@ defmodule StatifierExamples.ScreenEditor.Try do
   """
   @spec start(Document.t()) :: {:ok, t()} | {:error, term()}
   def start(%Document{} = document) do
-    with {:ok, screens} <- walk(document),
-         :ok <- explained_formats(screens),
-         opts = [screens: screens, path: path(screens)],
+    with {:ok, opts} <- options(document),
          {:ok, execution_id} <- Journey.start(Durable.new_execution_id(), opts) do
       {:ok, %{execution_id: execution_id, opts: opts}}
+    end
+  end
+
+  @doc """
+  The options every `StatifierExamples.Signup.Journey` call over
+  `document`'s Try takes - the walked screen document and the derived
+  Path - without starting anything: what `start/1` starts with, for a
+  caller that runs the same document's Journey again by its execution id.
+  Both are derived from `document` alone, so the same document answers
+  the same options.
+
+  `{:error, {:walk, refusals}}` and `{:error, {:unsupported_format, keys}}`
+  as `start/1` refuses them.
+  """
+  @spec options(Document.t()) ::
+          {:ok, [screens: map(), path: Document.t()]} | {:error, term()}
+  def options(%Document{} = document) do
+    with {:ok, screens} <- walk(document),
+         :ok <- explained_formats(screens) do
+      {:ok, [screens: screens, path: path(screens)]}
     end
   end
 

@@ -26,6 +26,19 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     %{live: live, html: html, execution_id: execution_id}
   end
 
+  # An element of the screen RiddlerLiveView.Journey draws, by its key.
+  defp key(key), do: ~s([data-riddler-key="#{key}"])
+
+  # Presses the button keyed `key`: a submit of the component's form with
+  # that button as its submitter. It answers the page as drawn once the
+  # press has landed: the component draws its answer in the submit's own
+  # render, and the page draws what it shows beside the component from the
+  # host's word one message later.
+  defp press(live, key) do
+    live |> form("#journey form") |> put_submitter("button" <> key(key)) |> render_submit()
+    render(live)
+  end
+
   describe "with no execution" do
     test "it offers to start one", %{conn: conn} do
       {:ok, live, html} = live(conn, ~p"/signup-journey")
@@ -45,8 +58,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       html = live |> element("#start-journey") |> render_click()
 
       assert html =~ "Create your account"
-      assert has_element?(live, "#journey-responses")
-      assert has_element?(live, "#account_continue")
+      assert has_element?(live, "#journey form")
+      assert has_element?(live, key("account_continue"))
     end
 
     # No reader reaches this: the form is drawn only inside the `:if={@view}`
@@ -62,11 +75,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "and a keystroke with no execution refuses rather than raising", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey")
 
-      html = render_change(live, "response", %{"responses" => %{"first_name" => "Ada"}})
+      html = render_change(live, "change", %{"responses" => %{"first_name" => "Ada"}})
 
       assert html =~ "no_execution"
       assert has_element?(live, "#journey-error")
-      refute has_element?(live, "#journey-responses")
+      refute has_element?(live, "#journey form")
     end
 
     # The same shape one press further along. The outcome buttons are drawn
@@ -82,11 +95,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "and an outcome press with no execution refuses rather than raising", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey")
 
-      html = render_click(live, "outcome", %{"outcome" => "continue"})
+      html = render_click(live, "submit", %{"outcome" => "continue"})
 
       assert html =~ "no_execution"
       assert has_element?(live, "#journey-error")
-      refute has_element?(live, "#journey-responses")
+      refute has_element?(live, "#journey form")
     end
   end
 
@@ -96,11 +109,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
       assert html =~ "Create your account"
       assert has_element?(live, "#execution-id", execution_id)
-      assert has_element?(live, "#first_name")
-      assert has_element?(live, "#email")
+      assert has_element?(live, "#journey-element-first_name")
+      assert has_element?(live, "#journey-element-email")
 
       # Conditional on a name nobody has given.
-      refute has_element?(live, "#account_greeting")
+      refute has_element?(live, key("account_greeting"))
     end
 
     # Sabotage: made the page pass `@view.datamodel` to `SignupElements.screen`
@@ -114,11 +127,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
          %{conn: conn} do
       %{live: live} = started(conn)
 
-      refute has_element?(live, "#account_greeting")
+      refute has_element?(live, key("account_greeting"))
 
       html =
         live
-        |> form("#journey-responses", responses: %{"first_name" => "Ada"})
+        |> form("#journey form", %{"first_name" => "Ada"})
         |> render_change()
 
       assert html =~ "Nice to meet you, Ada."
@@ -139,22 +152,27 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "moves the execution to the next screen", %{conn: conn} do
       %{live: live} = started(conn)
 
-      live |> form("#journey-responses", responses: @account) |> render_change()
-      html = live |> element("#account_continue") |> render_click()
+      live |> form("#journey form", @account) |> render_change()
+      html = live |> press("account_continue")
 
       assert html =~ "Pick a plan"
-      assert has_element?(live, "#seats")
+      assert has_element?(live, "#journey-element-seats")
     end
 
     test "that does not validate draws its findings and stays put", %{conn: conn} do
       %{live: live} = started(conn)
 
-      live |> form("#journey-responses", responses: %{"email" => "ada"}) |> render_change()
-      html = live |> element("#account_continue") |> render_click()
+      live |> form("#journey form", %{"email" => "ada"}) |> render_change()
+      html = live |> press("account_continue")
 
       assert html =~ "Create your account"
-      assert has_element?(live, "#finding-first_name", "is required")
-      assert has_element?(live, "#finding-email", "must look like an email address")
+      assert has_element?(live, "#journey-element-first_name-finding-1", "is required")
+
+      assert has_element?(
+               live,
+               "#journey-element-email-finding-1",
+               "must look like an email address"
+             )
     end
 
     # The seat count decides which buttons the plan screen offers, and the
@@ -163,17 +181,17 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "on a button a condition reveals", %{conn: conn} do
       %{live: live} = started(conn)
 
-      live |> form("#journey-responses", responses: @account) |> render_change()
-      live |> element("#account_continue") |> render_click()
+      live |> form("#journey form", @account) |> render_change()
+      live |> press("account_continue")
 
-      refute has_element?(live, "#plan_personal")
+      refute has_element?(live, key("plan_personal"))
 
-      live |> form("#journey-responses", responses: %{"seats" => "1"}) |> render_change()
+      live |> form("#journey form", %{"seats" => "1"}) |> render_change()
 
-      assert has_element?(live, "#plan_personal")
-      refute has_element?(live, "#plan_business")
+      assert has_element?(live, key("plan_personal"))
+      refute has_element?(live, key("plan_business"))
 
-      html = live |> element("#plan_personal") |> render_click()
+      html = live |> press("plan_personal")
 
       assert html =~ "Confirm and finish"
     end
@@ -192,16 +210,16 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "the chart refused says so and stays where the execution stopped", %{conn: conn} do
       %{live: live, execution_id: execution_id} = started(conn)
 
-      live |> form("#journey-responses", responses: @account) |> render_change()
-      live |> element("#account_continue") |> render_click()
+      live |> form("#journey form", @account) |> render_change()
+      live |> press("account_continue")
 
       refute has_element?(live, "#press-discarded")
 
       {:ok, {{durable, _run}, _document}} = Durable.resume(execution_id)
       assert :ok = Durable.abandon(durable)
 
-      live |> form("#journey-responses", responses: %{"seats" => "1"}) |> render_change()
-      html = live |> element("#plan_personal") |> render_click()
+      live |> form("#journey form", %{"seats" => "1"}) |> render_change()
+      html = live |> press("plan_personal")
 
       assert has_element?(live, "#press-discarded", "your last press was not recorded")
       assert html =~ "Pick a plan"
@@ -219,15 +237,15 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "a waiting execution shows the reason and the retry hint", %{conn: conn} do
       %{live: live} = started(conn)
 
-      live |> form("#journey-responses", responses: @account) |> render_change()
-      live |> element("#account_continue") |> render_click()
-      live |> form("#journey-responses", responses: %{"seats" => "5"}) |> render_change()
-      live |> element("#plan_business") |> render_click()
+      live |> form("#journey form", @account) |> render_change()
+      live |> press("account_continue")
+      live |> form("#journey form", %{"seats" => "5"}) |> render_change()
+      live |> press("plan_business")
 
       assert has_element?(live, "#journey-waiting")
       assert has_element?(live, "#waiting-reason", "company_details_pending")
       assert has_element?(live, "#waiting-retry", "Ask again in 5 seconds")
-      refute has_element?(live, "#journey-responses")
+      refute has_element?(live, "#journey form")
       refute has_element?(live, "#journey-done")
     end
 
@@ -239,11 +257,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "a done execution shows what it finished with", %{conn: conn} do
       %{live: live} = started(conn)
 
-      live |> form("#journey-responses", responses: @account) |> render_change()
-      live |> element("#account_continue") |> render_click()
-      live |> form("#journey-responses", responses: %{"seats" => "1"}) |> render_change()
-      live |> element("#plan_personal") |> render_click()
-      live |> element("#confirm_finish") |> render_click()
+      live |> form("#journey form", @account) |> render_change()
+      live |> press("account_continue")
+      live |> form("#journey form", %{"seats" => "1"}) |> render_change()
+      live |> press("plan_personal")
+      live |> press("confirm_finish")
 
       assert has_element?(live, "#journey-finished", "The execution finished: done.")
       assert has_element?(live, "#journey-result", "ada@example.com")
@@ -267,7 +285,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
       assert has_element?(live, "#journey-finished", "The execution finished: failed.")
       assert has_element?(live, "#journey-stopped-on", "Create your account")
-      refute has_element?(live, "#journey-responses")
+      refute has_element?(live, "#journey form")
       refute has_element?(live, "#journey-result")
     end
   end
@@ -285,13 +303,13 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "and a second mount opens where it was", %{conn: conn} do
       %{live: live, execution_id: execution_id} = started(conn)
 
-      live |> form("#journey-responses", responses: @account) |> render_change()
-      live |> element("#account_continue") |> render_click()
+      live |> form("#journey form", @account) |> render_change()
+      live |> press("account_continue")
 
       {:ok, second, html} = live(conn, ~p"/signup-journey?execution=#{execution_id}")
 
       assert html =~ "Pick a plan"
-      assert has_element?(second, "#seats")
+      assert has_element?(second, "#journey-element-seats")
 
       # The first screen's responses are the chart's now, and the page reads
       # them back out of it - the collected block is drawn from the execution's own
@@ -304,7 +322,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
       assert html =~ "execution_not_found"
       assert has_element?(live, "#journey-error")
-      refute has_element?(live, "#journey-responses")
+      refute has_element?(live, "#journey form")
     end
 
     # And a keystroke that arrives anyway keeps that refusal rather than
@@ -317,7 +335,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "and a keystroke on a refused execution keeps the refusal it has", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-an-execution")
 
-      html = render_change(live, "response", %{"responses" => %{"first_name" => "Ada"}})
+      html = render_change(live, "change", %{"responses" => %{"first_name" => "Ada"}})
 
       assert html =~ "execution_not_found"
       refute html =~ "no_execution"
@@ -329,7 +347,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "and an outcome press on a refused execution keeps the refusal it has", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/signup-journey?execution=not-an-execution")
 
-      html = render_click(live, "outcome", %{"outcome" => "continue"})
+      html = render_click(live, "submit", %{"outcome" => "continue"})
 
       assert html =~ "execution_not_found"
       refute html =~ "no_execution"
@@ -354,8 +372,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     } do
       live = steps_started(conn)
 
-      assert has_element?(live, "#name_continue")
-      refute has_element?(live, "#journey-back")
+      assert has_element?(live, key("name_continue"))
+      refute has_element?(live, "[data-riddler-back]")
       assert assert_patch(live) =~ "path=patron_registration_steps"
     end
 
@@ -370,16 +388,16 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
          %{conn: conn} do
       live = steps_started(conn)
 
-      live |> form("#journey-responses", responses: @name) |> render_change()
-      live |> element("#name_continue") |> render_click()
-      assert has_element?(live, "#card_continue")
-      assert has_element?(live, "#journey-back")
+      live |> form("#journey form", @name) |> render_change()
+      live |> press("name_continue")
+      assert has_element?(live, key("card_continue"))
+      assert has_element?(live, "[data-riddler-back]")
 
-      live |> form("#journey-responses", responses: %{"card_type" => "family"}) |> render_change()
-      html = live |> element("#journey-back") |> render_click()
+      live |> form("#journey form", %{"card_type" => "family"}) |> render_change()
+      html = live |> element("[data-riddler-back]") |> render_click()
 
-      assert has_element?(live, "#name_continue")
-      refute has_element?(live, "#journey-back")
+      assert has_element?(live, key("name_continue"))
+      refute has_element?(live, "[data-riddler-back]")
       refute has_element?(live, "#journey-error")
       assert html =~ ~s(value="Rosa")
       assert html =~ ~s(value="rosa@example.com")
@@ -393,15 +411,15 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     test "a step gone back to moves on again without retyping", %{conn: conn} do
       live = steps_started(conn)
 
-      live |> form("#journey-responses", responses: @name) |> render_change()
-      live |> element("#name_continue") |> render_click()
-      live |> element("#journey-back") |> render_click()
+      live |> form("#journey form", @name) |> render_change()
+      live |> press("name_continue")
+      live |> element("[data-riddler-back]") |> render_click()
 
-      live |> element("#name_continue") |> render_click()
+      live |> press("name_continue")
 
-      refute has_element?(live, "#findings")
-      assert has_element?(live, "#card_continue")
-      assert has_element?(live, "#journey-back")
+      refute has_element?(live, "[data-riddler-finding]")
+      assert has_element?(live, key("card_continue"))
+      assert has_element?(live, "[data-riddler-back]")
     end
 
     # Sabotage: made `load/2` call `Journey.current/1` without the page's
@@ -417,8 +435,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
 
       {:ok, live, _html} = live(conn, "#{@steps_path}&execution=#{execution_id}")
 
-      assert has_element?(live, "#card_continue")
-      assert has_element?(live, "#journey-back")
+      assert has_element?(live, key("card_continue"))
+      assert has_element?(live, "[data-riddler-back]")
     end
 
     # Sabotage: made `path_options/1` answer the signup Path for a key the
@@ -430,7 +448,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
       assert html =~ "unknown_path"
       assert has_element?(live, "#journey-error")
       live |> element("#start-journey") |> render_click()
-      refute has_element?(live, "#journey-responses")
+      refute has_element?(live, "#journey form")
     end
 
     # Sabotage: made `back_offered?/2` in `Journey` answer `true` for every
@@ -441,11 +459,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLiveTest do
     } do
       %{live: live} = started(conn)
 
-      live |> form("#journey-responses", responses: @account) |> render_change()
-      live |> element("#account_continue") |> render_click()
+      live |> form("#journey form", @account) |> render_change()
+      live |> press("account_continue")
 
-      assert has_element?(live, "#plan_back")
-      refute has_element?(live, "#journey-back")
+      assert has_element?(live, key("plan_back"))
+      refute has_element?(live, "[data-riddler-back]")
     end
   end
 end

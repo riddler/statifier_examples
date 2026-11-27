@@ -1007,6 +1007,12 @@ defmodule StatifierExamples.MixDepsTest do
   # of a loop and adds no migration. Sabotage: pointed the requirement
   # expectation back at `"~> 0.26"` and left `mix.exs` alone; the
   # membership assertion went red. Reverted from a copy.
+  #
+  # 2026-11-27: `mix.lock` resolves 0.28.0 under the same `~> 0.27` arm.
+  # 0.28.0 adds an option this app does not name, so it is a lock move
+  # only. Sabotage: pointed the LOCK assertion back at `"0.27.` and left
+  # `mix.lock` alone; it went red reporting the resolved 0.28.0 entry.
+  # Reverted from a copy.
   test "the statifier_persistence dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
@@ -1019,7 +1025,7 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "statifier_persistence": )))
 
     assert lock_line, "statifier_persistence has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.27.)
+    assert lock_line =~ ~s({:hex, :statifier_persistence, "0.28.)
     refute lock_line =~ ":git,"
   end
 
@@ -1313,10 +1319,16 @@ defmodule StatifierExamples.MixDepsTest do
   # this app. Sabotage: pointed the LOCK assertion back at `"0.5.` and
   # left `mix.lock` alone; it went red reporting the resolved 0.6.0 entry.
   # Reverted from a copy.
+  #
+  # 2026-11-27: the requirement moves to `~> 0.9.0`, and `mix.lock`
+  # resolves 0.9.0, past 0.8.0's rename of what riddler answers; `mix.exs`
+  # says what moved here. Sabotage: pointed the LOCK assertion back at
+  # `"0.6.` and left `mix.lock` alone; it went red reporting the resolved
+  # 0.9.0 entry. Reverted from a copy.
   test "the riddler dep is the Hex requirement" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:riddler, "~> 0.6.0"} in deps
+    assert {:riddler, "~> 0.9.0"} in deps
 
     lock_line =
       "mix.lock"
@@ -1325,7 +1337,31 @@ defmodule StatifierExamples.MixDepsTest do
       |> Enum.find(&String.starts_with?(&1, ~s(  "riddler": )))
 
     assert lock_line, "riddler has no mix.lock entry"
-    assert lock_line =~ ~s({:hex, :riddler, "0.6.)
+    assert lock_line =~ ~s({:hex, :riddler, "0.9.)
+    refute lock_line =~ ":git,"
+  end
+
+  # The Journey page's renderer, a Hex requirement from the start and never
+  # a pin. 0.2.0 is the floor: it presents a screen again for what the
+  # reader has typed and not sent, which the signup Path's plan screen
+  # needs.
+  #
+  # Sabotage: pointed the LOCK assertion at `"0.1.` and left `mix.lock`
+  # alone; it went red reporting the resolved 0.2.0 entry. Reverted from a
+  # copy.
+  test "the riddler_live_view dep is the Hex requirement" do
+    deps = Mix.Project.config()[:deps]
+
+    assert {:riddler_live_view, "~> 0.2.0"} in deps
+
+    lock_line =
+      "mix.lock"
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.find(&String.starts_with?(&1, ~s(  "riddler_live_view": )))
+
+    assert lock_line, "riddler_live_view has no mix.lock entry"
+    assert lock_line =~ ~s({:hex, :riddler_live_view, "0.2.)
     refute lock_line =~ ":git,"
   end
 end

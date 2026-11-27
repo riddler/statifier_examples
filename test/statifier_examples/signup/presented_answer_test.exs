@@ -72,8 +72,8 @@ defmodule StatifierExamples.Signup.PresentedAnswerTest do
     # A screen answer with no moves, a node with no key, and a state
     # riddler never answers.
     no_moves = Map.delete(answer, "moves")
-    [first | rest] = answer["screen"]["nodes"]
-    keyless = put_in(answer, ["screen", "nodes"], [Map.delete(first, "key") | rest])
+    [first | rest] = answer["screen"]["elements"]
+    keyless = put_in(answer, ["screen", "elements"], [Map.delete(first, "key") | rest])
     elsewhere = %{"state" => "elsewhere"}
 
     for broken <- [no_moves, keyless, elsewhere] do

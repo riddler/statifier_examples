@@ -145,7 +145,7 @@ defmodule StatifierExamples.Signup.Screens do
     document = admit_screen!(key, title, nodes)
     {:ok, resolved, _diagnostics} = Riddler.Screens.resolve_screen(document, key, datamodel)
 
-    Enum.map(resolved.nodes, &to_node_doc/1)
+    Enum.map(resolved.elements, &to_node_doc/1)
   end
 
   @doc """
@@ -172,7 +172,7 @@ defmodule StatifierExamples.Signup.Screens do
 
       document ->
         match?(
-          {:ok, %{nodes: [_shown]}, _},
+          {:ok, %{elements: [_shown]}, _},
           Riddler.Screens.resolve_screen(document, "shown", datamodel)
         )
     end

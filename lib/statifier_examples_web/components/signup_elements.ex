@@ -18,6 +18,12 @@ defmodule StatifierExamplesWeb.SignupElements do
   declares. Naming the outcome here rather than a screen-specific event is
   what lets the screen Composite wire the same markup to its outcome slots
   without the renderer learning anything about the chart.
+
+  It draws two pages: `/signup-screens`
+  (`StatifierExamplesWeb.SignupScreensLive`) and the screen editor's Try
+  (`StatifierExamplesWeb.ScreenEditorLive`). The Journey page renders
+  through `RiddlerLiveView.Journey` and does not use it, so its raise on
+  an unknown type is not reachable from there.
   """
 
   use Phoenix.Component

@@ -42,7 +42,7 @@ defmodule StatifierExamples.Signup.Validation do
   `{key, message}` - the same key the response lands at (`responses.<key>`,
   ruled by the operator for Riddler, 2026-09-12), so a page can put the
   message beside the input it belongs to without a second lookup, and the
-  order is the document's. The key is riddler's `node_key`; the message is
+  order is the document's. The key is riddler's `element_key`; the message is
   this app's for the two codes a shipped screen can raise (a format finding
   is worded for the format the question names), and riddler's own for any
   other, an out-of-range number among them.
@@ -91,17 +91,41 @@ defmodule StatifierExamples.Signup.Validation do
   """
   @spec validate([Screens.node_doc()], %{optional(String.t()) => term()}) :: [finding()]
   def validate(nodes, responses) when is_list(nodes) and is_map(responses) do
+    formats = formats_by_key(nodes)
+
+    nodes |> refusals(responses) |> Enum.map(&pair(&1, formats))
+  end
+
+  @doc """
+  The same check as `validate/2`, answered as riddler's own findings, for a
+  renderer that draws `Riddler.Finding` structs: each carries, as its
+  `author_message`, the words `validate/2` pairs its key with for the two
+  codes a shipped screen can raise, and keeps riddler's own otherwise.
+
+      iex> nodes = [%{"type" => "text_question", "key" => "email",
+      ...>            "required" => true, "format" => "email"}]
+      iex> [finding] = StatifierExamples.Signup.Validation.check(nodes, %{"email" => "ada"})
+      iex> {finding.code, finding.element_key, finding.author_message}
+      {"response.format", "email", "must look like an email address"}
+  """
+  @spec check([Screens.node_doc()], %{optional(String.t()) => term()}) :: [Finding.t()]
+  def check(nodes, responses) when is_list(nodes) and is_map(responses) do
+    formats = formats_by_key(nodes)
+
+    nodes
+    |> refusals(responses)
+    |> Enum.map(&%{&1 | author_message: reader_message(&1, formats) || &1.author_message})
+  end
+
+  @spec refusals([Screens.node_doc()], %{optional(String.t()) => term()}) :: [Finding.t()]
+  defp refusals(nodes, responses) do
     Enum.each(nodes, &known_format!/1)
 
     document = admit!(nodes)
 
     case Riddler.Screens.validate_screen(document, @screen_key, %{"responses" => responses}) do
-      :ok ->
-        []
-
-      {:error, findings} ->
-        formats = formats_by_key(nodes)
-        Enum.map(findings, &pair(&1, formats))
+      :ok -> []
+      {:error, findings} -> findings
     end
   end
 
@@ -164,15 +188,16 @@ defmodule StatifierExamples.Signup.Validation do
   end
 
   @spec pair(Finding.t(), %{optional(String.t()) => String.t()}) :: finding()
-  defp pair(%Finding{code: "response.required", node_key: key}, _formats),
-    do: {key, "is required"}
+  defp pair(%Finding{element_key: key, message: message} = finding, formats),
+    do: {key, reader_message(finding, formats) || message}
 
-  defp pair(%Finding{code: "response.format", node_key: key} = finding, formats) do
-    case Map.fetch(@format_messages, Map.get(formats, key)) do
-      {:ok, message} -> {key, message}
-      :error -> {key, finding.message}
-    end
-  end
+  # This app's words for the two codes a shipped screen can raise, or nil
+  # where it has none and riddler's are used.
+  @spec reader_message(Finding.t(), %{optional(String.t()) => String.t()}) :: String.t() | nil
+  defp reader_message(%Finding{code: "response.required"}, _formats), do: "is required"
 
-  defp pair(%Finding{node_key: key, message: message}, _formats), do: {key, message}
+  defp reader_message(%Finding{code: "response.format", element_key: key}, formats),
+    do: Map.get(@format_messages, Map.get(formats, key))
+
+  defp reader_message(_finding, _formats), do: nil
 end

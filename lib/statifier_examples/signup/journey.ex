@@ -260,7 +260,11 @@ defmodule StatifierExamples.Signup.Journey do
   nodes back in against the draft (the moduledoc's "What a page draws is
   riddler's answer"). `reason` and `retry_after_ms` are riddler's waiting
   answer's, and `nil` on any other state; `result` is riddler's done
-  answer's, and `nil` on any other state. `back` is riddler's moves'
+  answer's, and `nil` on any other state: a done view always carries a
+  map there, the create-account receipt under `"created"` or an empty
+  map for an execution that stopped before it, never `nil`. `answer` is
+  riddler's answer itself, the one the view was drawn from, for a page
+  that draws it whole. `back` is riddler's moves'
   `"back"` on a `"screen"` view - whether going back from the screen
   would take the execution anywhere - and `false` on any other state.
   `responses` is what the chart
@@ -277,6 +281,7 @@ defmodule StatifierExamples.Signup.Journey do
   """
   @type view :: %{
           :execution_id => String.t(),
+          :answer => Riddler.Journey.answer(),
           :screen => Screens.screen() | nil,
           :nodes => [Screens.node_doc()],
           :datamodel => map(),
@@ -370,10 +375,55 @@ defmodule StatifierExamples.Signup.Journey do
   @spec resolve(view(), %{optional(String.t()) => term()}) :: view()
   def resolve(%{screen: nil} = view, _draft), do: view
 
-  def resolve(%{screen: screen, datamodel: datamodel} = view, draft) when is_map(draft) do
-    merged = merged(datamodel, draft |> coerce() |> Map.drop(secret_keys(screen.nodes)))
+  def resolve(%{screen: screen} = view, draft) when is_map(draft) do
+    merged = drafted(view, draft)
 
     %{view | responses: Map.fetch!(merged, "responses"), nodes: Screens.resolve(screen, merged)}
+  end
+
+  @doc """
+  The screen the execution keyed `execution_id` is parked on, presented
+  again with `draft` - the responses a reader has typed on it and not
+  sent - laid over what the chart has stored: riddler's answer, as
+  `Riddler.Journey.present/3` gives it.
+
+  It is `resolve/2` for a renderer that draws riddler's answer rather than
+  a view: the draft is laid over the datamodel the same way, a secret
+  question's response left out, and the screen is presented whatever the
+  execution's state, as `resolve/2` re-resolves it, so a button the draft
+  reveals is drawn on a page that has not yet learned the execution
+  stopped, and the press is answered as `discarded` by `submit/4`. Nothing
+  is sent and nothing is written. The answer goes through the same
+  presented answer check as every answer a view is drawn from (the
+  moduledoc's "What a page draws is riddler's answer").
+
+  `{:error, :not_on_a_screen}` for an execution resting on no screen, and
+  the refusals `current/2` answers.
+
+  `opts[:screens]` and `opts[:path]` are the screens document and the Path
+  `start/2` was given, when it was given them.
+  """
+  @spec present_draft(String.t(), %{optional(String.t()) => term()}, keyword()) ::
+          {:ok, Riddler.Journey.answer()} | {:error, term()}
+  def present_draft(execution_id, draft, opts \\ [])
+      when is_binary(execution_id) and is_map(draft) and is_list(opts) do
+    with {:ok, {_document, admitted} = screens} <- screens_document(opts),
+         {:ok, {{%Durable{machine_state: state}, run}, path}} <- resume(execution_id, opts),
+         {:ok, settled} <- view(execution_id, run, state, screens, path),
+         {:ok, %{screen: %{key: key}} = on} <- parked_on(settled) do
+      status = {:screen, key, %{"back" => on.back}}
+      {:ok, answer} = Riddler.Journey.present(admitted, status, drafted(on, draft))
+      :ok = check_presented(answer)
+
+      {:ok, answer}
+    end
+  end
+
+  # The datamodel with `draft` laid over its responses: coerced, and with
+  # every secret question's response on the view's screen left out.
+  @spec drafted(view(), %{optional(String.t()) => term()}) :: map()
+  defp drafted(%{screen: screen, datamodel: datamodel}, draft) do
+    merged(datamodel, draft |> coerce() |> Map.drop(secret_keys(screen.nodes)))
   end
 
   @doc """
@@ -623,6 +673,7 @@ defmodule StatifierExamples.Signup.Journey do
       {:ok,
        %{
          execution_id: execution_id,
+         answer: answer,
          screen: key && Screens.screen(document, key),
          nodes: presented_nodes(answer),
          datamodel: datamodel,
@@ -709,6 +760,11 @@ defmodule StatifierExamples.Signup.Journey do
   # answer a Journey test or a page test draws from is checked before it is
   # drawn. Nothing names one outside the tests, and the answer is drawn as
   # riddler gives it.
+  #
+  # Only `Riddler.Journey.present/3` answers are checked: every view's, and
+  # the one `present_draft/3` answers for a draft, which is what the Journey
+  # page draws as a reader types. The nodes `resolve/2` answers are
+  # resolved nodes, not a presented answer, and are not checked.
   @spec check_presented(Riddler.Journey.answer()) :: :ok
   defp check_presented(answer) do
     :statifier_examples
@@ -722,7 +778,7 @@ defmodule StatifierExamples.Signup.Journey do
   defp check_with(check, answer), do: check.check!(answer)
 
   @spec presented_nodes(Riddler.Journey.answer()) :: [Screens.node_doc()]
-  defp presented_nodes(%{"screen" => %{"nodes" => nodes}}), do: nodes
+  defp presented_nodes(%{"screen" => %{"elements" => elements}}), do: elements
   defp presented_nodes(_no_screen), do: []
 
   # The screens document the call reads, decoded and admitted: the one

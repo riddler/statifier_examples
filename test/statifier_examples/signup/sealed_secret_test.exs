@@ -149,7 +149,7 @@ defmodule StatifierExamples.Signup.SealedSecretTest do
       assert {:error, {:seal_secrets, [finding]}} =
                Journey.submit(id, "details_submitted", @details, opts)
 
-      assert {finding.code, finding.node_key} == {"response.seal_failed", "library_pin"}
+      assert {finding.code, finding.element_key} == {"response.seal_failed", "library_pin"}
       assert {:ok, %{screen: %{key: "patron_details"}}} = Journey.current(id, opts)
     end
   end
