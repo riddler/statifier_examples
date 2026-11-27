@@ -10,6 +10,8 @@ defmodule StatifierExamplesWeb.RegistrationJourneyLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias StatifierExamples.Charts.Durable
+
   @path "/signup-journey?path=patron_registration"
 
   @details %{
@@ -82,5 +84,32 @@ defmodule StatifierExamplesWeb.RegistrationJourneyLiveTest do
     assert has_element?(live, "#journey-element-lending_rules-finding-1")
     assert has_element?(live, key("card_finish"))
     refute has_element?(live, "#journey-done")
+  end
+
+  # THE PATRON SCOPE. A registration starts under the patron scope the
+  # visitor's own session id names, the patron it is about to create, and
+  # a visitor of another session is a member of no such scope.
+  #
+  # Sabotage (run): made `JourneyAccess.scopes/1` add the patron scope
+  # `"P-1001"` to every actor's. The second session was drawn the
+  # registration and this went red on the refusal.
+  test "a registration runs under its visitor's patron scope, and no other visitor sees it", %{
+    conn: conn
+  } do
+    {:ok, live, _html} = live(init_test_session(conn, visitor: "P-1001"), @path)
+    live |> element("#start-journey") |> render_click()
+    {:ok, %{query: query}} = live |> assert_patch() |> URI.new()
+    %{"execution" => execution_id} = URI.decode_query(query)
+
+    assert {:ok, %{"kind" => "patron", "id" => "P-1001"}} = Durable.scope(execution_id)
+
+    url = "#{@path}&execution=#{execution_id}"
+    {:ok, other, _html} = live(init_test_session(build_conn(), visitor: "P-2002"), url)
+
+    assert has_element?(other, "#journey-refused[data-riddler-refused]")
+    refute has_element?(other, "#journey form")
+
+    {:ok, again, _html} = live(init_test_session(build_conn(), visitor: "P-1001"), url)
+    assert has_element?(again, key("details_continue"))
   end
 end

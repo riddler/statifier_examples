@@ -31,9 +31,30 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   `StatifierExamplesWeb.SignupElements`, no longer draws this page; the
   screens page and the screen editor's preview still use it.
 
+  ## Who may see it
+
   The access module the component asks before it shows or steps a Journey
-  is `StatifierExamplesWeb.JourneyAccess`, which is interim: every Journey
-  here is answered under one fixed scope (`JourneyHost.scope/0`).
+  is `StatifierExamplesWeb.JourneyAccess`, and the actor it is asked for is
+  the one the page's session names (`JourneyAccess.actor/1`). The page asks
+  it too, before it draws anything of a Journey beside the component:
+  where the actor is not a member of the Journey's scope
+  (`JourneyHost.scope_of/1`), the page draws the one refusal, the sentence
+  the component draws for it, and nothing else of the Journey - no
+  execution id and no collected responses.
+
+  Start starts a Journey under the scope the page's context gives: the
+  kind the Path takes (`JourneyHost.scope_kind/1`), of the actor's own
+  (`JourneyAccess.start_scope/2`), asked of the access module before the
+  host starts it. A visitor who holds no scope of that kind - a visitor
+  who is no librarian, pressing Start on the branch onboarding - is drawn
+  the one refusal and nothing is started.
+
+  An execution id nobody stored is still drawn as
+  `:execution_not_found`, before any scope is asked, as it was before the
+  page asked one; execution ids are random and unguessable. Any other
+  reason a stored execution cannot be drawn is drawn only to a member of
+  its scope, and a visitor who is not one sees the one refusal, so the
+  reason never tells a non-member more than that.
 
   ## What the socket holds, and why none of it is the execution
 
@@ -132,6 +153,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
   use StatifierExamplesWeb, :live_view
 
+  alias Riddler.Journey.Access
   alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Signup.Journey
   alias StatifierExamplesWeb.{JourneyAccess, JourneyHost}
@@ -145,9 +167,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   @receipt_fields [{"email", "Account for"}, {"collected", "Responses collected"}]
 
   @impl Phoenix.LiveView
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     {:ok,
      assign(socket,
+       actor: JourneyAccess.actor(session),
+       refused: false,
        view: nil,
        error: nil,
        topic: nil,
@@ -168,7 +192,13 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
       :error ->
         {:noreply,
-         assign(socket, view: nil, path: nil, opts: [], error: {:unknown_path, params["path"]})}
+         assign(socket,
+           view: nil,
+           refused: false,
+           path: nil,
+           opts: [],
+           error: {:unknown_path, params["path"]}
+         )}
     end
   end
 
@@ -177,12 +207,16 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
     do: {:noreply, socket}
 
   def handle_event("start", _params, socket) do
-    case Journey.start(Durable.new_execution_id(), socket.assigns.opts) do
-      {:ok, execution_id} ->
-        {:noreply, push_patch(socket, to: journey_url(socket.assigns.path, execution_id))}
+    %{path: path, actor: actor} = socket.assigns
 
-      {:error, reason} ->
-        {:noreply, assign(socket, error: reason)}
+    with {:ok, kind} <- JourneyHost.scope_kind(path),
+         {:ok, scope} <- JourneyAccess.start_scope(kind, actor),
+         :ok <- Access.check(JourneyAccess, actor, scope, :present),
+         {:ok, journey, _answer} <- JourneyHost.start(JourneyHost.path_name(path), scope),
+         {:ok, _path, execution_id} <- JourneyHost.parse(journey) do
+      {:noreply, push_patch(socket, to: journey_url(path, execution_id))}
+    else
+      _refused -> {:noreply, refuse(socket)}
     end
   end
 
@@ -225,7 +259,7 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
 
   @impl Phoenix.LiveView
   def render(assigns) do
-    assigns = assign(assigns, component: @component)
+    assigns = assign(assigns, component: @component, refused_text: JourneyAccess.refused_text())
 
     ~H"""
     <Layouts.app flash={@flash}>
@@ -241,7 +275,11 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
           {inspect(@error)}
         </p>
 
-        <p :if={is_nil(@view)} id="no-execution" class="text-base-content/70">
+        <p :if={@refused} id="journey-refused" class="text-base-content/70" data-riddler-refused>
+          {@refused_text}
+        </p>
+
+        <p :if={is_nil(@view) and not @refused} id="no-execution" class="text-base-content/70">
           No execution yet. Press <em>Start a new execution</em>
           and the Path begins at its first screen.
         </p>
@@ -275,6 +313,8 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
             journey={JourneyHost.journey(@path, @root)}
             host={JourneyHost}
             access={JourneyAccess}
+            actor={@actor}
+            refused_text={@refused_text}
             re_present={&JourneyHost.re_present/2}
             waiting_text="The execution is between screens - it is resting on a call this app runs as a job. This page redraws when the job answers."
             done_text="Nothing more to fill in."
@@ -343,22 +383,47 @@ defmodule StatifierExamplesWeb.SignupJourneyLive do
   # Load the execution named in the URL and subscribe to its advances. An execution id
   # nobody stored shows the refusal rather than an empty page, for
   # `StatifierExamplesWeb.EditorLive`'s reason: a page that quietly showed
-  # nothing would be hiding the storage guard doing its job.
+  # nothing would be hiding the storage guard doing its job. A Journey whose
+  # scope the actor is not a member of draws the one refusal and nothing of
+  # the view (the moduledoc's "Who may see it").
   @spec load(Phoenix.LiveView.Socket.t(), String.t() | nil) :: Phoenix.LiveView.Socket.t()
   defp load(socket, execution_id) when is_binary(execution_id) do
     %{path: path, opts: opts} = socket.assigns
 
     with {:ok, {presented, presented_opts}} <- JourneyHost.focus(path, execution_id, opts),
          {:ok, view} <- Journey.current(presented, presented_opts) do
-      socket |> watch(execution_id) |> assign(view: view, error: nil)
+      if member?(socket, execution_id),
+        do: socket |> watch(execution_id) |> assign(view: view, error: nil, refused: false),
+        else: refuse(socket)
     else
-      {:error, reason} -> assign(socket, view: nil, error: reason)
+      {:error, :execution_not_found} ->
+        assign(socket, view: nil, error: :execution_not_found, refused: false)
+
+      {:error, reason} ->
+        if member?(socket, execution_id),
+          do: assign(socket, view: nil, error: reason, refused: false),
+          else: refuse(socket)
     end
   end
 
   # A URL that names no execution draws none: the component is drawn only
   # for the execution the URL names.
-  defp load(socket, _absent), do: assign(socket, view: nil)
+  defp load(socket, _absent), do: assign(socket, view: nil, refused: false)
+
+  # Whether the page's actor may see the Journey of `execution_id`.
+  @spec member?(Phoenix.LiveView.Socket.t(), String.t()) :: boolean()
+  defp member?(socket, execution_id) do
+    %{path: path, actor: actor} = socket.assigns
+
+    case JourneyHost.scope_of(JourneyHost.journey(path, execution_id)) do
+      {:ok, scope} -> Access.check(JourneyAccess, actor, scope, :present) == :ok
+      {:error, :no_such_journey} -> false
+    end
+  end
+
+  # The one refusal, and nothing of the Journey.
+  @spec refuse(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp refuse(socket), do: assign(socket, view: nil, error: nil, refused: true)
 
   @spec watch(Phoenix.LiveView.Socket.t(), String.t()) :: Phoenix.LiveView.Socket.t()
   defp watch(socket, execution_id) do

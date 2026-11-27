@@ -71,7 +71,7 @@ defmodule StatifierExamplesWeb.JourneyHostTest do
     assert {:error, :no_such_journey} = JourneyHost.start("no_such_path", JourneyHost.scope())
   end
 
-  test "the interim access module admits the fixed scope alone, for any actor" do
+  test "the access module admits any actor to the signup Path's scope, and not to a branch" do
     {:ok, elsewhere} = Scope.new("branch", "elsewhere")
 
     assert :ok = Riddler.Journey.Access.check(JourneyAccess, nil, JourneyHost.scope(), :submit)

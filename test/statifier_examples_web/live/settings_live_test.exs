@@ -9,8 +9,25 @@ defmodule StatifierExamplesWeb.SettingsLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Library.Setups
+  alias StatifierExamples.Persistence
   alias StatifierExamples.Signup.Journey
+  alias StatifierPersistence.Execution.Linkage
+  alias StatifierPersistence.Storage
+
+  # The page is a librarian's, and this app has no sign-in: every test here
+  # but the refusal's puts the riverside branch's librarian in its session.
+  setup %{conn: conn} do
+    {:ok, conn: init_test_session(conn, librarian_of: "riverside")}
+  end
+
+  defp execution_count do
+    %{rows: [[count]]} =
+      StatifierExamples.Repo.query!("SELECT count(*) FROM statifier_executions")
+
+    count
+  end
 
   # Each setup's first two steps: the first screen's continue button, what
   # it carries, and the second screen's continue button.
@@ -103,6 +120,42 @@ defmodule StatifierExamplesWeb.SettingsLiveTest do
       refute has_element?(journey, "[data-riddler-back]")
       refute has_element?(journey, "#journey-error")
     end
+  end
+
+  # THE BRANCH SCOPE. A setup started here runs alone - a root execution,
+  # no child of anything - and records the librarian's branch scope.
+  #
+  # Sabotage (run): made the page start the setup under the open scope
+  # every visitor holds. The host refused a scope of the wrong kind, no
+  # redirect came and this went red on the first match.
+  test "Start starts the setup alone under the librarian's branch scope", %{conn: conn} do
+    {:ok, settings, _html} = live(conn, ~p"/settings")
+
+    assert {:error, {:live_redirect, %{to: to}}} =
+             settings |> element("#start-catalogue_sync") |> render_click()
+
+    %{"execution" => execution_id} = to |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+
+    assert {:ok, %{"kind" => "branch", "id" => "riverside"}} = Durable.scope(execution_id)
+
+    {:ok, store} = Storage.new(Persistence, [])
+    {:ok, record} = Storage.fetch_execution(store, execution_id)
+    refute Map.has_key?(record.metadata, Linkage.reserved_key())
+  end
+
+  # Sabotage (run): made the page start the setup under the riverside
+  # branch scope without asking the access module. The setup started, the
+  # page navigated away and this went red on the refute.
+  test "a visitor who is no librarian is refused Start, and nothing is started" do
+    {:ok, settings, _html} = live(build_conn(), ~p"/settings")
+    before = execution_count()
+
+    pressed = settings |> element("#start-catalogue_sync") |> render_click()
+
+    refute match?({:error, {:live_redirect, _to}}, pressed)
+    assert has_element?(settings, "#settings-refused[data-riddler-refused]")
+    assert render(settings) =~ "There is nothing to show here."
+    assert execution_count() == before
   end
 
   # Sabotage: made the start clause's `:error` branch leave the socket as
