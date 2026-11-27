@@ -138,6 +138,52 @@ defmodule StatifierExamples.ScreenEditor.TryTest do
              }
     end
 
+    # Sabotage: took the image block out of the fixture; the details
+    # screen presented no library_logo and this went red, then reverted
+    # from a copy.
+    test "presents the image, divider, link, date, slider and option description the fixture adds" do
+      {:ok, document} =
+        "priv/fixtures/patron_registration_screens.json" |> File.read!() |> Document.from_json()
+
+      {:ok, %{execution_id: execution_id, opts: opts}} = Try.start(document)
+      {:ok, details} = Journey.current(execution_id, opts)
+      details_nodes = Map.new(details.nodes, &{&1["key"], &1})
+
+      assert %{
+               "type" => "image",
+               "src" => "/images/logo.svg",
+               "alt" => "Riverbend Public Library"
+             } =
+               details_nodes["library_logo"]
+
+      assert %{"type" => "divider"} = details_nodes["details_divider"]
+
+      assert %{"type" => "text_question", "format" => "date"} =
+               birth = details_nodes["birth_date"]
+
+      refute Map.has_key?(birth, "checks")
+
+      responses = %{
+        "first_name" => "Rosa",
+        "email" => "rosa@example.com",
+        "age" => "34",
+        "birth_date" => "1990-04-17",
+        "library_pin" => "1234"
+      }
+
+      {:ok, card} = Journey.submit(execution_id, "details_submitted", responses, opts)
+      card_nodes = Map.new(card.nodes, &{&1["key"], &1})
+
+      assert %{"type" => "link", "href" => "https://library.example.com/lending-rules"} =
+               card_nodes["rules_link"]
+
+      assert %{"style" => "slider", "step" => 1, "min" => 1, "max" => 20} =
+               card_nodes["items_at_once"]
+
+      assert %{"value" => "student", "description" => "For patrons in full-time education" <> _} =
+               card_nodes["card_type"]["answer_options"] |> List.last()
+    end
+
     # Sabotage: made walk/1 answer the walk's refusals unwrapped; the
     # {:walk, _} match went red, then reverted.
     test "refuses a document the walk refuses, starting nothing" do

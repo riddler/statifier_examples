@@ -23,6 +23,19 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
   key-shaped and so never holds an `=`, while a label may hold anything.
   Each value is checked here as the document will check it: key-shaped,
   and unique within the question.
+
+  ## `option_descriptions`, one row per described option
+
+  An option may carry a `description`, a line a renderer shows under its
+  label - what a family card covers, say. A row of `answer_options` already
+  splits at its first `=` and its label may hold anything, so a description
+  has rows of its own, each written `value=Description` - `family=For two
+  adults and their children` - naming an option of the question once. The
+  walk puts each description on its option and leaves the field itself out
+  of the document, which has no such field.
+
+  `checks` are the question's own conditions, one row each
+  (`StatifierExamples.ScreenEditor.Element.checks_field/0`).
   """
 
   use StatifierBlocks.BlockType
@@ -38,12 +51,20 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
         Element.field("label", :string, "Label", true, ""),
         Element.field("select", {:select, @selects}, "Select", true, "one"),
         Element.field("answer_options", {:list, :string}, "Answer options", true, []),
+        Element.field(
+          "option_descriptions",
+          {:list, :string},
+          "Option descriptions",
+          false,
+          []
+        ),
         Element.field("style", :string, "Style", false, ""),
         Element.field("help", :string, "Help", false, ""),
         Element.field("default", :string, "Default", false, ""),
         Element.field("required", :boolean, "Required", false, false),
         Element.field("min_selections", :integer, "Min selections", false, nil),
-        Element.field("max_selections", :integer, "Max selections", false, nil)
+        Element.field("max_selections", :integer, "Max selections", false, nil),
+        Element.checks_field()
       ]
   end
 
@@ -54,7 +75,9 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
     Element.validate(
       config,
       Element.present(config, "label", "a question needs the label a patron is asked") ++
-        option_findings(options) ++ selection_findings(config, options)
+        option_findings(options) ++
+        description_findings(Map.get(config, "option_descriptions"), options) ++
+        selection_findings(config, options) ++ Element.check_findings(config)
     )
   end
 
@@ -97,6 +120,37 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
     end
   end
 
+  @doc """
+  The descriptions `rows` give the options valued `values`, by value, or
+  `:error` when a row is not `value=Description`, names no option of
+  `values`, or names one a second time.
+
+      iex> StatifierExamples.ScreenEditor.ChoiceQuestion.option_descriptions(
+      ...>   ["family=For two adults"],
+      ...>   ["standard", "family"]
+      ...> )
+      {:ok, %{"family" => "For two adults"}}
+
+      iex> StatifierExamples.ScreenEditor.ChoiceQuestion.option_descriptions(["student=Ages 12 to 18"], ["standard"])
+      :error
+  """
+  @spec option_descriptions([String.t()], [String.t()]) ::
+          {:ok, %{String.t() => String.t()}} | :error
+  def option_descriptions(rows, values) when is_list(rows) and is_list(values) do
+    Enum.reduce_while(rows, {:ok, %{}}, fn row, {:ok, acc} ->
+      case row_pair(row) do
+        {:ok, pair} -> describe(pair, values, acc)
+        :error -> {:halt, :error}
+      end
+    end)
+  end
+
+  defp describe({value, description}, values, acc) do
+    if value in values and not is_map_key(acc, value),
+      do: {:cont, {:ok, Map.put(acc, value, description)}},
+      else: {:halt, :error}
+  end
+
   defp row_pair(row) when is_binary(row) do
     case String.split(row, "=", parts: 2) do
       [value, label] when label != "" -> {:ok, {value, label}}
@@ -115,6 +169,28 @@ defmodule StatifierExamples.ScreenEditor.ChoiceQuestion do
 
   defp option_findings(_none),
     do: [{"answer_options", "a choice question needs at least one option"}]
+
+  defp description_findings(blank, _options) when blank in [nil, []], do: []
+
+  defp description_findings(rows, options) when is_list(rows) do
+    values =
+      case answer_options(List.wrap(options)) do
+        {:ok, pairs} -> Enum.map(pairs, &elem(&1, 0))
+        :error -> []
+      end
+
+    case option_descriptions(rows, values) do
+      {:ok, _descriptions} -> []
+      :error -> [description_finding()]
+    end
+  end
+
+  defp description_findings(_other, _options), do: [description_finding()]
+
+  defp description_finding do
+    {"option_descriptions",
+     "each description is written value=Description, naming an option of the question once"}
+  end
 
   defp value_findings(values) do
     cond do

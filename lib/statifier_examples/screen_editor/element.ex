@@ -35,6 +35,7 @@ defmodule StatifierExamples.ScreenEditor.Element do
   alias StatifierBlocks.Core.Emit
 
   @key_shape ~r/\A[a-z][a-z0-9_]*\z/
+  @check_code ~r/\Acheck(\.[a-z][a-z0-9_]*)+\z/
 
   @doc """
   The `key` and `condition` field declarations, in that order, ahead of a
@@ -95,6 +96,91 @@ defmodule StatifierExamples.ScreenEditor.Element do
       _absent -> [{field, message}]
     end
   end
+
+  @doc """
+  The `checks` field every question type declares after its own fields:
+  conditions a patron's response has to satisfy, one row per check.
+
+  The document holds `checks` as a list of objects - `condition`, `code`
+  and `message` - and the editor's field types have no list of objects. So
+  each row is written `code: condition => message`, split at its first `:`
+  and then at the first ` => ` after it: `check.birth_date_in_future:
+  trim(responses.birth_date)::date <= context.today::date => A date of
+  birth cannot be in the future.` That is unambiguous for the code, which
+  is `check.` and key-shaped segments and so never holds a `:`, and for a
+  condition outside its string literals, where ` => ` is no operator; a
+  condition whose string literal holds ` => ` cannot be written this way.
+  """
+  @spec checks_field() :: BlockType.field_decl()
+  def checks_field, do: field("checks", {:list, :string}, "Checks", false, [])
+
+  @doc """
+  The check objects `rows` hold, in order, or `:error` when a row is not
+  `code: condition => message` with a code in the `check.` shape.
+
+      iex> StatifierExamples.ScreenEditor.Element.checks(["check.adult: responses.age >= 18 => You must be 18."])
+      {:ok, [%{"code" => "check.adult", "condition" => "responses.age >= 18", "message" => "You must be 18."}]}
+
+      iex> StatifierExamples.ScreenEditor.Element.checks(["adult: responses.age >= 18 => You must be 18."])
+      :error
+  """
+  @spec checks([String.t()]) :: {:ok, [%{String.t() => String.t()}]} | :error
+  def checks(rows) when is_list(rows) do
+    rows
+    |> Enum.reduce_while({:ok, []}, fn row, {:ok, acc} ->
+      case check_row(row) do
+        {:ok, check} -> {:cont, {:ok, [check | acc]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, checks} -> {:ok, Enum.reverse(checks)}
+      :error -> :error
+    end
+  end
+
+  @doc """
+  The findings on a question's `checks` rows: each row readable, and each
+  code used once on the question, as the document will hold them.
+  """
+  @spec check_findings(Block.config()) :: [BlockType.finding()]
+  def check_findings(config) do
+    case Map.get(config, "checks") do
+      blank when blank in [nil, []] ->
+        []
+
+      rows when is_list(rows) ->
+        case checks(rows) do
+          {:ok, checks} -> unique_code_findings(Enum.map(checks, & &1["code"]))
+          :error -> [{"checks", "each check is written check.<name>: condition => message"}]
+        end
+
+      _other ->
+        [{"checks", "each check is written check.<name>: condition => message"}]
+    end
+  end
+
+  defp unique_code_findings(codes) do
+    if Enum.uniq(codes) == codes,
+      do: [],
+      else: [{"checks", "each check's code is used once on the question"}]
+  end
+
+  defp check_row(row) when is_binary(row) do
+    with [code, rest] <- String.split(row, ":", parts: 2),
+         code = String.trim(code),
+         true <- Regex.match?(@check_code, code),
+         [condition, message] <- String.split(rest, " => ", parts: 2),
+         condition = String.trim(condition),
+         message = String.trim(message),
+         true <- condition != "" and message != "" do
+      {:ok, %{"condition" => condition, "code" => code, "message" => message}}
+    else
+      _not_a_check -> :error
+    end
+  end
+
+  defp check_row(_row), do: :error
 
   @doc "The inert state a leaf element compiles to: entered, and done at once."
   @spec emit_leaf(Context.t()) :: {:ok, StatifierBlocks.Emission.t()}

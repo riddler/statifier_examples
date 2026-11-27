@@ -112,6 +112,93 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
                Enum.find(elements, &(&1["key"] == "card_notice"))
     end
 
+    # Sabotage: made described/2 drop the descriptions; the student
+    # option came out with no description, then reverted from a copy.
+    # Sabotage: made step/1 leave the step as its text; the slider match
+    # went red, then reverted from a copy.
+    test "walks each newer element and field into riddler's shape" do
+      {:ok, walked} = Walk.screen_document(registration())
+      [details, card] = walked["screens"]
+      by_key = fn screen -> Map.new(screen["elements"], &{&1["key"], &1}) end
+
+      details = by_key.(details)
+      card = by_key.(card)
+
+      assert details["library_logo"] == %{
+               "type" => "image",
+               "key" => "library_logo",
+               "src" => "/images/logo.svg",
+               "alt" => "Riverbend Public Library",
+               "size" => "small"
+             }
+
+      assert details["details_divider"] == %{"type" => "divider", "key" => "details_divider"}
+
+      assert %{
+               "format" => "date",
+               "min" => "1900-01-01",
+               "checks" => [
+                 %{
+                   "code" => "check.birth_date_in_future",
+                   "condition" => "trim(responses.birth_date)::date <= context.today::date",
+                   "message" => "A date of birth cannot be in the future."
+                 }
+               ]
+             } = details["birth_date"]
+
+      assert %{"style" => "slider", "step" => 1, "min" => 1, "max" => 20} =
+               card["items_at_once"]
+
+      assert card["rules_link"] == %{
+               "type" => "link",
+               "key" => "rules_link",
+               "label" => "Read the lending rules",
+               "href" => "https://library.example.com/lending-rules"
+             }
+
+      options = card["card_type"]["answer_options"]
+      refute Map.has_key?(card["card_type"], "option_descriptions")
+      assert [%{"value" => "standard"} = standard, _family, student] = options
+      refute Map.has_key?(standard, "description")
+
+      assert student["description"] ==
+               "For patrons in full-time education, with a longer loan period"
+    end
+
+    # Sabotage: took the checks row off the fixture's date of birth
+    # question; the future date answered :ok, then reverted from a copy.
+    test "holds the date of birth to its check, decided against the host's today" do
+      {:ok, walked} = Walk.screen_document(registration())
+      {:ok, document} = Screens.admit(walked)
+
+      answered = %{
+        "first_name" => "Rosa",
+        "email" => "rosa@example.com",
+        "age" => "34",
+        "library_pin" => "1234"
+      }
+
+      root = fn birth_date ->
+        %{
+          "responses" => Map.put(answered, "birth_date", birth_date),
+          "context" => %{"today" => "2026-11-27"}
+        }
+      end
+
+      assert {:error, [finding]} =
+               Riddler.Screens.validate_screen(document, "patron_details", root.("2031-04-17"))
+
+      assert %Riddler.Finding{
+               code: "check.birth_date_in_future",
+               element_key: "birth_date",
+               field: "checks",
+               author_message: "A date of birth cannot be in the future."
+             } = finding
+
+      assert :ok =
+               Riddler.Screens.validate_screen(document, "patron_details", root.("1990-04-17"))
+    end
+
     test "is a document the screen palette authors, with no finding" do
       document = registration()
       schema = ScreenEditor.palette() |> Schema.for_palette() |> ExJsonSchema.Schema.resolve()
@@ -221,6 +308,46 @@ defmodule StatifierExamples.ScreenEditor.WalkTest do
 
       assert {:error, [{"blk_walk_nested", _}, {"blk_walk_wait", _}, {"blk_walk_stray", _}]} =
                Walk.screen_document(Document.new(root, id: "sdoc_walk"))
+    end
+
+    # Sabotage: made checks/1 keep the rows as written; the checks case
+    # answered :ok, then reverted from a copy.
+    test "a check row, an option description or a step it cannot read" do
+      choice = %{
+        "label" => "Card",
+        "select" => "one",
+        "answer_options" => ["standard=Standard card"],
+        "option_descriptions" => ["student=Ages 12 to 18"]
+      }
+
+      cases = [
+        element("text_question", "age", %{"label" => "Age", "checks" => ["responses.age > 0"]}),
+        element("choice_question", "card", choice),
+        element("text_question", "items", %{"label" => "Items", "step" => "one"})
+      ]
+
+      for block <- cases do
+        assert {:error, [{id, _message}]} = Walk.screen_document(one_screen([block]))
+        assert id == block.id
+      end
+    end
+
+    # Sabotage: made bounds/1 convert a date bound like a number; the walk
+    # refused the date question, then reverted from a copy.
+    test "keeps a date or time bound as the text it is" do
+      for {format, min} <- [
+            {"date", "1900-01-01"},
+            {"time", "09:00"},
+            {"datetime", "2026-01-01T09:00:00Z"}
+          ] do
+        question = %{"label" => "When", "format" => format, "min" => min}
+
+        assert {:ok, walked} =
+                 Walk.screen_document(one_screen([element("text_question", "when", question)]))
+
+        assert %{"min" => ^min} =
+                 walked |> Map.fetch!("screens") |> hd() |> Map.fetch!("elements") |> hd()
+      end
     end
 
     # Sabotage: made options/1 pass an unreadable option row through; the

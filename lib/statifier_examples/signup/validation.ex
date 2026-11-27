@@ -31,7 +31,8 @@ defmodule StatifierExamples.Signup.Validation do
 
   The one rule this module keeps is which formats a document may ask for.
   Riddler checks more than one, and this app has a reader-facing message
-  for `email`, `integer` and `number` alone, so a `text_question` naming
+  for `email`, `integer` and `number`, and for the date and time formats
+  `date`, `time` and `datetime`, alone, so a `text_question` naming
   any other format **raises**, for `StatifierExamplesWeb.SignupElements`'
   reason about an unknown element type: a check this app cannot explain to a reader is a
   screen that cannot be finished, which is worse than a page that will not
@@ -63,7 +64,10 @@ defmodule StatifierExamples.Signup.Validation do
   @format_messages %{
     "email" => "must look like an email address",
     "integer" => "must be a whole number",
-    "number" => "must be a number"
+    "number" => "must be a number",
+    "date" => "must be a date, written YYYY-MM-DD",
+    "time" => "must be a time, written HH:MM",
+    "datetime" => "must be a date and time, written YYYY-MM-DDTHH:MM:SS with Z or an offset"
   }
   @formats Map.keys(@format_messages) |> Enum.sort()
 
@@ -135,7 +139,7 @@ defmodule StatifierExamples.Signup.Validation do
   moduledoc).
 
       iex> StatifierExamples.Signup.Validation.formats()
-      ["email", "integer", "number"]
+      ["date", "datetime", "email", "integer", "number", "time"]
   """
   @spec formats() :: [String.t()]
   def formats, do: @formats
