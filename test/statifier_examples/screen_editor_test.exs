@@ -103,6 +103,8 @@ defmodule StatifierExamples.ScreenEditorTest do
       assert names(candidates, "link", "style") == ~w(inline button)
     end
 
+    # Sabotage: dropped "time" from the text question's format choices;
+    # the choices assertion went red, then reverted from a copy.
     test "offers the date and time formats as choices of a text question's format" do
       assert %{type: {:select, formats}} = field("text_question", "format")
 
