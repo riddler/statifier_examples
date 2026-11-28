@@ -409,6 +409,23 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       assert log =~ ~s(Last message: %Phoenix.Socket.Message{)
       assert log =~ ~s("responses" => "[FILTERED]")
     end
+
+    # Sabotage: made wait_for_crash_report/1 return at once; the capture
+    # closed before the slow process had logged its report, then
+    # reverted.
+    test "the wait holds the capture open for a report that is logged late" do
+      log =
+        debug_log(fn ->
+          {:ok, pid} =
+            GenServer.start(StatifierExamplesWeb.ScreenEditorLiveTest.SlowCrashing, nil)
+
+          send(pid, :crash)
+          wait_for_crash_report(pid)
+        end)
+
+      assert log =~ "terminating"
+      assert log =~ "the page crashed slowly"
+    end
   end
 
   defmodule Crashing do
@@ -420,6 +437,22 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
 
     @impl true
     def handle_info(_message, _state), do: raise("the page crashed")
+  end
+
+  # Crashes, then takes its time in terminate/2, which runs before the crash
+  # report is logged: a report that lands late, on demand.
+  defmodule SlowCrashing do
+    @moduledoc false
+    use GenServer
+
+    @impl true
+    def init(state), do: {:ok, state}
+
+    @impl true
+    def handle_info(_message, _state), do: raise("the page crashed slowly")
+
+    @impl true
+    def terminate(_reason, _state), do: Process.sleep(200)
   end
 
   defmodule RaisingSealer do
@@ -482,6 +515,11 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
   # it exits, so the report is in the capture once the process is down. The
   # wait is on that exit, by a monitor, and bounded: a process that never
   # goes down fails here, by name, rather than as a missing line later.
+  # The wait is pinned by the slow crash test, which logs its report late
+  # on purpose. The calls in the tests above are not each pinned: the
+  # report of a real page crash cannot be slowed on demand, so a call
+  # dropped from one of them still passes here and stays a robustness
+  # measure against a slow machine.
   defp wait_for_crash_report(pid) do
     ref = Process.monitor(pid)
 
