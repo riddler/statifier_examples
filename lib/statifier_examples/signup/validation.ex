@@ -31,12 +31,12 @@ defmodule StatifierExamples.Signup.Validation do
 
   The one rule this module keeps is which formats a document may ask for.
   Riddler checks more than one, and this app has a reader-facing message
-  for `email`, `integer` and `number`, and for the date and time formats
-  `date`, `time` and `datetime`, alone, so a `text_question` naming
-  any other format **raises**, for `StatifierExamplesWeb.SignupElements`'
-  reason about an unknown element type: a check this app cannot explain to a reader is a
-  screen that cannot be finished, which is worse than a page that will not
-  draw.
+  for `email`, `phone`, `pattern`, `integer` and `number`, and for the date
+  and time formats `date`, `time` and `datetime`, alone, so a
+  `text_question` naming any other format **raises**, for
+  `StatifierExamplesWeb.SignupElements`' reason about an unknown element
+  type: a check this app cannot explain to a reader is a screen that cannot
+  be finished, which is worse than a page that will not draw.
 
   ## A question's own checks, against the host's context
 
@@ -77,6 +77,8 @@ defmodule StatifierExamples.Signup.Validation do
   # See the moduledoc.
   @format_messages %{
     "email" => "must look like an email address",
+    "phone" => "must be a phone number, with at least seven digits",
+    "pattern" => "must be written in the form this question asks for",
     "integer" => "must be a whole number",
     "number" => "must be a number",
     "date" => "must be a date, written YYYY-MM-DD",
@@ -186,7 +188,7 @@ defmodule StatifierExamples.Signup.Validation do
   moduledoc).
 
       iex> StatifierExamples.Signup.Validation.formats()
-      ["date", "datetime", "email", "integer", "number", "time"]
+      ["date", "datetime", "email", "integer", "number", "pattern", "phone", "time"]
   """
   @spec formats() :: [String.t()]
   def formats, do: @formats
@@ -246,6 +248,10 @@ defmodule StatifierExamples.Signup.Validation do
   # where it has none and riddler's are used.
   @spec reader_message(Finding.t(), %{optional(String.t()) => String.t()}) :: String.t() | nil
   defp reader_message(%Finding{code: "response.required"}, _formats), do: "is required"
+
+  # A pattern question declaring no pattern is the author's defect, not the
+  # reader's: riddler's own sentence says so and is kept.
+  defp reader_message(%Finding{code: "response.format", field: "pattern"}, _formats), do: nil
 
   defp reader_message(%Finding{code: "response.format", element_key: key}, formats),
     do: Map.get(@format_messages, Map.get(formats, key))

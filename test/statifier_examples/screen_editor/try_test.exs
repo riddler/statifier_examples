@@ -86,6 +86,23 @@ defmodule StatifierExamples.ScreenEditor.TryTest do
       assert done.screen == nil
     end
 
+    # Sabotage: made explained_formats/1 find no unsupported format; the
+    # Try started on the question and the refusal match went red, then
+    # reverted from a copy. The editor's own format choices are all
+    # worded, so the document is built here, as a hand-written one would be.
+    test "refuses a text question naming a format with no message, starting nothing" do
+      screen =
+        screen("blk_try_card", "card_choice", "Your card", [
+          element("text_question", "postcode", %{"label" => "Postcode", "format" => "postcode"}),
+          element("button", "card_next", %{"label" => "Continue", "outcome" => "card_chosen"})
+        ])
+
+      root = Block.new("core.sequence", id: "blk_try_doc_root", slots: %{"body" => [screen]})
+      document = Document.new(root, id: "doc_unsupported_format")
+
+      assert Try.start(document) == {:error, {:unsupported_format, ["postcode"]}}
+    end
+
     # Sabotage: dropped "integer" from Validation's formats; Try.start/1
     # refused the fixture as {:unsupported_format, ["age"]}, then reverted
     # from a copy.

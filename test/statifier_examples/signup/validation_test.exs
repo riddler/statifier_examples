@@ -104,9 +104,45 @@ defmodule StatifierExamples.Signup.ValidationTest do
     # The moduledoc's argument: a document asking for a check nobody runs is
     # a document that silently accepts anything.
     test "a format this module does not implement raises" do
-      assert_raise ArgumentError, ~r/no check for format "phone"/, fn ->
-        Validation.validate([question(%{"format" => "phone"})], %{"q" => "x"})
+      assert_raise ArgumentError, ~r/no check for format "postcode"/, fn ->
+        Validation.validate([question(%{"format" => "postcode"})], %{"q" => "x"})
       end
+    end
+
+    # Sabotage: put the phone message as "is invalid"; this test went red,
+    # then reverted from a copy.
+    test "phone is put in its own words" do
+      nodes = [question(%{"format" => "phone"})]
+      message = "must be a phone number, with at least seven digits"
+
+      for typo <- ["call me", "555", "12-34"] do
+        assert Validation.validate(nodes, %{"q" => typo}) == [{"q", message}]
+      end
+
+      assert Validation.validate(nodes, %{"q" => "555-0187"}) == []
+    end
+
+    # Sabotage: removed the field "pattern" clause of reader_message/2; the
+    # author's defect read as the reader's message and this test went red,
+    # then reverted from a copy.
+    test "a pattern question declaring no pattern keeps riddler's sentence" do
+      nodes = [question(%{"format" => "pattern"})]
+
+      assert [{"q", message}] = Validation.validate(nodes, %{"q" => "x"})
+      assert message =~ "declares none"
+    end
+
+    # Sabotage: put the pattern message as "is invalid"; this test went red,
+    # then reverted from a copy.
+    test "pattern is put in its own words" do
+      nodes = [question(%{"format" => "pattern", "pattern" => "[0-9]{4}"})]
+      message = "must be written in the form this question asks for"
+
+      for typo <- ["12", "12345", "abcd"] do
+        assert Validation.validate(nodes, %{"q" => typo}) == [{"q", message}]
+      end
+
+      assert Validation.validate(nodes, %{"q" => "1234"}) == []
     end
   end
 
