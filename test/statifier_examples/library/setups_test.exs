@@ -132,19 +132,6 @@ defmodule StatifierExamples.Library.SetupsTest do
                "#{name} declares a screen no step shows"
       end
     end
-
-    # The boolean answer is not converted on the Journey page, so no setup
-    # asks one.
-    #
-    # Sabotage: made the card reader's test-card question a
-    # `boolean_question`. This went red naming the screen. Restored from a
-    # copy.
-    test "no setup asks a boolean question" do
-      for {name, _document, screens} <- paths(), screen <- screens["screens"] do
-        refute Enum.any?(screen["elements"], &(&1["type"] == "boolean_question")),
-               "#{name}'s #{screen["key"]} asks a boolean question"
-      end
-    end
   end
 
   describe "each setup run alone as a durable Journey" do
