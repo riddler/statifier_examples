@@ -10,6 +10,8 @@ defmodule StatifierExamples.Library.OnboardingTest do
 
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias Ecto.Adapters.SQL.Sandbox
   alias Statifier.Machine.Identity
   alias StatifierBlocks.Compiled
@@ -211,6 +213,38 @@ defmodule StatifierExamples.Library.OnboardingTest do
       assert [_first, _second, _third] = children(id)
       assert {:ok, {^newest, opts}} = Onboarding.focus(id)
       assert opts[:child]
+    end
+
+    # Sabotage: made `pass_order/1` read an unparseable suffix as the first
+    # pass without logging it. This test went red: no warning was captured.
+    test "a child id whose pass suffix does not parse is logged and read as the first pass" do
+      id = start()
+      {:ok, _view} = pick(id, ["bdoc_catalogue_sync"])
+      first = first_child(id)
+
+      {:ok, %Compiled{} = compiled} = Onboarding.resolve_chart("bdoc_catalogue_sync", %{})
+      {:ok, setup} = Setups.fetch_document("bdoc_catalogue_sync")
+      {:ok, {durable, _run}} = Durable.resume(compiled, setup, first)
+      {:ok, %{metadata: metadata}} = Storage.fetch_execution(store(), first)
+      assert {:ok, linkage} = Linkage.from_metadata(metadata)
+
+      stray = Linkage.child_execution_id(id, "blk_bo_setup", 0, "not-a-pass")
+
+      assert {:ok, _execution, _state} =
+               Executions.create(store(), stray, durable.machine,
+                 executor: fn _effect, _context -> :ok end,
+                 serialization: {ExecutionLock, ExecutionLock},
+                 linkage: linkage
+               )
+
+      log =
+        capture_log(fn ->
+          assert {:ok, {picked, _opts}} = Onboarding.focus(id)
+          assert picked in [first, stray]
+        end)
+
+      assert log =~ stray
+      assert log =~ "read as the first pass"
     end
 
     # The moduledoc and the fixture's description say the setups run in the
