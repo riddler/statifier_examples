@@ -83,6 +83,8 @@ defmodule StatifierExamples.Library.Onboarding do
 
   use StatifierBlocks.Runtime.Subchart
 
+  require Logger
+
   alias Statifier.Invoke.Handler
   alias Statifier.Machine.Identity
   alias StatifierBlocks.{Compiled, Decode, Document, Palette}
@@ -185,15 +187,41 @@ defmodule StatifierExamples.Library.Onboarding do
           StatifierPersistence.Execution.t()
   defp newest_pass(children), do: Enum.max_by(children, &pass_order(&1.execution_id))
 
+  # `statifier_persistence` exposes no function that reads a pass back out of
+  # a child id, so the suffix is parsed here. An id with no `@` is the first
+  # pass's. An id with an `@` whose suffix is not `<macrostep>.<round>` is
+  # read as the first pass too, but is logged: the id shape changed, and the
+  # pick would otherwise degrade without a sign.
   @spec pass_order(String.t()) :: {integer(), integer()}
   defp pass_order(child_id) do
-    with [_first, invocation] <- String.split(child_id, "@", parts: 2),
-         [macrostep, round] <- String.split(invocation, ".", parts: 2),
+    case String.split(child_id, "@", parts: 2) do
+      [_first_pass] ->
+        {-1, -1}
+
+      [_first, invocation] ->
+        case parse_invocation(invocation) do
+          {:ok, order} ->
+            order
+
+          :error ->
+            Logger.warning(
+              "onboarding child #{child_id} has a pass suffix that is not " <>
+                "<macrostep>.<round>; read as the first pass"
+            )
+
+            {-1, -1}
+        end
+    end
+  end
+
+  @spec parse_invocation(String.t()) :: {:ok, {integer(), integer()}} | :error
+  defp parse_invocation(invocation) do
+    with [macrostep, round] <- String.split(invocation, ".", parts: 2),
          {macrostep, ""} <- Integer.parse(macrostep),
          {round, ""} <- Integer.parse(round) do
-      {macrostep, round}
+      {:ok, {macrostep, round}}
     else
-      _first_pass -> {-1, -1}
+      _unparseable -> :error
     end
   end
 
