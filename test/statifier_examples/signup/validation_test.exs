@@ -9,6 +9,7 @@ defmodule StatifierExamples.Signup.ValidationTest do
 
   use ExUnit.Case, async: true
 
+  alias Riddler.Finding
   alias StatifierExamples.Signup.{Screens, Validation}
 
   doctest Validation
@@ -170,6 +171,39 @@ defmodule StatifierExamples.Signup.ValidationTest do
       nodes = Screens.resolve(Screens.screen("plan"), %{"responses" => %{"seats" => 1}})
 
       assert Validation.validate(nodes, %{}) == []
+    end
+  end
+
+  describe "a question's checks" do
+    defp dated do
+      question(%{
+        "format" => "date",
+        "checks" => [
+          %{
+            "code" => "check.not_after_today",
+            "condition" => "responses.q::date <= context.today::date",
+            "message" => "cannot be after today"
+          }
+        ]
+      })
+    end
+
+    # Sabotage: made refusals/3 leave the context out of the root; the
+    # future date answered [] and this went red, then reverted from a copy.
+    test "are decided against the context they are handed, in the author's words" do
+      today = %{"today" => "2026-11-27"}
+
+      assert Validation.validate([dated()], %{"q" => "2026-11-28"}, today) ==
+               [{"q", "cannot be after today"}]
+
+      assert [%Finding{code: "check.not_after_today", author_message: "cannot be after today"}] =
+               Validation.check([dated()], %{"q" => "2026-11-28"}, today)
+
+      assert Validation.validate([dated()], %{"q" => "2026-11-27"}, today) == []
+    end
+
+    test "decide nothing without a context, and raise nothing" do
+      assert Validation.validate([dated()], %{"q" => "2999-01-01"}) == []
     end
   end
 end
