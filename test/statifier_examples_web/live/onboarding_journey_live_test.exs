@@ -86,8 +86,9 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     {live, execution_id}
   end
 
-  # Sabotage: made `path_options/1` answer `:error` for the onboarding key.
-  # The page refused the Path and this went red. Reverted from a copy.
+  # Sabotage: made `JourneyHost.path_options/1` answer `:error` for the
+  # onboarding key. The host refused the Path, the page drew its error
+  # and no screen and this went red. Reverted from a copy.
   test "the page runs the branch onboarding and starts on its first screen", %{conn: conn} do
     {live, _execution_id} = started(conn)
 
@@ -96,9 +97,10 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     refute has_element?(live, "#journey-error")
   end
 
-  # Sabotage: made `focus/2` answer the named execution with the page's
-  # options for every Path. The page drew the onboarding resting on its
-  # subchart, with no screen, and this went red. Reverted from a copy.
+  # Sabotage: made `JourneyHost.focus/3` answer the named execution with
+  # the page's options for every Path. The page drew the onboarding resting
+  # on its subchart, with no screen, and this went red. Reverted from a
+  # copy.
   test "a pick presents the first picked setup's screen, the child's own", %{conn: conn} do
     {live, execution_id} = picked(conn, ["bdoc_catalogue_sync", "bdoc_card_reader_setup"])
 
@@ -109,9 +111,10 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     refute has_element?(live, "[data-riddler-back]")
   end
 
-  # Sabotage: made `target/1` answer the execution on the URL with the
-  # page's options for every Path. The press went to the onboarding
-  # execution, which was refused, and this went red. Reverted from a copy.
+  # Sabotage: made `JourneyHost.target/1` answer the execution on the URL
+  # with the page's options for every Path. The press went to the
+  # onboarding execution rather than the setup, the next setup's screen
+  # never came and this went red. Reverted from a copy.
   test "presses go to the child, and a finished setup moves on to the next pick", %{conn: conn} do
     {live, _execution_id} = picked(conn, ["bdoc_catalogue_sync", "bdoc_card_reader_setup"])
 
@@ -124,9 +127,10 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     refute has_element?(live, "#journey-error")
   end
 
-  # Sabotage: dropped `refocus/1` from the outcome clause. After the pick
-  # the page kept the onboarding's own view, resting on its subchart with
-  # no screen, and this went red. Reverted from a copy.
+  # Sabotage: made `JourneyHost.stepped/3` tell the press's own view for the
+  # onboarding too, so the focus was not asked again after a press. The
+  # page never drew the closing screen and this went red. Reverted from a
+  # copy.
   test "after the last pick finishes, the onboarding shows its closing screen", %{conn: conn} do
     {live, _execution_id} = picked(conn, ["bdoc_card_reader_setup"])
 
@@ -141,9 +145,10 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     assert has_element?(live, "#journey-done")
   end
 
-  # Sabotage: made the back clause send the back request to the execution
-  # on the URL. It went to the onboarding execution, which rests on no
-  # screen, and this went red. Reverted from a copy.
+  # Sabotage: made `JourneyHost.back/2` send the back request to the
+  # execution on the URL rather than the focus's. It went to the
+  # onboarding execution, not the setup, and this went red. Reverted from
+  # a copy.
   test "Back inside a setup goes back between the setup's own steps", %{conn: conn} do
     {live, _execution_id} = picked(conn, ["bdoc_card_reader_setup"])
 
@@ -158,10 +163,10 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     assert html =~ "desk_reader"
   end
 
-  # Sabotage: made `focus/2` answer the named execution with the page's
-  # options for every Path. The reload presented the onboarding execution
-  # resting on its subchart, with no screen, and this went red. Reverted
-  # from a copy.
+  # Sabotage: made `JourneyHost.focus/3` answer the named execution with
+  # the page's options for every Path. The reload presented the onboarding
+  # execution resting on its subchart, with no screen, and this went red.
+  # Reverted from a copy.
   test "a reload of the onboarding URL presents the running setup", %{conn: conn} do
     {:ok, riverside} = Scope.new("branch", "riverside")
 
@@ -254,10 +259,12 @@ defmodule StatifierExamplesWeb.OnboardingJourneyLiveTest do
     end
   end
 
-  # Sabotage (run): made the page start the onboarding under the riverside
-  # branch scope without asking the access module. The page still drew the
-  # refusal, since it asks again before it draws, but an execution was
-  # started and this went red on the count.
+  # Sabotage (run): made `JourneyAccess.start_scope/2` answer the riverside
+  # branch scope for every actor and dropped the page's `Access.check/4`
+  # before the start. The Journey was started for the visitor and this went
+  # red on the count. Either change alone leaves this green: `start_scope/2`
+  # answers `:error` for a non-librarian, and `Access.check/4` refuses a
+  # scope the actor is not a member of, each before the host starts.
   test "a visitor who is no librarian is refused Start on the onboarding" do
     {:ok, live, _html} = live(build_conn(), @path)
     before = execution_count()
