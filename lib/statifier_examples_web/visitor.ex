@@ -17,7 +17,12 @@ defmodule StatifierExamplesWeb.Visitor do
       `"riverside"`, so the dev server's settings page and branch
       onboarding work for whoever opens them. The test configuration names
       none, and a test that needs a librarian puts the key in its own
-      session.
+      session. The prod configuration names none either, so a prod build
+      makes no session a librarian: every visitor holds its own patron
+      scope and the open scope and nothing else, so a start of the branch
+      onboarding or of a setup draws the one refusal for everyone. A
+      deployment that wants librarians signs them in and puts the key in
+      the session before this plug runs; this app has no sign-in to do it.
 
   Neither key is written over once it is there.
   """
