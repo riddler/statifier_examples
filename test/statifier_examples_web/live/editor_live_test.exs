@@ -7,6 +7,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   import Phoenix.LiveViewTest
 
   alias Ecto.Adapters.SQL
+  alias Riddler.Journey.Scope
   alias StatifierBlocks.Compiler
   alias StatifierBlocks.Document
   alias StatifierBlocks.Editor
@@ -19,6 +20,7 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
   alias StatifierExamples.Documents
   alias StatifierExamples.Repo
   alias StatifierExamples.TwoStageDocument
+  alias StatifierExamplesWeb.JourneyHost
 
   @themes ["light", "dark", "brand"]
 
@@ -1313,6 +1315,52 @@ defmodule StatifierExamplesWeb.EditorLiveTest do
 
       assert html =~ "execution refused"
       assert html =~ "execution_not_found"
+    end
+
+    # A Journey's execution records the scope it runs under, and the editor
+    # is a second door onto it by id. An actor outside the scope is answered
+    # what an id nobody stored is answered. A member goes on to the resume:
+    # a patron registration's chart is not one the editor resumes, so the
+    # member meets that refusal instead, which is the resume's own.
+    #
+    # Sabotage: made the `{:ok, data}` branch of `resumed_in_reach/2` resume
+    # without asking the access module; the other visitor was answered
+    # `:chart_unknown` and this went red, then reverted.
+    test "a Journey's execution is refused to an actor outside its scope" do
+      {:ok, scope} = Scope.new("patron", "P-1001")
+      {:ok, journey, _answer} = JourneyHost.start("patron_registration_steps", scope)
+      {:ok, _path, execution_id} = JourneyHost.parse(journey)
+      url = ~p"/editor?#{[doc: "signup_wizard", execution: execution_id]}"
+
+      for outsider <- [init_test_session(build_conn(), visitor: "P-2002"), build_conn()] do
+        {:ok, _view, html} = live(outsider, url)
+
+        assert html =~ "execution refused: :execution_not_found"
+      end
+
+      {:ok, _view, html} = live(init_test_session(build_conn(), visitor: "P-1001"), url)
+
+      assert html =~ "execution refused: :chart_unknown"
+    end
+
+    # The signup Path records the open scope every visitor holds, so the
+    # check lets any visitor's page resume it.
+    #
+    # Sabotage: made `resumed_in_reach/2` refuse every execution that records
+    # a scope; the signup Journey was refused and this went red, then
+    # reverted.
+    test "a Journey under the open scope resumes for any visitor" do
+      {:ok, journey, _answer} = JourneyHost.start("signup_path", JourneyHost.scope())
+      {:ok, nil, execution_id} = JourneyHost.parse(journey)
+
+      {:ok, view, html} =
+        live(
+          init_test_session(build_conn(), visitor: "P-2002"),
+          ~p"/editor?#{[doc: "signup_wizard", execution: execution_id]}"
+        )
+
+      refute html =~ "execution refused"
+      assert has_element?(view, "[data-run-status]")
     end
 
     # Stop is the host's own terminal transition, and the page stops naming

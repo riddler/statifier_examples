@@ -39,6 +39,23 @@ defmodule StatifierExamplesWeb.EditorLive do
     * the drawer height, per ADR-0005 2A: the package hands each new height
       out through `on_drawer_resize` and reads back whatever the host stored.
 
+  ## Whose execution the page opens
+
+  The execution id in the URL resumes any stored execution, and some of
+  them are Journeys: a Journey a page started records the scope it runs
+  under, and a setup the branch onboarding runs records the onboarding's.
+  This page is a second door onto those by id, so it asks
+  `StatifierExamplesWeb.JourneyAccess` before it resumes one, with
+  `:present` and the actor the session names
+  (`StatifierExamplesWeb.JourneyAccess.actor/1`), as the Journey page
+  does. An actor outside the scope is answered what an id nobody stored
+  is answered, so the page does not say that the Journey exists. A member
+  goes on to the resume, which refuses the library Paths' Journeys on its
+  own, since their charts are not ones this page resumes; the signup Path
+  records the open scope every visitor holds, and resumes. An execution
+  that records no scope, which is every one this page's Run starts,
+  resumes for anyone who has its id.
+
   ## The themes are CSS, not the `theme` assign
 
   `docs/theming.md` in the package offers two seams and they differ in reach
@@ -53,6 +70,8 @@ defmodule StatifierExamplesWeb.EditorLive do
 
   use StatifierExamplesWeb, :live_view
 
+  alias Riddler.Journey.Access
+  alias Riddler.Journey.Scope
   alias StatifierBlocks.Compiler
   alias StatifierBlocks.Document
   alias StatifierBlocks.Editor
@@ -64,16 +83,18 @@ defmodule StatifierExamplesWeb.EditorLive do
   alias StatifierExamples.Charts.Replay
   alias StatifierExamples.Documents
   alias StatifierExamplesWeb.Icons
+  alias StatifierExamplesWeb.JourneyAccess
 
   @default_theme :light
 
   @impl Phoenix.LiveView
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     parent = self()
 
     {:ok,
      assign(socket,
        page_title: "Editor",
+       actor: JourneyAccess.actor(session),
        palette: Charts.palette(),
        field_candidates: Charts.field_candidates(),
        fixtures: Charts.fixtures(),
@@ -475,11 +496,39 @@ defmodule StatifierExamplesWeb.EditorLive do
         socket
 
       true ->
-        adopt(socket, resumed(execution_id))
+        adopt(socket, resumed_in_reach(execution_id, socket.assigns.actor))
     end
   end
 
   defp restore_execution(socket, _absent), do: socket
+
+  # The access check on a resume by id (the moduledoc's "Whose execution
+  # the page opens"). The scope is read from the execution's own record,
+  # where a durable child keeps the copy it inherited, so a setup is
+  # checked against its onboarding's branch. A scope the access module
+  # refuses, or one the record holds in a shape `Scope.from_data/1` does
+  # not read, answers `:execution_not_found`, the refusal an unknown id
+  # meets; a read storage refuses answers its own reason, which for an
+  # unknown id is that same one.
+  @spec resumed_in_reach(String.t(), JourneyAccess.actor()) ::
+          {:ok, Durable.driven()} | {:error, term()}
+  defp resumed_in_reach(execution_id, actor) do
+    case Durable.scope(execution_id) do
+      {:ok, nil} ->
+        resumed(execution_id)
+
+      {:ok, data} ->
+        with {:ok, scope} <- Scope.from_data(data),
+             :ok <- Access.check(JourneyAccess, actor, scope, :present) do
+          resumed(execution_id)
+        else
+          _refused -> {:error, :execution_not_found}
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
 
   @spec resumed(String.t()) :: {:ok, Durable.driven()} | {:error, term()}
   defp resumed(execution_id) do

@@ -63,6 +63,19 @@ defmodule StatifierExamplesWeb.JourneyHost do
   and the open scope every visitor holds for the signup Path.
   `start/2` refuses a scope of another kind.
 
+  `start/2` does not ask whether its caller holds the scope, and need
+  not: `c:Riddler.Journey.Host.start/2` is handed a Path and a scope and
+  no actor, so this module cannot read who is asking, and the behaviour
+  puts that question on the caller, which asks
+  `Riddler.Journey.Access.check/4` with `:present` and the scope before
+  it calls `start/2` ("What a renderer asks, and when"). Both of this
+  app's starts do: the Journey page and the settings page take the scope
+  from `StatifierExamplesWeb.JourneyAccess.start_scope/2` for the
+  session's actor and ask the access module with it first. A caller that
+  skips that check starts a Journey under a scope it names, of the right
+  kind; the check of the kind here is what this module can answer for
+  itself.
+
   `present/1` answers the scope the presented execution records, so the
   component checks it with `StatifierExamplesWeb.JourneyAccess`, the
   access module for all of them. A setup the branch onboarding runs is a
@@ -215,6 +228,8 @@ defmodule StatifierExamplesWeb.JourneyHost do
   Starts a Journey of the Path named `path` - a page key, or
   `"signup_path"` for the signup Path - under `scope`, which has to be of
   the kind `scope_kind/1` names for it. The execution records `scope`.
+  Whether the caller may start a Journey under `scope` is the caller's
+  check, asked before this (the moduledoc's "The scope").
   """
   @impl Riddler.Journey.Host
   @spec start(String.t(), Scope.t()) ::
