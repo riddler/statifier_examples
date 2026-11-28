@@ -110,7 +110,9 @@ defmodule StatifierExamplesWeb.JourneyHostTest do
 
   # Sabotage (run): made `Validation.check/2` leave each finding's
   # `author_message` as riddler gave it. The findings carried none and this
-  # went red on the list. Restored from a copy.
+  # went red on the list. Restored from a copy. Sabotage: made `submit/2`
+  # refuse with an empty list in place of the view's `refusals`; this went
+  # red on the list, then reverted from a copy.
   test "a submit the screen refuses answers riddler's findings in this app's words" do
     journey = JourneyHost.journey(nil, elem(Journey.start("host-#{System.unique_integer()}"), 1))
 

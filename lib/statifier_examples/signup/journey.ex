@@ -187,6 +187,23 @@ defmodule StatifierExamples.Signup.Journey do
   a field no shipped screen can exercise is a field no test can defend.
   `docs/spikes/signup-skeleton-spike.md` carries it as the ask.
 
+  ## A question's own checks hold a press, against the host's today
+
+  A question may carry `checks`, conditions its author wrote over
+  `responses` and `context` - the patron registration fixture's date of
+  birth has one refusing a date after today. Riddler's resolve drops them
+  from the nodes it answers, so `submit/4` puts each shown question's
+  checks back from the screens document before it validates, and
+  validates against a root carrying the responses and a `context` built
+  here. The responses are what the reader typed, over what the chart
+  holds for the other screens: a question on this screen is checked
+  against what was typed for it alone, as it always was, and no secret
+  question's stored response is in the root at all. The `context` is
+  `"today"`, the ISO 8601 date `opts[:today]` names, today's UTC date when
+  it names none. The `context` root is the host's, so nothing the reader
+  sends reaches it. A failing check refuses the press as `{:invalid,
+  view}`, its finding put in the author's words.
+
   ## A secret question is sealed before the chart sees it
 
   A screen may ask a `secret_question` - the patron registration screens
@@ -281,7 +298,12 @@ defmodule StatifierExamples.Signup.Journey do
   has collected so far, keyed by element key; `findings` is empty except in the
   `{:invalid, view}` a refused `submit/3` answers with.
 
-  `discarded` is the one key that is not always there, and its absence is
+  `refusals` is there only beside those findings: the same refusals as
+  riddler's findings, each carrying as its `author_message` the words its
+  pair carries (`StatifierExamples.Signup.Validation.check/3`), for a
+  renderer that draws `Riddler.Finding` structs.
+
+  `discarded` is the other key that is not always there, and its absence is
   the information: a view carries it only when the press it answers was
   refused by the chart, and it holds the reason
   `StatifierExamples.Charts.Durable.send_event/4` gave. A page can
@@ -303,6 +325,7 @@ defmodule StatifierExamples.Signup.Journey do
           :retry_after_ms => non_neg_integer() | nil,
           :result => map() | nil,
           :findings => [Validation.finding()],
+          optional(:refusals) => [Riddler.Finding.t()],
           optional(:discarded) => term()
         }
 
@@ -495,7 +518,10 @@ defmodule StatifierExamples.Signup.Journey do
   the screen the reader saw one keystroke ago.
 
   `opts[:screens]` and `opts[:path]` are the screens document and the Path
-  `start/2` was given, when it was given them.
+  `start/2` was given, when it was given them. `opts[:today]`, a `Date`,
+  is the today a question's checks read as `context.today` (the
+  moduledoc's "A question's own checks hold a press, against the host's
+  today"); today's UTC date when it is absent.
   """
   @spec submit(String.t(), String.t(), %{optional(String.t()) => term()}, keyword()) ::
           {:ok, view()} | {:invalid, view()} | {:error, term()}
@@ -508,7 +534,7 @@ defmodule StatifierExamples.Signup.Journey do
          {:ok, settled} <- view(execution_id, run, state, screens, path),
          {:ok, drafted} <- parked_on(resolve(settled, responses)),
          {:ok, button} <- button(drafted.nodes, outcome),
-         {:ok, sealed} <- checked(drafted, responses, screens) do
+         {:ok, sealed} <- checked(drafted, responses, screens, context(opts)) do
       pressed(durable, run, execution_id, button, coerce(sealed), {screens, path})
     end
   end
@@ -516,13 +542,95 @@ defmodule StatifierExamples.Signup.Journey do
   # The press's responses checked as the reader typed them and then sealed
   # (the moduledoc's "A secret question is sealed before the chart sees
   # it"), or the drafted view with its findings when the check refuses them.
-  @spec checked(view(), map(), screens()) ::
+  @spec checked(view(), map(), screens(), map()) ::
           {:ok, map()} | {:invalid, view()} | {:error, {:seal_secrets, term()}}
-  defp checked(drafted, responses, screens) do
-    case Validation.validate(drafted.nodes, responses) do
-      [] -> seal(screens, drafted.screen, responses)
-      findings -> {:invalid, %{drafted | findings: findings}}
+  defp checked(drafted, responses, {document, _admitted} = screens, context) do
+    nodes = authored_checks(drafted.nodes, drafted.screen.nodes)
+    held = Map.merge(elsewhere(drafted, document), responses)
+
+    case Validation.validate(nodes, held, context) do
+      [] ->
+        seal(screens, drafted.screen, responses)
+
+      findings ->
+        refusals = Validation.check(nodes, held, context)
+        {:invalid, Map.put(%{drafted | findings: findings}, :refusals, refusals)}
     end
+  end
+
+  # What the chart holds for the other screens: every stored response but
+  # the ones this screen's questions own and every secret question's,
+  # whichever screen asks it (the moduledoc's "A question's own checks
+  # hold a press, against the host's today").
+  @spec elsewhere(view(), map()) :: map()
+  defp elsewhere(%{datamodel: datamodel, screen: screen}, document) do
+    secrets = document |> Screens.screens() |> Enum.flat_map(&secret_keys(&1.nodes))
+
+    (Map.get(datamodel, "responses") || %{})
+    |> Map.drop(owned_keys(screen.nodes))
+    |> Map.drop(secrets)
+  end
+
+  @spec owned_keys([Screens.node_doc()]) :: [String.t()]
+  defp owned_keys(nodes) do
+    Enum.flat_map(nodes, fn node ->
+      own = if is_binary(node["key"]), do: [node["key"]], else: []
+      own ++ owned_keys(child_nodes(node))
+    end)
+  end
+
+  # The shown nodes with each question's `checks` put back from the
+  # screen's own nodes, a container's children included at any depth on
+  # both sides (the moduledoc's "A question's own checks hold a press,
+  # against the host's today").
+  @spec authored_checks([Screens.node_doc()], [Screens.node_doc()]) :: [Screens.node_doc()]
+  defp authored_checks(shown, authored), do: put_checks(shown, checks_by_key(authored))
+
+  @spec put_checks([Screens.node_doc()], %{optional(String.t()) => list()}) ::
+          [Screens.node_doc()]
+  defp put_checks(nodes, checks) do
+    Enum.map(nodes, fn node ->
+      node = Enum.reduce(["nodes", "elements"], node, &put_inner_checks(&2, &1, checks))
+
+      case Map.fetch(checks, Map.get(node, "key")) do
+        {:ok, node_checks} -> Map.put(node, "checks", node_checks)
+        :error -> node
+      end
+    end)
+  end
+
+  @spec put_inner_checks(Screens.node_doc(), String.t(), %{optional(String.t()) => list()}) ::
+          Screens.node_doc()
+  defp put_inner_checks(node, field, checks) do
+    case node do
+      %{^field => inner} when is_list(inner) -> %{node | field => put_checks(inner, checks)}
+      _no_children -> node
+    end
+  end
+
+  @spec child_nodes(Screens.node_doc()) :: [Screens.node_doc()]
+  defp child_nodes(%{"nodes" => inner}) when is_list(inner), do: inner
+  defp child_nodes(%{"elements" => inner}) when is_list(inner), do: inner
+  defp child_nodes(_node), do: []
+
+  @spec checks_by_key([Screens.node_doc()]) :: %{optional(String.t()) => list()}
+  defp checks_by_key(nodes) do
+    Enum.reduce(nodes, %{}, fn node, acc ->
+      own =
+        case node do
+          %{"key" => key, "checks" => checks} when is_list(checks) -> %{key => checks}
+          _no_checks -> %{}
+        end
+
+      acc |> Map.merge(checks_by_key(child_nodes(node))) |> Map.merge(own)
+    end)
+  end
+
+  # The host's `context` root for a press's checks.
+  @spec context(keyword()) :: %{required(String.t()) => String.t()}
+  defp context(opts) do
+    today = Keyword.get_lazy(opts, :today, &Date.utc_today/0)
+    %{"today" => Date.to_iso8601(today)}
   end
 
   @doc """

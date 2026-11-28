@@ -38,6 +38,20 @@ defmodule StatifierExamples.Signup.Validation do
   screen that cannot be finished, which is worse than a page that will not
   draw.
 
+  ## A question's own checks, against the host's context
+
+  A question may carry `checks`: conditions its author wrote over
+  `responses` and `context`, which riddler evaluates after the built-in
+  rules (`Riddler.Screens.validate_screen/3`). Riddler's resolve drops them
+  from a resolved node, as it drops a condition, so a caller that wants
+  them checked puts each shown question's `checks` back from the document
+  before it calls `validate/3` (`StatifierExamples.Signup.Journey` does).
+  `context` is the host's: `validate/3` and `check/3` put it in the root
+  beside the responses, and `validate/2` and `check/2` put an empty one, so
+  a check reading `context.today` decides nothing there and raises
+  nothing. A failing check is put to a reader in its author's words, the
+  check's `message`.
+
   ## A finding is a pair, and the key is the element key
 
   `{key, message}` - the same key the response lands at (`responses.<key>`,
@@ -45,8 +59,8 @@ defmodule StatifierExamples.Signup.Validation do
   message beside the input it belongs to without a second lookup, and the
   order is the document's. The key is riddler's `element_key`; the message is
   this app's for the two codes a shipped screen can raise (a format finding
-  is worded for the format the question names), and riddler's own for any
-  other, an out-of-range number among them.
+  is worded for the format the question names), the author's for a failing
+  check, and riddler's own for any other, an out-of-range number among them.
   """
 
   alias Riddler.Finding
@@ -95,10 +109,32 @@ defmodule StatifierExamples.Signup.Validation do
       []
   """
   @spec validate([Screens.node_doc()], %{optional(String.t()) => term()}) :: [finding()]
-  def validate(nodes, responses) when is_list(nodes) and is_map(responses) do
+  def validate(nodes, responses) when is_list(nodes) and is_map(responses),
+    do: validate(nodes, responses, %{})
+
+  @doc """
+  `validate/2` with `context`, the host's root, beside the responses: what
+  a question's `checks` read as `context` (the moduledoc's "A question's own
+  checks, against the host's context").
+
+      iex> nodes = [%{"type" => "text_question", "key" => "birth_date", "format" => "date",
+      ...>            "checks" => [%{"code" => "check.birth_date_in_future",
+      ...>                           "condition" => "responses.birth_date::date <= context.today::date",
+      ...>                           "message" => "A date of birth cannot be in the future."}]}]
+      iex> StatifierExamples.Signup.Validation.validate(nodes, %{"birth_date" => "2031-04-17"},
+      ...>   %{"today" => "2026-11-27"})
+      [{"birth_date", "A date of birth cannot be in the future."}]
+      iex> StatifierExamples.Signup.Validation.validate(nodes, %{"birth_date" => "1990-04-17"},
+      ...>   %{"today" => "2026-11-27"})
+      []
+  """
+  @spec validate([Screens.node_doc()], %{optional(String.t()) => term()}, map()) ::
+          [finding()]
+  def validate(nodes, responses, context)
+      when is_list(nodes) and is_map(responses) and is_map(context) do
     formats = formats_by_key(nodes)
 
-    nodes |> refusals(responses) |> Enum.map(&pair(&1, formats))
+    nodes |> refusals(responses, context) |> Enum.map(&pair(&1, formats))
   end
 
   @doc """
@@ -114,21 +150,31 @@ defmodule StatifierExamples.Signup.Validation do
       {"response.format", "email", "must look like an email address"}
   """
   @spec check([Screens.node_doc()], %{optional(String.t()) => term()}) :: [Finding.t()]
-  def check(nodes, responses) when is_list(nodes) and is_map(responses) do
+  def check(nodes, responses) when is_list(nodes) and is_map(responses),
+    do: check(nodes, responses, %{})
+
+  @doc """
+  `check/2` with `context` beside the responses, as `validate/3` takes it.
+  """
+  @spec check([Screens.node_doc()], %{optional(String.t()) => term()}, map()) :: [Finding.t()]
+  def check(nodes, responses, context)
+      when is_list(nodes) and is_map(responses) and is_map(context) do
     formats = formats_by_key(nodes)
 
     nodes
-    |> refusals(responses)
+    |> refusals(responses, context)
     |> Enum.map(&%{&1 | author_message: reader_message(&1, formats) || &1.author_message})
   end
 
-  @spec refusals([Screens.node_doc()], %{optional(String.t()) => term()}) :: [Finding.t()]
-  defp refusals(nodes, responses) do
+  @spec refusals([Screens.node_doc()], %{optional(String.t()) => term()}, map()) ::
+          [Finding.t()]
+  defp refusals(nodes, responses, context) do
     Enum.each(nodes, &known_format!/1)
 
     document = admit!(nodes)
+    root = %{"responses" => responses, "context" => context}
 
-    case Riddler.Screens.validate_screen(document, @screen_key, %{"responses" => responses}) do
+    case Riddler.Screens.validate_screen(document, @screen_key, root) do
       :ok -> []
       {:error, findings} -> findings
     end
@@ -203,6 +249,12 @@ defmodule StatifierExamples.Signup.Validation do
 
   defp reader_message(%Finding{code: "response.format", element_key: key}, formats),
     do: Map.get(@format_messages, Map.get(formats, key))
+
+  # A failing check is told in its author's words (the moduledoc's "A
+  # question's own checks, against the host's context").
+  defp reader_message(%Finding{field: "checks", author_message: message}, _formats)
+       when is_binary(message),
+       do: message
 
   defp reader_message(_finding, _formats), do: nil
 end

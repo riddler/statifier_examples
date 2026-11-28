@@ -111,6 +111,77 @@ defmodule StatifierExamples.ScreenEditor.TryTest do
       assert refused.findings == [{"age", "must be a whole number"}]
     end
 
+    # Sabotage: made Journey's checked/4 validate the shown nodes without
+    # putting their checks back; the future date was accepted and the
+    # :invalid match went red, then reverted from a copy. Sabotage: made
+    # context/1 ignore opts[:today]; the press on the 19th was accepted,
+    # then reverted from a copy.
+    test "holds the date of birth to its check, against the host's today" do
+      {:ok, document} =
+        "priv/fixtures/patron_registration_screens.json" |> File.read!() |> Document.from_json()
+
+      {:ok, %{execution_id: execution_id, opts: opts}} = Try.start(document)
+
+      details = %{
+        "first_name" => "Rosa",
+        "email" => "rosa@example.com",
+        "age" => "34",
+        "birth_date" => "2026-11-20",
+        "library_pin" => "1234"
+      }
+
+      on = fn day -> opts ++ [today: Date.from_iso8601!(day)] end
+
+      assert {:invalid, refused} =
+               Journey.submit(execution_id, "details_submitted", details, on.("2026-11-19"))
+
+      assert refused.findings == [{"birth_date", "A date of birth cannot be in the future."}]
+
+      assert [
+               %Riddler.Finding{
+                 code: "check.birth_date_in_future",
+                 element_key: "birth_date",
+                 author_message: "A date of birth cannot be in the future."
+               }
+             ] = refused.refusals
+
+      {:ok, still} = Journey.current(execution_id, opts)
+      assert %{key: "patron_details"} = still.screen
+      refute Map.has_key?(still, :refusals)
+
+      assert {:ok, card} =
+               Journey.submit(execution_id, "details_submitted", details, on.("2026-11-21"))
+
+      assert %{key: "card_choice"} = card.screen
+      refute Map.has_key?(card, :refusals)
+    end
+
+    # Sabotage: made submit/4 take the context the press carries when it
+    # carries one; the press was accepted and the :invalid match
+    # went red, then reverted from a copy. Sabotage: made the default
+    # today 9999-12-31; the year 2999 was accepted, then reverted.
+    test "takes its today from the host's clock, never from the press" do
+      {:ok, document} =
+        "priv/fixtures/patron_registration_screens.json" |> File.read!() |> Document.from_json()
+
+      {:ok, %{execution_id: execution_id, opts: opts}} = Try.start(document)
+
+      details = %{
+        "first_name" => "Rosa",
+        "email" => "rosa@example.com",
+        "age" => "34",
+        "birth_date" => "2999-01-01",
+        "library_pin" => "1234",
+        "context" => %{"today" => "3000-01-01"},
+        "today" => "3000-01-01"
+      }
+
+      assert {:invalid, refused} =
+               Journey.submit(execution_id, "details_submitted", details, opts)
+
+      assert refused.findings == [{"birth_date", "A date of birth cannot be in the future."}]
+    end
+
     # The fixture is where the boolean and choice blocks' `help` field is
     # used. Sabotage: took the boolean question's help out of the fixture; the
     # card screen presented one help line and this went red, then reverted

@@ -25,7 +25,8 @@ defmodule StatifierExamplesWeb.JourneyHost do
   one `Signup.Journey`'s view is drawn from (its `answer`). A submit the
   screen refuses answers its findings as `Riddler.Finding` structs, each
   carrying this app's words for it as its `author_message`
-  (`StatifierExamples.Signup.Validation.check/2`), which is what the
+  (the refused view's `refusals`, `StatifierExamples.Signup.Validation.check/3`'s
+  answer), which is what the
   component draws beside the question. An execution, a Path or a name
   this module does not have is `{:error, :no_such_journey}`.
 
@@ -83,7 +84,7 @@ defmodule StatifierExamplesWeb.JourneyHost do
   alias StatifierExamples.Charts.Durable
   alias StatifierExamples.Library.{Onboarding, RegistrationSteps, Setups}
   alias StatifierExamples.ScreenEditor.Try
-  alias StatifierExamples.Signup.{Journey, Validation}
+  alias StatifierExamples.Signup.Journey
   alias StatifierExamplesWeb.JourneyAccess
 
   # The signup Path, named for a start: on the page it is the Path no
@@ -264,7 +265,7 @@ defmodule StatifierExamplesWeb.JourneyHost do
     with {:ok, path, execution_id, {target, opts}} <- target(journey) do
       case Journey.submit(target, outcome, responses, opts) do
         {:ok, view} -> stepped(path, execution_id, view)
-        {:invalid, view} -> refused(view, Validation.check(view.nodes, responses))
+        {:invalid, view} -> refused(view, view.refusals)
         {:error, reason} -> failed(reason)
       end
     end
