@@ -44,19 +44,16 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
       refute has_element?(view, "#try-journey")
     end
 
-    # Sabotage (run): removed the format check from Try.start/1; the Try
-    # started a Journey and the refusal assertion went red. Reverted from a
-    # copy.
-    test "refuses a text question format the Journey cannot check, keeping the page", %{
-      conn: conn
-    } do
+    # Sabotage: put the phone message as "is invalid"; the finding
+    # assertion went red, then reverted from a copy.
+    test "tries a phone question and tells a short number in the page's words", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/screen-editor")
 
       details = insert(view, "myapp.screens.screen", "blk_pr_root", "body", 0)
       configure(view, details, %{"key" => "patron_details", "title" => "Your details"})
 
-      age = insert(view, "myapp.screens.text_question", details, "elements", 0)
-      configure(view, age, %{"key" => "age", "label" => "Age", "format" => "phone"})
+      phone = insert(view, "myapp.screens.text_question", details, "elements", 0)
+      configure(view, phone, %{"key" => "phone", "label" => "Phone", "format" => "phone"})
 
       next = insert(view, "myapp.screens.button", details, "elements", 1)
 
@@ -68,10 +65,17 @@ defmodule StatifierExamplesWeb.ScreenEditorLiveTest do
 
       view |> element("#try") |> render_click()
 
-      assert has_element?(view, "#try-refusals li", "age: this page has no check")
-      refute has_element?(view, "#try-journey")
-      refute has_element?(view, "#details_next")
-      assert render(view) =~ ~s(data-block-id="#{age}")
+      refute has_element?(view, "#try-refusals")
+      assert has_element?(view, "#try-journey")
+
+      view |> element("#try-responses") |> render_change(%{"responses" => %{"phone" => "555"}})
+      view |> element("#details_next") |> render_click()
+
+      assert has_element?(
+               view,
+               "#try-finding-phone",
+               "must be a phone number, with at least seven digits"
+             )
     end
   end
 
